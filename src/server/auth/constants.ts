@@ -1,0 +1,42 @@
+/**
+ * Auth values shared by the better-auth config and the route-protection proxy. This file must
+ * stay free of env, database and Node-only imports: the proxy imports it.
+ */
+
+/** Cookie names become `<prefix>.session_token` (with `__Secure-` in front over HTTPS). */
+export const AUTH_COOKIE_PREFIX = "blaxzy";
+
+/** Where better-auth's handler is mounted (`src/app/api/auth/[...all]/route.ts`). */
+export const AUTH_BASE_PATH = "/api/auth";
+
+/** Request header the proxy sets so server code knows the path being rendered. */
+export const PATHNAME_HEADER = "x-blaxzy-pathname";
+
+export const LOGIN_PATH = "/login";
+export const VERIFY_EMAIL_PATH = "/verify-email";
+
+export const MIN_PASSWORD_LENGTH = 10;
+export const MAX_PASSWORD_LENGTH = 128;
+
+/** Pages reachable without a session. Everything else under the app redirects to login. */
+const PUBLIC_PAGES = new Set([
+  "/",
+  LOGIN_PATH,
+  "/signup",
+  VERIFY_EMAIL_PATH,
+  "/forgot-password",
+  "/reset-password",
+]);
+
+function isUnder(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
+/** True when `pathname` can be served without a session cookie. */
+export function isPublicPath(pathname: string, isDevelopment: boolean): boolean {
+  const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  if (PUBLIC_PAGES.has(normalized)) return true;
+  if (isUnder(normalized, AUTH_BASE_PATH)) return true;
+  if (isDevelopment && isUnder(normalized, "/dev")) return true;
+  return false;
+}

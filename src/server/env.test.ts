@@ -17,6 +17,14 @@ describe("parseEnv", () => {
     expect(env.S3_REGION).toBe("us-east-1");
     expect(env.S3_FORCE_PATH_STYLE).toBe(true);
     expect(env.BETTER_AUTH_URL).toBe("http://localhost:3000");
+    expect(env.EMAIL_TRANSPORT).toBe("console");
+    expect(env.SMTP_HOST).toBeUndefined();
+  });
+
+  it("rejects an unknown EMAIL_TRANSPORT", () => {
+    expect(() => parseEnv({ ...valid, EMAIL_TRANSPORT: "carrier-pigeon" })).toThrow(
+      /EMAIL_TRANSPORT/,
+    );
   });
 
   it("fails when DATABASE_URL is missing", () => {

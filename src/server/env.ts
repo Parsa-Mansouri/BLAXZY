@@ -17,6 +17,14 @@ export const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1),
   S3_SECRET_ACCESS_KEY: z.string().min(1),
   S3_FORCE_PATH_STYLE: booleanString.default(true),
+  /** `console` prints emails to the server log (development); `smtp` sends them. */
+  EMAIL_TRANSPORT: z.enum(["console", "smtp"]).default("console"),
+  EMAIL_FROM: z.string().min(1).default("BLAXZY <no-reply@blaxzy.local>"),
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASSWORD: z.string().min(1).optional(),
+  SMTP_SECURE: booleanString.optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

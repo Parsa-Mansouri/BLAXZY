@@ -10,6 +10,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -200,6 +201,26 @@ export const verification = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [index("verification_identifier_idx").on(t.identifier)],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Auth rate limiting (better-auth `rateLimit` model)                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * better-auth rate-limit counters (`rateLimit.storage: "database"`). Kept in Postgres so every
+ * stateless web replica shares the same limits. Rows are pruned by better-auth itself.
+ * `lastRequest` is a Unix timestamp in milliseconds.
+ */
+export const rateLimit = pgTable(
+  "rate_limit",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull().unique(),
+    count: integer("count").notNull(),
+    lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+  },
+  (t) => [index("rate_limit_last_request_idx").on(t.lastRequest)],
 );
 
 /* -------------------------------------------------------------------------- */

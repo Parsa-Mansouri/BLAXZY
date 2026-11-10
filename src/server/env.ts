@@ -4,6 +4,22 @@ const booleanString = z
   .enum(["true", "false", "1", "0"])
   .transform((v) => v === "true" || v === "1");
 
+/** `name=4,other.name=0` → `{ name: 4, "other.name": 0 }`. */
+const concurrencyMap = z.string().transform((value, ctx) => {
+  const result: Record<string, number> = {};
+  for (const part of value.split(",")) {
+    const entry = part.trim();
+    if (!entry) continue;
+    const match = /^([\w.\-/]+)=(\d+)$/.exec(entry);
+    if (!match?.[1] || !match[2]) {
+      ctx.addIssue({ code: "custom", message: `expected name=count, got "${entry}"` });
+      return z.NEVER;
+    }
+    result[match[1]] = Number(match[2]);
+  }
+  return result;
+});
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1),
@@ -17,6 +33,27 @@ export const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1),
   S3_SECRET_ACCESS_KEY: z.string().min(1),
   S3_FORCE_PATH_STYLE: booleanString.default(true),
+  /**
+   * Endpoint the browser uses for presigned URLs, when it differs from `S3_ENDPOINT` (for example
+   * the server reaches the store over a container network). Used only for presigning.
+   */
+  S3_PUBLIC_ENDPOINT: z.string().url().optional(),
+  /** Postgres schema that holds the job queue tables (pg-boss). */
+  JOBS_SCHEMA: z
+    .string()
+    .regex(/^[a-z_][a-z0-9_]*$/, "lower-case letters, digits and underscores")
+    .default("pgboss"),
+  /** Queue connection pool per web process (send only, keep small). */
+  JOBS_WEB_POOL_MAX: z.coerce.number().int().positive().default(2),
+  /** Queue connection pool per worker process (polling + completion). */
+  JOBS_WORKER_POOL_MAX: z.coerce.number().int().positive().default(10),
+  /** Jobs each worker process runs at once per job type, unless overridden below. */
+  WORKER_CONCURRENCY_DEFAULT: z.coerce.number().int().nonnegative().default(2),
+  /** Per job type overrides, e.g. `script.generate=4,video.render=0` (0 = not on this worker). */
+  WORKER_CONCURRENCY: concurrencyMap.default({}),
+  WORKER_POLL_INTERVAL_SECONDS: z.coerce.number().min(0.5).default(2),
+  /** How long shutdown waits for in-flight jobs before they are failed (and retried elsewhere). */
+  WORKER_SHUTDOWN_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(25),
   /** `console` prints emails to the server log (development); `smtp` sends them. */
   EMAIL_TRANSPORT: z.enum(["console", "smtp"]).default("console"),
   EMAIL_FROM: z.string().min(1).default("BLAXZY <no-reply@blaxzy.local>"),

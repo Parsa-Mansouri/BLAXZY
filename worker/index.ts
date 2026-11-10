@@ -1,10 +1,11 @@
 import "dotenv/config";
 import { closeDb } from "../src/server/db/client";
 import { getEnv } from "../src/server/env";
+import { startWorker, stopWorker } from "../src/server/jobs";
+import { handlers } from "./handlers";
 
 async function main(): Promise<void> {
-  getEnv(); // fail fast on invalid configuration
-  console.log("worker started");
+  const env = getEnv(); // fail fast on invalid configuration
 
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
@@ -12,10 +13,17 @@ async function main(): Promise<void> {
     shuttingDown = true;
     console.log(`worker received ${signal}, shutting down`);
     try {
+      // Drain in-flight jobs first: handlers may still use the database.
+      await stopWorker(env.WORKER_SHUTDOWN_TIMEOUT_SECONDS * 1000);
       await closeDb();
+    } catch (err) {
+      console.error("worker shutdown failed", err);
+      process.exitCode = 1;
     } finally {
       clearInterval(keepAlive);
       console.log("worker stopped");
+      // Exit even if a library left a handle open.
+      setTimeout(() => process.exit(), 5_000).unref();
     }
   };
 
@@ -23,6 +31,13 @@ async function main(): Promise<void> {
   const keepAlive = setInterval(() => {}, 1 << 30);
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
+
+  await startWorker({
+    handlers,
+    concurrency: { default: env.WORKER_CONCURRENCY_DEFAULT, perJob: env.WORKER_CONCURRENCY },
+    pollingIntervalSeconds: env.WORKER_POLL_INTERVAL_SECONDS,
+  });
+  console.log("worker started");
 }
 
 main().catch((err: unknown) => {

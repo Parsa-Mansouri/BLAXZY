@@ -31,7 +31,27 @@ All configuration is read from the environment (see `.env.example` and `src/serv
 | `EMAIL_FROM`                                                          | `BLAXZY <no-reply@blaxzy.local>` | Sender address                                                                                              |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_SECURE` | unset                            | Reserved for the SMTP transport                                                                             |
 | `S3_*`                                                                | see `.env.example`               | Object storage                                                                                              |
+| `S3_PUBLIC_ENDPOINT`                                                  | `S3_ENDPOINT`                    | Origin browsers use in presigned upload/download URLs (only for presigning)                                 |
+| `S3_CORS_ORIGINS`                                                     | `http://localhost:3000`          | Compose only: origins `minio-init` allows to PUT/GET the bucket (comma-separated)                           |
+| `JOBS_SCHEMA`                                                         | `pgboss`                         | Postgres schema of the job queue (pg-boss, same `DATABASE_URL`)                                             |
+| `JOBS_WEB_POOL_MAX`, `JOBS_WORKER_POOL_MAX`                           | `2`, `10`                        | Queue connection pool per web / worker process                                                              |
+| `WORKER_CONCURRENCY_DEFAULT`                                          | `2`                              | Jobs of one type a worker process runs at once                                                              |
+| `WORKER_CONCURRENCY`                                                  | empty                            | Per job type overrides, e.g. `script.generate=4,video.render=0` (`0` = not on this worker)                  |
+| `WORKER_POLL_INTERVAL_SECONDS`                                        | `2`                              | How often an idle worker checks for jobs                                                                    |
+| `WORKER_SHUTDOWN_TIMEOUT_SECONDS`                                     | `25`                             | Wait for in-flight jobs on SIGTERM; keep the container stop grace period longer                             |
 | `ANTHROPIC_API_KEY`                                                   | unset                            | Claude API                                                                                                  |
+
+## Background jobs and storage
+
+Long work runs in workers through the typed job queue in `src/server/jobs` (pg-boss on Postgres):
+web code calls `enqueue(job, payload)`, handlers live in `worker/handlers/`. Run as many web and
+worker processes as needed; see `src/server/jobs/README.md` for concurrency and the idempotency
+rule every handler must follow.
+
+Files go straight from the browser to the S3 store through presigned URLs
+(`src/server/storage`, see its README). The bucket needs CORS for the app origins; locally
+`minio-init` applies it (`docker compose up --no-deps minio-init` after changing
+`S3_CORS_ORIGINS`).
 
 ## Accounts
 
@@ -48,7 +68,10 @@ One image runs either role:
 ```bash
 docker build -t blaxzy .
 docker run --env-file .env -p 3000:3000 blaxzy              # web
-docker run --env-file .env blaxzy node worker.cjs           # worker
+docker run --env-file .env --stop-timeout 30 blaxzy node worker.cjs   # worker
 ```
+
+The worker drains in-flight jobs on SIGTERM for up to `WORKER_SHUTDOWN_TIMEOUT_SECONDS`; give the
+container a longer stop timeout (Docker's default is 10 s).
 
 See `CLAUDE.md` for commands, folder map and engineering rules.

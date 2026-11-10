@@ -27,6 +27,27 @@ describe("parseEnv", () => {
     );
   });
 
+  it("applies job queue and worker defaults", () => {
+    const env = parseEnv(valid);
+    expect(env.JOBS_SCHEMA).toBe("pgboss");
+    expect(env.JOBS_WEB_POOL_MAX).toBe(2);
+    expect(env.WORKER_CONCURRENCY_DEFAULT).toBe(2);
+    expect(env.WORKER_CONCURRENCY).toEqual({});
+    expect(env.S3_PUBLIC_ENDPOINT).toBeUndefined();
+  });
+
+  it("parses per job type worker concurrency", () => {
+    const env = parseEnv({ ...valid, WORKER_CONCURRENCY: " script.generate=4, video.render=0 ," });
+    expect(env.WORKER_CONCURRENCY).toEqual({ "script.generate": 4, "video.render": 0 });
+    expect(() => parseEnv({ ...valid, WORKER_CONCURRENCY: "script.generate" })).toThrow(
+      /WORKER_CONCURRENCY/,
+    );
+  });
+
+  it("rejects an unsafe JOBS_SCHEMA", () => {
+    expect(() => parseEnv({ ...valid, JOBS_SCHEMA: "pgboss; drop" })).toThrow(/JOBS_SCHEMA/);
+  });
+
   it("fails when DATABASE_URL is missing", () => {
     const rest: Record<string, string | undefined> = { ...valid, DATABASE_URL: undefined };
     expect(() => parseEnv(rest)).toThrow(/DATABASE_URL/);

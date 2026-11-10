@@ -1,0 +1,20 @@
+{
+  "verdict": "ready",
+  "summary": "Ready for production. Estimated screen time is about 58 seconds against a 60-second target. Two minor points: decide whether the ferryman is ever seen, and keep the cabin window free of readable reflections.",
+  "issues": [
+    {
+      "severity": "minor",
+      "category": "continuity",
+      "quote": "FERRYMAN (O.S.)",
+      "explanation": "The ferryman is only heard. If he is ever seen later he needs a character asset; as written he only needs a voice.",
+      "suggestion": "Keep him off screen, or add one brief shot of him at the gangway."
+    },
+    {
+      "severity": "minor",
+      "category": "filmability",
+      "quote": "Through the window, the pier lights slide away.",
+      "explanation": "Moving lights seen through glass with the cabin reflected in it can flicker or double in generated video.",
+      "suggestion": "Frame the window so the pier lights are seen directly, with the reflection kept faint."
+    }
+  ]
+}

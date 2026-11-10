@@ -1,0 +1,67 @@
+{
+  "assets": [
+    {
+      "kind": "character",
+      "name": "Mara",
+      "slug": "mara",
+      "description": "Woman in her 60s; wiry build; grey-streaked braid; oil-stained work jacket; carries a brass locket; hurried, breathless at the pier.",
+      "appearsIn": ["EXT. HARBOUR PIER - DUSK", "INT. FERRY CABIN - CONTINUOUS"]
+    },
+    {
+      "kind": "character",
+      "name": "Jonas",
+      "slug": "jonas",
+      "description": "Man in his 60s; broad-shouldered; wears a flat cap; sits alone in the ferry cabin.",
+      "appearsIn": ["INT. FERRY CABIN - CONTINUOUS"]
+    },
+    {
+      "kind": "location",
+      "name": "Harbour Pier",
+      "slug": "harbour-pier",
+      "description": "Exterior; deserted wooden pier with planks; wind and sea spray; dusk; a ferry with blazing lights idles at the far end.",
+      "appearsIn": ["EXT. HARBOUR PIER - DUSK"]
+    },
+    {
+      "kind": "location",
+      "name": "Ferry Cabin",
+      "slug": "ferry-cabin",
+      "description": "Interior of the ferry; warm tungsten light; rows of empty benches; spray-streaked windows looking out on the pier; dusk.",
+      "appearsIn": ["INT. FERRY CABIN - CONTINUOUS"]
+    },
+    {
+      "kind": "prop",
+      "name": "Brass locket",
+      "slug": "brass-locket",
+      "description": "Brass locket that opens; held in Mara's hand, handed to Jonas, who opens it.",
+      "appearsIn": ["EXT. HARBOUR PIER - DUSK", "INT. FERRY CABIN - CONTINUOUS"]
+    },
+    {
+      "kind": "prop",
+      "name": "Ferry",
+      "slug": "ferry",
+      "description": "A single passenger ferry with its lights blazing; idles at the end of the pier; sounds its horn as it departs.",
+      "appearsIn": ["EXT. HARBOUR PIER - DUSK", "INT. FERRY CABIN - CONTINUOUS"]
+    },
+    {
+      "kind": "voice",
+      "name": "Mara (voice)",
+      "slug": "mara",
+      "description": "Woman in her 60s; breathless and pleading at first, then dry and tender.",
+      "appearsIn": ["EXT. HARBOUR PIER - DUSK", "INT. FERRY CABIN - CONTINUOUS"]
+    },
+    {
+      "kind": "voice",
+      "name": "Jonas (voice)",
+      "slug": "jonas",
+      "description": "Man in his 60s; quiet, moved.",
+      "appearsIn": ["INT. FERRY CABIN - CONTINUOUS"]
+    },
+    {
+      "kind": "voice",
+      "name": "Ferryman (voice)",
+      "slug": "ferryman",
+      "description": "Off-screen man calling loudly over the wind; urgent.",
+      "appearsIn": ["EXT. HARBOUR PIER - DUSK"]
+    }
+  ]
+}

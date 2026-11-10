@@ -1,0 +1,13 @@
+{
+  "style": {
+    "visualStyle": "Cinematic live-action",
+    "genre": "Drama",
+    "format": "movie",
+    "orientation": "portrait",
+    "totalDurationSeconds": 60,
+    "extras": {
+      "tone": "bittersweet, restrained"
+    }
+  },
+  "brief": "Two old lovers meet again on the last ferry of the night."
+}

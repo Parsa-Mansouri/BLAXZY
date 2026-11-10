@@ -21,7 +21,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "dev:user": "tsx scripts/dev-user.ts"
+    "dev:user": "tsx scripts/dev-user.ts",
+    "dami:run": "tsx scripts/dami-run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.7.0",

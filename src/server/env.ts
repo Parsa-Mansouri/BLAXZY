@@ -27,6 +27,12 @@ export const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(1),
   BETTER_AUTH_URL: z.string().url().default("http://localhost:3000"),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  /** Overrides every dami's default Claude model (e.g. a cheaper model on staging). */
+  DAMI_DEFAULT_MODEL: z.string().min(1).optional(),
+  /** Per-process limit on concurrent Claude API calls made by damis. */
+  DAMI_MAX_CONCURRENCY: z.coerce.number().int().positive().default(4),
+  /** Retries per Claude call for rate limits, overloads and network errors (not counting the first try). */
+  DAMI_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(4),
   S3_ENDPOINT: z.string().url(),
   S3_REGION: z.string().min(1).default("us-east-1"),
   S3_BUCKET: z.string().min(1),

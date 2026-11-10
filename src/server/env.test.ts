@@ -19,6 +19,13 @@ describe("parseEnv", () => {
     expect(env.BETTER_AUTH_URL).toBe("http://localhost:3000");
     expect(env.EMAIL_TRANSPORT).toBe("console");
     expect(env.SMTP_HOST).toBeUndefined();
+    expect(env.DAMI_MAX_CONCURRENCY).toBe(4);
+    expect(env.DAMI_MAX_RETRIES).toBe(4);
+    expect(env.DAMI_DEFAULT_MODEL).toBeUndefined();
+  });
+
+  it("rejects a non-positive DAMI_MAX_CONCURRENCY", () => {
+    expect(() => parseEnv({ ...valid, DAMI_MAX_CONCURRENCY: "0" })).toThrow(/DAMI_MAX_CONCURRENCY/);
   });
 
   it("rejects an unknown EMAIL_TRANSPORT", () => {

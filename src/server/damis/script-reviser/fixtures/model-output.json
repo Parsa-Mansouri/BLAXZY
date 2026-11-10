@@ -1,0 +1,23 @@
+{
+  "edits": [
+    {
+      "startLine": 24,
+      "endLine": 28,
+      "replacement": "JONAS\nYou kept it.\n\nHe reaches into his cap and draws out two faded ferry tickets, folded together.\n\nMARA\n(softly)\nForty years. Worth every one."
+    }
+  ],
+  "changeSummary": [
+    {
+      "request": "ending_weak",
+      "change": "The ending now turns on a reveal: Jonas kept the two tickets from the night he left, answering the locket."
+    },
+    {
+      "request": "note",
+      "change": "Jonas surprises Mara with the tickets he kept."
+    },
+    {
+      "request": "comment 1",
+      "change": "Replaced \"You're late\" with \"Worth every one\", delivered softly."
+    }
+  ]
+}

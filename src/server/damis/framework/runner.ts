@@ -1,0 +1,277 @@
+import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
+import type { z } from "zod";
+import { getEnv } from "@/server/env";
+import {
+  getDefaultClaudeClient,
+  type ClaudeClient,
+  type ClaudeRequest,
+  type ClaudeResponse,
+} from "./client";
+import { getProcessClaudeLimiter, Semaphore } from "./concurrency";
+import type { DamiDefinition } from "./define";
+import {
+  DamiApiError,
+  DamiConfigError,
+  DamiError,
+  DamiInputError,
+  DamiOutputError,
+  DamiRefusalError,
+  DamiTruncatedError,
+} from "./errors";
+import { resolveModel } from "./models";
+import { addUsage, computeCostUsd, ZERO_USAGE, type TokenUsage } from "./pricing";
+import { buildClaudeRequest, replayAssistantContent, responseText } from "./request";
+import { backoffDelayMs, DEFAULT_BACKOFF, errorStatus, isTransientError } from "./retry";
+import { createDrizzleDamiRunStore, type DamiRunStore } from "./store";
+
+/** Who the run is for. Both ids are optional so damis can run outside a project (CLI, Pro tools). */
+export type DamiRunContext = {
+  userId?: string | null;
+  projectId?: string | null;
+  /** Explicit model for this run; overrides DAMI_DEFAULT_MODEL and the dami default. */
+  model?: string;
+  signal?: AbortSignal;
+};
+
+export type DamiRuntimeConfig = {
+  apiKey: string | undefined;
+  defaultModel: string | undefined;
+  maxConcurrency: number;
+  maxRetries: number;
+};
+
+/** Injection points. Production code passes nothing; tests pass fakes. */
+export type DamiRunnerDeps = {
+  client?: ClaudeClient;
+  store?: DamiRunStore;
+  limiter?: Semaphore;
+  /** Values given here are used instead of the environment. */
+  config?: Partial<DamiRuntimeConfig>;
+  sleep?: (ms: number) => Promise<void>;
+  random?: () => number;
+  backoff?: { baseDelayMs: number; maxDelayMs: number };
+};
+
+export type DamiRunResult<R> = {
+  runId: string;
+  output: R;
+  model: string;
+  /** API attempts, including transient retries and the corrective retry. */
+  attempts: number;
+  usage: TokenUsage;
+  costUsd: number | null;
+};
+
+const MAX_REPORTED_ISSUES = 20;
+
+function resolveConfig(deps: DamiRunnerDeps): DamiRuntimeConfig {
+  const given = deps.config ?? {};
+  const complete =
+    "apiKey" in given &&
+    "defaultModel" in given &&
+    given.maxConcurrency !== undefined &&
+    given.maxRetries !== undefined;
+  const env = complete ? undefined : getEnv();
+  return {
+    apiKey: "apiKey" in given ? given.apiKey : env?.ANTHROPIC_API_KEY,
+    defaultModel: "defaultModel" in given ? given.defaultModel : env?.DAMI_DEFAULT_MODEL,
+    maxConcurrency: given.maxConcurrency ?? env?.DAMI_MAX_CONCURRENCY ?? 4,
+    maxRetries: given.maxRetries ?? env?.DAMI_MAX_RETRIES ?? 4,
+  };
+}
+
+function usageOf(response: ClaudeResponse): TokenUsage {
+  const u = response.usage;
+  return {
+    inputTokens: u.input_tokens,
+    outputTokens: u.output_tokens,
+    cacheReadTokens: u.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+  };
+}
+
+function formatIssues(issues: z.core.$ZodIssue[]): string[] {
+  return issues
+    .slice(0, MAX_REPORTED_ISSUES)
+    .map((i) => `${i.path.length ? i.path.join(".") : "(root)"}: ${i.message}`);
+}
+
+type Validation<T> = { ok: true; value: T } | { ok: false; issues: string[] };
+
+function validateOutput<I extends z.ZodType, O extends z.ZodType, R>(
+  dami: DamiDefinition<I, O, R>,
+  text: string,
+  input: z.output<I>,
+): Validation<z.output<O>> {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch (error) {
+    return {
+      ok: false,
+      issues: [`The response is not valid JSON: ${error instanceof Error ? error.message : ""}`],
+    };
+  }
+  const parsed = dami.output.safeParse(json);
+  if (!parsed.success) return { ok: false, issues: formatIssues(parsed.error.issues) };
+  const semantic = dami.check(parsed.data, input).slice(0, MAX_REPORTED_ISSUES);
+  if (semantic.length > 0) return { ok: false, issues: semantic };
+  return { ok: true, value: parsed.data };
+}
+
+function correctionMessage(issues: string[]): string {
+  return [
+    "Your previous response did not pass validation:",
+    ...issues.map((i) => `- ${i}`),
+    "",
+    "Return the complete corrected JSON object, not a diff. Fix exactly what these errors require and keep everything else as it was.",
+  ].join("\n");
+}
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = error.cause instanceof Error ? ` (cause: ${error.cause.message})` : "";
+    return `${error.name}: ${error.message}${cause}`;
+  }
+  return String(error);
+}
+
+/**
+ * Runs a dami: validates input, records a `dami_run`, calls Claude with schema-constrained output,
+ * validates (with one corrective retry), and records the outcome, tokens and cost.
+ * Throws a `DamiError` subclass on failure.
+ */
+export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
+  dami: DamiDefinition<I, O, R>,
+  input: z.input<I>,
+  ctx: DamiRunContext = {},
+  deps: DamiRunnerDeps = {},
+): Promise<DamiRunResult<R>> {
+  const parsedInput = dami.input.safeParse(input);
+  if (!parsedInput.success) {
+    throw new DamiInputError(dami.key, formatIssues(parsedInput.error.issues));
+  }
+  const validInput: z.output<I> = parsedInput.data;
+
+  const config = resolveConfig(deps);
+  const model = resolveModel(dami.model ?? "", config.defaultModel, ctx.model);
+  if (!model) throw new DamiConfigError(dami.key, `Dami "${dami.key}" has no model configured`);
+  const client = deps.client ?? getDefaultClaudeClient(config.apiKey);
+  if (!client) {
+    throw new DamiConfigError(
+      dami.key,
+      "ANTHROPIC_API_KEY is not set: damis cannot call Claude. Add it to the environment (see .env.example).",
+    );
+  }
+  const limiter = deps.limiter ?? getProcessClaudeLimiter(config.maxConcurrency);
+  const store = deps.store ?? createDrizzleDamiRunStore();
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const backoff = { ...DEFAULT_BACKOFF, ...deps.backoff, random: deps.random ?? Math.random };
+
+  const request = buildClaudeRequest(dami.build(validInput), {
+    model,
+    maxTokens: dami.maxOutputTokens,
+    effort: dami.effort,
+    outputSchema: dami.output,
+  });
+
+  const runId = await store.start({
+    damiKey: dami.key,
+    damiVersion: dami.version,
+    model,
+    userId: ctx.userId ?? null,
+    projectId: ctx.projectId ?? null,
+    input: validInput,
+  });
+
+  let attempts = 0;
+  let usage: TokenUsage | null = null;
+
+  const call = async (req: ClaudeRequest): Promise<ClaudeResponse> => {
+    for (let retry = 0; ; retry++) {
+      attempts++;
+      try {
+        const response = await limiter.run(() =>
+          dami.streaming
+            ? client.streamMessage(req, { signal: ctx.signal })
+            : client.createMessage(req, { signal: ctx.signal }),
+        );
+        usage = addUsage(usage ?? ZERO_USAGE, usageOf(response));
+        return response;
+      } catch (error) {
+        const transient = isTransientError(error);
+        if (transient && retry < config.maxRetries) {
+          await sleep(backoffDelayMs(retry + 1, error, backoff));
+          continue;
+        }
+        throw new DamiApiError(
+          dami.key,
+          transient
+            ? `Claude call failed after ${retry + 1} attempts: ${describeError(error)}`
+            : `Claude call failed: ${describeError(error)}`,
+          { cause: error, transient, status: errorStatus(error) },
+        );
+      }
+    }
+  };
+
+  try {
+    const messages: MessageParam[] = [...request.messages];
+    let correctionsLeft = 1;
+    for (;;) {
+      const response = await call({ ...request, messages });
+      if (response.stop_reason === "refusal") {
+        throw new DamiRefusalError(
+          dami.key,
+          response.stop_details?.category ?? null,
+          response.stop_details?.explanation ?? null,
+        );
+      }
+      if (response.stop_reason === "max_tokens") {
+        throw new DamiTruncatedError(dami.key, dami.maxOutputTokens);
+      }
+      const result = validateOutput(dami, responseText(response.content), validInput);
+      if (result.ok) {
+        let output: R;
+        try {
+          output = dami.finalize(result.value, validInput);
+        } catch (error) {
+          throw new DamiOutputError(dami.key, [`finalize failed: ${describeError(error)}`]);
+        }
+        const finalUsage: TokenUsage = usage ?? ZERO_USAGE;
+        const costUsd = computeCostUsd(model, finalUsage);
+        await store.finish(runId, { status: "succeeded", output, attempts, usage, costUsd });
+        return { runId, output, model, attempts, usage: finalUsage, costUsd };
+      }
+      if (correctionsLeft === 0) throw new DamiOutputError(dami.key, result.issues);
+      correctionsLeft--;
+      messages.push(
+        { role: "assistant", content: replayAssistantContent(response.content) },
+        { role: "user", content: correctionMessage(result.issues) },
+      );
+    }
+  } catch (error) {
+    const typed =
+      error instanceof DamiError
+        ? error
+        : new DamiApiError(dami.key, describeError(error), {
+            cause: error,
+            transient: false,
+            status: null,
+          });
+    typed.runId = runId;
+    const finalUsage: TokenUsage | null = usage;
+    try {
+      await store.finish(runId, {
+        status: "failed",
+        error: describeError(typed),
+        attempts,
+        usage: finalUsage,
+        costUsd: finalUsage ? computeCostUsd(model, finalUsage) : null,
+      });
+    } catch (storeError) {
+      console.error(`[damis] could not record failure of run ${runId}:`, storeError);
+    }
+    throw typed;
+  }
+}

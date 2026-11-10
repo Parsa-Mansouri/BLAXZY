@@ -39,7 +39,19 @@ All configuration is read from the environment (see `.env.example` and `src/serv
 | `WORKER_CONCURRENCY`                                                  | empty                            | Per job type overrides, e.g. `script.generate=4,video.render=0` (`0` = not on this worker)                  |
 | `WORKER_POLL_INTERVAL_SECONDS`                                        | `2`                              | How often an idle worker checks for jobs                                                                    |
 | `WORKER_SHUTDOWN_TIMEOUT_SECONDS`                                     | `25`                             | Wait for in-flight jobs on SIGTERM; keep the container stop grace period longer                             |
-| `ANTHROPIC_API_KEY`                                                   | unset                            | Claude API                                                                                                  |
+| `ANTHROPIC_API_KEY`                                                   | unset                            | Claude API; required to run damis                                                                           |
+| `DAMI_DEFAULT_MODEL`                                                  | unset                            | Overrides every dami's default Claude model (unset = per-dami defaults)                                     |
+| `DAMI_MAX_CONCURRENCY`                                                | `4`                              | Per-process limit on concurrent Claude calls made by damis                                                  |
+| `DAMI_MAX_RETRIES`                                                    | `4`                              | Retries per Claude call for rate limits, overloads and network errors                                       |
+
+## Damis
+
+Damis are the Claude-powered processes (`src/server/damis`, see its README). To run one for real
+once `ANTHROPIC_API_KEY` is set (the run is recorded in `dami_run`):
+
+```bash
+pnpm dami:run script-writer src/server/damis/script-writer/fixtures/input.json [--project <id>]
+```
 
 ## Background jobs and storage
 

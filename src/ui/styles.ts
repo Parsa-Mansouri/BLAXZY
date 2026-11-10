@@ -1,31 +1,30 @@
 /**
- * Shared class recipes. Every colour comes from a token (see globals.css),
- * so changing the brand never requires editing a component.
+ * Shared class recipes. Every colour, radius and size comes from a token in globals.css, so a
+ * brand change never requires editing a component.
  */
 
-export type ControlSize = "md" | "lg";
+/** Text-field surface: a grey fill, no border at rest, a white ring on keyboard focus. */
+export const fieldSurface =
+  "flex w-full items-center gap-2 bg-fill-3 text-label focus-ring-within " +
+  "has-[[aria-invalid=true]]:ring-1 has-[[aria-invalid=true]]:ring-red has-[[aria-invalid=true]]:ring-inset " +
+  "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50";
 
-/** Bordered surface used by Input, Select trigger, DatePicker trigger, DurationInput. */
-export const controlSurface =
-  "flex w-full items-center gap-2 rounded-md border border-line-strong bg-sunken text-fg " +
-  "transition-[border-color,background-color] duration-(--duration-fast) " +
-  "hover:border-fg-subtle focus-within:border-focus " +
-  "focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus " +
-  "has-[[aria-invalid=true]]:border-danger " +
-  "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:disabled]:hover:border-line-strong";
+/** Field shapes: forms use 10px corners and the large height, toolbars 6px and regular. */
+export const fieldShape = {
+  form: "min-h-(--control-h-lg) rounded-field px-3",
+  toolbar: "min-h-(--control-h) rounded-control px-2",
+} as const;
 
-export const controlHeight: Record<ControlSize, string> = {
-  md: "min-h-11",
-  lg: "min-h-13",
-};
+export type FieldVariant = keyof typeof fieldShape;
 
-/** 16px on phones prevents iOS zoom on focus. */
-export const controlText = "text-base sm:text-sm";
-
-/** Floating panels (popover, select list, tooltip-like surfaces). */
+/** Floating surfaces: menus, popovers, pop-up lists, tips. */
 export const popupSurface =
-  "popup-motion rounded-lg border border-line bg-raised text-fg shadow-lg outline-none";
+  "popup-motion rounded-popover bg-elevated-2 text-label shadow-float outline-none";
 
-export const itemRow =
-  "relative flex cursor-default select-none items-center gap-3 rounded-sm px-3 py-2 text-sm outline-none " +
-  "data-[highlighted]:bg-hover data-[disabled]:opacity-40 data-[selected]:text-fg";
+/** One row in a menu or pop-up list. */
+export const menuRow =
+  "flex min-h-(--menu-row-h) cursor-default items-center gap-2 rounded-control px-2 text-body text-label outline-none select-none " +
+  "data-[highlighted]:bg-selection data-[disabled]:text-label-3";
+
+/** Popup padding that keeps menu-row corners concentric with the popup's corners. */
+export const menuPad = "p-1.5";

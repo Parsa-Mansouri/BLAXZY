@@ -1,14 +1,13 @@
 import type { HTMLAttributes } from "react";
 import { cn } from "./cn";
 
-/** Placeholder block. Size it with className (e.g. `h-4 w-40`). */
+/** Placeholder block while content loads. Size it with className (e.g. `h-4 w-40`). */
 export function Skeleton({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       aria-hidden="true"
       className={cn(
-        "animate-shimmer rounded-sm bg-hover",
-        "bg-[linear-gradient(100deg,transparent_30%,var(--pressed)_50%,transparent_70%)] bg-[length:250%_100%]",
+        "animate-pulse rounded-control bg-fill-4 motion-reduce:animate-none",
         className,
       )}
       {...rest}

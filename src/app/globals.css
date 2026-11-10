@@ -2,227 +2,346 @@
 
 /*
   BLAXZY design tokens.
-  This is the single file to edit when the brand identity arrives: palette, radii,
-  type scale, elevation, motion and layers all live here. Components only use the
-  Tailwind names mapped in the @theme block below, never raw colours.
-  Dark is the default (film tools live in dark rooms); light is data-theme="light".
+
+  One dark world, modelled on Apple's dark semantic colours and macOS text styles. This is the
+  single file to edit when the brand identity arrives: replace --accent / --on-accent and every
+  prominent control, selection ring and focus ring follows.
+
+  Components only use the Tailwind names mapped in the @theme block below. Tailwind's default
+  palette, type scale and radii are cleared, so a raw colour or size cannot sneak in.
 */
 
-/* ---------- Theme: dark (default) ---------- */
-:root,
-:root[data-theme="dark"] {
+:root {
   color-scheme: dark;
 
-  /* surfaces, from the deepest layer to the most raised */
-  --bg: oklch(0.16 0.006 270);
-  --sunken: oklch(0.13 0.006 270);
-  --surface: oklch(0.2 0.007 270);
-  --raised: oklch(0.245 0.008 270);
-  --overlay-scrim: oklch(0.08 0.01 270 / 0.62);
+  /* ---------- Backgrounds ---------- */
+  --ground: #000000; /* content */
+  --elevated: #1c1c1e; /* sidebar, grouped lists, artwork */
+  --elevated-2: #2c2c2e; /* popovers, sheets, menus */
+  --elevated-3: #3a3a3c; /* raised inside a floating surface */
+  --scrim: rgb(0 0 0 / 0.5); /* behind sheets and the sidebar drawer */
 
-  /* interaction washes work on any surface */
-  --hover: oklch(1 0 0 / 0.06);
-  --pressed: oklch(1 0 0 / 0.1);
+  /* ---------- Labels ---------- */
+  --label: #ffffff;
+  --label-2: rgb(235 235 245 / 0.6); /* secondary: still meets AA on every ground */
+  --label-3: rgb(235 235 245 / 0.3); /* tertiary: decoration and disabled only */
+  --label-4: rgb(235 235 245 / 0.18); /* quaternary: decoration only */
 
-  /* text */
-  --fg: oklch(0.96 0.004 270);
-  --fg-muted: oklch(0.76 0.01 270);
-  --fg-subtle: oklch(0.64 0.012 270);
+  /* ---------- Separators ---------- */
+  --separator: rgb(84 84 88 / 0.65);
+  --separator-opaque: #38383a;
+  --hairline: 1px;
 
-  /* borders and focus */
-  --line: oklch(1 0 0 / 0.09);
-  --line-strong: oklch(1 0 0 / 0.17);
-  --focus: oklch(0.8 0.13 270);
+  /* ---------- Fills (control backgrounds) ---------- */
+  --fill: rgb(120 120 128 / 0.36);
+  --fill-2: rgb(120 120 128 / 0.32);
+  --fill-3: rgb(120 120 128 / 0.24);
+  --fill-4: rgb(120 120 128 / 0.18);
+  --segment-selected: #636366; /* the lifted segment in a segmented control */
 
-  /* the one accent */
-  --accent: oklch(0.72 0.15 270);
-  --accent-hover: oklch(0.78 0.14 270);
-  --accent-soft: oklch(0.72 0.15 270 / 0.15);
-  --accent-text: oklch(0.8 0.12 270);
-  --on-accent: oklch(0.16 0.04 270);
+  /* ---------- Accent: the one token pair reserved for the brand colour ---------- */
+  --accent: #ffffff;
+  --on-accent: #000000;
+  --selection: rgb(255 255 255 / 0.12); /* selected rows, highlighted menu items */
+  --text-highlight: rgb(235 235 245 / 0.3); /* selected text */
+  --focus: rgb(255 255 255 / 0.7);
 
-  /* status colours */
-  --success: oklch(0.76 0.15 155);
-  --success-soft: oklch(0.76 0.15 155 / 0.15);
-  --warning: oklch(0.82 0.15 85);
-  --warning-soft: oklch(0.82 0.15 85 / 0.15);
-  --danger: oklch(0.7 0.19 25);
-  --danger-hover: oklch(0.75 0.18 25);
-  --danger-soft: oklch(0.7 0.19 25 / 0.15);
-  --on-danger: oklch(0.16 0.04 25);
+  /* ---------- Status only ---------- */
+  --red: #ff453a;
+  --green: #30d158;
+  --orange: #ff9f0a;
+  --yellow: #ffd60a;
+  --on-red: #ffffff;
 
-  /* elevation */
-  --elev-1: 0 1px 2px oklch(0 0 0 / 0.35);
-  --elev-2: 0 6px 16px -4px oklch(0 0 0 / 0.45), 0 1px 2px oklch(0 0 0 / 0.3);
-  --elev-3: 0 20px 48px -12px oklch(0 0 0 / 0.6), 0 2px 6px oklch(0 0 0 / 0.3);
-}
+  /* ---------- Depth: only floating surfaces carry a shadow ---------- */
+  --float-shadow:
+    0 0 0 0.5px rgb(255 255 255 / 0.1), 0 12px 36px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.35);
 
-/* ---------- Theme: light ---------- */
-:root[data-theme="light"] {
-  color-scheme: light;
+  /* ---------- Type ---------- */
+  --font-stack:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", var(--font-inter),
+    "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
 
-  --bg: oklch(0.975 0.003 270);
-  --sunken: oklch(0.955 0.004 270);
-  --surface: oklch(1 0 0);
-  --raised: oklch(1 0 0);
-  --overlay-scrim: oklch(0.2 0.02 270 / 0.4);
+  /* macOS text styles: size / line height / tracking. Weights live in the @theme block. */
+  --ts-large-title: 26px;
+  --ts-large-title-lh: 32px;
+  --ts-large-title-tr: 0px;
+  --ts-title-1: 22px;
+  --ts-title-1-lh: 26px;
+  --ts-title-1-tr: -0.3px;
+  --ts-title-2: 17px;
+  --ts-title-2-lh: 22px;
+  --ts-title-2-tr: -0.4px;
+  --ts-title-3: 15px;
+  --ts-title-3-lh: 20px;
+  --ts-title-3-tr: -0.2px;
+  --ts-headline: 13px;
+  --ts-headline-lh: 16px;
+  --ts-headline-tr: -0.08px;
+  --ts-body: 13px;
+  --ts-body-lh: 16px;
+  --ts-body-tr: -0.08px;
+  --ts-reading: 14px; /* multi-line reading text */
+  --ts-reading-lh: 20px;
+  --ts-reading-tr: -0.15px;
+  --ts-script: 15px; /* script text */
+  --ts-script-lh: 22px;
+  --ts-script-tr: -0.2px;
+  --ts-callout: 12px;
+  --ts-callout-lh: 15px;
+  --ts-callout-tr: 0px;
+  --ts-subheadline: 11px;
+  --ts-subheadline-lh: 14px;
+  --ts-subheadline-tr: 0.06px;
+  --ts-footnote: 10px;
+  --ts-footnote-lh: 13px;
+  --ts-footnote-tr: 0.12px;
+  --ts-wordmark: 18px;
+  --ts-wordmark-lh: 24px;
 
-  --hover: oklch(0 0 0 / 0.045);
-  --pressed: oklch(0 0 0 / 0.08);
+  /* ---------- Sizes ---------- */
+  --control-h: 28px; /* regular control */
+  --control-h-lg: 32px; /* large control */
+  --row-h: 36px; /* grouped list row */
+  --row-h-lg: 40px; /* grouped form row on sign-in pages */
+  --sidebar-row-h: 28px;
+  --menu-row-h: 24px;
+  --icon: 16px;
+  --icon-sm: 14px;
+  --avatar: 22px;
+  --thumb-w: 160px; /* option thumbnail width */
+  --sidebar-w: 240px;
+  --toolbar-h: 52px;
+  --content-x: 28px;
+  --measure: 68ch;
+  --form-w: 360px;
+  --settings-w: 680px;
 
-  --fg: oklch(0.2 0.012 270);
-  --fg-muted: oklch(0.42 0.014 270);
-  --fg-subtle: oklch(0.52 0.014 270);
+  /* ---------- Motion ---------- */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slide: 250ms;
+  --dur-move: 1; /* multiplier: 0 under reduced motion removes movement, fades remain */
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-spring: cubic-bezier(0.32, 0.72, 0, 1); /* close to a critically damped spring */
+  --dur-slide-motion: calc(var(--dur-slide) * var(--dur-move));
 
-  --line: oklch(0 0 0 / 0.09);
-  --line-strong: oklch(0 0 0 / 0.2);
-  --focus: oklch(0.52 0.19 270);
-
-  --accent: oklch(0.52 0.19 270);
-  --accent-hover: oklch(0.47 0.19 270);
-  --accent-soft: oklch(0.52 0.19 270 / 0.1);
-  --accent-text: oklch(0.47 0.19 270);
-  --on-accent: oklch(0.99 0.005 270);
-
-  --success: oklch(0.5 0.13 155);
-  --success-soft: oklch(0.5 0.13 155 / 0.11);
-  --warning: oklch(0.5 0.12 70);
-  --warning-soft: oklch(0.6 0.14 80 / 0.15);
-  --danger: oklch(0.54 0.21 27);
-  --danger-hover: oklch(0.49 0.21 27);
-  --danger-soft: oklch(0.54 0.21 27 / 0.1);
-  --on-danger: oklch(0.99 0.005 27);
-
-  --elev-1: 0 1px 2px oklch(0.2 0.02 270 / 0.08);
-  --elev-2: 0 6px 16px -4px oklch(0.2 0.02 270 / 0.14), 0 1px 2px oklch(0.2 0.02 270 / 0.06);
-  --elev-3: 0 20px 48px -12px oklch(0.2 0.02 270 / 0.24), 0 2px 6px oklch(0.2 0.02 270 / 0.08);
-}
-
-/* ---------- Theme-independent tokens ---------- */
-:root {
-  --font-ui: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-code: var(--font-geist-mono), ui-monospace, monospace;
-
-  --radius-control: 0.625rem;
-  --radius-surface: 1rem;
-
-  /* motion */
-  --duration-fast: 120ms;
-  --duration-base: 200ms;
-  --duration-slow: 360ms;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-
-  /* layers */
-  --z-sticky: 20;
+  /* ---------- Layers ---------- */
+  --z-toolbar: 20;
+  --z-drawer: 60;
   --z-overlay: 100;
   --z-modal: 200;
   --z-popover: 300;
   --z-toast: 400;
   --z-tooltip: 500;
-
-  /* layout rhythm */
-  --gutter: 1rem;
-  --measure: 65ch;
 }
 
-@media (min-width: 40rem) {
+/* iOS scale on touch screens and narrow windows: larger text, 44px hit targets. */
+@media (pointer: coarse), (max-width: 40rem) {
   :root {
-    --gutter: 1.5rem;
+    --ts-large-title: 34px;
+    --ts-large-title-lh: 41px;
+    --ts-large-title-tr: 0.4px;
+    --ts-title-1: 28px;
+    --ts-title-1-lh: 34px;
+    --ts-title-1-tr: 0.38px;
+    --ts-title-2: 22px;
+    --ts-title-2-lh: 28px;
+    --ts-title-2-tr: -0.26px;
+    --ts-title-3: 20px;
+    --ts-title-3-lh: 25px;
+    --ts-title-3-tr: -0.45px;
+    --ts-headline: 17px;
+    --ts-headline-lh: 22px;
+    --ts-headline-tr: -0.43px;
+    --ts-body: 17px;
+    --ts-body-lh: 22px;
+    --ts-body-tr: -0.43px;
+    --ts-reading: 17px;
+    --ts-reading-lh: 22px;
+    --ts-reading-tr: -0.43px;
+    --ts-script: 17px;
+    --ts-script-lh: 24px;
+    --ts-script-tr: -0.43px;
+    --ts-callout: 16px;
+    --ts-callout-lh: 21px;
+    --ts-callout-tr: -0.31px;
+    --ts-subheadline: 15px;
+    --ts-subheadline-lh: 20px;
+    --ts-subheadline-tr: -0.23px;
+    --ts-footnote: 13px;
+    --ts-footnote-lh: 18px;
+    --ts-footnote-tr: -0.08px;
+
+    --control-h: 44px;
+    --control-h-lg: 44px;
+    --row-h: 44px;
+    --row-h-lg: 48px;
+    --sidebar-row-h: 44px;
+    --menu-row-h: 44px;
+    --icon: 20px;
+    --icon-sm: 17px;
+    --avatar: 30px;
+    --thumb-w: 140px;
+    --sidebar-w: 300px;
+  }
+}
+
+@media (max-width: 40rem) {
+  :root {
+    --content-x: 16px;
+    --sidebar-w: min(300px, 84vw);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --duration-fast: 1ms;
-    --duration-base: 1ms;
-    --duration-slow: 1ms;
+    --dur-move: 0;
   }
-  *,
-  *::before,
-  *::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 1ms !important;
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* High-density screens get true 0.5px hairlines. */
+@media (min-resolution: 2dppx) {
+  :root {
+    --hairline: 0.5px;
   }
 }
 
 /* ---------- Tailwind wiring ---------- */
 @theme inline {
-  --color-bg: var(--bg);
-  --color-sunken: var(--sunken);
-  --color-surface: var(--surface);
-  --color-raised: var(--raised);
-  --color-scrim: var(--overlay-scrim);
-  --color-hover: var(--hover);
-  --color-pressed: var(--pressed);
-  --color-fg: var(--fg);
-  --color-fg-muted: var(--fg-muted);
-  --color-fg-subtle: var(--fg-subtle);
-  --color-line: var(--line);
-  --color-line-strong: var(--line-strong);
-  --color-focus: var(--focus);
+  --color-*: initial;
+  --color-ground: var(--ground);
+  --color-elevated: var(--elevated);
+  --color-elevated-2: var(--elevated-2);
+  --color-elevated-3: var(--elevated-3);
+  --color-scrim: var(--scrim);
+  --color-label: var(--label);
+  --color-label-2: var(--label-2);
+  --color-label-3: var(--label-3);
+  --color-label-4: var(--label-4);
+  --color-separator: var(--separator);
+  --color-separator-opaque: var(--separator-opaque);
+  --color-fill: var(--fill);
+  --color-fill-2: var(--fill-2);
+  --color-fill-3: var(--fill-3);
+  --color-fill-4: var(--fill-4);
+  --color-segment-selected: var(--segment-selected);
   --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-accent-soft: var(--accent-soft);
-  --color-accent-text: var(--accent-text);
   --color-on-accent: var(--on-accent);
-  --color-success: var(--success);
-  --color-success-soft: var(--success-soft);
-  --color-warning: var(--warning);
-  --color-warning-soft: var(--warning-soft);
-  --color-danger: var(--danger);
-  --color-danger-hover: var(--danger-hover);
-  --color-danger-soft: var(--danger-soft);
-  --color-on-danger: var(--on-danger);
+  --color-selection: var(--selection);
+  --color-focus: var(--focus);
+  --color-red: var(--red);
+  --color-green: var(--green);
+  --color-orange: var(--orange);
+  --color-yellow: var(--yellow);
+  --color-on-red: var(--on-red);
 
-  --font-sans: var(--font-ui);
-  --font-mono: var(--font-code);
+  --font-*: initial;
+  --font-sans: var(--font-stack);
 
-  --radius-xs: 0.375rem;
-  --radius-sm: 0.5rem;
-  --radius-md: var(--radius-control);
-  --radius-lg: var(--radius-surface);
-  --radius-xl: 1.5rem;
+  --text-*: initial;
+  --text-large-title: var(--ts-large-title);
+  --text-large-title--line-height: var(--ts-large-title-lh);
+  --text-large-title--letter-spacing: var(--ts-large-title-tr);
+  --text-large-title--font-weight: 700;
+  --text-title-1: var(--ts-title-1);
+  --text-title-1--line-height: var(--ts-title-1-lh);
+  --text-title-1--letter-spacing: var(--ts-title-1-tr);
+  --text-title-1--font-weight: 700;
+  --text-title-2: var(--ts-title-2);
+  --text-title-2--line-height: var(--ts-title-2-lh);
+  --text-title-2--letter-spacing: var(--ts-title-2-tr);
+  --text-title-2--font-weight: 700;
+  --text-title-3: var(--ts-title-3);
+  --text-title-3--line-height: var(--ts-title-3-lh);
+  --text-title-3--letter-spacing: var(--ts-title-3-tr);
+  --text-title-3--font-weight: 600;
+  --text-headline: var(--ts-headline);
+  --text-headline--line-height: var(--ts-headline-lh);
+  --text-headline--letter-spacing: var(--ts-headline-tr);
+  --text-headline--font-weight: 600;
+  --text-body: var(--ts-body);
+  --text-body--line-height: var(--ts-body-lh);
+  --text-body--letter-spacing: var(--ts-body-tr);
+  --text-reading: var(--ts-reading);
+  --text-reading--line-height: var(--ts-reading-lh);
+  --text-reading--letter-spacing: var(--ts-reading-tr);
+  --text-script: var(--ts-script);
+  --text-script--line-height: var(--ts-script-lh);
+  --text-script--letter-spacing: var(--ts-script-tr);
+  --text-callout: var(--ts-callout);
+  --text-callout--line-height: var(--ts-callout-lh);
+  --text-callout--letter-spacing: var(--ts-callout-tr);
+  --text-subheadline: var(--ts-subheadline);
+  --text-subheadline--line-height: var(--ts-subheadline-lh);
+  --text-subheadline--letter-spacing: var(--ts-subheadline-tr);
+  --text-footnote: var(--ts-footnote);
+  --text-footnote--line-height: var(--ts-footnote-lh);
+  --text-footnote--letter-spacing: var(--ts-footnote-tr);
+  --text-wordmark: var(--ts-wordmark);
+  --text-wordmark--line-height: var(--ts-wordmark-lh);
+  --text-wordmark--letter-spacing: 0.18em;
+  --text-wordmark--font-weight: 600;
 
-  --shadow-xs: var(--elev-1);
-  --shadow-md: var(--elev-2);
-  --shadow-lg: var(--elev-3);
+  --font-weight-*: initial;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
 
-  --text-xs: 0.75rem;
-  --text-xs--line-height: 1.125rem;
-  --text-sm: 0.875rem;
-  --text-sm--line-height: 1.375rem;
-  --text-base: 1rem;
-  --text-base--line-height: 1.6rem;
-  --text-lg: 1.125rem;
-  --text-lg--line-height: 1.6rem;
-  --text-xl: 1.375rem;
-  --text-xl--line-height: 1.8rem;
-  --text-2xl: 1.75rem;
-  --text-2xl--line-height: 2.2rem;
-  --text-3xl: 2.25rem;
-  --text-3xl--line-height: 2.6rem;
-  --text-4xl: 3rem;
-  --text-4xl--line-height: 3.2rem;
+  --tracking-*: initial;
+  --leading-*: initial;
 
-  --tracking-tight: -0.02em;
+  --radius-*: initial;
+  --radius-control: 6px;
+  --radius-control-inner: 4px; /* concentric: a 6px control minus its 2px inset */
+  --radius-field: 10px;
+  --radius-group: 10px;
+  --radius-artwork: 12px;
+  --radius-popover: 12px;
+  --radius-sheet: 14px;
+  --radius-capsule: 9999px;
 
-  --animate-spin-slow: spin 1s linear infinite;
-  --animate-shimmer: shimmer 1.6s var(--ease-out) infinite;
+  --shadow-*: initial;
+  --shadow-float: var(--float-shadow);
 
-  @keyframes shimmer {
-    0% {
-      background-position: 120% 0;
+  --breakpoint-shell: 60rem;
+
+  --ease-*: initial;
+  --ease-out: var(--motion-ease);
+  --ease-spring: var(--motion-spring);
+
+  --animate-spin: spin 0.8s steps(8) infinite;
+  --animate-pulse: pulse 1.6s ease-in-out infinite;
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
     }
-    100% {
-      background-position: -120% 0;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  --animate-indeterminate: indeterminate 1.4s var(--motion-ease) infinite;
+  @keyframes indeterminate {
+    from {
+      translate: -100% 0;
+    }
+    to {
+      translate: 300% 0;
     }
   }
 }
 
 /* ---------- Shared utilities ---------- */
+
+/* Keyboard focus only: a white ring with a gap in the ground colour. */
 @utility focus-ring {
   &:focus-visible {
     outline: 2px solid var(--focus);
@@ -230,45 +349,97 @@
   }
 }
 
-/* Enter/exit for Base UI popups (Popover, Select, Tooltip, Dialog...) */
+/* Same ring for a wrapper whose inner control has keyboard focus (text fields). */
+@utility focus-ring-within {
+  &:has(:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Hairline separators. */
+@utility hairline-b {
+  box-shadow: inset 0 calc(var(--hairline) * -1) 0 var(--separator);
+}
+@utility hairline-t {
+  box-shadow: inset 0 var(--hairline) 0 var(--separator);
+}
+@utility hairline-r {
+  box-shadow: inset calc(var(--hairline) * -1) 0 0 var(--separator);
+}
+
+/* Enter and exit for Base UI popups. Under reduced motion only the fade remains. */
 @utility popup-motion {
   transform-origin: var(--transform-origin, center);
   transition:
-    opacity var(--duration-base) var(--ease-out),
-    scale var(--duration-base) var(--ease-out);
+    opacity var(--dur-fast) var(--motion-ease),
+    scale calc(var(--dur-fast) * var(--dur-move)) var(--motion-ease);
   &[data-starting-style],
   &[data-ending-style] {
     opacity: 0;
-    scale: 0.97;
+    scale: calc(1 - 0.04 * var(--dur-move));
+  }
+}
+
+/*
+  Title-card artwork. Type is sized from the card's own width (container query units), so a
+  shelf tile and the Up Next hero share one composition at any size.
+*/
+@utility artwork-pad {
+  padding: 6cqi 6.5cqi;
+}
+@utility artwork-title {
+  font-size: clamp(var(--ts-title-3), 6.6cqi, 76px);
+  line-height: 1.04;
+  letter-spacing: -0.022em;
+  font-weight: 700;
+  text-wrap: balance;
+}
+@utility artwork-title-hero {
+  font-size: clamp(var(--ts-title-1), 3.6cqi, 44px);
+  line-height: 1.02;
+  letter-spacing: -0.026em;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+@utility fade-motion {
+  transition: opacity var(--dur-base) var(--motion-ease);
+  &[data-starting-style],
+  &[data-ending-style] {
+    opacity: 0;
   }
 }
 
 /* ---------- Base ---------- */
 html {
-  background: var(--bg);
+  background: var(--ground);
+  color: var(--label);
+  font-family: var(--font-stack);
+  font-size: var(--ts-body);
+  line-height: var(--ts-body-lh);
+  letter-spacing: var(--ts-body-tr);
   -webkit-text-size-adjust: 100%;
-  scrollbar-color: var(--line-strong) transparent;
-  scrollbar-width: thin;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  /* The page never shifts sideways when its scrollbar comes and goes. */
+  scrollbar-gutter: stable;
 }
 
 body {
-  background: var(--bg);
-  color: var(--fg);
-  font-family: var(--font-ui);
-  font-size: 1rem;
-  line-height: 1.6;
-  overflow-x: clip;
-  text-rendering: optimizeLegibility;
+  background: var(--ground);
+  min-height: 100dvh;
 }
 
 * {
-  scrollbar-color: var(--line-strong) transparent;
   scrollbar-width: thin;
+  scrollbar-color: var(--label-4) transparent;
 }
 
 ::selection {
-  background: var(--accent-soft);
-  color: var(--fg);
+  background: var(--text-highlight);
+  color: var(--label);
 }
 
 input,
@@ -277,15 +448,20 @@ textarea {
 }
 
 ::placeholder {
-  color: var(--fg-subtle);
+  color: var(--label-2);
   opacity: 1;
 }
 
-/* Toast stacking (Base UI exposes the --toast-* variables) */
+a {
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+
+/* Toast stacking (Base UI exposes the --toast-* variables). */
 .ui-toast {
-  --gap: 0.75rem;
-  --peek: 0.75rem;
-  --scale: calc(max(0, 1 - (var(--toast-index) * 0.06)));
+  --gap: 0.5rem;
+  --peek: 0.5rem;
+  --scale: calc(max(0, 1 - (var(--toast-index) * 0.05)));
   --shrink: calc(1 - var(--scale));
   --height: var(--toast-frontmost-height, var(--toast-height));
   --offset-y: calc(
@@ -295,10 +471,9 @@ textarea {
   position: absolute;
   right: 0;
   bottom: 0;
-  left: auto;
+  left: 0;
   width: 100%;
   height: var(--height);
-  margin-right: 0;
   transform-origin: bottom;
   z-index: calc(var(--z-toast) - var(--toast-index));
   transform: translateX(var(--toast-swipe-movement-x))
@@ -310,9 +485,9 @@ textarea {
     )
     scale(var(--scale));
   transition:
-    transform 0.5s var(--ease-out),
-    opacity 0.4s,
-    height 0.15s;
+    transform calc(var(--dur-slide) * var(--dur-move)) var(--motion-spring),
+    opacity var(--dur-base),
+    height var(--dur-fast);
 }
 .ui-toast::after {
   content: "";
@@ -326,28 +501,17 @@ textarea {
   height: var(--toast-height);
   transform: translateX(var(--toast-swipe-movement-x)) translateY(var(--offset-y));
 }
-.ui-toast[data-starting-style] {
-  transform: translateY(150%);
+.ui-toast[data-starting-style],
+.ui-toast[data-ending-style] {
+  opacity: 0;
+  transform: translateY(calc(16px * var(--dur-move)));
 }
 .ui-toast[data-limited] {
   opacity: 0;
 }
-.ui-toast[data-ending-style] {
-  opacity: 0;
-  transform: translateY(150%);
-}
-.ui-toast[data-ending-style][data-swipe-direction="left"] {
-  transform: translateX(calc(var(--toast-swipe-movement-x) - 150%)) translateY(var(--offset-y));
-}
-.ui-toast[data-ending-style][data-swipe-direction="right"] {
-  transform: translateX(calc(var(--toast-swipe-movement-x) + 150%)) translateY(var(--offset-y));
-}
-.ui-toast[data-ending-style][data-swipe-direction="down"] {
-  transform: translateY(calc(var(--toast-swipe-movement-y) + 150%));
-}
 .ui-toast-content {
   overflow: hidden;
-  transition: opacity 0.25s var(--ease-out);
+  transition: opacity var(--dur-base) var(--motion-ease);
 }
 .ui-toast-content[data-behind] {
   opacity: 0;

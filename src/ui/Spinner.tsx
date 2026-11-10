@@ -7,24 +7,32 @@ export interface SpinnerProps extends HTMLAttributes<HTMLSpanElement> {
   label?: string;
 }
 
-const sizes = { sm: "size-4", md: "size-5", lg: "size-8" } as const;
+const sizes = { sm: "size-(--icon-sm)", md: "size-(--icon)", lg: "size-8" } as const;
 
+const SPOKES = 8;
+
+/** Apple's activity indicator: eight spokes stepping round. Static under reduced motion. */
 export function Spinner({ size = "md", label = "Loading", className, ...rest }: SpinnerProps) {
   return (
     <span role="status" aria-label={label} className={cn("inline-flex", className)} {...rest}>
       <svg
         viewBox="0 0 24 24"
-        fill="none"
         aria-hidden="true"
-        className={cn("animate-spin-slow", sizes[size])}
+        className={cn("animate-spin motion-reduce:animate-none", sizes[size])}
       >
-        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.2" />
-        <path
-          d="M21 12a9 9 0 0 0-9-9"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
+        {Array.from({ length: SPOKES }, (_, i) => (
+          <rect
+            key={i}
+            x="11"
+            y="2"
+            width="2"
+            height="6"
+            rx="1"
+            fill="currentColor"
+            opacity={0.25 + (0.75 * (SPOKES - i)) / SPOKES}
+            transform={`rotate(${(-360 / SPOKES) * i} 12 12)`}
+          />
+        ))}
       </svg>
     </span>
   );

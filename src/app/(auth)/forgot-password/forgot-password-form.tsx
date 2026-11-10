@@ -2,12 +2,11 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import { MailCheck } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { callAuth } from "@/lib/auth-call";
 import { describeAuthFailure } from "@/lib/auth-errors";
-import { Button, Field, Input } from "@/ui";
-import { FormMessage } from "@/app/_components/form-message";
+import { Button, GroupedList, GroupedListField, Input } from "@/ui";
+import { AuthHeading, AuthLink, AuthLinks } from "../_components/auth-parts";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -18,7 +17,7 @@ export function ForgotPasswordForm() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setError("That does not look like an email address. Check for a missing @ or dot.");
+      setError("Enter an email address such as name@example.com.");
       return;
     }
     setSubmitting(true);
@@ -42,24 +41,17 @@ export function ForgotPasswordForm() {
 
   if (done) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-8">
+        <AuthHeading title="Check Your Email">
+          If there is an account for <span className="text-label">{email.trim()}</span>, a reset
+          link is on its way. It expires in one hour.
+        </AuthHeading>
         <div className="flex flex-col gap-3">
-          <span className="flex size-12 items-center justify-center rounded-full bg-accent-soft text-accent-text [&_svg]:size-6">
-            <MailCheck aria-hidden="true" />
-          </span>
-          <h1 className="text-2xl font-semibold tracking-tight">Check your email</h1>
-          <p className="text-sm text-fg-muted">
-            If there is an account for{" "}
-            <strong className="font-medium text-fg">{email.trim()}</strong>, a reset link is on its
-            way. It works for one hour.
-          </p>
-        </div>
-        <div className="flex flex-col gap-3">
-          <Button variant="secondary" onClick={() => setDone(false)}>
-            Try a different email
+          <Button variant="standard" size="large" onClick={() => setDone(false)} className="w-full">
+            Use a Different Email
           </Button>
-          <Button variant="ghost" href="/login">
-            Back to sign in
+          <Button variant="plain" size="large" render={<Link href="/login" />} className="w-full">
+            Back to Sign In
           </Button>
         </div>
       </div>
@@ -67,38 +59,38 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight">Reset your password</h1>
-        <p className="text-sm text-fg-muted">
-          Enter your email and we will send you a link to choose a new password.
-        </p>
-      </div>
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-        <Field label="Email" required>
-          <Input
-            name="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder="you@example.com"
-            autoFocus
-          />
-        </Field>
-        {error ? <FormMessage tone="error">{error}</FormMessage> : null}
-        <Button type="submit" size="lg" loading={submitting}>
-          Send reset link
+    <div className="flex flex-col gap-8">
+      <AuthHeading title="Reset Password">
+        Enter the email for your account to receive a link for choosing a new password.
+      </AuthHeading>
+      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+        <GroupedList size="large">
+          <GroupedListField label="Email" required error={error ?? undefined}>
+            <Input
+              name="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              autoCapitalize="none"
+              spellCheck={false}
+              autoFocus
+            />
+          </GroupedListField>
+        </GroupedList>
+        <Button
+          type="submit"
+          variant="prominent"
+          size="large"
+          loading={submitting}
+          className="mt-2 w-full"
+        >
+          Send Reset Link
         </Button>
       </form>
-      <p className="text-center text-sm text-fg-muted">
-        Remembered it?{" "}
-        <Link href="/login" className="rounded-xs text-accent-text focus-ring hover:underline">
-          Sign in
-        </Link>
-      </p>
+      <AuthLinks>
+        <AuthLink href="/login">Back to Sign In</AuthLink>
+      </AuthLinks>
     </div>
   );
 }

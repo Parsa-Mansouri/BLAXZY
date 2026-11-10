@@ -1,11 +1,13 @@
 import Link from "next/link";
+import { cn } from "@/ui";
 
-/** The BLAXZY wordmark, linking home. */
-export function Wordmark({ href = "/" }: { href?: string }) {
+/** The BLAXZY wordmark: wide-tracked capitals, linking home. */
+export function Wordmark({ href = "/", className }: { href?: string; className?: string }) {
   return (
     <Link
       href={href}
-      className="rounded-sm text-lg font-semibold tracking-[0.18em] text-fg focus-ring"
+      aria-label="BLAXZY, home"
+      className={cn("rounded-control text-wordmark text-label focus-ring", className)}
     >
       BLAXZY
     </Link>

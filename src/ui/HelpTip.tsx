@@ -1,75 +1,75 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Popover } from "@base-ui/react/popover";
-import { CircleHelp } from "lucide-react";
 import { cn } from "./cn";
+import { PopoverArrow } from "./Popover";
 import { popupSurface } from "./styles";
 
 export interface HelpTipProps {
-  /** The explanation. Keep it to one or two plain sentences. */
+  /** The explanation. One or two plain sentences. */
   children: ReactNode;
   title?: string;
-  /** Optional concrete example, shown in a quiet block. */
+  /** Optional concrete example, shown under the explanation. */
   example?: ReactNode;
-  /** Accessible name of the "?" button. */
+  /** Accessible name of the button. */
   label?: string;
   side?: "top" | "bottom" | "left" | "right";
   className?: string;
 }
 
-/** A small "?" that explains itself on hover, keyboard focus, or tap. */
+/** The round "?" help button. Opens a popover that explains the thing next to it. */
 export function HelpTip({
   children,
   title,
   example,
-  label = "What is this?",
+  label = "Help",
   side = "top",
   className,
 }: HelpTipProps) {
-  const [open, setOpen] = useState(false);
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root>
       <Popover.Trigger
-        openOnHover
-        delay={150}
-        closeDelay={120}
         aria-label={label}
-        onFocus={(event) => {
-          if (event.currentTarget.matches(":focus-visible")) setOpen(true);
-        }}
-        onBlur={() => setOpen(false)}
         className={cn(
-          "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-fg-subtle focus-ring",
-          "transition-colors duration-(--duration-fast) hover:bg-hover hover:text-fg data-[popup-open]:text-accent-text",
+          "relative inline-flex size-(--icon) shrink-0 items-center justify-center rounded-full bg-fill-2 text-subheadline font-semibold text-label-2 focus-ring",
+          "transition-colors duration-(--dur-fast) hover:bg-fill hover:text-label data-[popup-open]:bg-fill data-[popup-open]:text-label",
+          "pointer-coarse:after:absolute pointer-coarse:after:-inset-3 pointer-coarse:after:content-['']",
           className,
         )}
       >
-        <CircleHelp aria-hidden="true" className="size-4" />
+        <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[62.5%]">
+          <path
+            d="M5.6 5.7a2.4 2.4 0 0 1 4.7.6c0 1.6-2.3 2-2.3 3.4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+          <circle cx="8" cy="12.6" r="1.1" fill="currentColor" />
+        </svg>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner
           side={side}
-          sideOffset={8}
-          collisionPadding={12}
+          sideOffset={10}
+          collisionPadding={8}
           className="z-(--z-popover)"
         >
           <Popover.Popup
             initialFocus={false}
-            className={cn(
-              popupSurface,
-              "flex w-72 max-w-[calc(100vw-1.5rem)] flex-col gap-2 p-4 text-sm",
-            )}
+            className={cn(popupSurface, "flex w-72 max-w-[calc(100vw-1rem)] flex-col gap-1 p-3")}
           >
-            {title ? <Popover.Title className="font-medium text-fg">{title}</Popover.Title> : null}
-            <Popover.Description render={<div />} className="text-fg-muted">
+            <PopoverArrow />
+            {title ? <Popover.Title className="text-headline">{title}</Popover.Title> : null}
+            <Popover.Description render={<div />} className="text-callout text-label-2">
               {children}
             </Popover.Description>
             {example ? (
-              <div className="rounded-sm bg-sunken px-3 py-2 text-fg-muted">
-                <span className="mr-1.5 font-medium text-fg">Example</span>
+              <p className="pt-1 text-callout text-label-2">
+                <span className="text-label">Example: </span>
                 {example}
-              </div>
+              </p>
             ) : null}
           </Popover.Popup>
         </Popover.Positioner>

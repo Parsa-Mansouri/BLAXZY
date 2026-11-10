@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getSession, safeNextPath } from "@/server/auth";
 import { LoginForm } from "./login-form";
 
-export const metadata: Metadata = { title: "Sign in · BLAXZY" };
+export const metadata: Metadata = { title: "Sign In · BLAXZY" };
 
 export default async function LoginPage({
   searchParams,

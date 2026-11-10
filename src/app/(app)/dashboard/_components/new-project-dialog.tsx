@@ -2,11 +2,12 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Dialog, Field, Input } from "@/ui";
+import { Button, GroupedList, GroupedListField, Input, Sheet } from "@/ui";
 import { createProjectAction } from "../actions";
 
 const FORM_ID = "new-project-form";
 
+/** The New Project sheet: a working title, then straight into the project. */
 export function NewProjectDialog({
   open,
   onOpenChange,
@@ -33,7 +34,7 @@ export function NewProjectDialog({
   }
 
   return (
-    <Dialog
+    <Sheet
       open={open}
       onOpenChange={(next) => {
         if (pending) return;
@@ -43,31 +44,32 @@ export function NewProjectDialog({
         }
         onOpenChange(next);
       }}
-      title="Start a project"
-      description="Give your film a working title. Next, you will choose its look."
+      title="New Project"
+      description="Enter a working title. The next step is choosing the film’s look."
       footer={
         <>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+          <Button variant="standard" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
           </Button>
-          <Button type="submit" form={FORM_ID} variant="primary" loading={pending}>
-            Create project
+          <Button type="submit" form={FORM_ID} variant="prominent" loading={pending}>
+            Create
           </Button>
         </>
       }
     >
       <form id={FORM_ID} onSubmit={onSubmit} noValidate>
-        <Field label="Title" required error={error} hint="You can change this any time.">
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Midnight in Tabriz"
-            maxLength={200}
-            autoFocus
-            autoComplete="off"
-          />
-        </Field>
+        <GroupedList footer="You can change the title later.">
+          <GroupedListField label="Title" required error={error}>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={200}
+              autoFocus
+              autoComplete="off"
+            />
+          </GroupedListField>
+        </GroupedList>
       </form>
-    </Dialog>
+    </Sheet>
   );
 }

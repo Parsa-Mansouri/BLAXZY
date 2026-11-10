@@ -1,37 +1,41 @@
 import type { Metadata } from "next";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, requireUser } from "@/server/auth";
-import { Card, CardHeader } from "@/ui";
+import { Toolbar } from "@/ui";
 import { ChangePasswordForm } from "./_components/change-password-form";
 import { ProfileForm } from "./_components/profile-form";
 import { SignOutButton } from "./_components/sign-out-button";
 
 export const metadata: Metadata = { title: "Account · BLAXZY" };
 
+function initialOf(name: string, email: string): string {
+  return (name.trim()[0] ?? email[0] ?? "?").toUpperCase();
+}
+
 export default async function AccountPage() {
   const user = await requireUser();
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Account</h1>
-      <Card padding="lg" className="flex flex-col gap-6">
-        <CardHeader title="Your details" />
+    <>
+      <Toolbar title="Account" />
+      <div className="flex max-w-(--settings-w) flex-col gap-8 px-(--content-x) pt-4 pb-16 shell:pt-6">
+        <div className="flex items-center gap-4 px-1">
+          <span
+            aria-hidden="true"
+            className="flex size-14 shrink-0 items-center justify-center rounded-full bg-fill text-title-1 text-label"
+          >
+            {initialOf(user.name, user.email)}
+          </span>
+          <div className="flex min-w-0 flex-col">
+            <p className="truncate text-title-2">{user.name}</p>
+            <p className="truncate text-body text-label-2">{user.email}</p>
+          </div>
+        </div>
         <ProfileForm name={user.name} email={user.email} />
-      </Card>
-      <Card padding="lg" className="flex flex-col gap-6">
-        <CardHeader
-          title="Password"
-          description="Changing it signs you out on all your other devices."
-        />
         <ChangePasswordForm
           minPasswordLength={MIN_PASSWORD_LENGTH}
           maxPasswordLength={MAX_PASSWORD_LENGTH}
         />
-      </Card>
-      <Card padding="lg" className="flex flex-col gap-4">
-        <CardHeader title="Sign out" description="You will need your password to come back." />
-        <div>
-          <SignOutButton />
-        </div>
-      </Card>
-    </div>
+        <SignOutButton />
+      </div>
+    </>
   );
 }

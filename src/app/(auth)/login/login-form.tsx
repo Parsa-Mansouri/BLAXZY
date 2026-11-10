@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { callAuth } from "@/lib/auth-call";
 import { describeAuthFailure } from "@/lib/auth-errors";
-import { Button, Field, Input } from "@/ui";
+import { Button, GroupedList, GroupedListField, Input } from "@/ui";
 import { FormMessage } from "@/app/_components/form-message";
 import { PasswordField } from "@/app/_components/password-field";
+import { AuthHeading, AuthLink, AuthLinks } from "../_components/auth-parts";
 import { CheckEmail } from "../_components/check-email";
 
 export function LoginForm({ next }: { next: string }) {
@@ -22,7 +22,7 @@ export function LoginForm({ next }: { next: string }) {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!email.trim() || !password) {
-      setError("Enter your email and password to sign in.");
+      setError("Enter your email and password.");
       return;
     }
     setSubmitting(true);
@@ -47,59 +47,57 @@ export function LoginForm({ next }: { next: string }) {
     return (
       <CheckEmail
         email={email.trim()}
-        title="Verify your email first"
-        intro="Your email is not verified yet, so we just sent you a fresh link."
+        title="Verify Your Email"
+        intro="This email address is not verified yet, so a new link was sent."
         callbackURL={next}
         onBack={() => setNeedsVerification(false)}
-        backLabel="Back to sign in"
+        backLabel="Back to Sign In"
       />
     );
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-        <p className="text-sm text-fg-muted">Sign in to pick up your films where you left them.</p>
-      </div>
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-        <Field label="Email" required>
-          <Input
-            name="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder="you@example.com"
-            autoFocus
+    <div className="flex flex-col gap-8">
+      <AuthHeading title="Sign In" />
+      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+        <GroupedList size="large">
+          <GroupedListField label="Email" required>
+            <Input
+              name="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              autoCapitalize="none"
+              spellCheck={false}
+              autoFocus
+            />
+          </GroupedListField>
+          <PasswordField
+            label="Password"
+            name="password"
+            value={password}
+            onChange={setPassword}
+            autoComplete="current-password"
           />
-        </Field>
-        <PasswordField
-          label="Password"
-          name="password"
-          value={password}
-          onChange={setPassword}
-          autoComplete="current-password"
-        />
-        <Link
-          href="/forgot-password"
-          className="-mt-2 w-fit rounded-xs text-sm text-accent-text focus-ring hover:underline"
-        >
-          Forgot your password?
-        </Link>
+        </GroupedList>
         {error ? <FormMessage tone="error">{error}</FormMessage> : null}
-        <Button type="submit" size="lg" loading={submitting}>
-          Sign in
+        <Button
+          type="submit"
+          variant="prominent"
+          size="large"
+          loading={submitting}
+          className="mt-2 w-full"
+        >
+          Sign In
         </Button>
       </form>
-      <p className="text-center text-sm text-fg-muted">
-        New here?{" "}
-        <Link href="/signup" className="rounded-xs text-accent-text focus-ring hover:underline">
-          Create an account
-        </Link>
-      </p>
+      <AuthLinks>
+        <AuthLink href="/forgot-password">Forgot Password?</AuthLink>
+        <p>
+          No account? <AuthLink href="/signup">Create Account</AuthLink>
+        </p>
+      </AuthLinks>
     </div>
   );
 }

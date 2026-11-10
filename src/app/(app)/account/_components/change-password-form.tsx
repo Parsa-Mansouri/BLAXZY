@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth-client";
 import { callAuth } from "@/lib/auth-call";
 import { describeAuthFailure } from "@/lib/auth-errors";
-import { Button, useToast } from "@/ui";
+import { Button, GroupedList, useToast } from "@/ui";
 import { FormMessage } from "@/app/_components/form-message";
 import { PasswordField } from "@/app/_components/password-field";
 
@@ -29,11 +29,11 @@ export function ChangePasswordForm({
     setCurrentError(current ? undefined : "Enter your current password.");
     let nextProblem: string | undefined;
     if (next.length < minPasswordLength) {
-      nextProblem = `Your new password needs at least ${minPasswordLength} characters. It has ${next.length}.`;
+      nextProblem = `Use at least ${minPasswordLength} characters. This has ${next.length}.`;
     } else if (next.length > maxPasswordLength) {
-      nextProblem = `Your new password can be at most ${maxPasswordLength} characters. Shorten it.`;
+      nextProblem = `Use at most ${maxPasswordLength} characters.`;
     } else if (next === current) {
-      nextProblem = "Your new password is the same as the current one. Choose a different one.";
+      nextProblem = "This is the current password. Choose a different one.";
     }
     setNextError(nextProblem);
     if (!current || nextProblem) return;
@@ -46,7 +46,7 @@ export function ChangePasswordForm({
     if (result.ok) {
       setCurrent("");
       setNext("");
-      toast.success("Password changed", "You were signed out on all your other devices.");
+      toast.success("Password changed", "Your other devices were signed out.");
     } else if (result.failure.code === "INVALID_PASSWORD") {
       setCurrentError(describeAuthFailure(result.failure, "change-password"));
     } else {
@@ -55,26 +55,30 @@ export function ChangePasswordForm({
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-      <PasswordField
-        label="Current password"
-        value={current}
-        onChange={setCurrent}
-        autoComplete="current-password"
-        error={currentError}
-      />
-      <PasswordField
-        label="New password"
-        value={next}
-        onChange={setNext}
-        autoComplete="new-password"
-        minLength={minPasswordLength}
-        error={nextError}
-      />
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
+      <GroupedList
+        header="Password"
+        footer={`Use at least ${minPasswordLength} characters. Changing the password signs you out on your other devices.`}
+      >
+        <PasswordField
+          label="Current"
+          value={current}
+          onChange={setCurrent}
+          autoComplete="current-password"
+          error={currentError}
+        />
+        <PasswordField
+          label="New"
+          value={next}
+          onChange={setNext}
+          autoComplete="new-password"
+          error={nextError}
+        />
+      </GroupedList>
       {error ? <FormMessage tone="error">{error}</FormMessage> : null}
-      <div>
-        <Button type="submit" variant="primary" loading={pending}>
-          Change password
+      <div className="flex justify-end">
+        <Button type="submit" variant="standard" loading={pending}>
+          Change Password
         </Button>
       </div>
     </form>

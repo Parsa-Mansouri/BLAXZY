@@ -33,20 +33,20 @@ const icons = {
 } as const;
 
 const tones: Record<ToastKind, string> = {
-  info: "text-accent-text",
-  success: "text-success",
-  warning: "text-warning",
-  danger: "text-danger",
+  info: "text-label-2",
+  success: "text-green",
+  warning: "text-orange",
+  danger: "text-red",
 };
 
-const DEFAULT_DURATION = 5000;
+const DEFAULT_DURATION = 4000;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   return (
-    <BaseToast.Provider limit={4}>
+    <BaseToast.Provider limit={3}>
       {children}
       <BaseToast.Portal>
-        <BaseToast.Viewport className="fixed inset-x-4 bottom-4 z-(--z-toast) mx-auto sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-96">
+        <BaseToast.Viewport className="fixed inset-x-4 bottom-4 z-(--z-toast) mx-auto max-w-sm shell:inset-x-auto shell:right-6 shell:bottom-6 shell:w-sm">
           <ToastList />
         </BaseToast.Viewport>
       </BaseToast.Portal>
@@ -63,19 +63,19 @@ function ToastList() {
       <BaseToast.Root
         key={toast.id}
         toast={toast}
-        className="ui-toast rounded-lg border border-line-strong bg-raised text-fg shadow-lg"
+        className="ui-toast rounded-popover bg-elevated-2 text-label shadow-float"
       >
-        <BaseToast.Content className="ui-toast-content flex items-start gap-3 p-4">
-          <Icon aria-hidden="true" className={cn("mt-0.5 size-5 shrink-0", tones[kind])} />
+        <BaseToast.Content className="ui-toast-content flex items-start gap-2.5 p-3 pr-2">
+          <Icon aria-hidden="true" className={cn("mt-px size-(--icon) shrink-0", tones[kind])} />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <BaseToast.Title className="text-sm font-medium" />
-            <BaseToast.Description className="text-sm text-fg-muted" />
+            <BaseToast.Title className="text-headline" />
+            <BaseToast.Description className="text-callout text-label-2" />
           </div>
           <BaseToast.Close
             aria-label="Dismiss"
-            className="-mt-1 -mr-1 flex size-8 shrink-0 items-center justify-center rounded-sm text-fg-subtle focus-ring transition-colors hover:bg-hover hover:text-fg"
+            className="-my-1 flex size-(--control-h) shrink-0 items-center justify-center rounded-control text-label-2 focus-ring transition-colors hover:bg-fill-4 hover:text-label"
           >
-            <X aria-hidden="true" className="size-4" />
+            <X aria-hidden="true" className="size-(--icon-sm)" />
           </BaseToast.Close>
         </BaseToast.Content>
       </BaseToast.Root>

@@ -13,8 +13,8 @@ import { toSummary, type ProjectListPage, type ProjectSummary } from "./_lib/sum
 
 type Failure = { ok: false; error: string };
 
-const GENERIC_ERROR = "Something went wrong on our side. Try again in a moment.";
-const NOT_FOUND = "We could not find that project. It may have been archived. Reload the page.";
+const GENERIC_ERROR = "The server had a problem. Try again in a moment.";
+const NOT_FOUND = "This project no longer exists. It may have been archived. Reload the page.";
 
 function failure(error: unknown): Failure {
   if (error instanceof ProjectInputError) return { ok: false, error: error.message };

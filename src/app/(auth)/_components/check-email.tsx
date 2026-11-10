@@ -1,26 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MailCheck } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { callAuth } from "@/lib/auth-call";
 import { describeAuthFailure } from "@/lib/auth-errors";
 import { Button, Hint } from "@/ui";
 import { FormMessage } from "@/app/_components/form-message";
+import { AuthHeading } from "./auth-parts";
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
 export interface CheckEmailProps {
   email: string;
   title: string;
-  /** One calm sentence under the title. */
+  /** One sentence under the title. */
   intro: string;
   callbackURL: string;
   onBack: () => void;
   backLabel: string;
 }
 
-/** "Check your email" state with a resend button (cooldown so people do not hammer it). */
+/** "Check your email" state with a resend button (with a cooldown so it is not pressed twice). */
 export function CheckEmail({
   email,
   title,
@@ -49,7 +49,7 @@ export function CheckEmail({
     if (result.ok) {
       setMessage({
         tone: "success",
-        text: "A new link is on its way. The old one no longer works.",
+        text: "A new link was sent. The previous link no longer works.",
       });
       setCooldown(RESEND_COOLDOWN_SECONDS);
     } else {
@@ -58,27 +58,28 @@ export function CheckEmail({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
+      <AuthHeading title={title}>
+        {intro} The link was sent to <span className="text-label">{email}</span> and expires in one
+        hour.
+      </AuthHeading>
       <div className="flex flex-col gap-3">
-        <span className="flex size-12 items-center justify-center rounded-full bg-accent-soft text-accent-text [&_svg]:size-6">
-          <MailCheck aria-hidden="true" />
-        </span>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        <p className="text-sm text-fg-muted">
-          {intro} We sent a link to <strong className="font-medium text-fg">{email}</strong>. It
-          works for one hour.
-        </p>
-      </div>
-      <Hint tone="info">Nothing there? Look in your spam folder, then ask for a new link.</Hint>
-      {message ? <FormMessage tone={message.tone}>{message.text}</FormMessage> : null}
-      <div className="flex flex-col gap-3">
-        <Button variant="secondary" onClick={resend} loading={sending} disabled={cooldown > 0}>
-          {cooldown > 0 ? `Send a new link in ${cooldown}s` : "Send a new link"}
+        {message ? <FormMessage tone={message.tone}>{message.text}</FormMessage> : null}
+        <Button
+          variant="standard"
+          size="large"
+          onClick={resend}
+          loading={sending}
+          disabled={cooldown > 0}
+          className="w-full tabular-nums"
+        >
+          {cooldown > 0 ? `Send New Link in ${cooldown}s` : "Send New Link"}
         </Button>
-        <Button variant="ghost" onClick={onBack}>
+        <Button variant="plain" size="large" onClick={onBack} className="w-full">
           {backLabel}
         </Button>
       </div>
+      <Hint className="text-center">If the email has not arrived, check your spam folder.</Hint>
     </div>
   );
 }

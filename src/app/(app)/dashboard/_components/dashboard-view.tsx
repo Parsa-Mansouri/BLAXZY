@@ -1,139 +1,140 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
-import { Clapperboard, Plus } from "lucide-react";
-import { PROJECT_STAGES } from "@/lib/stages";
-import { Button, CoachMark, EmptyState, Hint, useDismissed, useToast } from "@/ui";
-import { loadMoreProjectsAction } from "../actions";
+import { useRef, useState } from "react";
+import Link from "next/link";
+import { Plus } from "lucide-react";
+import { PROJECT_STAGES, stageLabel, stageStep } from "@/lib/stages";
+import { Button, TitleCard, Tip, Toolbar, useDismissed } from "@/ui";
 import type { ProjectSummary } from "../_lib/summary";
 import { NewProjectDialog } from "./new-project-dialog";
-import { ProjectCard } from "./project-card";
+import { ProjectGrid } from "./project-grid";
+import { useProjectList } from "./use-project-list";
 
 export function DashboardView({
-  firstName,
   initialItems,
   initialCursor,
 }: {
-  firstName: string;
   initialItems: ProjectSummary[];
   initialCursor: string | null;
 }) {
-  const toast = useToast();
-  const [items, setItems] = useState(initialItems);
-  const [cursor, setCursor] = useState(initialCursor);
+  const list = useProjectList(initialItems, initialCursor);
   const [creating, setCreating] = useState(false);
-  const [loadingMore, startLoadMore] = useTransition();
-  const startButton = useRef<HTMLElement>(null);
-  const coach = useDismissed("dashboard-start-project");
-
-  function loadMore() {
-    if (!cursor) return;
-    startLoadMore(async () => {
-      const result = await loadMoreProjectsAction(cursor);
-      if (result.ok) {
-        setItems((current) => {
-          const known = new Set(current.map((p) => p.id));
-          return [...current, ...result.items.filter((p) => !known.has(p.id))];
-        });
-        setCursor(result.nextCursor);
-      } else {
-        toast.danger("Could not load more projects", result.error);
-      }
-    });
-  }
-
-  const startAction = (
-    <Button
-      ref={startButton}
-      size="lg"
-      variant="primary"
-      leadingIcon={<Plus />}
-      onClick={() => setCreating(true)}
-    >
-      Start a project
-    </Button>
-  );
+  const newButton = useRef<HTMLElement>(null);
+  const tip = useDismissed("dashboard-start-project");
+  const upNext = list.items[0];
 
   return (
-    <div className="flex flex-col gap-10">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-3xl font-semibold tracking-tight">Welcome, {firstName}</h1>
-          <p className="text-fg-muted">
-            {items.length === 0 ? "Ready to make your first film?" : "Pick up where you left off."}
-          </p>
-        </div>
-        {startAction}
+    <>
+      <Toolbar
+        title="Home"
+        trailing={
+          upNext ? (
+            <Button
+              ref={newButton}
+              variant="prominent"
+              leadingIcon={<Plus />}
+              onClick={() => setCreating(true)}
+              aria-label="New Project"
+              className="max-sm:w-(--control-h) max-sm:px-0"
+            >
+              <span className="max-sm:sr-only">New Project</span>
+            </Button>
+          ) : null
+        }
+      />
+
+      <div className="flex flex-col gap-10 px-(--content-x) pt-2 pb-16">
+        {upNext ? (
+          <>
+            <section aria-labelledby="up-next" className="flex flex-col gap-3">
+              <h2 id="up-next" className="text-title-2">
+                Up Next
+              </h2>
+              <TitleCard
+                size="hero"
+                title={upNext.title}
+                line={`${stageLabel(upNext.stage)} · ${stageStep(upNext.stage)}`}
+                action={
+                  <Button
+                    variant="standard"
+                    size="large"
+                    render={<Link href={`/projects/${upNext.id}`} />}
+                    aria-label={`Continue ${upNext.title}`}
+                  >
+                    Continue
+                  </Button>
+                }
+              />
+            </section>
+            <section aria-labelledby="projects" className="flex flex-col gap-3">
+              <h2 id="projects" className="text-title-2">
+                Projects
+              </h2>
+              <ProjectGrid
+                items={list.items}
+                hasMore={Boolean(list.cursor)}
+                loadingMore={list.loadingMore}
+                onLoadMore={list.loadMore}
+                onRenamed={list.onRenamed}
+                onArchived={list.onArchived}
+              />
+            </section>
+          </>
+        ) : (
+          <section
+            aria-labelledby="opening"
+            className="flex max-w-(--measure) flex-col gap-8 pt-6 shell:pt-12"
+          >
+            <div className="flex flex-col gap-3">
+              <h2 id="opening" className="text-large-title text-balance">
+                Make a film from an idea or a script.
+              </h2>
+              <p className="text-reading text-label-2">
+                BLAXZY takes a project through four stages and returns every clip of the film,
+                organised by scene and ready for your editor.
+              </p>
+            </div>
+            <div>
+              <Button
+                ref={newButton}
+                variant="prominent"
+                size="large"
+                leadingIcon={<Plus />}
+                onClick={() => setCreating(true)}
+              >
+                New Project
+              </Button>
+            </div>
+            <ol aria-label="The four stages" className="flex flex-col">
+              {PROJECT_STAGES.map((stage, index) => (
+                <li
+                  key={stage.key}
+                  className="grid grid-cols-[--spacing(8)_1fr] gap-x-2 py-3 hairline-t"
+                >
+                  <span className="text-headline text-label-2 tabular-nums">{index + 1}</span>
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-headline">{stage.label}</span>
+                    <span className="text-body text-label-2">{stage.summary}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
       </div>
 
-      {items.length === 0 ? (
-        <EmptyState
-          icon={<Clapperboard />}
-          title="Your first film starts here"
-          description="Tell us what to call it and we will guide you through four steps."
-          action={
-            <div className="flex flex-col items-center gap-5">
-              <ol className="flex flex-wrap justify-center gap-2" aria-label="The four steps">
-                {PROJECT_STAGES.map((stage, index) => (
-                  <li
-                    key={stage.key}
-                    className="rounded-full border border-line px-3 py-1 text-sm text-fg-muted"
-                  >
-                    <span className="mr-1.5 text-fg-subtle tabular-nums">{index + 1}</span>
-                    {stage.label}
-                  </li>
-                ))}
-              </ol>
-              <Button variant="secondary" leadingIcon={<Plus />} onClick={() => setCreating(true)}>
-                Start a project
-              </Button>
-            </div>
-          }
-        />
-      ) : (
-        <section aria-labelledby="recent-heading" className="flex flex-col gap-4">
-          <h2 id="recent-heading" className="text-sm font-medium text-fg-muted">
-            Recent projects
-          </h2>
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((project) => (
-              <li key={project.id}>
-                <ProjectCard
-                  project={project}
-                  onRenamed={(updated) =>
-                    setItems((current) => {
-                      const rest = current.filter((p) => p.id !== updated.id);
-                      return [updated, ...rest];
-                    })
-                  }
-                  onArchived={(id) => setItems((current) => current.filter((p) => p.id !== id))}
-                />
-              </li>
-            ))}
-          </ul>
-          {cursor ? (
-            <div className="flex justify-center pt-2">
-              <Button variant="secondary" onClick={loadMore} loading={loadingMore}>
-                Load more
-              </Button>
-            </div>
-          ) : (
-            <Hint tone="info">Archived projects are kept safe and stay off this list.</Hint>
-          )}
-        </section>
-      )}
-
       <NewProjectDialog open={creating} onOpenChange={setCreating} />
-      <CoachMark
-        open={!coach.dismissed && !creating}
-        anchor={startButton}
-        title="Start here"
-        onDismiss={coach.dismiss}
-        side="bottom"
-        align="end"
+      <Tip
+        open={!tip.dismissed && !creating}
+        anchor={newButton}
+        title="Create a Project"
+        onDismiss={tip.dismiss}
+        side={upNext ? "bottom" : "right"}
+        align={upNext ? "end" : "center"}
       >
-        Every film begins as a project. Pick a title and we will walk you through the rest.
-      </CoachMark>
-    </div>
+        Each film starts as a project. Give it a working title and BLAXZY guides you through the
+        four stages.
+      </Tip>
+    </>
   );
 }

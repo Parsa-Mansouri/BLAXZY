@@ -41,16 +41,16 @@ export function describeAuthFailure(failure: AuthFailure, context: AuthContext):
       break;
   }
   if (failure.status >= 500) {
-    return "Something went wrong on our side. Try again in a moment.";
+    return "The server had a problem. Try again in a moment.";
   }
   if (failure.status === 0) {
-    return "We could not reach the server. Check your connection and try again.";
+    return "The server could not be reached. Check your connection and try again.";
   }
   if (context === "sign-in") {
-    return "We could not sign you in. Check your email and password and try again.";
+    return "Sign-in failed. Check your email and password and try again.";
   }
   if (context === "sign-up") {
-    return "We could not create your account. Check the details and try again.";
+    return "The account could not be created. Check the details and try again.";
   }
   return failure.message && failure.message.length < 120
     ? `${failure.message.replace(/\.$/, "")}. Check what you entered and try again.`

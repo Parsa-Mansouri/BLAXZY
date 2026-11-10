@@ -8,27 +8,26 @@ export interface ProgressBarProps {
   /** 0-100, or null for an indeterminate bar. */
   value: number | null;
   label?: ReactNode;
-  /** Shows the percentage on the right. */
+  /** Shows the percentage on the trailing side. */
   showValue?: boolean;
-  tone?: "accent" | "success" | "warning" | "danger";
-  size?: "sm" | "md";
+  /** Status colour for the fill; white otherwise. */
+  tone?: "default" | "success" | "warning" | "danger";
   className?: string;
   "aria-label"?: string;
 }
 
 const fills = {
-  accent: "bg-accent",
-  success: "bg-success",
-  warning: "bg-warning",
-  danger: "bg-danger",
+  default: "bg-accent",
+  success: "bg-green",
+  warning: "bg-orange",
+  danger: "bg-red",
 } as const;
 
 export function ProgressBar({
   value,
   label,
   showValue = false,
-  tone = "accent",
-  size = "md",
+  tone = "default",
   className,
   "aria-label": ariaLabel,
 }: ProgressBarProps) {
@@ -36,28 +35,23 @@ export function ProgressBar({
     <Progress.Root
       value={value}
       aria-label={label ? undefined : ariaLabel}
-      className={cn("flex flex-col gap-2", className)}
+      className={cn("flex flex-col gap-1.5", className)}
     >
       {label || showValue ? (
-        <div className="flex items-baseline justify-between gap-3 text-sm">
-          {label ? <Progress.Label className="text-fg">{label}</Progress.Label> : <span />}
+        <div className="flex items-baseline justify-between gap-3 text-callout">
+          {label ? <Progress.Label className="text-label">{label}</Progress.Label> : <span />}
           {showValue && value !== null ? (
-            <span className="text-fg-muted tabular-nums">{Math.round(value)}%</span>
+            <span className="text-label-2 tabular-nums">{Math.round(value)}%</span>
           ) : null}
         </div>
       ) : null}
-      <Progress.Track
-        className={cn(
-          "relative w-full overflow-hidden rounded-full bg-hover",
-          size === "sm" ? "h-1.5" : "h-2.5",
-        )}
-      >
+      <Progress.Track className="relative h-1 w-full overflow-hidden rounded-capsule bg-fill-3">
         <Progress.Indicator
           className={cn(
-            "rounded-full transition-[width] duration-(--duration-slow) ease-(--ease-out)",
+            "rounded-capsule transition-[width] duration-(--dur-base) ease-out",
             fills[tone],
             value === null &&
-              "absolute inset-y-0 w-1/3 animate-shimmer bg-[linear-gradient(90deg,transparent,var(--fg),transparent)] opacity-40",
+              "absolute inset-y-0 w-1/3 animate-indeterminate motion-reduce:animate-pulse",
           )}
         />
       </Progress.Track>

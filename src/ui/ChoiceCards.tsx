@@ -3,13 +3,17 @@
 import type { ReactNode } from "react";
 import { Radio } from "@base-ui/react/radio";
 import { RadioGroup } from "@base-ui/react/radio-group";
-import { Check } from "lucide-react";
 import { cn } from "./cn";
 
 export interface ChoiceOption {
   value: string;
+  /** Label under the thumbnail. */
   title: string;
+  /** Optional second line under the label. */
   description?: string;
+  /** Drawn picture of the choice. Takes precedence over `icon`. */
+  thumbnail?: ReactNode;
+  /** Shown centred in the thumbnail when there is no drawing. */
   icon?: ReactNode;
   disabled?: boolean;
 }
@@ -18,22 +22,29 @@ export interface ChoiceCardsProps {
   options: ChoiceOption[];
   value: string | null;
   onValueChange: (value: string) => void;
-  /** Accessible name of the group (e.g. the question being asked). */
+  /** Accessible name of the group (the question being asked). */
   "aria-label": string;
-  /** Columns from the `sm` breakpoint up. Always one column on phones. */
-  columns?: 1 | 2 | 3;
+  /** Thumbnail shape. Defaults to 4:3. */
+  aspect?: "video" | "standard" | "square";
   disabled?: boolean;
   className?: string;
 }
 
-const columnClass = { 1: "sm:grid-cols-1", 2: "sm:grid-cols-2", 3: "sm:grid-cols-3" } as const;
+const aspects = {
+  video: "aspect-video",
+  standard: "aspect-[4/3]",
+  square: "aspect-square",
+} as const;
 
-/** Large tappable cards: the way the Wizard asks one question at a time. */
+/**
+ * Option thumbnails, as in System Settings > Appearance: a picture of each choice with its label
+ * beneath and a white ring around the chosen one. Arrow keys move between options.
+ */
 export function ChoiceCards({
   options,
   value,
   onValueChange,
-  columns = 2,
+  aspect = "standard",
   disabled,
   className,
   "aria-label": ariaLabel,
@@ -44,7 +55,7 @@ export function ChoiceCards({
       value={value ?? ""}
       onValueChange={(next) => onValueChange(String(next))}
       disabled={disabled}
-      className={cn("grid grid-cols-1 gap-3", columnClass[columns], className)}
+      className={cn("flex flex-wrap gap-x-5 gap-y-4", className)}
     >
       {options.map((option) => (
         <Radio.Root
@@ -52,32 +63,29 @@ export function ChoiceCards({
           value={option.value}
           disabled={option.disabled}
           className={cn(
-            "group relative flex min-h-28 cursor-default flex-col items-start gap-3 rounded-lg border border-line-strong bg-surface p-5 text-left focus-ring select-none",
-            "transition-[background-color,border-color,box-shadow,scale] duration-(--duration-base) ease-(--ease-out)",
-            "hover:border-fg-subtle hover:bg-raised active:scale-[0.99]",
-            "data-[checked]:border-accent data-[checked]:bg-accent-soft data-[checked]:shadow-[0_0_0_1px_var(--accent)]",
-            "data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40 data-[disabled]:hover:border-line-strong",
+            "group flex w-(--thumb-w) cursor-default flex-col items-center gap-2 rounded-artwork text-center outline-none select-none",
+            "focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus",
+            "data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
           )}
         >
-          <span className="flex w-full items-start justify-between gap-3">
-            {option.icon ? (
-              <span className="flex size-11 items-center justify-center rounded-md bg-sunken text-fg-muted transition-colors group-data-[checked]:bg-accent group-data-[checked]:text-on-accent [&_svg]:size-5">
-                {option.icon}
-              </span>
-            ) : (
-              <span />
+          <span
+            className={cn(
+              "flex w-full items-center justify-center overflow-hidden rounded-field bg-elevated text-label-2",
+              "transition-[box-shadow,color] duration-(--dur-fast)",
+              "group-hover:text-label group-data-[checked]:text-label",
+              "group-data-[checked]:ring-2 group-data-[checked]:ring-accent group-data-[checked]:ring-offset-2 group-data-[checked]:ring-offset-ground",
+              "[&>svg]:size-8",
+              aspects[aspect],
             )}
-            <span
-              aria-hidden="true"
-              className="flex size-6 items-center justify-center rounded-full border border-line-strong text-transparent transition-colors group-data-[checked]:border-accent group-data-[checked]:bg-accent group-data-[checked]:text-on-accent"
-            >
-              <Check className="size-3.5" strokeWidth={3} />
-            </span>
+          >
+            {option.thumbnail ?? option.icon}
           </span>
-          <span className="flex flex-col gap-1">
-            <span className="text-base font-medium text-fg">{option.title}</span>
+          <span className="flex flex-col gap-0.5">
+            <span className="text-body text-label group-data-[checked]:font-semibold">
+              {option.title}
+            </span>
             {option.description ? (
-              <span className="text-sm text-fg-muted">{option.description}</span>
+              <span className="text-callout text-label-2">{option.description}</span>
             ) : null}
           </span>
         </Radio.Root>

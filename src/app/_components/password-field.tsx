@@ -2,62 +2,51 @@
 
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { Field, IconButton, Input } from "@/ui";
+import { GroupedListField, IconButton, Input } from "@/ui";
 
 export interface PasswordFieldProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
   autoComplete: "current-password" | "new-password";
-  /** Shows "At least N characters" as the hint (new passwords only). */
-  minLength?: number;
   error?: string;
   name?: string;
-  labelAccessory?: React.ReactNode;
+  autoFocus?: boolean;
 }
 
-/** Password input with a show/hide toggle and the length rule shown before the user fails it. */
+/** A grouped-list password row with a show/hide button. The length rule goes in the group footer. */
 export function PasswordField({
   label,
   value,
   onChange,
   autoComplete,
-  minLength,
   error,
   name,
-  labelAccessory,
+  autoFocus,
 }: PasswordFieldProps) {
   const [visible, setVisible] = useState(false);
   return (
-    <Field
-      label={label}
-      required
-      error={error}
-      labelAccessory={labelAccessory}
-      hint={
-        minLength ? `Use at least ${minLength} characters. A short sentence works well.` : undefined
-      }
-    >
+    <GroupedListField label={label} required error={error}>
       <Input
         name={name}
         type={visible ? "text" : "password"}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         autoComplete={autoComplete}
+        autoFocus={autoFocus}
         spellCheck={false}
         autoCapitalize="none"
         trailing={
           <IconButton
             type="button"
-            size="sm"
-            variant="ghost"
-            label={visible ? "Hide password" : "Show password"}
+            label={visible ? "Hide Password" : "Show Password"}
             aria-pressed={visible}
             icon={visible ? <EyeOff /> : <Eye />}
             onClick={() => setVisible((v) => !v)}
+            className="-mr-2 text-label-2 hover:text-label"
           />
         }
       />
-    </Field>
+    </GroupedListField>
   );
 }

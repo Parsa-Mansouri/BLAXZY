@@ -87,21 +87,24 @@ export function Calendar({
   const canNext = !max || startOfMonthISO(nextMonth) <= max;
 
   return (
-    <div className={cn("w-[19.5rem] max-w-full select-none", className)}>
-      <div className="mb-3 flex items-center justify-between">
+    <div
+      className={cn(
+        "w-[calc(var(--control-h-lg)*7+--spacing(4))] max-w-full select-none",
+        className,
+      )}
+    >
+      <div className="mb-2 flex items-center justify-between">
         <IconButton
-          label="Previous month"
-          size="sm"
+          label="Previous Month"
           icon={<ChevronLeft />}
           disabled={!canPrev}
           onClick={() => moveTo(prevMonth)}
         />
-        <div aria-live="polite" className="text-sm font-medium text-fg">
+        <div aria-live="polite" className="text-headline text-label">
           {formatMonthYear(view.year, view.month, locale)}
         </div>
         <IconButton
-          label="Next month"
-          size="sm"
+          label="Next Month"
           icon={<ChevronRight />}
           disabled={!canNext}
           onClick={() => moveTo(nextMonth)}
@@ -118,7 +121,7 @@ export function Calendar({
             <div
               key={label}
               role="columnheader"
-              className="flex h-8 items-center justify-center text-xs text-fg-subtle"
+              className="flex h-7 items-center justify-center text-subheadline text-label-2"
             >
               {label}
             </div>
@@ -148,12 +151,13 @@ export function Calendar({
                       if (day.iso !== active) setActive(day.iso);
                     }}
                     className={cn(
-                      "relative flex size-10 items-center justify-center rounded-full text-sm tabular-nums focus-ring",
-                      "transition-colors duration-(--duration-fast)",
-                      day.inMonth ? "text-fg" : "text-fg-subtle",
-                      !selected && !disabled && "hover:bg-hover",
-                      selected && "bg-accent font-medium text-on-accent hover:bg-accent-hover",
-                      disabled && "cursor-not-allowed opacity-30",
+                      "relative flex size-(--control-h-lg) items-center justify-center rounded-full text-body tabular-nums focus-ring",
+                      "transition-colors duration-(--dur-fast)",
+                      day.inMonth ? "text-label" : "text-label-2",
+                      !selected && !disabled && "hover:bg-fill-4",
+                      isToday && !selected && "font-semibold",
+                      selected && "bg-accent font-semibold text-on-accent",
+                      disabled && "cursor-not-allowed text-label-3",
                     )}
                   >
                     {day.day}
@@ -161,8 +165,8 @@ export function Calendar({
                       <span
                         aria-hidden="true"
                         className={cn(
-                          "absolute bottom-1.5 size-1 rounded-full",
-                          selected ? "bg-on-accent" : "bg-accent",
+                          "absolute bottom-1 size-1 rounded-full",
+                          selected ? "bg-on-accent" : "bg-label",
                         )}
                       />
                     ) : null}

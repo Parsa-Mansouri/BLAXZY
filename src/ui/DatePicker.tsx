@@ -8,13 +8,7 @@ import { clampISO, formatDate, isValidISO, todayISO, type WeekStart } from "./da
 import { Button } from "./Button";
 import { cn } from "./cn";
 import { useFieldControl } from "./Field";
-import {
-  controlHeight,
-  controlSurface,
-  controlText,
-  popupSurface,
-  type ControlSize,
-} from "./styles";
+import { fieldShape, fieldSurface, popupSurface, type FieldVariant } from "./styles";
 
 export interface DatePickerProps {
   /** ISO `YYYY-MM-DD` or null. */
@@ -29,7 +23,8 @@ export interface DatePickerProps {
   clearable?: boolean;
   weekStart?: WeekStart;
   locale?: string;
-  size?: ControlSize;
+  /** `form` (default) or `toolbar` shape. */
+  variant?: FieldVariant;
   disabled?: boolean;
   id?: string;
   "aria-label"?: string;
@@ -41,11 +36,11 @@ export function DatePicker({
   onValueChange,
   min,
   max,
-  placeholder = "Pick a date",
+  placeholder = "Choose a Date",
   clearable = false,
   weekStart = 1,
   locale,
-  size = "md",
+  variant = "form",
   disabled,
   id,
   className,
@@ -66,23 +61,23 @@ export function DatePicker({
         aria-describedby={control["aria-describedby"]}
         aria-invalid={control["aria-invalid"]}
         className={cn(
-          controlSurface,
-          controlHeight[size],
-          controlText,
-          "cursor-default justify-between px-3 py-2 text-left outline-none data-[popup-open]:border-focus",
+          fieldSurface,
+          fieldShape[variant],
+          "cursor-default justify-between py-1 text-left text-body focus-ring outline-none",
+          "aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-red aria-[invalid=true]:ring-inset",
           className,
         )}
       >
-        <span className={cn("truncate", valid ? "text-fg" : "text-fg-subtle")}>
+        <span className={cn("truncate", valid ? "text-label" : "text-label-2")}>
           {valid ? formatDate(valid, locale) : placeholder}
         </span>
-        <CalendarDays aria-hidden="true" className="size-4 shrink-0 text-fg-subtle" />
+        <CalendarDays aria-hidden="true" className="size-(--icon) shrink-0 text-label-2" />
       </BasePopover.Trigger>
       <BasePopover.Portal>
         <BasePopover.Positioner
           align="start"
-          sideOffset={6}
-          collisionPadding={12}
+          sideOffset={4}
+          collisionPadding={8}
           className="z-(--z-popover)"
         >
           <BasePopover.Popup
@@ -90,7 +85,7 @@ export function DatePicker({
             initialFocus={(): HTMLElement | null =>
               document.querySelector<HTMLElement>('[role="grid"] button[tabindex="0"]')
             }
-            className={cn(popupSurface, "p-4")}
+            className={cn(popupSurface, "p-3")}
           >
             <Calendar
               autoFocus
@@ -104,10 +99,9 @@ export function DatePicker({
                 setOpen(false);
               }}
             />
-            <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
+            <div className="mt-2 flex items-center justify-between pt-2 hairline-t">
               <Button
-                size="sm"
-                variant="ghost"
+                variant="plain"
                 disabled={!todayAllowed}
                 onClick={() => {
                   onValueChange(today);
@@ -118,8 +112,7 @@ export function DatePicker({
               </Button>
               {clearable && valid ? (
                 <Button
-                  size="sm"
-                  variant="ghost"
+                  variant="plain"
                   onClick={() => {
                     onValueChange(null);
                     setOpen(false);

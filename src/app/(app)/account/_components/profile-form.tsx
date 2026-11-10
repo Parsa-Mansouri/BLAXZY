@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { callAuth } from "@/lib/auth-call";
 import { describeAuthFailure } from "@/lib/auth-errors";
-import { Button, Field, Input, useToast } from "@/ui";
+import { Button, GroupedList, GroupedListField, GroupedListRow, Input, useToast } from "@/ui";
 
 export function ProfileForm({ name, email }: { name: string; email: string }) {
   const router = useRouter();
@@ -19,7 +19,7 @@ export function ProfileForm({ name, email }: { name: string; email: string }) {
     event.preventDefault();
     const trimmed = value.trim();
     if (!trimmed) {
-      setError("Enter the name you want to be called.");
+      setError("Enter your name.");
       return;
     }
     setError(undefined);
@@ -31,7 +31,7 @@ export function ProfileForm({ name, email }: { name: string; email: string }) {
     if (result.ok) {
       setValue(trimmed);
       setSaved(trimmed);
-      toast.success("Name updated");
+      toast.success("Name saved");
       router.refresh();
     } else {
       setError(describeAuthFailure(result.failure, "generic"));
@@ -39,21 +39,29 @@ export function ProfileForm({ name, email }: { name: string; email: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-      <Field label="Name" required error={error}>
-        <Input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          autoComplete="name"
-          maxLength={100}
-        />
-      </Field>
-      <Field label="Email" hint="Your email is how you sign in. It cannot be changed here.">
-        <Input value={email} readOnly disabled />
-      </Field>
-      <div>
-        <Button type="submit" variant="primary" loading={pending} disabled={value.trim() === saved}>
-          Save name
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
+      <GroupedList
+        header="Profile"
+        footer="Your email address is how you sign in. It cannot be changed here."
+      >
+        <GroupedListField label="Name" required error={error}>
+          <Input
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            autoComplete="name"
+            maxLength={100}
+          />
+        </GroupedListField>
+        <GroupedListRow label="Email">{email}</GroupedListRow>
+      </GroupedList>
+      <div className="flex justify-end">
+        <Button
+          type="submit"
+          variant="standard"
+          loading={pending}
+          disabled={value.trim() === saved}
+        >
+          Save
         </Button>
       </div>
     </form>

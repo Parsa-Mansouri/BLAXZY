@@ -1,23 +1,23 @@
 import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
 import { cn } from "./cn";
 
-export type BadgeTone = "neutral" | "accent" | "success" | "warning" | "danger";
+export type BadgeTone = "neutral" | "success" | "warning" | "danger";
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: BadgeTone;
   icon?: ReactNode;
-  /** Small coloured dot before the label (use instead of an icon for status). */
+  /** Small dot before the label. */
   dot?: boolean;
 }
 
 const tones: Record<BadgeTone, string> = {
-  neutral: "bg-hover text-fg-muted",
-  accent: "bg-accent-soft text-accent-text",
-  success: "bg-success-soft text-success",
-  warning: "bg-warning-soft text-warning",
-  danger: "bg-danger-soft text-danger",
+  neutral: "bg-fill-3 text-label-2",
+  success: "bg-green/15 text-green",
+  warning: "bg-orange/15 text-orange",
+  danger: "bg-red/15 text-red",
 };
 
+/** A status tag. Only for real status (approved, failed, needs review), never decoration. */
 export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
   { tone = "neutral", icon, dot = false, className, children, ...rest },
   ref,
@@ -26,7 +26,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
     <span
       ref={ref}
       className={cn(
-        "inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium whitespace-nowrap [&_svg]:size-3.5",
+        "inline-flex items-center gap-1 rounded-capsule px-2 py-0.5 text-callout font-medium whitespace-nowrap [&_svg]:size-(--icon-sm)",
         tones[tone],
         className,
       )}

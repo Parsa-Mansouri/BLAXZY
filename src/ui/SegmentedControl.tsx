@@ -19,24 +19,23 @@ export interface SegmentedControlProps {
   onValueChange: (value: string) => void;
   /** Accessible name of the group. */
   "aria-label": string;
-  size?: "sm" | "md";
   /** Stretch to the container width with equal segments. */
   fullWidth?: boolean;
   disabled?: boolean;
   className?: string;
 }
 
+/** The macOS segmented control: a grey track with the chosen segment lifted. */
 export function SegmentedControl({
   options,
   value,
   onValueChange,
-  size = "md",
   fullWidth = false,
   disabled,
   className,
   "aria-label": ariaLabel,
 }: SegmentedControlProps) {
-  const pillId = useId();
+  const thumbId = useId();
   return (
     <MotionConfig reducedMotion="user">
       <RadioGroup
@@ -45,7 +44,7 @@ export function SegmentedControl({
         onValueChange={(next) => onValueChange(String(next))}
         disabled={disabled}
         className={cn(
-          "inline-flex max-w-full gap-1 rounded-md border border-line bg-sunken p-1",
+          "inline-flex h-(--control-h) max-w-full rounded-control bg-fill-3 p-0.5",
           fullWidth && "flex w-full",
           className,
         )}
@@ -58,23 +57,21 @@ export function SegmentedControl({
               value={option.value}
               disabled={option.disabled}
               className={cn(
-                "relative inline-flex min-w-0 cursor-default items-center justify-center gap-2 rounded-sm font-medium focus-ring select-none",
-                "transition-colors duration-(--duration-fast)",
-                size === "sm" ? "h-8 px-3 text-sm" : "h-9 px-4 text-sm",
+                "relative inline-flex min-w-0 cursor-default items-center justify-center rounded-control-inner px-3 text-body focus-ring select-none",
                 fullWidth && "flex-1",
-                selected ? "text-fg" : "text-fg-muted hover:text-fg",
-                "data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40",
+                selected ? "font-medium text-label" : "text-label-2 hover:text-label",
+                "data-[disabled]:pointer-events-none data-[disabled]:text-label-3",
               )}
             >
               {selected ? (
                 <motion.span
-                  layoutId={pillId}
+                  layoutId={thumbId}
                   aria-hidden="true"
-                  className="absolute inset-0 rounded-sm bg-raised shadow-xs ring-1 ring-line-strong"
-                  transition={{ type: "spring", stiffness: 520, damping: 40 }}
+                  className="absolute inset-0 rounded-control-inner bg-segment-selected"
+                  transition={{ type: "spring", stiffness: 600, damping: 50 }}
                 />
               ) : null}
-              <span className="relative inline-flex items-center gap-2 [&_svg]:size-4">
+              <span className="relative inline-flex items-center gap-1.5 [&_svg]:size-(--icon-sm)">
                 {option.icon}
                 <span className="truncate">{option.label}</span>
               </span>

@@ -10,7 +10,7 @@ import {
 } from "react";
 import { cn } from "./cn";
 import { useFieldControl } from "./Field";
-import { controlSurface, controlText } from "./styles";
+import { fieldSurface } from "./styles";
 import { mergeRefs } from "./utils";
 
 export interface TextareaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "rows"> {
@@ -18,11 +18,23 @@ export interface TextareaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaE
   minRows?: number;
   /** Stops growing after this many rows and scrolls. */
   maxRows?: number;
+  /** `script` sets the larger 15/22 script text style. */
+  textStyle?: "reading" | "script";
 }
 
-/** Grows with its content. Works controlled and uncontrolled. */
+/** Multi-line text that grows with its content. Works controlled and uncontrolled. */
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
-  { minRows = 3, maxRows = 12, className, id, disabled, onChange, value, ...rest },
+  {
+    minRows = 3,
+    maxRows = 12,
+    textStyle = "reading",
+    className,
+    id,
+    disabled,
+    onChange,
+    value,
+    ...rest
+  },
   ref,
 ) {
   const control = useFieldControl({ id, disabled });
@@ -32,7 +44,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     const el = inner.current;
     if (!el) return;
     const style = getComputedStyle(el);
-    const line = parseFloat(style.lineHeight) || 22;
+    const line = parseFloat(style.lineHeight) || 20;
     const pad = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
     el.style.height = "auto";
     const max = line * maxRows + pad;
@@ -51,7 +63,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   }, [resize]);
 
   return (
-    <div className={cn(controlSurface, "items-stretch px-3", className)}>
+    <div className={cn(fieldSurface, "items-stretch rounded-field px-3", className)}>
       <textarea
         ref={mergeRefs(ref, inner)}
         {...control}
@@ -63,8 +75,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
           resize();
         }}
         className={cn(
-          "min-w-0 flex-1 resize-none bg-transparent py-2.5 text-fg outline-none disabled:cursor-not-allowed",
-          controlText,
+          "min-w-0 flex-1 resize-none bg-transparent py-2 text-label outline-none disabled:cursor-not-allowed",
+          textStyle === "script" ? "text-script" : "text-reading",
         )}
       />
     </div>

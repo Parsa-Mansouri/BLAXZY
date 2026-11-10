@@ -1,14 +1,24 @@
+import { cookies } from "next/headers";
 import { requireUser } from "@/server/auth";
-import { AppHeader } from "./_components/app-header";
+import { AppShell } from "./_components/app-shell";
+import { SIDEBAR_COOKIE } from "./_lib/sidebar-cookie";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireUser();
+/**
+ * The signed-in window. The `sidebar` slot shows the library everywhere except inside a project,
+ * where it becomes that project's stage list.
+ */
+export default async function AppLayout({
+  children,
+  sidebar,
+}: {
+  children: React.ReactNode;
+  sidebar: React.ReactNode;
+}) {
+  await requireUser();
+  const collapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
   return (
-    <div className="flex min-h-dvh flex-col">
-      <AppHeader name={user.name} email={user.email} />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-(--gutter) py-8 sm:py-12">
-        {children}
-      </main>
-    </div>
+    <AppShell sidebar={sidebar} defaultCollapsed={collapsed}>
+      {children}
+    </AppShell>
   );
 }

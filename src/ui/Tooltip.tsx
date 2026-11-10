@@ -7,8 +7,10 @@ import { cn } from "./cn";
 export const TooltipProvider = BaseTooltip.Provider;
 
 export interface TooltipProps {
-  /** Short text shown on hover and keyboard focus. */
+  /** Short, plain text shown on hover and keyboard focus. */
   content: ReactNode;
+  /** Keyboard shortcut shown after the text, e.g. "⌘\". */
+  shortcut?: string;
   /** The element that triggers the tooltip. It receives the trigger props. */
   children: ReactElement;
   side?: "top" | "bottom" | "left" | "right";
@@ -19,12 +21,14 @@ export interface TooltipProps {
   className?: string;
 }
 
+/** A small, plain label. Never put anything a user must act on inside a tooltip. */
 export function Tooltip({
   content,
+  shortcut,
   children,
-  side = "top",
+  side = "bottom",
   align = "center",
-  delay = 400,
+  delay = 600,
   disabled,
   className,
 }: TooltipProps) {
@@ -35,17 +39,19 @@ export function Tooltip({
         <BaseTooltip.Positioner
           side={side}
           align={align}
-          sideOffset={8}
+          sideOffset={6}
+          collisionPadding={8}
           className="z-(--z-tooltip)"
         >
           <BaseTooltip.Popup
             className={cn(
-              "max-w-64 popup-motion rounded-sm border border-line bg-raised px-2.5 py-1.5 text-xs text-fg shadow-md",
-              "data-[instant]:transition-none",
+              "flex max-w-64 items-baseline gap-2 rounded-control bg-elevated-2 px-2 py-1 text-callout text-label shadow-float",
+              "fade-motion data-[instant]:transition-none",
               className,
             )}
           >
-            {content}
+            <span>{content}</span>
+            {shortcut ? <kbd className="font-sans text-label-2">{shortcut}</kbd> : null}
           </BaseTooltip.Popup>
         </BaseTooltip.Positioner>
       </BaseTooltip.Portal>

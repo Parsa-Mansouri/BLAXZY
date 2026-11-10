@@ -1,18 +1,26 @@
 "use client";
 
 import { createContext, useContext, useId, type ReactNode } from "react";
-import { CircleAlert } from "lucide-react";
 import { cn } from "./cn";
 
-interface FieldContextValue {
+export interface FieldContextValue {
   id: string;
   describedBy: string | undefined;
   invalid: boolean;
   required: boolean;
   disabled: boolean;
+  /** True inside a grouped-list row: controls drop their own fill and fill the row. */
+  inline: boolean;
 }
 
 const FieldContext = createContext<FieldContextValue | null>(null);
+
+export const FieldProvider = FieldContext.Provider;
+
+/** Whether the nearest field is a grouped-list row (controls render bare). */
+export function useFieldInline(): boolean {
+  return useContext(FieldContext)?.inline ?? false;
+}
 
 export interface FieldControlProps {
   id?: string;
@@ -23,7 +31,7 @@ export interface FieldControlProps {
   disabled?: boolean;
 }
 
-/** Controls call this to pick up id, aria wiring and state from the surrounding Field. */
+/** Controls call this to pick up id, aria wiring and state from the surrounding field. */
 export function useFieldControl(own: { id?: string; disabled?: boolean } = {}): FieldControlProps {
   const ctx = useContext(FieldContext);
   if (!ctx) return { id: own.id, disabled: own.disabled };
@@ -37,21 +45,23 @@ export function useFieldControl(own: { id?: string; disabled?: boolean } = {}): 
 }
 
 export interface FieldProps {
+  /** Persistent label above the control. */
   label: ReactNode;
-  /** Always-visible helper line under the control. */
+  /** Help text under the control. */
   hint?: ReactNode;
-  /** Error message. Replaces nothing: shown below the hint and marks the control invalid. */
+  /** What is wrong and how to fix it. Marks the control invalid. */
   error?: ReactNode;
   required?: boolean;
-  /** Shows "Optional" next to the label. Use instead of `required` for non-mandatory fields. */
+  /** Shows "Optional" after the label. */
   optional?: boolean;
   disabled?: boolean;
-  /** Extra element aligned to the label row, e.g. a HelpTip. */
+  /** Extra element on the label row, e.g. a HelpTip. */
   labelAccessory?: ReactNode;
   className?: string;
   children: ReactNode;
 }
 
+/** A stacked form field: label, control, then the error (red) and the help text. */
 export function Field({
   label,
   hint,
@@ -66,46 +76,39 @@ export function Field({
   const id = useId();
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
-  const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(" ");
+  const describedBy = [error ? errorId : null, hint ? hintId : null].filter(Boolean).join(" ");
 
   return (
-    <FieldContext.Provider
+    <FieldProvider
       value={{
         id,
         describedBy: describedBy || undefined,
         invalid: Boolean(error),
         required,
         disabled,
+        inline: false,
       }}
     >
-      <div className={cn("flex min-w-0 flex-col gap-2", className)}>
-        <div className="flex items-center gap-2">
-          <label htmlFor={id} className="text-sm font-medium text-fg">
+      <div className={cn("flex min-w-0 flex-col gap-1.5", className)}>
+        <div className="flex items-center gap-1.5">
+          <label htmlFor={id} className="text-body text-label">
             {label}
-            {required ? (
-              <span aria-hidden="true" className="ml-0.5 text-accent-text">
-                *
-              </span>
-            ) : null}
-            {optional && !required ? (
-              <span className="ml-2 text-xs font-normal text-fg-subtle">Optional</span>
-            ) : null}
+            {optional && !required ? <span className="ml-1.5 text-label-2">Optional</span> : null}
           </label>
           {labelAccessory}
         </div>
         {children}
+        {error ? (
+          <p id={errorId} role="alert" className="text-callout text-red">
+            {error}
+          </p>
+        ) : null}
         {hint ? (
-          <p id={hintId} className="text-sm text-fg-subtle">
+          <p id={hintId} className="text-callout text-label-2">
             {hint}
           </p>
         ) : null}
-        {error ? (
-          <p id={errorId} role="alert" className="flex items-start gap-1.5 text-sm text-danger">
-            <CircleAlert aria-hidden="true" className="mt-[3px] size-4 shrink-0" />
-            <span>{error}</span>
-          </p>
-        ) : null}
       </div>
-    </FieldContext.Provider>
+    </FieldProvider>
   );
 }

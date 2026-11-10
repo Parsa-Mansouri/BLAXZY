@@ -1,28 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
-import { Button } from "@/ui";
+import { GroupedList, GroupedListButton } from "@/ui";
+import { useSignOut } from "../../_lib/use-sign-out";
 
 export function SignOutButton() {
-  const router = useRouter();
-  const [pending, setPending] = useState(false);
-
-  async function signOut() {
-    setPending(true);
-    try {
-      await authClient.signOut();
-    } finally {
-      router.replace("/login");
-      router.refresh();
-    }
-  }
-
+  const { signOut, pending } = useSignOut();
   return (
-    <Button variant="secondary" leadingIcon={<LogOut />} loading={pending} onClick={signOut}>
-      Sign out
-    </Button>
+    <GroupedList footer="Signing in again needs your password.">
+      <GroupedListButton destructive onClick={signOut} disabled={pending}>
+        {pending ? "Signing Out…" : "Sign Out"}
+      </GroupedListButton>
+    </GroupedList>
   );
 }

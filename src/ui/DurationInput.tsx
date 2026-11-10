@@ -4,7 +4,7 @@ import { useRef, useState, type ChangeEvent, type FocusEvent, type KeyboardEvent
 import { cn } from "./cn";
 import { clampDuration, joinDuration, splitDuration } from "./duration";
 import { useFieldControl } from "./Field";
-import { controlHeight, controlSurface, controlText, type ControlSize } from "./styles";
+import { fieldShape, fieldSurface, type FieldVariant } from "./styles";
 
 export interface DurationInputProps {
   /** Total seconds, or null when empty. */
@@ -14,7 +14,8 @@ export interface DurationInputProps {
   min?: number;
   /** Largest allowed total, in seconds. */
   max?: number;
-  size?: ControlSize;
+  /** `form` (default) or `toolbar` shape. */
+  variant?: FieldVariant;
   disabled?: boolean;
   id?: string;
   "aria-label"?: string;
@@ -33,7 +34,7 @@ export function DurationInput({
   onValueChange,
   min,
   max,
-  size = "md",
+  variant = "form",
   disabled,
   id,
   className,
@@ -104,11 +105,10 @@ export function DurationInput({
         onKeyDown={onKeyDown(name)}
         onFocus={(event) => event.currentTarget.select()}
         className={cn(
-          "w-full min-w-0 bg-transparent py-2 text-right text-fg tabular-nums outline-none disabled:cursor-not-allowed",
-          controlText,
+          "w-full min-w-0 bg-transparent py-1 text-right text-body text-label tabular-nums outline-none disabled:cursor-not-allowed",
         )}
       />
-      <span className="text-sm text-fg-subtle">{unit}</span>
+      <span className="text-body text-label-2">{unit}</span>
     </label>
   );
 
@@ -119,14 +119,14 @@ export function DurationInput({
       aria-label={ariaLabel}
       onBlur={onBlur}
       className={cn(
-        controlSurface,
-        controlHeight[size],
-        "w-auto max-w-full gap-4 px-3 sm:max-w-72",
+        fieldSurface,
+        fieldShape[variant],
+        "w-auto max-w-full gap-4 sm:max-w-72",
         className,
       )}
     >
       {field("minutes", "min", true)}
-      <span aria-hidden="true" className="h-5 w-px bg-line-strong" />
+      <span aria-hidden="true" className="h-4 w-(--hairline) bg-separator" />
       {field("seconds", "sec", false)}
     </div>
   );

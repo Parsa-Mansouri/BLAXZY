@@ -3,14 +3,18 @@
  * both server and client components (and the stage-building code) can use it.
  */
 export const PROJECT_STAGES = [
-  { key: "style", label: "Style", summary: "Pick the look and feel of your film." },
+  { key: "style", label: "Style", summary: "Choose the look and feel of the film." },
   { key: "script", label: "Script", summary: "Write or upload the story, then refine it." },
   {
     key: "pre_production",
     label: "Pre-production",
-    summary: "Approve characters, places and shots.",
+    summary: "Approve the characters, places and shots.",
   },
-  { key: "production", label: "Production", summary: "Generate and assemble the film." },
+  {
+    key: "production",
+    label: "Production",
+    summary: "Generate every clip, ready for your editor.",
+  },
 ] as const;
 
 export type ProjectStageKey = (typeof PROJECT_STAGES)[number]["key"];
@@ -39,6 +43,13 @@ function stageIndex(stage: string): number {
 export function stageLabel(stage: string): string {
   if (stage === "done") return "Finished";
   return PROJECT_STAGES.find((s) => s.key === stage)?.label ?? "Style";
+}
+
+/** "Step 2 of 4", or "Finished" once every stage is done. */
+export function stageStep(stage: string): string {
+  const index = stageIndex(stage);
+  if (index >= PROJECT_STAGES.length) return "Finished";
+  return `Step ${index + 1} of ${PROJECT_STAGES.length}`;
 }
 
 /** Earlier stages are done, the current one is current, all later ones are locked. */

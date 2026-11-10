@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Card, CardHeader } from "@/ui";
 import { PROJECT_STAGES, stageViews } from "@/lib/stages";
 import { loadProject } from "./_lib/load-project";
 
@@ -19,17 +18,18 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const current = stageViews(project.stage).find((s) => s.status === "current");
   const stage = PROJECT_STAGES.find((s) => s.key === current?.key);
 
-  // Placeholder: the stage builders replace this card with the real stage UI.
+  // Placeholder: the stage builders replace this with the stage's own screen.
   return (
-    <Card padding="lg">
+    <section aria-labelledby="stage-title" className="flex max-w-(--measure) flex-col gap-2">
+      <h2 id="stage-title" className="text-large-title">
+        {stage ? stage.label : "Finished"}
+      </h2>
+      <p className="text-reading text-label-2">
+        {stage ? stage.summary : "Every stage of this film is complete."}
+      </p>
       {stage ? (
-        <CardHeader
-          title={`${stage.label} questions arrive here next`}
-          description={stage.summary}
-        />
-      ) : (
-        <CardHeader title="Every stage is complete" description="Your film is finished." />
-      )}
-    </Card>
+        <p className="pt-6 text-body text-label-2">This stage is not available yet.</p>
+      ) : null}
+    </section>
   );
 }

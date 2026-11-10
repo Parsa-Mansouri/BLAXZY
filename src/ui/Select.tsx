@@ -6,13 +6,7 @@ import { Combobox } from "@base-ui/react/combobox";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { cn } from "./cn";
 import { useFieldControl } from "./Field";
-import {
-  controlHeight,
-  controlSurface,
-  controlText,
-  popupSurface,
-  type ControlSize,
-} from "./styles";
+import { menuPad, menuRow, popupSurface } from "./styles";
 
 export interface SelectOption {
   value: string;
@@ -33,7 +27,8 @@ export interface SelectProps {
   searchable?: boolean | "auto";
   searchPlaceholder?: string;
   emptyText?: string;
-  size?: ControlSize;
+  /** `regular` 28px or `large` 32px. */
+  size?: "regular" | "large";
   disabled?: boolean;
   id?: string;
   "aria-label"?: string;
@@ -42,19 +37,19 @@ export interface SelectProps {
 
 const AUTO_SEARCH_THRESHOLD = 8;
 
-function OptionBody({ option }: { option: SelectOption }) {
+function OptionBody({ option, text }: { option: SelectOption; text: ReactNode }) {
   return (
-    <>
+    <span className="flex min-w-0 items-start gap-2">
       {option.icon ? (
-        <span className="mt-0.5 shrink-0 text-fg-muted [&_svg]:size-4">{option.icon}</span>
+        <span className="mt-px shrink-0 text-label-2 [&_svg]:size-(--icon)">{option.icon}</span>
       ) : null}
-      <span className="flex min-w-0 flex-col">
-        <span className="truncate">{option.label}</span>
+      <span className="flex min-w-0 flex-col py-1">
+        {text}
         {option.description ? (
-          <span className="text-xs text-fg-subtle">{option.description}</span>
+          <span className="text-callout text-label-2">{option.description}</span>
         ) : null}
       </span>
-    </>
+    </span>
   );
 }
 
@@ -70,40 +65,48 @@ function TriggerBody({
       {option ? (
         <>
           {option.icon ? (
-            <span className="shrink-0 text-fg-muted [&_svg]:size-4">{option.icon}</span>
+            <span className="shrink-0 text-label-2 [&_svg]:size-(--icon)">{option.icon}</span>
           ) : null}
           <span className="truncate">{option.label}</span>
         </>
       ) : (
-        <span className="truncate text-fg-subtle">{placeholder}</span>
+        <span className="truncate text-label-2">{placeholder}</span>
       )}
     </span>
   );
 }
 
-const itemClass =
-  "grid cursor-default select-none grid-cols-[1rem_1fr] items-start gap-2 rounded-sm px-2 py-2 text-sm outline-none " +
-  "data-[highlighted]:bg-hover data-[disabled]:opacity-40";
+const itemClass = cn(menuRow, "grid grid-cols-[var(--icon)_1fr] items-start gap-1.5 py-0");
 
-const triggerClass = (size: ControlSize, className?: string) =>
+const triggerClass = (size: "regular" | "large", className?: string) =>
   cn(
-    controlSurface,
-    controlHeight[size],
-    controlText,
-    "cursor-default justify-between py-2 pr-2.5 pl-3 text-left outline-none",
-    "data-[popup-open]:border-focus",
+    "inline-flex min-w-40 cursor-default items-center justify-between gap-2 rounded-control bg-fill-2 pr-1.5 pl-2.5 text-body text-label outline-none focus-ring",
+    "transition-colors duration-(--dur-fast) hover:bg-fill data-[popup-open]:bg-fill",
+    "aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-red aria-[invalid=true]:ring-inset",
+    "data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
+    size === "large" ? "h-(--control-h-lg)" : "h-(--control-h)",
     className,
   );
 
+const chevron = (
+  <ChevronsUpDown aria-hidden="true" className="size-(--icon-sm) shrink-0 text-label-2" />
+);
+
+const checkmark = <Check aria-hidden="true" className="mt-1 size-(--icon) text-label" />;
+
+/**
+ * A pop-up button: one choice from a list, with the up-and-down chevrons. The open list places
+ * the chosen item over the button, as on macOS. Long lists get a search field.
+ */
 export function Select({
   options,
   value,
   onValueChange,
-  placeholder = "Choose one",
+  placeholder = "Choose",
   searchable = "auto",
   searchPlaceholder = "Search",
-  emptyText = "Nothing matches",
-  size = "md",
+  emptyText = "No Results",
+  size = "regular",
   disabled,
   id,
   className,
@@ -112,8 +115,6 @@ export function Select({
   const control = useFieldControl({ id, disabled });
   const selected = options.find((o) => o.value === value);
   const isSearchable = searchable === "auto" ? options.length > AUTO_SEARCH_THRESHOLD : searchable;
-
-  const chevron = <ChevronsUpDown aria-hidden="true" className="size-4 shrink-0 text-fg-subtle" />;
 
   if (isSearchable) {
     return (
@@ -139,25 +140,31 @@ export function Select({
           {chevron}
         </Combobox.Trigger>
         <Combobox.Portal>
-          <Combobox.Positioner align="start" sideOffset={6} className="z-(--z-popover)">
+          <Combobox.Positioner
+            align="start"
+            sideOffset={4}
+            collisionPadding={8}
+            className="z-(--z-popover)"
+          >
             <Combobox.Popup
               aria-label={ariaLabel ?? placeholder}
               className={cn(
                 popupSurface,
-                "w-(--anchor-width) max-w-(--available-width) min-w-60 p-1",
+                menuPad,
+                "w-(--anchor-width) max-w-(--available-width) min-w-60",
               )}
             >
-              <div className="flex items-center gap-2 border-b border-line px-2 pt-1 pb-1.5">
-                <Search aria-hidden="true" className="size-4 shrink-0 text-fg-subtle" />
+              <div className="mb-1 flex h-(--control-h) items-center gap-2 rounded-control bg-fill-3 px-2 focus-ring-within">
+                <Search aria-hidden="true" className="size-(--icon-sm) shrink-0 text-label-2" />
                 <Combobox.Input
                   placeholder={searchPlaceholder}
-                  className="h-9 min-w-0 flex-1 bg-transparent text-base text-fg outline-none sm:text-sm"
+                  className="min-w-0 flex-1 bg-transparent text-body text-label outline-none"
                 />
               </div>
-              <Combobox.Empty className="px-3 py-6 text-center text-sm text-fg-subtle">
+              <Combobox.Empty className="px-2 py-4 text-center text-body text-label-2 empty:hidden">
                 {emptyText}
               </Combobox.Empty>
-              <Combobox.List className="max-h-72 overflow-y-auto overscroll-contain pt-1 outline-none">
+              <Combobox.List className="max-h-72 overflow-y-auto overscroll-contain outline-none">
                 {(option: SelectOption) => (
                   <Combobox.Item
                     key={option.value}
@@ -165,11 +172,9 @@ export function Select({
                     disabled={option.disabled}
                     className={itemClass}
                   >
-                    <Combobox.ItemIndicator className="mt-0.5">
-                      <Check aria-hidden="true" className="size-4 text-accent-text" />
-                    </Combobox.ItemIndicator>
-                    <span className="col-start-2 flex items-start gap-3">
-                      <OptionBody option={option} />
+                    <Combobox.ItemIndicator>{checkmark}</Combobox.ItemIndicator>
+                    <span className="col-start-2">
+                      <OptionBody option={option} text={<span>{option.label}</span>} />
                     </span>
                   </Combobox.Item>
                 )}
@@ -200,16 +205,15 @@ export function Select({
         {chevron}
       </BaseSelect.Trigger>
       <BaseSelect.Portal>
-        <BaseSelect.Positioner
-          alignItemWithTrigger={false}
-          align="start"
-          sideOffset={6}
-          className="z-(--z-popover)"
-        >
+        <BaseSelect.Positioner sideOffset={4} collisionPadding={8} className="z-(--z-popover)">
           <BaseSelect.Popup
-            className={cn(popupSurface, "max-w-(--available-width) min-w-(--anchor-width) p-1")}
+            className={cn(
+              popupSurface,
+              menuPad,
+              "max-w-(--available-width) min-w-(--anchor-width)",
+            )}
           >
-            <BaseSelect.List className="max-h-72 overflow-y-auto overscroll-contain outline-none">
+            <BaseSelect.List className="max-h-80 overflow-y-auto overscroll-contain outline-none">
               {options.map((option) => (
                 <BaseSelect.Item
                   key={option.value}
@@ -218,21 +222,12 @@ export function Select({
                   disabled={option.disabled}
                   className={itemClass}
                 >
-                  <BaseSelect.ItemIndicator className="mt-0.5">
-                    <Check aria-hidden="true" className="size-4 text-accent-text" />
-                  </BaseSelect.ItemIndicator>
-                  <span className="col-start-2 flex items-start gap-3">
-                    {option.icon ? (
-                      <span className="mt-0.5 shrink-0 text-fg-muted [&_svg]:size-4">
-                        {option.icon}
-                      </span>
-                    ) : null}
-                    <span className="flex min-w-0 flex-col">
-                      <BaseSelect.ItemText className="truncate">{option.label}</BaseSelect.ItemText>
-                      {option.description ? (
-                        <span className="text-xs text-fg-subtle">{option.description}</span>
-                      ) : null}
-                    </span>
+                  <BaseSelect.ItemIndicator>{checkmark}</BaseSelect.ItemIndicator>
+                  <span className="col-start-2">
+                    <OptionBody
+                      option={option}
+                      text={<BaseSelect.ItemText>{option.label}</BaseSelect.ItemText>}
+                    />
                   </span>
                 </BaseSelect.Item>
               ))}

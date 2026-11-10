@@ -6,3 +6,4 @@ pnpm-lock.yaml
 docs
 next-env.d.ts
 dist
+.claude

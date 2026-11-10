@@ -20,7 +20,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "dev:user": "tsx scripts/dev-user.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.7.0",

@@ -1,8 +1,484 @@
 /**
- * Drizzle schema for BLAXZY.
+ * Drizzle schema for BLAXZY. This file is the data contract for every module.
  *
- * Tables are defined here (or re-exported from sibling files) and consumed by
- * drizzle-kit (see drizzle.config.ts) and by `getDb()` in ./client.ts.
- * Rules: append-only/versioned domain data, paginated queries, indexes for access paths.
+ * Rules (see CLAUDE.md and docs/PRO_READINESS.md):
+ * - Domain data is versioned and append-only: add a new row, never overwrite or hard-delete.
+ * - Every table has indexes for its access paths; every list query is paginated.
+ * - Status-like columns are `text` typed with a TypeScript union (not Postgres enums), so new
+ *   values need no migration. Services validate values with Zod before writing.
+ * - Anything the Wizard decides on the user's behalf is stored as data, so Pro can expose it.
  */
-export {};
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+  type AnyPgColumn,
+} from "drizzle-orm/pg-core";
+
+const ts = (name: string) => timestamp(name, { withTimezone: true });
+const createdAt = () => ts("created_at").notNull().defaultNow();
+const updatedAt = () =>
+  ts("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date());
+
+/* -------------------------------------------------------------------------- */
+/* Value unions                                                                */
+/* -------------------------------------------------------------------------- */
+
+export const USER_ROLES = ["user", "admin"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+export const PROJECT_MODES = ["wizard", "pro"] as const;
+export type ProjectMode = (typeof PROJECT_MODES)[number];
+
+/** Wizard stages, in order. Pro may use other stage keys; the column is free text. */
+export const WIZARD_STAGES = ["style", "script", "pre_production", "production", "done"] as const;
+export type WizardStage = (typeof WIZARD_STAGES)[number];
+
+export const PROJECT_FORMATS = ["movie", "series"] as const;
+export type ProjectFormat = (typeof PROJECT_FORMATS)[number];
+
+export const ORIENTATIONS = ["landscape", "portrait"] as const;
+export type Orientation = (typeof ORIENTATIONS)[number];
+
+export const SCRIPT_SOURCES = ["uploaded", "generated", "revised", "edited"] as const;
+export type ScriptSource = (typeof SCRIPT_SOURCES)[number];
+
+/**
+ * pending: a dami is still producing/checking it · in_review: waiting for the user ·
+ * accepted / rejected: the user's decision · superseded: an older accepted version replaced
+ * by a newer accepted one · failed: the dami run failed.
+ */
+export const SCRIPT_STATUSES = [
+  "pending",
+  "in_review",
+  "accepted",
+  "rejected",
+  "superseded",
+  "failed",
+] as const;
+export type ScriptStatus = (typeof SCRIPT_STATUSES)[number];
+
+export const ASSET_KINDS = [
+  "character",
+  "location",
+  "prop",
+  "voice",
+  "creature",
+  "costume",
+  "other",
+] as const;
+export type AssetKind = (typeof ASSET_KINDS)[number];
+
+/** detected/manual assets are `active`; one no longer in the script becomes `removed` (kept). */
+export const ASSET_STATUSES = ["active", "removed"] as const;
+export type AssetStatus = (typeof ASSET_STATUSES)[number];
+
+export const ASSET_ORIGINS = ["detected", "manual"] as const;
+export type AssetOrigin = (typeof ASSET_ORIGINS)[number];
+
+export const DAMI_RUN_STATUSES = ["queued", "running", "succeeded", "failed"] as const;
+export type DamiRunStatus = (typeof DAMI_RUN_STATUSES)[number];
+
+export const REVIEW_SUBJECTS = [
+  "script_version",
+  "asset",
+  "asset_look",
+  "asset_sheet",
+  "prompt_block",
+  "generation",
+] as const;
+export type ReviewSubject = (typeof REVIEW_SUBJECTS)[number];
+
+export const REVIEW_DECISIONS = ["accepted", "rejected"] as const;
+export type ReviewDecision = (typeof REVIEW_DECISIONS)[number];
+
+export const FILE_STATUSES = ["pending", "ready"] as const;
+export type FileStatus = (typeof FILE_STATUSES)[number];
+
+/* -------------------------------------------------------------------------- */
+/* JSON shapes                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** Output_01: the answers of the Style stage. Durations are in seconds. */
+export type ProjectStyle = {
+  visualStyle: string;
+  genre: string;
+  format: ProjectFormat;
+  orientation: Orientation;
+  /** Movie: the whole film. Series: the whole season. */
+  totalDurationSeconds: number;
+  /** Series only. */
+  episodeDurationSeconds?: number;
+  /** Anything else the Style stage collects (tone, audience, language, ...). */
+  extras?: Record<string, string>;
+};
+
+/** A comment anchored to a passage of the reviewed text. */
+export type ReviewComment = {
+  /** The quoted passage, so the comment survives small offset shifts. */
+  quote: string;
+  start: number;
+  end: number;
+  note: string;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Auth (better-auth core tables; property names are what better-auth expects) */
+/* -------------------------------------------------------------------------- */
+
+export const user = pgTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  image: text("image"),
+  role: text("role").$type<UserRole>().notNull().default("user"),
+  disabled: boolean("disabled").notNull().default(false),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const session = pgTable(
+  "session",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: ts("expires_at").notNull(),
+    token: text("token").notNull().unique(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  (t) => [index("session_user_id_idx").on(t.userId)],
+);
+
+export const account = pgTable(
+  "account",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: ts("access_token_expires_at"),
+    refreshTokenExpiresAt: ts("refresh_token_expires_at"),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("account_user_id_idx").on(t.userId)],
+);
+
+export const verification = pgTable(
+  "verification",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("verification_identifier_idx").on(t.identifier)],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Projects                                                                    */
+/* -------------------------------------------------------------------------- */
+
+export const project = pgTable(
+  "project",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id),
+    title: text("title").notNull(),
+    mode: text("mode").$type<ProjectMode>().notNull().default("wizard"),
+    /** Current stage key of the project's flow (a WizardStage for wizard projects). */
+    stage: text("stage").notNull().default("style"),
+    /** Per-stage progress of the flow state machine (shape owned by src/server/projects). */
+    stageState: jsonb("stage_state")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    /** Output_01. Null until the Style stage is completed. */
+    style: jsonb("style").$type<ProjectStyle>(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    /** Soft delete: archived projects leave the dashboard but keep their data. */
+    archivedAt: ts("archived_at"),
+  },
+  (t) => [index("project_owner_updated_idx").on(t.ownerId, t.updatedAt.desc())],
+);
+
+/** A movie has exactly one episode; a series has many. */
+export const episode = pgTable(
+  "episode",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    number: integer("number").notNull(),
+    title: text("title"),
+    targetDurationSeconds: integer("target_duration_seconds"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("episode_project_number_unique").on(t.projectId, t.number)],
+);
+
+/** Append-only activity log: stage changes, acceptances, edits. */
+export const projectEvent = pgTable(
+  "project_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    userId: text("user_id").references(() => user.id),
+    type: text("type").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("project_event_project_created_idx").on(t.projectId, t.createdAt.desc())],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Files (bytes live in object storage; this is the record)                    */
+/* -------------------------------------------------------------------------- */
+
+export const file = pgTable(
+  "file",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id),
+    projectId: uuid("project_id").references(() => project.id),
+    storageKey: text("storage_key").notNull().unique(),
+    originalName: text("original_name"),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes"),
+    /** pending until the direct upload is confirmed. */
+    status: text("status").$type<FileStatus>().notNull().default("pending"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("file_project_idx").on(t.projectId), index("file_owner_idx").on(t.ownerId)],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Dami runs (every Claude process execution; also the cost and latency record) */
+/* -------------------------------------------------------------------------- */
+
+export const damiRun = pgTable(
+  "dami_run",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    damiKey: text("dami_key").notNull(),
+    damiVersion: text("dami_version").notNull(),
+    model: text("model").notNull(),
+    status: text("status").$type<DamiRunStatus>().notNull().default("queued"),
+    userId: text("user_id").references(() => user.id),
+    projectId: uuid("project_id").references(() => project.id),
+    input: jsonb("input").$type<unknown>().notNull(),
+    output: jsonb("output").$type<unknown>(),
+    error: text("error"),
+    attempts: integer("attempts").notNull().default(0),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    cacheReadTokens: integer("cache_read_tokens"),
+    cacheWriteTokens: integer("cache_write_tokens"),
+    costUsd: numeric("cost_usd", { precision: 12, scale: 6 }),
+    createdAt: createdAt(),
+    startedAt: ts("started_at"),
+    finishedAt: ts("finished_at"),
+  },
+  (t) => [
+    index("dami_run_project_created_idx").on(t.projectId, t.createdAt.desc()),
+    index("dami_run_user_created_idx").on(t.userId, t.createdAt.desc()),
+    index("dami_run_key_version_idx").on(t.damiKey, t.damiVersion),
+    index("dami_run_status_idx").on(t.status),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Script                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One immutable version of a script. `episodeId` is null for a project-level script
+ * (the Wizard default); a per-episode script sets it.
+ */
+export const scriptVersion = pgTable(
+  "script_version",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    episodeId: uuid("episode_id").references(() => episode.id),
+    versionNumber: integer("version_number").notNull(),
+    parentId: uuid("parent_id").references((): AnyPgColumn => scriptVersion.id),
+    source: text("source").$type<ScriptSource>().notNull(),
+    status: text("status").$type<ScriptStatus>().notNull().default("pending"),
+    /** The script text. Null while a dami is still writing it. */
+    content: text("content"),
+    /** The user's short description, when the script was generated from one. */
+    brief: text("brief"),
+    /** Notes from the script-checker or writer dami, shown to the user in review. */
+    damiNotes: jsonb("dami_notes").$type<unknown>(),
+    /** The uploaded source document, when uploaded. */
+    fileId: uuid("file_id").references(() => file.id),
+    /** The dami run that produced or checked this version. */
+    damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    createdBy: text("created_by").references(() => user.id),
+    createdAt: createdAt(),
+    decidedAt: ts("decided_at"),
+  },
+  (t) => [
+    unique("script_version_number_unique")
+      .on(t.projectId, t.episodeId, t.versionNumber)
+      .nullsNotDistinct(),
+    index("script_version_project_status_idx").on(t.projectId, t.status),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Assets (Output_021). Looks and sheets are added in the pre-production work. */
+/* -------------------------------------------------------------------------- */
+
+export const asset = pgTable(
+  "asset",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    kind: text("kind").$type<AssetKind>().notNull(),
+    name: text("name").notNull(),
+    /** Stable, lower-case key within the project and kind; used to match across script versions. */
+    slug: text("slug").notNull(),
+    description: text("description"),
+    status: text("status").$type<AssetStatus>().notNull().default("active"),
+    origin: text("origin").$type<AssetOrigin>().notNull().default("detected"),
+    displayOrder: integer("display_order").notNull().default(0),
+    /** The script version in which the asset was first detected. */
+    firstScriptVersionId: uuid("first_script_version_id").references(() => scriptVersion.id),
+    /** The latest script version in which it was detected. */
+    lastScriptVersionId: uuid("last_script_version_id").references(() => scriptVersion.id),
+    damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("asset_project_kind_slug_unique").on(t.projectId, t.kind, t.slug),
+    index("asset_project_kind_status_idx").on(t.projectId, t.kind, t.status),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Prompt blocks (Output_022)                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One version of one block. `lineageId` is the block's identity across versions: a block that
+ * survives a script edit keeps its lineage and gets a new row with the next `versionNumber`.
+ * The current set of blocks is the rows with `supersededAt` null.
+ */
+export const promptBlock = pgTable(
+  "prompt_block",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    lineageId: uuid("lineage_id").notNull().defaultRandom(),
+    versionNumber: integer("version_number").notNull().default(1),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    episodeId: uuid("episode_id").references(() => episode.id),
+    scriptVersionId: uuid("script_version_id")
+      .notNull()
+      .references(() => scriptVersion.id),
+    orderIndex: integer("order_index").notNull(),
+    title: text("title"),
+    /** The section of the script this block covers. */
+    scriptExcerpt: text("script_excerpt").notNull(),
+    prompt: text("prompt").notNull(),
+    durationSeconds: integer("duration_seconds"),
+    /** Slugs of the assets that appear in this block, as `kind:slug`. */
+    assetRefs: jsonb("asset_refs")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** True when the script changed under this block and it must be regenerated. */
+    stale: boolean("stale").notNull().default(false),
+    staleReason: text("stale_reason"),
+    damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    createdAt: createdAt(),
+    supersededAt: ts("superseded_at"),
+  },
+  (t) => [
+    uniqueIndex("prompt_block_lineage_version_unique").on(t.lineageId, t.versionNumber),
+    index("prompt_block_project_order_idx").on(t.projectId, t.episodeId, t.orderIndex),
+    index("prompt_block_script_version_idx").on(t.scriptVersionId),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Reviews (every accept / reject, with its reason)                            */
+/* -------------------------------------------------------------------------- */
+
+export const review = pgTable(
+  "review",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    subjectType: text("subject_type").$type<ReviewSubject>().notNull(),
+    subjectId: uuid("subject_id").notNull(),
+    decision: text("decision").$type<ReviewDecision>().notNull(),
+    /** Codes of the predefined issues the user picked (empty when accepted). */
+    issueCodes: jsonb("issue_codes")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** The user's free-text reason. */
+    note: text("note"),
+    /** Comments anchored to passages (script review). */
+    comments: jsonb("comments")
+      .$type<ReviewComment[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** The dami run that produced the reviewed output; ties the reason to a dami version. */
+    damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("review_subject_idx").on(t.subjectType, t.subjectId),
+    index("review_project_created_idx").on(t.projectId, t.createdAt.desc()),
+  ],
+);

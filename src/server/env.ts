@@ -33,6 +33,13 @@ export const envSchema = z.object({
   DAMI_MAX_CONCURRENCY: z.coerce.number().int().positive().default(4),
   /** Retries per Claude call for rate limits, overloads and network errors (not counting the first try). */
   DAMI_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(4),
+  /**
+   * `live` calls Claude; `sample` answers every dami with sample output generated from its input
+   * (no API key, no cost); `auto` is `sample` when ANTHROPIC_API_KEY is unset, `live` otherwise.
+   */
+  DAMI_MODE: z.enum(["auto", "live", "sample"]).default("auto"),
+  /** Artificial latency of one sample-mode dami call, so the flow feels real. */
+  DAMI_SAMPLE_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(1500),
   S3_ENDPOINT: z.string().url(),
   S3_REGION: z.string().min(1).default("us-east-1"),
   S3_BUCKET: z.string().min(1),

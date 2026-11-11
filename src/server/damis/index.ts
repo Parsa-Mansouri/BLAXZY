@@ -42,6 +42,8 @@ export {
 export type { ClaudeClient, ClaudeRequest, ClaudeResponse } from "./framework/client";
 export type { DamiRunStore, DamiRunStart, DamiRunFinish } from "./framework/store";
 export { Semaphore } from "./framework/concurrency";
+export { getDamiMode, resolveDamiMode, SAMPLE_MODEL, type DamiMode } from "./framework/mode";
+export { createSampleClaudeClient, SAMPLE_GENERATORS } from "./sample/client";
 export { CLAUDE_MODELS, FRAMEWORK_DEFAULT_MODEL } from "./framework/models";
 export {
   MODEL_PRICING,

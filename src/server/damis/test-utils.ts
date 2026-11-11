@@ -112,7 +112,14 @@ export function testDeps(client: ClaudeClient, overrides: Partial<DamiRunnerDeps
     client,
     store,
     limiter: new Semaphore(4),
-    config: { apiKey: undefined, defaultModel: undefined, maxConcurrency: 4, maxRetries: 3 },
+    config: {
+      apiKey: undefined,
+      defaultModel: undefined,
+      maxConcurrency: 4,
+      maxRetries: 3,
+      mode: "live",
+      sampleDelayMs: 0,
+    },
     sleep: async (ms) => {
       sleeps.push(ms);
     },

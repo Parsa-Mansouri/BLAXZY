@@ -22,7 +22,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "dev:user": "tsx scripts/dev-user.ts",
-    "dami:run": "tsx scripts/dami-run.ts"
+    "dami:run": "tsx scripts/dami-run.ts",
+    "dev:script-flow": "tsx scripts/dev-script-flow.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.7.0",

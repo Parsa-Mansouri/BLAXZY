@@ -18,11 +18,13 @@ import {
   DamiRefusalError,
   DamiTruncatedError,
 } from "./errors";
+import { resolveDamiMode, SAMPLE_MODEL, type DamiMode } from "./mode";
 import { resolveModel } from "./models";
 import { addUsage, computeCostUsd, ZERO_USAGE, type TokenUsage } from "./pricing";
 import { buildClaudeRequest, replayAssistantContent, responseText } from "./request";
 import { backoffDelayMs, DEFAULT_BACKOFF, errorStatus, isTransientError } from "./retry";
 import { createDrizzleDamiRunStore, type DamiRunStore } from "./store";
+import { createSampleClaudeClient } from "../sample/client";
 
 /** Who the run is for. Both ids are optional so damis can run outside a project (CLI, Pro tools). */
 export type DamiRunContext = {
@@ -38,6 +40,10 @@ export type DamiRuntimeConfig = {
   defaultModel: string | undefined;
   maxConcurrency: number;
   maxRetries: number;
+  /** `sample` answers with generated output when no client is injected (see `getDamiMode`). */
+  mode: DamiMode;
+  /** Artificial latency of one sample-mode call. */
+  sampleDelayMs: number;
 };
 
 /** Injection points. Production code passes nothing; tests pass fakes. */
@@ -72,11 +78,14 @@ function resolveConfig(deps: DamiRunnerDeps): DamiRuntimeConfig {
     given.maxConcurrency !== undefined &&
     given.maxRetries !== undefined;
   const env = complete ? undefined : getEnv();
+  const apiKey = "apiKey" in given ? given.apiKey : env?.ANTHROPIC_API_KEY;
   return {
-    apiKey: "apiKey" in given ? given.apiKey : env?.ANTHROPIC_API_KEY,
+    apiKey,
     defaultModel: "defaultModel" in given ? given.defaultModel : env?.DAMI_DEFAULT_MODEL,
     maxConcurrency: given.maxConcurrency ?? env?.DAMI_MAX_CONCURRENCY ?? 4,
     maxRetries: given.maxRetries ?? env?.DAMI_MAX_RETRIES ?? 4,
+    mode: given.mode ?? resolveDamiMode(env?.DAMI_MODE ?? "auto", apiKey),
+    sampleDelayMs: given.sampleDelayMs ?? env?.DAMI_SAMPLE_DELAY_MS ?? 0,
   };
 }
 
@@ -154,9 +163,17 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
   const validInput: z.output<I> = parsedInput.data;
 
   const config = resolveConfig(deps);
-  const model = resolveModel(dami.model ?? "", config.defaultModel, ctx.model);
+  // Sample mode applies only when no client is injected (tests inject fakes and keep real models).
+  const sample = !deps.client && config.mode === "sample";
+  const model = sample
+    ? SAMPLE_MODEL
+    : resolveModel(dami.model ?? "", config.defaultModel, ctx.model);
   if (!model) throw new DamiConfigError(dami.key, `Dami "${dami.key}" has no model configured`);
-  const client = deps.client ?? getDefaultClaudeClient(config.apiKey);
+  const client =
+    deps.client ??
+    (sample
+      ? createSampleClaudeClient({ delayMs: config.sampleDelayMs })
+      : getDefaultClaudeClient(config.apiKey));
   if (!client) {
     throw new DamiConfigError(
       dami.key,
@@ -174,6 +191,7 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
     effort: dami.effort,
     outputSchema: dami.output,
   });
+  const callOptions = { signal: ctx.signal, dami: { key: dami.key, input: validInput } };
 
   const runId = await store.start({
     damiKey: dami.key,
@@ -193,8 +211,8 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
       try {
         const response = await limiter.run(() =>
           dami.streaming
-            ? client.streamMessage(req, { signal: ctx.signal })
-            : client.createMessage(req, { signal: ctx.signal }),
+            ? client.streamMessage(req, callOptions)
+            : client.createMessage(req, callOptions),
         );
         usage = addUsage(usage ?? ZERO_USAGE, usageOf(response));
         return response;

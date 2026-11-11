@@ -7,6 +7,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Damis answer from the sample generators, instantly (dotenv never overrides these).
+    env: { DAMI_MODE: "sample", DAMI_SAMPLE_DELAY_MS: "0" },
     include: ["src/**/*.test.ts", "worker/**/*.test.ts"],
   },
 });

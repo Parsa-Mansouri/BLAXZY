@@ -7,7 +7,14 @@ import type {
 export type ClaudeRequest = MessageCreateParamsNonStreaming;
 export type ClaudeResponse = Message;
 
-export type ClaudeCallOptions = { signal?: AbortSignal };
+export type ClaudeCallOptions = {
+  signal?: AbortSignal;
+  /**
+   * The dami behind the call and its validated input. The Claude API client ignores it; the
+   * sample client (sample mode) uses it to answer without parsing the prompt.
+   */
+  dami?: { key: string; input: unknown };
+};
 
 /**
  * The narrow surface the runner needs from Claude. The default implementation wraps the

@@ -56,6 +56,12 @@ export async function findFile(fileId: string): Promise<FileRow | undefined> {
   return row;
 }
 
+/** The file's record when it exists and belongs to the user, else null (for other modules). */
+export async function getOwnedFileInfo(fileId: string, userId: string): Promise<FileInfo | null> {
+  const row = await findFile(fileId);
+  return row && row.ownerId === userId ? toFileInfo(row) : null;
+}
+
 /** The row if it exists and belongs to the user; otherwise the same `not_found` either way. */
 export async function findOwnedFile(fileId: string, userId: string): Promise<FileRow> {
   const row = await findFile(fileId);

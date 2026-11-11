@@ -122,7 +122,8 @@ describe("extractScriptText: docx", () => {
   });
 });
 
-describe("extractScriptText: pdf", () => {
+// The first pdfjs import is slow on a busy machine; the default 5 s is not enough.
+describe("extractScriptText: pdf", { timeout: 30_000 }, () => {
   const fixture = new Uint8Array(readFileSync(join(__dirname, "fixtures", "screenplay.pdf")));
 
   it("rebuilds lines in order, joins same-line items and separates pages", async () => {

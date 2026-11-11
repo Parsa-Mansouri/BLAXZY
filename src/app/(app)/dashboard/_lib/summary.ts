@@ -1,3 +1,4 @@
+import { stageLabel, stageStep } from "@/lib/stages";
 import type { Project } from "@/server/projects";
 
 /** What the dashboard needs about a project; plain values that cross the server/client line. */
@@ -17,4 +18,18 @@ export function toSummary(project: Project): ProjectSummary {
     stage: project.stage,
     updatedAt: project.updatedAt.toISOString(),
   };
+}
+
+/** Where a project opens from the home screen: a finished film opens its finished screen. */
+export function projectHref(project: Pick<ProjectSummary, "id" | "stage">): string {
+  return project.stage === "done"
+    ? `/projects/${project.id}/production/finished`
+    : `/projects/${project.id}`;
+}
+
+/** The line under a project's title on the Up Next frame. */
+export function stageLine(project: Pick<ProjectSummary, "stage">): string {
+  return project.stage === "done"
+    ? "Finished"
+    : `${stageLabel(project.stage)} · ${stageStep(project.stage)}`;
 }

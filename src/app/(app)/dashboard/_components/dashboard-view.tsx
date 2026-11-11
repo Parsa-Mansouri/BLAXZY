@@ -3,9 +3,9 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { PROJECT_STAGES, stageLabel, stageStep } from "@/lib/stages";
+import { PROJECT_STAGES } from "@/lib/stages";
 import { Button, TitleCard, Tip, Toolbar, useDismissed } from "@/ui";
-import type { ProjectSummary } from "../_lib/summary";
+import { projectHref, stageLine, type ProjectSummary } from "../_lib/summary";
 import { NewProjectDialog } from "./new-project-dialog";
 import { ProjectGrid } from "./project-grid";
 import { useProjectList } from "./use-project-list";
@@ -53,15 +53,15 @@ export function DashboardView({
               <TitleCard
                 size="hero"
                 title={upNext.title}
-                line={`${stageLabel(upNext.stage)} · ${stageStep(upNext.stage)}`}
+                line={stageLine(upNext)}
                 action={
                   <Button
                     variant="standard"
                     size="large"
-                    render={<Link href={`/projects/${upNext.id}`} />}
-                    aria-label={`Continue ${upNext.title}`}
+                    render={<Link href={projectHref(upNext)} />}
+                    aria-label={`${upNext.stage === "done" ? "Open" : "Continue"} ${upNext.title}`}
                   >
-                    Continue
+                    {upNext.stage === "done" ? "Open" : "Continue"}
                   </Button>
                 }
               />

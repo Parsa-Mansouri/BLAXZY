@@ -21,7 +21,7 @@ import {
   useToast,
 } from "@/ui";
 import { archiveProjectAction, renameProjectAction } from "../actions";
-import type { ProjectSummary } from "../_lib/summary";
+import { projectHref, type ProjectSummary } from "../_lib/summary";
 
 const RENAME_FORM_ID = "rename-project-form";
 
@@ -81,10 +81,7 @@ export function ProjectTile({
 
   return (
     <li className="group/tile relative">
-      <Link
-        href={`/projects/${project.id}`}
-        className="group/link flex flex-col gap-2 outline-none"
-      >
+      <Link href={projectHref(project)} className="group/link flex flex-col gap-2 outline-none">
         <TitleCard
           title={project.title}
           className="group-hover/tile:bg-elevated-2 group-focus-visible/link:outline-2 group-focus-visible/link:outline-offset-2 group-focus-visible/link:outline-focus"

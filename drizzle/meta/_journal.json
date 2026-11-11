@@ -15,6 +15,13 @@
       "when": 1794317086792,
       "tag": "0001_auth_rate_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794386979548,
+      "tag": "0002_engine_and_preproduction",
+      "breakpoints": true
     }
   ]
 }

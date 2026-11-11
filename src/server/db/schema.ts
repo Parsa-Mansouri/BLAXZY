@@ -300,7 +300,7 @@ export const file = pgTable(
     storageKey: text("storage_key").notNull().unique(),
     originalName: text("original_name"),
     mimeType: text("mime_type").notNull(),
-    sizeBytes: integer("size_bytes"),
+    sizeBytes: bigint("size_bytes", { mode: "number" }),
     /** pending until the direct upload is confirmed. */
     status: text("status").$type<FileStatus>().notNull().default("pending"),
     createdAt: createdAt(),
@@ -501,5 +501,203 @@ export const review = pgTable(
   (t) => [
     index("review_subject_idx").on(t.subjectType, t.subjectId),
     index("review_project_created_idx").on(t.projectId, t.createdAt.desc()),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Generation engine: provider jobs and credits (see docs/M2_M3_CONTRACTS.md)  */
+/* -------------------------------------------------------------------------- */
+
+export const GENERATION_KINDS = ["image", "video"] as const;
+export type GenerationKind = (typeof GENERATION_KINDS)[number];
+
+export const GENERATION_STATUSES = [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "cancelled",
+] as const;
+export type GenerationStatus = (typeof GENERATION_STATUSES)[number];
+
+/** What a generation is for; decides the model through the server-side policy. */
+export const GENERATION_PURPOSES = [
+  "asset_look",
+  "asset_sheet",
+  "block_draft",
+  "block_final",
+] as const;
+export type GenerationPurpose = (typeof GENERATION_PURPOSES)[number];
+
+/**
+ * One job sent to a generation provider. The model and parameters the platform chose are stored
+ * explicitly (Pro will expose them). Credits are reserved when the row is created and settled or
+ * refunded when it finishes.
+ */
+export const generation = pgTable(
+  "generation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    kind: text("kind").$type<GenerationKind>().notNull(),
+    purpose: text("purpose").$type<GenerationPurpose>().notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    params: jsonb("params")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    prompt: text("prompt").notNull(),
+    /** Files sent as references, in attachment order. */
+    referenceFileIds: jsonb("reference_file_ids")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    status: text("status").$type<GenerationStatus>().notNull().default("queued"),
+    providerJobId: text("provider_job_id"),
+    resultFileId: uuid("result_file_id").references(() => file.id),
+    /** Credits reserved for this job (the quoted price). */
+    priceCredits: integer("price_credits").notNull(),
+    /** User-readable reason when failed. */
+    error: text("error"),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: createdAt(),
+    startedAt: ts("started_at"),
+    finishedAt: ts("finished_at"),
+  },
+  (t) => [
+    index("generation_project_created_idx").on(t.projectId, t.createdAt.desc()),
+    index("generation_user_status_idx").on(t.userId, t.status),
+    index("generation_status_idx").on(t.status),
+  ],
+);
+
+export const CREDIT_ENTRY_TYPES = ["grant", "reserve", "settle", "refund"] as const;
+export type CreditEntryType = (typeof CREDIT_ENTRY_TYPES)[number];
+
+/**
+ * Append-only credit ledger. `amount` is signed: grant and refund are positive, reserve is
+ * negative, settle is zero (it marks a reservation as spent). The balance is the sum.
+ */
+export const creditLedger = pgTable(
+  "credit_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    type: text("type").$type<CreditEntryType>().notNull(),
+    amount: integer("amount").notNull(),
+    generationId: uuid("generation_id").references(() => generation.id),
+    note: text("note"),
+    createdBy: text("created_by").references(() => user.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("credit_ledger_user_created_idx").on(t.userId, t.createdAt.desc()),
+    // A generation is reserved, settled and refunded at most once each.
+    uniqueIndex("credit_ledger_generation_type_unique").on(t.generationId, t.type),
+  ],
+);
+
+/** Current balance per user, updated in the same transaction as every ledger entry (row-locked). */
+export const creditBalance = pgTable("credit_balance", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id),
+  balance: integer("balance").notNull().default(0),
+  updatedAt: updatedAt(),
+});
+
+/* -------------------------------------------------------------------------- */
+/* Pre-production: looks and sheets of an asset                                */
+/* -------------------------------------------------------------------------- */
+
+export const LOOK_SOURCES = ["uploaded", "generated"] as const;
+export type LookSource = (typeof LOOK_SOURCES)[number];
+
+/**
+ * pending: a dami or the provider is still working · in_review: waiting for the user ·
+ * accepted / rejected: the user decided · superseded: an older accepted one was replaced ·
+ * failed: could not be produced (see `failure`).
+ */
+export const LOOK_STATUSES = [
+  "pending",
+  "in_review",
+  "accepted",
+  "rejected",
+  "superseded",
+  "failed",
+] as const;
+export type LookStatus = (typeof LOOK_STATUSES)[number];
+
+/** One candidate image (or voice recording) of an asset. Immutable once decided. */
+export const assetLook = pgTable(
+  "asset_look",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => asset.id),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    versionNumber: integer("version_number").notNull(),
+    parentId: uuid("parent_id").references((): AnyPgColumn => assetLook.id),
+    source: text("source").$type<LookSource>().notNull(),
+    status: text("status").$type<LookStatus>().notNull().default("pending"),
+    fileId: uuid("file_id").references(() => file.id),
+    /** The prompt the user wrote, when they wrote one. */
+    userPrompt: text("user_prompt"),
+    /** Answers to the guided questions, keyed by question id. */
+    guidedAnswers: jsonb("guided_answers").$type<Record<string, string>>(),
+    /** The prompt actually sent to the provider (written by a dami). */
+    prompt: text("prompt"),
+    generationId: uuid("generation_id").references(() => generation.id),
+    damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    failure: text("failure"),
+    createdBy: text("created_by").references(() => user.id),
+    createdAt: createdAt(),
+    decidedAt: ts("decided_at"),
+  },
+  (t) => [
+    uniqueIndex("asset_look_asset_version_unique").on(t.assetId, t.versionNumber),
+    index("asset_look_project_status_idx").on(t.projectId, t.status),
+  ],
+);
+
+/** The sheet built from an accepted look (character sheet, prop sheet, location sheet). */
+export const assetSheet = pgTable(
+  "asset_sheet",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => asset.id),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    lookId: uuid("look_id")
+      .notNull()
+      .references(() => assetLook.id),
+    versionNumber: integer("version_number").notNull(),
+    parentId: uuid("parent_id").references((): AnyPgColumn => assetSheet.id),
+    status: text("status").$type<LookStatus>().notNull().default("pending"),
+    fileId: uuid("file_id").references(() => file.id),
+    prompt: text("prompt"),
+    generationId: uuid("generation_id").references(() => generation.id),
+    damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    failure: text("failure"),
+    createdAt: createdAt(),
+    decidedAt: ts("decided_at"),
+  },
+  (t) => [
+    uniqueIndex("asset_sheet_asset_version_unique").on(t.assetId, t.versionNumber),
+    index("asset_sheet_project_status_idx").on(t.projectId, t.status),
   ],
 );

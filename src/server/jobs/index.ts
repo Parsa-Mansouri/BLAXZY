@@ -6,7 +6,14 @@ export {
   type JobOptions,
   type JobPayload,
 } from "./define";
-export { systemPing } from "./definitions";
+export {
+  scriptCheck,
+  scriptDetectAssets,
+  scriptRevise,
+  scriptSection,
+  scriptWrite,
+  systemPing,
+} from "./definitions";
 export { closeJobQueue, enqueue, InvalidJobPayloadError, type EnqueueOptions } from "./enqueue";
 export {
   defineHandler,

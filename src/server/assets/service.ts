@@ -21,7 +21,8 @@ export class AssetInputError extends Error {
 
 const uuid = z.uuid();
 
-function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
+/** Validates input; the first issue's message becomes an `AssetInputError`. */
+export function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
   const result = schema.safeParse(input);
   if (!result.success) {
     throw new AssetInputError(result.error.issues[0]?.message ?? "That input is not valid.");

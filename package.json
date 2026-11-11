@@ -25,7 +25,8 @@
     "dami:run": "tsx scripts/dami-run.ts",
     "dev:script-flow": "tsx scripts/dev-script-flow.ts",
     "dev:credits": "tsx scripts/dev-credits.ts",
-    "dev:generation": "tsx scripts/dev-generation.ts"
+    "dev:generation": "tsx scripts/dev-generation.ts",
+    "dev:preprod-flow": "tsx scripts/dev-preprod-flow.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.7.0",

@@ -1,8 +1,9 @@
 import "dotenv/config";
 import { closeDb } from "../src/server/db/client";
 import { getEnv } from "../src/server/env";
+import { onGenerationFinished } from "../src/server/generation";
 import { startWorker, stopWorker } from "../src/server/jobs";
-import { handlers } from "./handlers";
+import { assetGenerationHook, handlers } from "./handlers";
 
 async function main(): Promise<void> {
   const env = getEnv(); // fail fast on invalid configuration
@@ -31,6 +32,9 @@ async function main(): Promise<void> {
   const keepAlive = setInterval(() => {}, 1 << 30);
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
+
+  // Completion hooks first, so no generation finishes before they are in place. Once per process.
+  onGenerationFinished(assetGenerationHook);
 
   await startWorker({
     handlers,

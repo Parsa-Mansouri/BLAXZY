@@ -72,3 +72,43 @@ export const generationRun = defineJob({
   dedupeKey: (p) => p.generationId,
   allowFollowUp: true,
 });
+
+/*
+ * Pre-production (see docs/M2_M3_CONTRACTS.md). Each job writes the image prompt with a dami
+ * (unless one is stored already), then requests the generation; the generation's completion hook
+ * moves the look or sheet to review.
+ */
+const lookPayload = z.object({ lookId: z.string().uuid() });
+const sheetPayload = z.object({ sheetId: z.string().uuid() });
+
+/** Write a look's prompt (asset-prompt-writer) and request its image. */
+export const assetLookGenerate = defineJob({
+  name: "asset.look.generate",
+  payload: lookPayload,
+  options: damiJob,
+  dedupeKey: (p) => p.lookId,
+});
+
+/** Fix a rejected look's prompt from its review (asset-fixer) and request the new image. */
+export const assetLookFix = defineJob({
+  name: "asset.look.fix",
+  payload: lookPayload,
+  options: damiJob,
+  dedupeKey: (p) => p.lookId,
+});
+
+/** Write a sheet's prompt (sheet-generator) and request it with the accepted look attached. */
+export const assetSheetGenerate = defineJob({
+  name: "asset.sheet.generate",
+  payload: sheetPayload,
+  options: damiJob,
+  dedupeKey: (p) => p.sheetId,
+});
+
+/** Fix a rejected sheet's prompt from its review (sheet-fixer) and request the new sheet. */
+export const assetSheetFix = defineJob({
+  name: "asset.sheet.fix",
+  payload: sheetPayload,
+  options: damiJob,
+  dedupeKey: (p) => p.sheetId,
+});

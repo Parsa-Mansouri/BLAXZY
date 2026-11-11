@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { SectionedBlock } from "@/server/damis";
-import { getDb, type DbExecutor } from "@/server/db/client";
+import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
 import { project, projectEvent, promptBlock, scriptVersion } from "@/server/db/schema";
 import { enqueue, scriptDetectAssets } from "@/server/jobs";
 
@@ -172,6 +172,64 @@ export async function markBlocksStale(input: {
     .where(and(eq(promptBlock.projectId, projectId), current, eq(promptBlock.stale, false)))
     .returning({ id: promptBlock.id });
   return updated.length;
+}
+
+/**
+ * Replaces the asset reference `from` with `to` (both `kind:slug`) in the project's current
+ * blocks, append-only: each affected block gets a new version (same lineage, next version number)
+ * and the old row is superseded. A block that already lists `to` keeps it once. Pass `executor`
+ * to run inside the caller's transaction (asset merges). Returns the number of blocks rewritten.
+ */
+export async function rewriteAssetRefs(
+  input: { projectId: string; from: string; to: string },
+  executor?: DbTx,
+): Promise<number> {
+  const { projectId, from, to } = parse(
+    z.object({
+      projectId: uuid,
+      from: z.string().min(3).max(120),
+      to: z.string().min(3).max(120),
+    }),
+    input,
+  );
+  if (from === to) return 0;
+  const run = async (tx: DbTx): Promise<number> => {
+    const affected = await tx
+      .select()
+      .from(promptBlock)
+      .where(
+        and(
+          eq(promptBlock.projectId, projectId),
+          current,
+          sql`${promptBlock.assetRefs} @> ${JSON.stringify([from])}::jsonb`,
+        ),
+      )
+      .for("update");
+    if (affected.length === 0) return 0;
+    const now = new Date();
+    for (const block of affected) {
+      await tx.update(promptBlock).set({ supersededAt: now }).where(eq(promptBlock.id, block.id));
+      const refs = [...new Set(block.assetRefs.map((ref) => (ref === from ? to : ref)))];
+      await tx.insert(promptBlock).values({
+        lineageId: block.lineageId,
+        versionNumber: block.versionNumber + 1,
+        projectId: block.projectId,
+        episodeId: block.episodeId,
+        scriptVersionId: block.scriptVersionId,
+        orderIndex: block.orderIndex,
+        title: block.title,
+        scriptExcerpt: block.scriptExcerpt,
+        prompt: block.prompt,
+        durationSeconds: block.durationSeconds,
+        assetRefs: refs,
+        stale: block.stale,
+        staleReason: block.staleReason,
+        damiRunId: block.damiRunId,
+      });
+    }
+    return affected.length;
+  };
+  return executor ? run(executor) : getDb().transaction(run);
 }
 
 /** True when the project's current blocks were cut from this script version. */

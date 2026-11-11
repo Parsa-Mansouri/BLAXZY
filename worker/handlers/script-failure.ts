@@ -95,9 +95,10 @@ export async function handleFailure(
   job: JobDefinition,
   context: JobContext,
   record: (decision: FailureDecision) => Promise<void>,
+  classify: (error: unknown) => FailureDecision = classifyFailure,
 ): Promise<void> {
   if (context.signal.aborted) throw error;
-  const decision = classifyFailure(error);
+  const decision = classify(error);
   const last = isLastAttempt(job, context);
   if (decision.retryable && !last) throw error;
   await record(decision);
@@ -105,7 +106,7 @@ export async function handleFailure(
     JSON.stringify({
       time: new Date().toISOString(),
       level: "error",
-      msg: "script job gave up",
+      msg: "job gave up",
       job: job.name,
       id: context.jobId,
       attempt: context.attempt,

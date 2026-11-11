@@ -11,6 +11,12 @@ import type {
 } from "../framework/client";
 import { SAMPLE_MODEL } from "../framework/mode";
 import { sampleAssetDetector } from "./asset-detector";
+import {
+  sampleAssetFixer,
+  sampleAssetPromptWriter,
+  sampleSheetFixer,
+  sampleSheetGenerator,
+} from "./reference";
 import { samplePromptSectioner } from "./prompt-sectioner";
 import { sampleScriptChecker } from "./script-checker";
 import { sampleScriptReviser } from "./script-reviser";
@@ -23,6 +29,10 @@ export const SAMPLE_GENERATORS: Readonly<Record<string, (input: unknown) => unkn
   "script-reviser": sampleScriptReviser,
   "asset-detector": sampleAssetDetector,
   "prompt-sectioner": samplePromptSectioner,
+  "asset-prompt-writer": sampleAssetPromptWriter,
+  "asset-fixer": sampleAssetFixer,
+  "sheet-generator": sampleSheetGenerator,
+  "sheet-fixer": sampleSheetFixer,
 };
 
 function wait(ms: number, signal: AbortSignal | undefined): Promise<void> {

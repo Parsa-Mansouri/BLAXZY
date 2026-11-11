@@ -1,5 +1,5 @@
 /** The tasks damis perform; a module may add guidance specific to each. */
-export const DAMI_TASKS = ["write", "check", "revise", "detect", "section"] as const;
+export const DAMI_TASKS = ["write", "check", "revise", "detect", "section", "reference"] as const;
 export type DamiTask = (typeof DAMI_TASKS)[number];
 
 /**

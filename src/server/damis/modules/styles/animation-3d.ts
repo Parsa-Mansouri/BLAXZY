@@ -26,5 +26,7 @@ export const animation3d: PromptModule = {
     section: `- STYLE line for every block: "Stylised 3D animation, feature-film quality CG, soft global illumination, rich materials, expressive character animation" plus the aspect ratio and the project's palette.
 - Describe shapes and materials (rounded, chunky, soft fur, brushed metal), squash-and-stretch acting, clear poses and big readable expressions.
 - Light like an animated feature: warm key, cool fill, rim light separating characters from the background, saturated but controlled colour.`,
+    reference: `- Start the image prompt with the style in concrete terms: "Stylised 3D animation render, feature-film quality CG, soft global illumination, rich materials".
+- Describe shapes and materials (rounded, chunky, soft fur, brushed metal) rather than photographic detail; no film grain, no lens talk.`,
   },
 };

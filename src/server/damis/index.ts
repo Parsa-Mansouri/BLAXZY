@@ -3,11 +3,15 @@
  * Nothing here touches Claude or the database at import time.
  */
 import { assetDetector } from "./asset-detector/dami";
+import { assetFixer } from "./asset-fixer/dami";
+import { assetPromptWriter } from "./asset-prompt-writer/dami";
 import type { AnyDami } from "./framework/define";
 import { promptSectioner } from "./prompt-sectioner/dami";
 import { scriptChecker } from "./script-checker/dami";
 import { scriptReviser } from "./script-reviser/dami";
 import { scriptWriter } from "./script-writer/dami";
+import { sheetFixer } from "./sheet-fixer/dami";
+import { sheetGenerator } from "./sheet-generator/dami";
 
 // Framework
 export { defineDami } from "./framework/define";
@@ -124,6 +128,57 @@ export {
   type SectionedBlock,
 } from "./prompt-sectioner/section-script";
 
+// Reference images and sheets (pre-production)
+export { assetPromptWriter, assetFixer, sheetGenerator, sheetFixer };
+export {
+  assetPromptWriterInputSchema,
+  assetPromptWriterOutputSchema,
+  type AssetPromptWriterInput,
+  type AssetPromptWriterOutput,
+} from "./asset-prompt-writer/schema";
+export { ASSET_QUESTIONS, type GuidedQuestion } from "./asset-prompt-writer/questions";
+export {
+  assetFixerInputSchema,
+  assetFixerOutputSchema,
+  lookIssueCodeSchema,
+  lookReviewSchema,
+  type AssetFixerInput,
+  type AssetFixerOutput,
+} from "./asset-fixer/schema";
+export {
+  LOOK_ISSUES,
+  LOOK_ISSUE_CODES,
+  LOOK_ISSUE_LIST,
+  type LookIssueCode,
+  type LookIssueDefinition,
+} from "./asset-fixer/issues";
+export {
+  sheetGeneratorInputSchema,
+  sheetGeneratorOutputSchema,
+  type SheetGeneratorInput,
+  type SheetGeneratorOutput,
+} from "./sheet-generator/schema";
+export {
+  sheetFixerInputSchema,
+  sheetFixerOutputSchema,
+  sheetIssueCodeSchema,
+  sheetReviewSchema,
+  type SheetFixerInput,
+  type SheetFixerOutput,
+} from "./sheet-fixer/schema";
+export {
+  SHEET_ISSUES,
+  SHEET_ISSUE_CODES,
+  SHEET_ISSUE_LIST,
+  type SheetIssueCode,
+  type SheetIssueDefinition,
+} from "./sheet-fixer/issues";
+export {
+  referenceAssetSchema,
+  type ChangeSummaryItem,
+  type ReferenceAsset,
+} from "./shared/reference";
+
 /** Every dami by key (for the CLI and, later, Pro's dami picker). */
 export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [scriptWriter.key]: scriptWriter,
@@ -131,4 +186,8 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [scriptReviser.key]: scriptReviser,
   [assetDetector.key]: assetDetector,
   [promptSectioner.key]: promptSectioner,
+  [assetPromptWriter.key]: assetPromptWriter,
+  [assetFixer.key]: assetFixer,
+  [sheetGenerator.key]: sheetGenerator,
+  [sheetFixer.key]: sheetFixer,
 };

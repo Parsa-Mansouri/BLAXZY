@@ -1,0 +1,23 @@
+{
+  "style": {
+    "visualStyle": "Cinematic live-action",
+    "genre": "Drama",
+    "format": "movie",
+    "orientation": "portrait",
+    "totalDurationSeconds": 60,
+    "extras": {
+      "tone": "bittersweet, restrained"
+    }
+  },
+  "asset": {
+    "kind": "character",
+    "name": "Mara",
+    "description": "Woman in her 60s; wiry, grey-streaked braid, oil-stained work jacket; carries a brass locket; harbour town, present day."
+  },
+  "userPrompt": "Make her look tired but proud, grey eyes.",
+  "guidedAnswers": {
+    "age": "Older (60s-70s)",
+    "build": "Lean",
+    "wardrobe": "oil-stained dark work jacket, worn trousers, boots"
+  }
+}

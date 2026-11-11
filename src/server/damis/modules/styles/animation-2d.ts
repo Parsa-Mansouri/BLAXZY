@@ -24,5 +24,7 @@ export const animation2d: PromptModule = {
     section: `- STYLE line for every block: "2D anime-style animation, clean line art, cel shading, painted backgrounds" plus the aspect ratio and the project's palette.
 - Use anime staging: strong angles, held poses, wind in hair and clothes, light shafts, dramatic close-ups on eyes at key moments; limited animation for dialogue.
 - Light is expressed through cel-shadow shapes and colour temperature; backgrounds stay painterly and calm behind the action.`,
+    reference: `- Start the image prompt with the style in concrete terms: "2D anime-style illustration, clean line art, cel shading, flat painted colour".
+- Describe silhouette, line weight and colour blocks rather than photographic skin or lens detail; light is cel-shadow shapes, not realistic gradients.`,
   },
 };

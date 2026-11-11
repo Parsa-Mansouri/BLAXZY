@@ -73,6 +73,16 @@ export const envSchema = z.object({
   GENERATION_SAMPLE_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(2500),
   /** Generations one user may have running at once; extra jobs wait (rescheduled, not failed). */
   GENERATION_MAX_PER_USER: z.coerce.number().int().positive().max(100).default(3),
+  /**
+   * A generation still queued or running this long after it was created (or started) is failed
+   * and refunded by the `generation.sweep` job.
+   */
+  GENERATION_STUCK_AFTER_MINUTES: z.coerce.number().int().min(10).max(100_000).default(120),
+  /**
+   * The ffmpeg binary that renders sample video. Unset: the `ffmpeg-static` package when it is
+   * installed, else `ffmpeg` on the PATH. The worker Docker image sets it.
+   */
+  FFMPEG_PATH: z.string().min(1).optional(),
   /** `console` prints emails to the server log (development); `smtp` sends them. */
   EMAIL_TRANSPORT: z.enum(["console", "smtp"]).default("console"),
   EMAIL_FROM: z.string().min(1).default("BLAXZY <no-reply@blaxzy.local>"),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GENERATION_PURPOSES, type ProjectStyle } from "@/server/db/schema";
-import { MODEL_POLICY, pickModel } from "@/server/providers/policy";
+import { clampDurationSeconds, MODEL_POLICY, pickModel } from "@/server/providers/policy";
 
 const landscape: ProjectStyle = {
   visualStyle: "Cinematic live-action",
@@ -38,6 +38,25 @@ describe("pickModel", () => {
     expect(draft.resolution).not.toBe(final.resolution);
     expect(draft.quality).toBe("draft");
     expect(final.quality).toBe("final");
+  });
+
+  it("gives video a clamped duration and a sound flag; images get neither", () => {
+    expect(pickModel("block_draft", landscape)).toMatchObject({
+      params: { aspectRatio: "16:9", resolution: "480p", durationSeconds: 5, sound: false },
+    });
+    expect(
+      pickModel("block_final", portrait, { durationSeconds: 7.4, sound: true }).params,
+    ).toMatchObject({ aspectRatio: "9:16", resolution: "1080p", durationSeconds: 7, sound: true });
+    expect(
+      pickModel("block_draft", landscape, { durationSeconds: 40 }).params.durationSeconds,
+    ).toBe(15);
+    expect(pickModel("block_draft", landscape, { durationSeconds: 0 }).params.durationSeconds).toBe(
+      1,
+    );
+    expect(clampDurationSeconds(Number.NaN)).toBe(5);
+    const look = pickModel("asset_look", landscape, { durationSeconds: 8, sound: true }).params;
+    expect(look.durationSeconds).toBeUndefined();
+    expect(look.sound).toBeUndefined();
   });
 
   it("has a policy for every purpose and returns fresh params", () => {

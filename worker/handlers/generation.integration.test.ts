@@ -164,7 +164,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
     expect(await billing.getBalance(userId)).toBe(3);
   });
 
-  it("validates input: project ownership and video not yet available", async () => {
+  it("validates input: project ownership, prompt, a final without its draft", async () => {
     const { userId, projectId } = await funded();
     const other = await funded();
     const base = {
@@ -180,8 +180,8 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
     await expect(gen.requestGeneration({ ...base, prompt: "  " })).rejects.toThrow(
       gen.GenerationInputError,
     );
-    await expect(gen.requestGeneration({ ...base, purpose: "block_draft" })).rejects.toThrow(
-      /not available/,
+    await expect(gen.requestGeneration({ ...base, purpose: "block_final" })).rejects.toThrow(
+      /needs the accepted draft/,
     );
     expect(await gen.getGeneration("not-a-uuid", userId)).toBeNull();
   });

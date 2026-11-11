@@ -1,6 +1,10 @@
 /**
  * The sample provider: no network, no cost. Jobs finish after `GENERATION_SAMPLE_DELAY_MS` and
- * produce a deterministic placeholder PNG. All job state is in the job id (see `job-id.ts`).
+ * produce a deterministic placeholder PNG (images) or MP4 with a JPEG poster (video, rendered
+ * with ffmpeg). All job state is in the job id (see `job-id.ts`).
+ *
+ * A final made with `draftProviderJobId` takes the draft's digest as its seed, so it is the same
+ * clip (colours, motion) at 1080p.
  *
  * Test switches in the prompt: `[[fail]]` fails for good; `[[flaky]]` reports one transient
  * (retryable) failure right after it is ready, then succeeds when asked again a moment later.
@@ -9,6 +13,7 @@ import { createHash } from "node:crypto";
 import type { GenerationPurpose } from "@/server/db/schema";
 import { getEnv } from "@/server/env";
 import { ProviderError } from "../errors";
+import { clampDurationSeconds, VIDEO_DURATION_LIMITS } from "../policy";
 import type {
   GenerationProvider,
   GenerationRequest,
@@ -82,6 +87,12 @@ function labelOf(request: GenerationRequest): string {
   return text.length > MAX_LABEL_LENGTH ? `${text.slice(0, MAX_LABEL_LENGTH - 1)}…` : text;
 }
 
+function resolutionOf(request: GenerationRequest): "480p" | "1080p" {
+  const resolution = request.params.resolution;
+  if (resolution === "480p" || resolution === "1080p") return resolution;
+  return request.purpose === "block_final" ? "1080p" : "480p";
+}
+
 export class SampleProvider implements GenerationProvider {
   readonly id = SAMPLE_PROVIDER_ID;
 
@@ -98,9 +109,6 @@ export class SampleProvider implements GenerationProvider {
   }
 
   async create(request: GenerationRequest): Promise<{ providerJobId: string }> {
-    if (request.kind !== "image") {
-      throw new ProviderError("Sample video is not available yet.", false);
-    }
     const created = this.clock.now();
     const job: SampleJob = {
       v: 1,
@@ -113,6 +121,22 @@ export class SampleProvider implements GenerationProvider {
       l: labelOf(request),
       d: requestDigest(request),
     };
+    if (request.kind === "video") {
+      job.s = clampDurationSeconds(
+        typeof request.params.durationSeconds === "number"
+          ? request.params.durationSeconds
+          : undefined,
+      );
+      job.q = resolutionOf(request);
+      job.n = request.params.sound === true;
+      if (request.draftProviderJobId !== undefined) {
+        const draft = decodeSampleJobId(request.draftProviderJobId);
+        if (!draft || draft.k !== "video") {
+          throw new ProviderError("The draft to finish was not found at the provider.", false);
+        }
+        job.d = draft.d;
+      }
+    }
     return { providerJobId: encodeSampleJobId(job) };
   }
 
@@ -137,12 +161,31 @@ export class SampleProvider implements GenerationProvider {
     return { state: "succeeded" };
   }
 
-  async fetchResult(providerJobId: string): Promise<ProviderResult> {
+  async fetchResult(
+    providerJobId: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<ProviderResult> {
     const status = await this.getStatus(providerJobId);
     if (status.state !== "succeeded") {
       throw new ProviderError("The sample result is not ready.", status.state === "running");
     }
     const job = this.decode(providerJobId);
+    if (job.k === "video") {
+      // Loaded on first use: only the worker renders video.
+      const { renderSampleVideo } = await import("./video");
+      return renderSampleVideo(
+        {
+          purpose: job.p,
+          label: job.l,
+          aspectRatio: job.a,
+          resolution: job.q ?? (job.p === "block_final" ? "1080p" : "480p"),
+          durationSeconds: job.s ?? VIDEO_DURATION_LIMITS.default,
+          sound: job.n ?? false,
+          digest: job.d,
+        },
+        options,
+      );
+    }
     const bytes = await renderSampleImage({
       purpose: job.p,
       label: job.l,

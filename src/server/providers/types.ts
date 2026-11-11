@@ -1,3 +1,4 @@
+import type { Readable } from "node:stream";
 import type { GenerationKind, GenerationPurpose } from "@/server/db/schema";
 
 /** A reference image (or other file) sent along with a request, in attachment order. */
@@ -9,11 +10,19 @@ export type GenerationRequest = {
   purpose: GenerationPurpose;
   model: string;
   prompt: string;
-  /** aspectRatio, resolution, durationSeconds, ... (from `pickModel`). */
+  /**
+   * From `pickModel`: `aspectRatio` always; for video also `durationSeconds` (1..15),
+   * `resolution` ("480p" draft, "1080p" final) and `sound`.
+   */
   params: Record<string, unknown>;
   references: GenerationReference[];
   /** Shown on sample output only. */
   label?: string;
+  /**
+   * `block_final` only: the provider job of the accepted draft, so the provider finishes that
+   * exact video in final quality.
+   */
+  draftProviderJobId?: string;
 };
 
 /**
@@ -27,7 +36,20 @@ export type ProviderJobStatus =
   | { state: "succeeded" }
   | { state: "failed"; reason: string; retryable: boolean };
 
-export type ProviderResult = { bytes: Uint8Array; mimeType: string };
+/** An output file: in memory, or a stream of known length (large media). */
+export type ProviderFile = { mimeType: string } & (
+  { bytes: Uint8Array } | { stream: Readable; sizeBytes: number }
+);
+
+/**
+ * The output of a finished job. Video may come with a poster (a still of the clip). Call
+ * `dispose` once the result has been consumed or abandoned: it releases temporary files and open
+ * streams.
+ */
+export type ProviderResult = ProviderFile & {
+  poster?: { bytes: Uint8Array; mimeType: string };
+  dispose?: () => Promise<void>;
+};
 
 /**
  * A generation backend. Implementations keep no per-job state in memory: anything needed later
@@ -40,7 +62,7 @@ export interface GenerationProvider {
   price(request: Omit<GenerationRequest, "references">): Promise<number>;
   create(request: GenerationRequest): Promise<{ providerJobId: string }>;
   getStatus(providerJobId: string): Promise<ProviderJobStatus>;
-  fetchResult(providerJobId: string): Promise<ProviderResult>;
+  fetchResult(providerJobId: string, options?: { signal?: AbortSignal }): Promise<ProviderResult>;
 }
 
 /** What `pickModel` decides for a purpose: the platform's choice, never the user's. */

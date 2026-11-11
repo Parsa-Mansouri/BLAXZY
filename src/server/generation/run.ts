@@ -7,8 +7,9 @@
  *    and ends (rescheduled, not failed).
  * 3. The provider job is created once: `create` runs while the row is locked and its id is stored
  *    before any polling, so a retry (or a duplicate run) resumes the same provider job.
- * 4. Poll with backoff within the attempt's time budget; on success store the bytes, mark the
- *    generation succeeded and settle its credits in one transaction (conditional on `running`).
+ * 4. Poll with backoff within the attempt's time budget; on success store the output (streamed
+ *    when the provider streams it; a video's poster too), mark the generation succeeded and settle
+ *    its credits in one transaction (conditional on `running`).
  * 5. A non-retryable failure, or any failure on the last attempt, marks it failed and refunds.
  */
 import { and, eq, gt, ne, sql } from "drizzle-orm";
@@ -25,13 +26,24 @@ import {
   type GenerationReference,
   type GenerationRequest,
 } from "@/server/providers";
-import { getOwnedFileInfo, putFileBytes, readFileBytes, StorageError } from "@/server/storage";
+import {
+  getOwnedFileInfo,
+  putFileBytes,
+  readFileBytes,
+  StorageError,
+  type FileInfo,
+} from "@/server/storage";
 import { GenerationRunError } from "./errors";
 import { notifyGenerationFinished } from "./hooks";
 import {
+  DRAFT_PARAM,
   failGeneration,
   isFinished,
   LABEL_PARAM,
+  POSTER_FILE_PURPOSE,
+  POSTER_PARAM,
+  posterFileIdOf,
+  RESERVED_PARAMS,
   RESULT_FILE_PURPOSE,
   type GenerationRow,
 } from "./service";
@@ -56,6 +68,7 @@ const MIME_EXTENSIONS: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
+  "video/mp4": "mp4",
 };
 
 type Log = (
@@ -88,12 +101,14 @@ async function loadRow(generationId: string): Promise<GenerationRow | undefined>
   return row;
 }
 
-async function notify(row: GenerationRow): Promise<void> {
+/** Calls the completion hooks for a finished generation (also used by the sweep). */
+export async function notify(row: GenerationRow): Promise<void> {
   await notifyGenerationFinished({
     id: row.id,
     purpose: row.purpose,
     status: row.status,
     resultFileId: row.resultFileId,
+    posterFileId: posterFileIdOf(row),
     error: row.error,
   });
 }
@@ -158,8 +173,39 @@ async function loadReferences(
   return references;
 }
 
-function buildRequest(row: GenerationRow, references: GenerationReference[]): GenerationRequest {
-  const { [LABEL_PARAM]: label, ...params } = row.params;
+/** A final's draft: its provider job id, checking it is still the user's succeeded draft. */
+async function loadDraftProviderJobId(row: GenerationRow): Promise<string | undefined> {
+  const draftId = row.params[DRAFT_PARAM];
+  if (draftId === undefined) return undefined;
+  const [draft] =
+    typeof draftId === "string"
+      ? await getDb()
+          .select({ status: generation.status, providerJobId: generation.providerJobId })
+          .from(generation)
+          .where(
+            and(
+              eq(generation.id, draftId),
+              eq(generation.userId, row.userId),
+              eq(generation.purpose, "block_draft"),
+            ),
+          )
+          .limit(1)
+      : [];
+  if (!draft || draft.status !== "succeeded" || !draft.providerJobId) {
+    throw new GenerationRunError("The draft to finish is no longer available.", false);
+  }
+  return draft.providerJobId;
+}
+
+function buildRequest(
+  row: GenerationRow,
+  references: GenerationReference[],
+  draftProviderJobId: string | undefined,
+): GenerationRequest {
+  const params = Object.fromEntries(
+    Object.entries(row.params).filter(([key]) => !RESERVED_PARAMS.includes(key)),
+  );
+  const label = row.params[LABEL_PARAM];
   return {
     kind: row.kind,
     purpose: row.purpose,
@@ -168,6 +214,7 @@ function buildRequest(row: GenerationRow, references: GenerationReference[]): Ge
     params,
     references,
     label: typeof label === "string" ? label : undefined,
+    ...(draftProviderJobId !== undefined ? { draftProviderJobId } : {}),
   };
 }
 
@@ -179,7 +226,8 @@ async function ensureProviderJob(
   log: Log,
 ): Promise<string> {
   if (row.providerJobId) return row.providerJobId;
-  const request = buildRequest(row, await loadReferences(row, signal));
+  const draftProviderJobId = await loadDraftProviderJobId(row);
+  const request = buildRequest(row, await loadReferences(row, signal), draftProviderJobId);
   return getDb().transaction(async (tx) => {
     // The row lock makes a concurrent duplicate run wait here, then reuse the stored id.
     const [locked] = await tx
@@ -231,29 +279,61 @@ async function storeResult(
   const purpose = RESULT_FILE_PURPOSE[row.purpose];
   if (!purpose)
     throw new GenerationRunError("This kind of generation cannot be stored yet.", false);
-  const result = await provider.fetchResult(providerJobId);
-  const extension = MIME_EXTENSIONS[result.mimeType.toLowerCase()] ?? "bin";
-  const stored = await putFileBytes({
-    ownerId: row.userId,
-    projectId: row.projectId,
-    name: `${row.purpose.replace("_", "-")}-${row.id}.${extension}`,
-    mimeType: result.mimeType,
-    purpose,
-    bytes: result.bytes,
-    signal,
-  });
+  const baseName = `${row.purpose.replace("_", "-")}-${row.id}`;
+  const result = await provider.fetchResult(providerJobId, { signal });
+  let stored: FileInfo;
+  let poster: FileInfo | null = null;
+  try {
+    const extension = MIME_EXTENSIONS[result.mimeType.toLowerCase()] ?? "bin";
+    const common = {
+      ownerId: row.userId,
+      projectId: row.projectId,
+      name: `${baseName}.${extension}`,
+      mimeType: result.mimeType,
+      purpose,
+      signal,
+    };
+    // A streamed result goes to the store as a stream of known length (no copy in memory).
+    stored = await putFileBytes(
+      "stream" in result
+        ? { ...common, bytes: result.stream, sizeBytes: result.sizeBytes }
+        : { ...common, bytes: result.bytes },
+    );
+    if (row.kind === "video" && result.poster) {
+      const posterExtension = MIME_EXTENSIONS[result.poster.mimeType.toLowerCase()] ?? "bin";
+      poster = await putFileBytes({
+        ownerId: row.userId,
+        projectId: row.projectId,
+        name: `${baseName}-poster.${posterExtension}`,
+        mimeType: result.poster.mimeType,
+        purpose: POSTER_FILE_PURPOSE,
+        bytes: result.poster.bytes,
+        signal,
+      });
+    }
+  } finally {
+    await result.dispose?.();
+  }
+  const posterId = poster?.id;
   const won = await getDb().transaction(async (tx) => {
     const updated = await tx
       .update(generation)
-      .set({ status: "succeeded", resultFileId: stored.id, error: null, finishedAt: new Date() })
+      .set({
+        status: "succeeded",
+        resultFileId: stored.id,
+        error: null,
+        finishedAt: new Date(),
+        ...(posterId ? { params: { ...row.params, [POSTER_PARAM]: posterId } } : {}),
+      })
       .where(and(eq(generation.id, row.id), eq(generation.status, "running")))
       .returning({ id: generation.id });
     if (updated.length === 0) return false;
     await settle({ generationId: row.id }, tx);
     return true;
   });
-  if (!won) log("warn", "generation already finished by another run", { fileId: stored.id });
-  else log("info", "generation result stored", { fileId: stored.id, bytes: stored.sizeBytes });
+  const fields = { fileId: stored.id, posterFileId: posterId ?? null };
+  if (!won) log("warn", "generation already finished by another run", fields);
+  else log("info", "generation result stored", { ...fields, bytes: stored.sizeBytes });
   return won;
 }
 

@@ -14,6 +14,11 @@ export type FinishedGeneration = {
   purpose: GenerationPurpose;
   status: GenerationStatus;
   resultFileId: string | null;
+  /**
+   * A succeeded video's poster, else null. Always set by the engine; optional in the type so a
+   * `generation` row (which has no such column) can still be passed to a hook directly.
+   */
+  posterFileId?: string | null;
   error: string | null;
 };
 

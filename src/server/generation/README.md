@@ -7,10 +7,13 @@ Paid jobs at a generation provider (`@/server/generation`, contract in
 - `requestGeneration(input, tx?)`: checks references (ready images the user owns), `pickModel`,
   prices at the active provider, then in one transaction checks the project, inserts the row
   (`queued`) and reserves the credits. Enqueues `generation.run` after commit; with `tx` the
-  caller enqueues with `enqueueGeneration` after its own commit. Video purposes are refused until
-  a video file purpose exists. The optional `label` is stored as `params.label` and passed to the
-  provider as `label` (sample output only).
-- `getGeneration(id, userId)`: `GenerationView` or null.
+  caller enqueues with `enqueueGeneration` after its own commit. The optional `label` is stored
+  as `params.label` and passed to the provider as `label` (sample output only). Video
+  (`block_draft`, `block_final`) takes `durationSeconds` and `sound`. A `block_final` requires
+  `draftGenerationId`: a succeeded `block_draft` of the same user and project (checked inside the
+  transaction), stored as `params.draftGenerationId`; the run passes that draft's provider job id
+  to the provider as `draftProviderJobId`. Other purposes refuse a `draftGenerationId`.
+- `getGeneration(id, userId)`: `GenerationView` or null (with `posterFileId` for a video).
 - `onGenerationFinished(handler)`: completion hooks, registered by the worker. At-least-once:
   hooks must be idempotent.
 
@@ -29,11 +32,27 @@ running one, never two running).
    duplicate run resumes the stored provider job.
 4. Poll with backoff (or the provider's `retryAfterMs`) within the attempt's budget (job expiry
    minus 60 s).
-5. Success: store the bytes with `putFileBytes` (`generated_image` / `sheet_image`), then in one
-   transaction set `succeeded` + `resultFileId` (only if still `running`) and `settle`.
+5. Success: store the output with `putFileBytes` (`generated_image` / `sheet_image` /
+   `generated_video`; a streamed result is uploaded as a stream, never held in memory) and a
+   video's poster (`video_poster`), then in one transaction set `succeeded` + `resultFileId`
+   (only if still `running`) and `settle`. The poster id is written to `params.posterFileId`
+   in that update (the table has no column for it) so a repeated hook call still gets it.
 6. A non-retryable failure, or any failure on the last attempt (including an expired attempt):
    `failed` with a user-readable `error`, and `refund`, in one transaction. Retryable failures
    before the last attempt rethrow so pg-boss retries.
+
+Hooks receive `{ id, purpose, status, resultFileId, posterFileId, error }`.
+
+## The `generation.sweep` job (`sweep.ts`)
+
+Scheduled by every worker at startup (cron `*/5 * * * *`, UTC; pg-boss keeps one schedule per job
+name and sends each occurrence once, and the queue's dedupe key allows one sweep at a time).
+Generations `queued` or `running` since before `GENERATION_STUCK_AFTER_MINUTES` (default 120;
+measured from `startedAt`, else `createdAt`) are failed with a user-readable error and refunded
+through the same conditional update as a failed run, then the hooks are called (only by the call
+that changed the row). If a hook throws, a `generation.run` job is queued, which finds the
+generation finished and calls the hooks again with retries. Idempotent: a second sweep changes
+nothing. `pnpm dev:sweep` runs one sweep in-process with the worker's hooks.
 
 Every step logs one JSON line with `generationId`, `jobId` and `attempt`.
 

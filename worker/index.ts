@@ -3,7 +3,7 @@ import { closeDb } from "../src/server/db/client";
 import { getEnv } from "../src/server/env";
 import { onGenerationFinished } from "../src/server/generation";
 import { startWorker, stopWorker } from "../src/server/jobs";
-import { assetGenerationHook, handlers } from "./handlers";
+import { generationHooks, handlers, schedules } from "./handlers";
 
 async function main(): Promise<void> {
   const env = getEnv(); // fail fast on invalid configuration
@@ -34,10 +34,11 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
   // Completion hooks first, so no generation finishes before they are in place. Once per process.
-  onGenerationFinished(assetGenerationHook);
+  for (const hook of generationHooks) onGenerationFinished(hook);
 
   await startWorker({
     handlers,
+    schedules,
     concurrency: { default: env.WORKER_CONCURRENCY_DEFAULT, perJob: env.WORKER_CONCURRENCY },
     pollingIntervalSeconds: env.WORKER_POLL_INTERVAL_SECONDS,
   });

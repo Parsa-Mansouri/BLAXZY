@@ -12,6 +12,7 @@ export {
   assetSheetFix,
   assetSheetGenerate,
   generationRun,
+  generationSweep,
   scriptCheck,
   scriptDetectAssets,
   scriptRevise,
@@ -26,5 +27,6 @@ export {
   stopWorker,
   type JobContext,
   type JobHandler,
+  type JobSchedule,
   type WorkerOptions,
 } from "./worker";

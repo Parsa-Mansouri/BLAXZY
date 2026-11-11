@@ -1,10 +1,11 @@
 # syntax=docker/dockerfile:1
 
-# One image, two roles:
-#   web    (default): node server.js            (Next standalone output)
-#   worker          : node worker.cjs           (docker run <image> node worker.cjs)
+# Two images from one build:
+#   web    (default target): node server.js   (Next standalone output)
+#   worker (--target worker): node worker.cjs  (esbuild bundle + sharp + ffmpeg)
 # The worker is bundled with esbuild into a single file. Only native packages stay outside the
 # bundle (`--external:sharp`); they are installed for the worker in /app/worker/node_modules.
+# ffmpeg (sample video) comes from the distribution in the worker image only.
 
 ARG NODE_VERSION=24
 
@@ -14,8 +15,11 @@ WORKDIR /app
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
+# ffmpeg-static is for local development only (the worker image uses the distribution's ffmpeg):
+# pointing its installer at an existing file makes it skip downloading a binary nobody ships.
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile
+    touch /tmp/no-ffmpeg-static \
+ && FFMPEG_BIN=/tmp/no-ffmpeg-static pnpm install --frozen-lockfile
 
 FROM deps AS build
 COPY . .
@@ -32,22 +36,32 @@ RUN SHARP_VERSION="$(node -p "require('/tmp/package.json').dependencies.sharp")"
  && npm install --omit=dev --no-audit --no-fund --no-package-lock "sharp@${SHARP_VERSION}" \
  && node -e "require('sharp')"
 
-FROM node:${NODE_VERSION}-alpine AS runner
+# What both images share: Node and the unprivileged user.
+FROM node:${NODE_VERSION}-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3000 \
+    NEXT_TELEMETRY_DISABLED=1
+RUN addgroup -S -g 1001 app && adduser -S -u 1001 -G app app
+
+FROM runtime AS worker
+# Fonts for text in rendered images and clips (sample placeholders use DejaVu Sans), and ffmpeg
+# for the sample provider's video (H.264 + AAC).
+RUN apk add --no-cache fontconfig font-dejavu ffmpeg \
+ && ffmpeg -hide_banner -encoders | grep -q libx264
+ENV FFMPEG_PATH=/usr/bin/ffmpeg
+COPY --from=build --chown=app:app /app/dist/worker.cjs ./worker/index.cjs
+COPY --from=worker-deps --chown=app:app /opt/worker/node_modules ./worker/node_modules
+# `node worker.cjs` is the entry point; modules resolve from /app/worker/node_modules.
+RUN printf 'require("./worker/index.cjs");\n' > worker.cjs && chown app:app worker.cjs
+USER app
+CMD ["node", "worker.cjs"]
+
+FROM runtime AS web
+ENV PORT=3000 \
     HOSTNAME=0.0.0.0
-# Fonts for text in rendered images (sample provider placeholders use DejaVu Sans).
-RUN apk add --no-cache fontconfig font-dejavu \
- && addgroup -S -g 1001 app && adduser -S -u 1001 -G app app
 COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
-COPY --from=build --chown=app:app /app/dist/worker.cjs ./worker/index.cjs
-COPY --from=worker-deps --chown=app:app /opt/worker/node_modules ./worker/node_modules
-# `node worker.cjs` stays the entry point; modules resolve from /app/worker/node_modules.
-RUN printf 'require("./worker/index.cjs");\n' > worker.cjs && chown app:app worker.cjs
 USER app
 EXPOSE 3000
 CMD ["node", "server.js"]

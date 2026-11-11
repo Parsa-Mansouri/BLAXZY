@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { GenerationRequest } from "@/server/providers";
 import { decodeSampleJobId, encodeSampleJobId } from "./job-id";
 import { FLAKY_WINDOW_MS, requestDigest, SampleProvider } from "./provider";
+import { parseProbe } from "../ffmpeg";
 import { renderSampleImage, sampleImageSvg, wrapText } from "./render";
+import { sampleVideoSize, sampleVideoSvg, timecodeText } from "./video";
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -18,6 +20,18 @@ function request(overrides: Partial<GenerationRequest> = {}): GenerationRequest 
     label: "Tomas",
     ...overrides,
   };
+}
+
+function videoRequest(overrides: Partial<GenerationRequest> = {}): GenerationRequest {
+  return request({
+    kind: "video",
+    purpose: "block_draft",
+    model: "seedance_2_5",
+    prompt: "Tomas walks to the harbour",
+    params: { aspectRatio: "16:9", resolution: "480p", durationSeconds: 3, sound: false },
+    label: "Harbour at dawn",
+    ...overrides,
+  });
 }
 
 function fakeClock(start = 1_700_000_000_000) {
@@ -105,6 +119,7 @@ describe("SampleProvider", () => {
     expect(await other.getStatus(providerJobId)).toEqual({ state: "succeeded" });
     const result = await other.fetchResult(providerJobId);
     expect(result.mimeType).toBe("image/png");
+    if (!("bytes" in result)) throw new Error("expected an image in memory");
     expect((await sharp(result.bytes).metadata()).width).toBe(1280);
     expect(decodeSampleJobId(providerJobId)).toMatchObject({ l: "Tomas", a: "16:9", o: "ok" });
   });
@@ -126,9 +141,17 @@ describe("SampleProvider", () => {
     expect(await provider.getStatus(flaky.providerJobId)).toEqual({ state: "succeeded" });
   });
 
-  it("refuses video and invalid job ids", async () => {
+  it("refuses invalid job ids and a final whose draft is not a sample video", async () => {
     const provider = new SampleProvider(fakeClock(), () => 0);
-    await expect(provider.create(request({ kind: "video" }))).rejects.toThrow(/not available/);
+    await expect(
+      provider.create(videoRequest({ purpose: "block_final", draftProviderJobId: "sample_bad" })),
+    ).rejects.toThrow(/draft to finish/);
+    const image = await provider.create(request());
+    await expect(
+      provider.create(
+        videoRequest({ purpose: "block_final", draftProviderJobId: image.providerJobId }),
+      ),
+    ).rejects.toThrow(/draft to finish/);
     await expect(provider.getStatus("sample_bad")).rejects.toThrow(/not valid/);
     const forged = encodeSampleJobId({
       v: 1,
@@ -154,5 +177,113 @@ describe("SampleProvider", () => {
       }),
     );
     expect(withRef).not.toBe(a);
+  });
+});
+
+describe("SampleProvider video jobs", () => {
+  it("keeps duration, resolution and sound in the job id (duration clamped)", async () => {
+    const provider = new SampleProvider(fakeClock(), () => 0);
+    const { providerJobId } = await provider.create(
+      videoRequest({ params: { aspectRatio: "9:16", durationSeconds: 99, sound: true } }),
+    );
+    expect(decodeSampleJobId(providerJobId)).toMatchObject({
+      k: "video",
+      p: "block_draft",
+      a: "9:16",
+      s: 15,
+      q: "480p",
+      n: true,
+    });
+  });
+
+  it("a final made from a draft reuses the draft's seed", async () => {
+    const provider = new SampleProvider(fakeClock(), () => 0);
+    const draft = await provider.create(videoRequest());
+    const final = await provider.create(
+      videoRequest({
+        purpose: "block_final",
+        params: { aspectRatio: "16:9", resolution: "1080p", durationSeconds: 3, sound: false },
+        draftProviderJobId: draft.providerJobId,
+      }),
+    );
+    const d = decodeSampleJobId(draft.providerJobId);
+    const f = decodeSampleJobId(final.providerJobId);
+    expect(f).toMatchObject({ p: "block_final", q: "1080p", d: d?.d });
+    const alone = await provider.create(
+      videoRequest({
+        purpose: "block_final",
+        params: { aspectRatio: "16:9", resolution: "1080p", durationSeconds: 3, sound: false },
+      }),
+    );
+    expect(decodeSampleJobId(alone.providerJobId)?.d).not.toBe(d?.d);
+  });
+
+  it("[[fail]] video fails for good", async () => {
+    const provider = new SampleProvider(fakeClock(), () => 0);
+    const { providerJobId } = await provider.create(videoRequest({ prompt: "x [[fail]]" }));
+    expect(await provider.getStatus(providerJobId)).toMatchObject({
+      state: "failed",
+      retryable: false,
+    });
+  });
+});
+
+describe("sample video frames", () => {
+  const spec = {
+    purpose: "block_draft",
+    label: "Harbour <at> dawn",
+    aspectRatio: "16:9",
+    resolution: "480p",
+    durationSeconds: 3,
+    sound: false,
+    digest: "a1b2c3d4e5f60718",
+  } as const;
+
+  it("sizes drafts and finals per aspect ratio", () => {
+    expect(sampleVideoSize({ resolution: "480p", aspectRatio: "16:9" })).toEqual({
+      width: 854,
+      height: 480,
+    });
+    expect(sampleVideoSize({ resolution: "480p", aspectRatio: "9:16" })).toEqual({
+      width: 480,
+      height: 854,
+    });
+    expect(sampleVideoSize({ resolution: "1080p", aspectRatio: "16:9" })).toEqual({
+      width: 1920,
+      height: 1080,
+    });
+    expect(sampleVideoSize({ resolution: "1080p", aspectRatio: "9:16" })).toEqual({
+      width: 1080,
+      height: 1920,
+    });
+  });
+
+  it("shows the label (escaped), the purpose and a sample mark", () => {
+    const svg = sampleVideoSvg(spec);
+    expect(svg).toContain("Harbour &lt;at&gt; dawn");
+    expect(svg).toContain("DRAFT SHOT");
+    expect(svg).toContain("SAMPLE");
+    expect(sampleVideoSvg({ ...spec, purpose: "block_final" })).toContain("FINAL SHOT");
+  });
+
+  it("counts frames in the timecode", () => {
+    expect(timecodeText(0, 3)).toBe("00:00:00:00  F001/72");
+    expect(timecodeText(37, 3)).toBe("00:00:01:13  F038/72");
+  });
+
+  it("parses ffmpeg's stream summary", () => {
+    const probe = parseProbe(
+      [
+        "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'clip.mp4':",
+        "  Duration: 00:00:10.02, start: 0.000000, bitrate: 85 kb/s",
+        "  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 854x480 [SAR 1:1 DAR 427:240], 80 kb/s, 24 fps",
+        "  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 2 kb/s",
+      ].join("\n"),
+    );
+    expect(probe).toEqual({
+      durationSeconds: 10.02,
+      video: { codec: "h264", pixelFormat: "yuv420p", width: 854, height: 480 },
+      audio: { codec: "aac" },
+    });
   });
 });

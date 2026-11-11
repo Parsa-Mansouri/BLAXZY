@@ -73,6 +73,17 @@ export const generationRun = defineJob({
   allowFollowUp: true,
 });
 
+/**
+ * Fails and refunds generations stuck in `queued` or `running` (see docs/M4_CONTRACTS.md). Run by
+ * the worker's schedule every 5 minutes (one schedule for the whole fleet); one sweep at a time.
+ */
+export const generationSweep = defineJob({
+  name: "generation.sweep",
+  payload: z.object({}),
+  options: { retryLimit: 1, retryDelaySeconds: 60, retryBackoff: false, expireInSeconds: 10 * 60 },
+  dedupeKey: () => "sweep",
+});
+
 /*
  * Pre-production (see docs/M2_M3_CONTRACTS.md). Each job writes the image prompt with a dami
  * (unless one is stored already), then requests the generation; the generation's completion hook

@@ -1,7 +1,7 @@
 import type { JobDefinition, JobPayload } from "./define";
 import { InvalidJobPayloadError, parsePayload } from "./enqueue";
 import { errorMessage, logLine } from "./log";
-import { getBackend, stopBackend, workQueue, type HandleOutcome } from "./pg-boss";
+import { getBackend, scheduleJob, stopBackend, workQueue, type HandleOutcome } from "./pg-boss";
 
 export type JobContext = {
   jobId: string;
@@ -30,8 +30,13 @@ export function defineHandler<J extends JobDefinition>(
   return { job, run: (data, context) => handler(parsePayload(job, data), context) };
 }
 
+/** A job type sent on a recurring schedule (cron, UTC), with a fixed payload. */
+export type JobSchedule = { job: JobDefinition; cron: string; payload: object };
+
 export type WorkerOptions = {
   handlers: JobHandler[];
+  /** Recurring jobs. Every worker registers them; there is one schedule per job type. */
+  schedules?: JobSchedule[];
   concurrency: {
     /** Jobs of one type this process runs at once. */
     default: number;
@@ -102,6 +107,20 @@ export async function startWorker(options: WorkerOptions): Promise<void> {
         }),
     );
     logLine("info", "job type subscribed", { job: handler.job.name, concurrency });
+  }
+  for (const schedule of options.schedules ?? []) {
+    const payload = parsePayload(schedule.job, schedule.payload);
+    if (typeof payload !== "object" || payload === null) {
+      throw new InvalidJobPayloadError(schedule.job.name, ["payload must be an object"]);
+    }
+    await scheduleJob(
+      backend,
+      schedule.job,
+      schedule.cron,
+      payload,
+      schedule.job.dedupeKey?.(payload),
+    );
+    logLine("info", "job type scheduled", { job: schedule.job.name, cron: schedule.cron });
   }
 }
 

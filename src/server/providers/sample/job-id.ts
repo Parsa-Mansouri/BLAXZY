@@ -22,8 +22,12 @@ const sampleJobSchema = z.object({
   p: z.enum(GENERATION_PURPOSES),
   a: z.enum(["16:9", "9:16"]),
   l: z.string().max(MAX_LABEL_LENGTH),
-  /** Request digest (hex), the seed of the image's tints. */
+  /** Request digest (hex), the seed of the image's tints (a final's is its draft's). */
   d: z.string().regex(/^[0-9a-f]{16}$/),
+  /** Video only: duration in whole seconds, resolution and sound. */
+  s: z.number().int().min(1).max(15).optional(),
+  q: z.enum(["480p", "1080p"]).optional(),
+  n: z.boolean().optional(),
 });
 
 export type SampleJob = z.output<typeof sampleJobSchema>;

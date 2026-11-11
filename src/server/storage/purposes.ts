@@ -2,6 +2,7 @@ import { StorageError } from "./errors";
 import { fileExtension } from "./sanitize";
 
 const MB = 1024 * 1024;
+const GB = 1024 * MB;
 
 type PurposeRule = {
   maxBytes: number;
@@ -45,6 +46,30 @@ export const FILE_PURPOSES = {
       "image/png": ["png"],
       "image/jpeg": ["jpg", "jpeg"],
       "image/webp": ["webp"],
+    },
+  },
+  /** A video clip (block draft or final) produced by a generation provider. */
+  generated_video: {
+    maxBytes: 2 * GB,
+    types: { "video/mp4": ["mp4"] },
+  },
+  /** The still shown before a video plays (a frame of a generated clip). */
+  video_poster: {
+    maxBytes: 10 * MB,
+    types: {
+      "image/jpeg": ["jpg", "jpeg"],
+      "image/png": ["png"],
+    },
+  },
+  /**
+   * A ZIP of a project's finished clips, written by streaming. Note: `putFileBytes` sends one
+   * PUT, which S3 caps at 5 GB; a bundle larger than that needs a multipart upload.
+   */
+  export_zip: {
+    maxBytes: 20 * GB,
+    types: {
+      "application/zip": ["zip"],
+      "application/x-zip-compressed": ["zip"],
     },
   },
   /** A voice asset's recording, uploaded by the user. */

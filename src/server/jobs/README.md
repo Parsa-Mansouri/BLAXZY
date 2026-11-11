@@ -36,6 +36,13 @@ the job type's `retryLimit` / `retryDelaySeconds` / `retryBackoff`. An attempt r
 `expireInSeconds` is aborted (`ctx.signal`) and retried. Every attempt logs one JSON line with
 `job`, `id`, `attempt`, `ms` and `outcome` (`completed`, `failed`, `rejected`).
 
+## Recurring jobs
+
+`startWorker({ schedules: [{ job, cron, payload }] })` registers cron schedules (UTC) through
+`scheduleJob`. pg-boss stores one schedule per job name, so every worker may register it; only
+worker processes evaluate cron, and pg-boss sends each occurrence once across them. Give the job a
+dedupe key so a slow run and the next occurrence never overlap (`generation.sweep`).
+
 ## Idempotency (required)
 
 Delivery is at-least-once: a job can run again after a crash, an expired attempt, a worker shutdown

@@ -43,7 +43,9 @@ export async function startBackend(config: BackendConfig): Promise<QueueBackend>
     // Maintenance (expiring stuck jobs, retention) is coordinated by pg-boss across instances;
     // only workers take part, web replicas just send.
     supervise: config.role === "worker",
-    schedule: false,
+    // Cron schedules (`scheduleJob`) are evaluated by workers only; pg-boss coordinates the
+    // instances so each occurrence is sent once.
+    schedule: config.role === "worker",
   });
   boss.on("error", (err) => logLine("error", "queue error", { error: errorMessage(err) }));
   boss.on("warning", (warning) =>
@@ -149,6 +151,26 @@ export async function sendJob(
   if (request.dedupeKey !== undefined) options.singletonKey = request.dedupeKey;
   if (request.startAfter) options.startAfter = request.startAfter;
   return backend.boss.send(job.name, request.payload, options);
+}
+
+/**
+ * Creates or updates the recurring schedule of a job type (a cron expression, UTC). Stored in the
+ * queue's tables keyed by the job name, so every worker may call this at startup: there is still
+ * exactly one schedule, and pg-boss sends each occurrence once whichever worker evaluates it.
+ */
+export async function scheduleJob(
+  backend: QueueBackend,
+  job: JobDefinition,
+  cron: string,
+  payload: object,
+  dedupeKey?: string,
+): Promise<void> {
+  await ensureQueue(backend, job);
+  await backend.boss.schedule(job.name, cron, payload, {
+    ...queueOptions(job.options),
+    ...(dedupeKey !== undefined ? { singletonKey: dedupeKey } : {}),
+    tz: "UTC",
+  });
 }
 
 export type ReceivedJob = {

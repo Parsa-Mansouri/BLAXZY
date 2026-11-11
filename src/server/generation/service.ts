@@ -38,6 +38,8 @@ export type GenerationView = {
   status: GenerationStatus;
   priceCredits: number;
   resultFileId: string | null;
+  /** Video: the poster (a still of the clip), stored next to the result. */
+  posterFileId: string | null;
   /** User-readable reason when failed. */
   error: string | null;
   attempts: number;
@@ -57,6 +59,15 @@ export type RequestGenerationInput = {
   /** Shown on sample output only (usually the asset's name). */
   label?: string;
   style: ProjectStyle;
+  /** Video: clip length in seconds (clamped to 1..15 by the policy; default 5). */
+  durationSeconds?: number;
+  /** Video: with a sound track. */
+  sound?: boolean;
+  /**
+   * `block_final` only, and required there: the succeeded `block_draft` generation (same user and
+   * project) the final finishes.
+   */
+  draftGenerationId?: string;
 };
 
 export const MAX_PROMPT_LENGTH = 8_000;
@@ -67,12 +78,24 @@ export const MAX_LABEL_LENGTH = 120;
 export const RESULT_FILE_PURPOSE: Readonly<Record<GenerationPurpose, FilePurpose | null>> = {
   asset_look: "generated_image",
   asset_sheet: "sheet_image",
-  block_draft: null,
-  block_final: null,
+  block_draft: "generated_video",
+  block_final: "generated_video",
 };
+
+/** Where a video's poster is stored. */
+export const POSTER_FILE_PURPOSE: FilePurpose = "video_poster";
 
 /** Kept in `params` for the run (the provider gets it as `label`, not as a model parameter). */
 export const LABEL_PARAM = "label";
+/** Kept in `params` of a final: the draft generation it finishes (resolved at run time). */
+export const DRAFT_PARAM = "draftGenerationId";
+/**
+ * Written into `params` when a video succeeds: its poster file (the table has no column for it,
+ * and a repeated completion hook must still get it).
+ */
+export const POSTER_PARAM = "posterFileId";
+/** `params` keys that are the platform's bookkeeping, never model parameters. */
+export const RESERVED_PARAMS: readonly string[] = [LABEL_PARAM, DRAFT_PARAM, POSTER_PARAM];
 
 const FINISHED: readonly GenerationStatus[] = ["succeeded", "failed", "cancelled"];
 const ENQUEUE_FAILURE =
@@ -101,6 +124,9 @@ const requestSchema = z.object({
     .default([]),
   label: z.string().trim().max(MAX_LABEL_LENGTH).optional(),
   style: styleSchema,
+  durationSeconds: z.number({ error: "The duration must be a number of seconds." }).optional(),
+  sound: z.boolean().optional(),
+  draftGenerationId: z.string().optional(),
 });
 
 function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
@@ -113,6 +139,12 @@ function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
 
 export function isFinished(status: GenerationStatus): boolean {
   return FINISHED.includes(status);
+}
+
+/** The poster file of a succeeded video, or null. */
+export function posterFileIdOf(row: Pick<GenerationRow, "params">): string | null {
+  const value = row.params[POSTER_PARAM];
+  return typeof value === "string" ? value : null;
 }
 
 export function toView(row: GenerationRow): GenerationView {
@@ -128,6 +160,7 @@ export function toView(row: GenerationRow): GenerationView {
     status: row.status,
     priceCredits: row.priceCredits,
     resultFileId: row.resultFileId,
+    posterFileId: posterFileIdOf(row),
     error: row.error,
     attempts: row.attempts,
     isSample: isSampleProvider(row.provider),
@@ -170,6 +203,45 @@ async function checkReferences(ids: string[], userId: string): Promise<string[]>
 }
 
 /**
+ * A final's draft: a succeeded `block_draft` of the same user and project with a provider job.
+ * Returns its id; throws `GenerationInputError` otherwise.
+ */
+async function checkDraft(
+  db: DbTx,
+  draftGenerationId: string,
+  userId: string,
+  projectId: string,
+): Promise<string> {
+  const notUsable = new GenerationInputError("The draft to finish was not found or is not ready.");
+  if (!uuid.safeParse(draftGenerationId).success) throw notUsable;
+  const [draft] = await db
+    .select({
+      id: generation.id,
+      purpose: generation.purpose,
+      status: generation.status,
+      providerJobId: generation.providerJobId,
+    })
+    .from(generation)
+    .where(
+      and(
+        eq(generation.id, draftGenerationId),
+        eq(generation.userId, userId),
+        eq(generation.projectId, projectId),
+      ),
+    )
+    .limit(1);
+  if (
+    !draft ||
+    draft.purpose !== "block_draft" ||
+    draft.status !== "succeeded" ||
+    !draft.providerJobId
+  ) {
+    throw notUsable;
+  }
+  return draft.id;
+}
+
+/**
  * Picks the model, prices it, inserts the generation (queued) and reserves its credits, in one
  * transaction; enqueues `generation.run` after commit. With `tx` it runs inside the caller's
  * transaction and the caller enqueues (`enqueueGeneration`) after its commit.
@@ -186,10 +258,20 @@ export async function requestGeneration(
     throw new GenerationInputError("That project was not found.");
   }
   if (!RESULT_FILE_PURPOSE[data.purpose]) {
-    throw new GenerationInputError("Video generation is not available yet.");
+    throw new GenerationInputError("This kind of generation is not available yet.");
+  }
+  const isFinal = data.purpose === "block_final";
+  if (isFinal && !data.draftGenerationId) {
+    throw new GenerationInputError("A final needs the accepted draft it finishes.");
+  }
+  if (!isFinal && data.draftGenerationId !== undefined) {
+    throw new GenerationInputError("Only a final is made from a draft.");
   }
   const referenceFileIds = await checkReferences(data.referenceFileIds, data.userId);
-  const choice = pickModel(data.purpose, data.style);
+  const choice = pickModel(data.purpose, data.style, {
+    durationSeconds: data.durationSeconds,
+    sound: data.sound,
+  });
   const provider = getProvider();
   const priceCredits = await provider.price({
     kind: choice.kind,
@@ -213,6 +295,16 @@ export async function requestGeneration(
       )
       .limit(1);
     if (!owned) throw new GenerationInputError("That project was not found.");
+    const params: Record<string, unknown> = { ...choice.params };
+    if (data.label) params[LABEL_PARAM] = data.label;
+    if (data.draftGenerationId) {
+      params[DRAFT_PARAM] = await checkDraft(
+        db,
+        data.draftGenerationId,
+        data.userId,
+        data.projectId,
+      );
+    }
     const [row] = await db
       .insert(generation)
       .values({
@@ -222,7 +314,7 @@ export async function requestGeneration(
         purpose: data.purpose,
         provider: provider.id,
         model: choice.model,
-        params: data.label ? { ...choice.params, [LABEL_PARAM]: data.label } : choice.params,
+        params,
         prompt: data.prompt,
         referenceFileIds,
         status: "queued",

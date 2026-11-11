@@ -14,18 +14,18 @@ export type SampleImageSpec = {
   digest: string;
 };
 
-const PURPOSE_TEXT: Record<GenerationPurpose, string> = {
+export const PURPOSE_TEXT: Record<GenerationPurpose, string> = {
   asset_look: "Look",
   asset_sheet: "Reference sheet",
   block_draft: "Draft shot",
   block_final: "Final shot",
 };
 
-const FONT = "DejaVu Sans, Segoe UI, Helvetica Neue, Arial, sans-serif";
-const MONO = "DejaVu Sans Mono, Consolas, Menlo, monospace";
-const SAMPLE_COLOR = "#f5b83d";
-const LABEL_COLOR = "#f4f4f5";
-const MUTED = "#a1a1aa";
+export const FONT = "DejaVu Sans, Segoe UI, Helvetica Neue, Arial, sans-serif";
+export const MONO = "DejaVu Sans Mono, Consolas, Menlo, monospace";
+export const SAMPLE_COLOR = "#f5b83d";
+export const LABEL_COLOR = "#f4f4f5";
+export const MUTED = "#a1a1aa";
 
 export function isSheet(purpose: GenerationPurpose): boolean {
   return purpose === "asset_sheet";
@@ -42,7 +42,7 @@ export function sampleImageSize(spec: Pick<SampleImageSpec, "purpose" | "aspectR
   return landscape ? { width: 1280, height: 720 } : { width: 720, height: 1280 };
 }
 
-function escapeXml(text: string): string {
+export function escapeXml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -64,7 +64,7 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 
 /** A byte of the digest as 0..1 (cycles when the digest is short). */
-function digestUnit(digest: string, index: number): number {
+export function digestUnit(digest: string, index: number): number {
   const hex = /^[0-9a-f]+$/i.test(digest) && digest.length >= 2 ? digest : "00";
   const pos = (index * 2) % (hex.length - (hex.length % 2) || 2);
   return parseInt(hex.slice(pos, pos + 2), 16) / 255;
@@ -99,9 +99,9 @@ export function wrapText(text: string, maxChars: number, maxLines: number): stri
   return kept;
 }
 
-type Palette = { accent: string; accentSoft: string; glow: string; swatches: string[] };
+export type Palette = { accent: string; accentSoft: string; glow: string; swatches: string[] };
 
-function paletteFor(digest: string): Palette {
+export function paletteFor(digest: string): Palette {
   const hue = digestUnit(digest, 0) * 360;
   return {
     accent: hslToHex(hue, 0.32, 0.68),
@@ -113,7 +113,7 @@ function paletteFor(digest: string): Palette {
   };
 }
 
-function background(width: number, height: number, p: Palette): string {
+export function background(width: number, height: number, p: Palette): string {
   const m = Math.min(width, height);
   const step = Math.round(m * 0.035);
   return `
@@ -131,7 +131,7 @@ function background(width: number, height: number, p: Palette): string {
   <rect width="${width}" height="${height}" fill="url(#hatch)"/>`;
 }
 
-function watermark(width: number, height: number): string {
+export function watermark(width: number, height: number): string {
   const size = Math.round(Math.min(width, height) * 0.2);
   return `<text x="${width / 2}" y="${height / 2}" transform="rotate(-24 ${width / 2} ${height / 2})"
     font-family="${FONT}" font-weight="800" font-size="${size}" letter-spacing="${size * 0.08}"
@@ -139,7 +139,7 @@ function watermark(width: number, height: number): string {
 }
 
 /** The amber "SAMPLE" badge; `x`, `y` is its top-left (or top-right with `alignRight`). */
-function sampleBadge(x: number, y: number, m: number, alignRight = false): string {
+export function sampleBadge(x: number, y: number, m: number, alignRight = false): string {
   const size = Math.round(m * 0.032);
   const padX = Math.round(size * 0.7);
   const h = Math.round(size * 1.9);
@@ -161,7 +161,7 @@ function footer(width: number, height: number, m: number, digest: string): strin
       fill="${MUTED}" fill-opacity="0.45" text-anchor="end">#${escapeXml(digest.slice(0, 8))}</text>`;
 }
 
-function textLines(
+export function textLines(
   lines: string[],
   x: number,
   firstBaseline: number,

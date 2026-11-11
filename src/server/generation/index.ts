@@ -16,3 +16,5 @@ export {
 } from "./service";
 /** Worker only: the work of one `generation.run` attempt. */
 export { runGeneration, type RunOutcome } from "./run";
+/** Worker only: the work of one `generation.sweep` run. */
+export { STUCK_FAILURE, sweepStuckGenerations, type SweepResult } from "./sweep";

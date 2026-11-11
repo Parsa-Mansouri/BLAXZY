@@ -777,7 +777,11 @@ export async function submitSheetReview(input: {
     if (
       !latest ||
       latest.id !== sheetId ||
-      latest.status !== "in_review" ||
+      // A ready asset's accepted sheet can still be sent back (the Review All pass).
+      !(
+        latest.status === "in_review" ||
+        (decision === "rejected" && latest.status === "accepted")
+      ) ||
       look?.id !== latest.lookId ||
       look.status !== "accepted"
     ) {

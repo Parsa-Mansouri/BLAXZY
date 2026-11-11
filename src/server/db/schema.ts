@@ -422,6 +422,10 @@ export const asset = pgTable(
 /* Prompt blocks (Output_022)                                                  */
 /* -------------------------------------------------------------------------- */
 
+/** none: not prepared · pending: the dami is running · ready: prepared · failed: see the failure. */
+export const PRODUCTION_STATES = ["none", "pending", "ready", "failed"] as const;
+export type ProductionState = (typeof PRODUCTION_STATES)[number];
+
 /**
  * One version of one block. `lineageId` is the block's identity across versions: a block that
  * survives a script edit keeps its lineage and gets a new row with the next `versionNumber`.
@@ -454,6 +458,19 @@ export const promptBlock = pgTable(
     /** True when the script changed under this block and it must be regenerated. */
     stale: boolean("stale").notNull().default(false),
     staleReason: text("stale_reason"),
+    /**
+     * Production preparation (text-blocks dami), filled once per block version: the prompt with
+     * its asset mentions bound to reference tokens, and the assets in token order (`kind:slug`).
+     * A user change to the prompt or the assets creates the next version of the block.
+     */
+    productionState: text("production_state").$type<ProductionState>().notNull().default("none"),
+    productionPrompt: text("production_prompt"),
+    productionAssetRefs: jsonb("production_asset_refs").$type<string[]>(),
+    productionNotes: jsonb("production_notes").$type<string[]>(),
+    productionDamiRunId: uuid("production_dami_run_id").references(() => damiRun.id),
+    productionFailure: text("production_failure"),
+    /** Set when the user approves the prepared block for generation. */
+    approvedAt: ts("approved_at"),
     damiRunId: uuid("dami_run_id").references(() => damiRun.id),
     createdAt: createdAt(),
     supersededAt: ts("superseded_at"),
@@ -700,4 +717,82 @@ export const assetSheet = pgTable(
     uniqueIndex("asset_sheet_asset_version_unique").on(t.assetId, t.versionNumber),
     index("asset_sheet_project_status_idx").on(t.projectId, t.status),
   ],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Production: takes of a block and export bundles (see docs/M4_CONTRACTS.md)  */
+/* -------------------------------------------------------------------------- */
+
+export const TAKE_STAGES = ["draft", "final"] as const;
+export type TakeStage = (typeof TAKE_STAGES)[number];
+
+/**
+ * One generated clip of a block. A draft is the cheap low-resolution render; a final finishes an
+ * accepted draft at full quality (`draftTakeId`). Statuses are those of looks and sheets.
+ */
+export const blockTake = pgTable(
+  "block_take",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    /** The block version this take was generated from. */
+    blockId: uuid("block_id")
+      .notNull()
+      .references(() => promptBlock.id),
+    /** The block's identity across versions; takes are numbered per lineage. */
+    lineageId: uuid("lineage_id").notNull(),
+    takeNumber: integer("take_number").notNull(),
+    stage: text("stage").$type<TakeStage>().notNull(),
+    status: text("status").$type<LookStatus>().notNull().default("pending"),
+    parentId: uuid("parent_id").references((): AnyPgColumn => blockTake.id),
+    /** For a final: the accepted draft it finishes. */
+    draftTakeId: uuid("draft_take_id").references((): AnyPgColumn => blockTake.id),
+    /** The prompt actually sent, with reference tokens. */
+    prompt: text("prompt"),
+    /** Files attached as references, in token order. */
+    referenceFileIds: jsonb("reference_file_ids")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    generationId: uuid("generation_id").references(() => generation.id),
+    fileId: uuid("file_id").references(() => file.id),
+    posterFileId: uuid("poster_file_id").references(() => file.id),
+    damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    failure: text("failure"),
+    createdAt: createdAt(),
+    decidedAt: ts("decided_at"),
+  },
+  (t) => [
+    uniqueIndex("block_take_lineage_number_unique").on(t.lineageId, t.takeNumber),
+    index("block_take_project_status_idx").on(t.projectId, t.status),
+    index("block_take_block_idx").on(t.blockId),
+  ],
+);
+
+export const EXPORT_STATUSES = ["pending", "ready", "failed"] as const;
+export type ExportStatus = (typeof EXPORT_STATUSES)[number];
+
+/** A ZIP of a project's accepted final clips, built by a worker. */
+export const exportBundle = pgTable(
+  "export_bundle",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    status: text("status").$type<ExportStatus>().notNull().default("pending"),
+    fileId: uuid("file_id").references(() => file.id),
+    clipCount: integer("clip_count").notNull().default(0),
+    /** Identifies the set of clips, so an unchanged film reuses its last bundle. */
+    contentKey: text("content_key").notNull(),
+    failure: text("failure"),
+    createdAt: createdAt(),
+    finishedAt: ts("finished_at"),
+  },
+  (t) => [index("export_bundle_project_created_idx").on(t.projectId, t.createdAt.desc())],
 );

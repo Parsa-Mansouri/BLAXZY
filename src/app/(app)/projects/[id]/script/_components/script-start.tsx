@@ -2,19 +2,13 @@
 
 import { useId, useRef, useState, useTransition, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Upload } from "lucide-react";
-import { Button, Hint, ProgressBar, cn } from "@/ui";
+import { FileText } from "lucide-react";
+import { Button, PageHeader, ProgressBar, Spinner, StatusDot, StatusLine, cn } from "@/ui";
 import {
   createScriptUploadAction,
   finishScriptUploadAction,
   startFromBriefAction,
 } from "../actions";
-
-const EXAMPLES = [
-  "A lighthouse keeper on a remote island finds a stranger washed ashore the night before the last ferry of the season.",
-  "Two rival street musicians in Lisbon are forced to share one corner for a summer, until one of them disappears.",
-  "A retired astronaut teaches her grandson to read the stars in the week before the family sells her house.",
-];
 
 const MB = 1024 * 1024;
 const MAX_UPLOAD_BYTES = 10 * MB;
@@ -55,6 +49,20 @@ function putFile(
   });
 }
 
+/** A problem shown on the white block: ink text after a red dot (red text fails contrast on white). */
+function ErrorOnWhite({ id, children }: { id?: string; children: string }) {
+  return (
+    <p id={id} role="alert" className="flex items-baseline gap-2 text-secondary text-on-accent">
+      <StatusDot tone="failed" className="shrink-0 -translate-y-px" />
+      <span>{children}</span>
+    </p>
+  );
+}
+
+/**
+ * The opening of the Script stage: describing the story is the main road (the white block); an
+ * upload stays beside it as the quieter alternative.
+ */
 export function ScriptStart({
   projectId,
   maxBriefChars,
@@ -77,6 +85,8 @@ export function ScriptStart({
 
   const length = brief.trim().length;
   const over = brief.length > maxBriefChars;
+  // The count only shows once it matters.
+  const nearLimit = brief.length > maxBriefChars * 0.8;
   const busy = writing || upload.kind !== "idle";
 
   function write() {
@@ -156,14 +166,32 @@ export function ScriptStart({
     if (file) void uploadFile(file);
   }
 
-  return (
-    <div className="grid gap-x-14 gap-y-12 @4xl:grid-cols-[minmax(0,1fr)_minmax(15rem,19rem)]">
-      <section aria-labelledby={`${id}-describe`} className="flex min-w-0 flex-col gap-5">
-        <h3 id={`${id}-describe`} className="text-title-1">
-          Describe Your Story
-        </h3>
+  const describedBy = [nearLimit ? `${id}-count` : null, briefError ? `${id}-error` : null]
+    .filter(Boolean)
+    .join(" ");
 
-        <div className="flex flex-col">
+  return (
+    <>
+      <PageHeader
+        title="Script"
+        description="Start from an idea, or bring a script you already have."
+      />
+
+      <div className="flex max-w-260 flex-wrap gap-3">
+        <section
+          aria-labelledby={`${id}-describe`}
+          className="flex min-h-105 min-w-0 flex-[2_1_420px] in-2 flex-col gap-6 rounded-block bg-accent p-8 text-on-accent max-sm:p-6"
+        >
+          <div className="flex flex-col gap-2.5">
+            <h2
+              id={`${id}-describe`}
+              className="text-[32px] leading-9 font-semibold tracking-[-0.03em] text-balance"
+            >
+              Describe Your Story
+            </h2>
+            <p className="max-w-[46ch] text-body text-on-accent-2">A few sentences are enough.</p>
+          </div>
+
           <label htmlFor={`${id}-brief`} className="sr-only">
             Your story
           </label>
@@ -181,134 +209,136 @@ export function ScriptStart({
                 write();
               }
             }}
-            rows={7}
-            placeholder="Who is it about, where are they, and what do they want?"
+            placeholder="An old lighthouse keeper refuses to leave her post the night the lamp finally fails."
             aria-invalid={briefError ? true : undefined}
-            aria-describedby={`${id}-count ${id}-hint${briefError ? ` ${id}-error` : ""}`}
+            aria-describedby={describedBy || undefined}
             disabled={busy}
             className={cn(
-              "field-sizing-content max-h-[60dvh] min-h-[calc(var(--ts-script-lh)*7+2.5rem)] w-full resize-none bg-transparent py-5 text-script text-label outline-none",
-              "[box-shadow:inset_0_var(--hairline)_0_var(--separator),inset_0_calc(var(--hairline)*-1)_0_var(--separator)]",
-              "focus-visible:[box-shadow:inset_0_var(--hairline)_0_var(--label-2),inset_0_calc(var(--hairline)*-1)_0_var(--label-2)]",
-              "disabled:text-label-2",
+              "field-sizing-content max-h-[60dvh] min-h-36 w-full flex-1 resize-none border-t border-on-accent/25 bg-transparent pt-4 text-[20px] leading-[30px] text-on-accent outline-none",
+              "transition-colors duration-(--dur-press) placeholder:text-on-accent-2 focus-visible:border-on-accent",
+              "selection:bg-on-accent/15 disabled:opacity-60",
             )}
           />
-          <div className="flex items-baseline justify-between gap-4 pt-2">
-            <p id={`${id}-hint`} className="text-callout text-label-2">
-              One sentence is enough. Names, a place and an ending help.
-            </p>
-            <p
-              id={`${id}-count`}
+
+          {nearLimit || briefError ? (
+            <div className="flex flex-col gap-2">
+              {nearLimit ? (
+                <p
+                  id={`${id}-count`}
+                  className={cn(
+                    "text-meta tabular-nums",
+                    over ? "font-semibold text-on-accent" : "text-on-accent-2",
+                  )}
+                >
+                  {numberFormat.format(brief.length)} characters, up to{" "}
+                  {numberFormat.format(maxBriefChars)}
+                </p>
+              ) : null}
+              {briefError ? <ErrorOnWhite id={`${id}-error`}>{briefError}</ErrorOnWhite> : null}
+            </div>
+          ) : null}
+
+          <div>
+            <button
+              type="button"
+              onClick={write}
+              disabled={busy}
+              aria-busy={writing || undefined}
               className={cn(
-                "shrink-0 text-callout tabular-nums",
-                over ? "text-red" : "text-label-2",
+                "inline-flex h-11 press items-center gap-2 rounded-capsule bg-on-accent px-6 text-body font-semibold text-accent",
+                "hover:bg-on-accent/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-on-accent",
+                "disabled:pointer-events-none disabled:opacity-60",
               )}
             >
-              <span className="sr-only">Characters used: </span>
-              {numberFormat.format(brief.length)} / {numberFormat.format(maxBriefChars)}
-            </p>
+              {writing ? <Spinner size="sm" /> : null}
+              Write the Script
+            </button>
           </div>
-          {briefError ? (
-            <p id={`${id}-error`} role="alert" className="pt-2 text-callout text-red">
-              {briefError}
+        </section>
+
+        <section
+          aria-labelledby={`${id}-upload`}
+          className="flex min-h-105 min-w-0 flex-[1_1_280px] in-3 flex-col gap-5 rounded-block bg-elevated p-6"
+        >
+          <div className="flex flex-col gap-1.5">
+            <h2
+              id={`${id}-upload`}
+              className="text-[22px] leading-[26px] font-semibold tracking-[-0.02em]"
+            >
+              Upload a Script
+            </h2>
+            <p className="text-secondary text-label-2">We check it and get it ready for review.</p>
+          </div>
+
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!busy) setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={cn(
+              "flex min-h-40 flex-1 flex-col items-center justify-center gap-3 rounded-tile border border-dashed p-4 text-center",
+              "transition-colors duration-(--dur-press)",
+              dragging ? "border-label bg-fill-4" : "border-outline",
+            )}
+          >
+            {upload.kind === "idle" ? (
+              <>
+                <p className="text-secondary text-label-3">
+                  Drop a file here
+                  <span className="block">Text, Markdown, Word or PDF, up to 10 MB</span>
+                </p>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => fileInput.current?.click()}
+                  disabled={busy}
+                >
+                  Choose a File
+                </Button>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept=".txt,.md,.docx,.pdf"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void uploadFile(file);
+                  }}
+                />
+              </>
+            ) : (
+              <div
+                className="flex w-full swap-in flex-col items-stretch gap-3 text-left"
+                aria-live="polite"
+              >
+                <p className="flex items-center gap-2 text-body text-label">
+                  <FileText aria-hidden="true" className="size-(--icon) shrink-0 text-label-2" />
+                  <span className="min-w-0 truncate">{upload.name}</span>
+                </p>
+                <ProgressBar
+                  value={upload.kind === "uploading" ? upload.progress : null}
+                  aria-label="Upload progress"
+                />
+                <StatusLine tone="working">
+                  {upload.kind === "uploading"
+                    ? `Uploading ${Math.round(upload.progress)}%`
+                    : "Opening the script"}
+                </StatusLine>
+              </div>
+            )}
+          </div>
+          {uploadError ? (
+            <p role="alert" className="text-secondary text-red">
+              {uploadError}
             </p>
           ) : null}
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <p className="text-callout text-label-2">Or begin from an idea:</p>
-          <ul className="flex flex-col">
-            {EXAMPLES.map((example) => (
-              <li key={example}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setBrief(example);
-                    setBriefError(null);
-                    area.current?.focus();
-                  }}
-                  className="-mx-2 w-[calc(100%+1rem)] rounded-control px-2 py-1.5 text-left text-reading text-label-2 focus-ring transition-colors duration-(--dur-fast) hover:bg-fill-4 hover:text-label disabled:pointer-events-none"
-                >
-                  {example}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="pt-2">
-          <Button variant="prominent" size="large" loading={writing} onClick={write}>
-            Write Script
-          </Button>
-        </div>
-      </section>
-
-      <section aria-labelledby={`${id}-upload`} className="flex min-w-0 flex-col gap-3">
-        <h3 id={`${id}-upload`} className="text-title-3">
-          Upload a Script
-        </h3>
-        <p className="text-body text-label-2">
-          Already written one? It is checked for format, length and anything hard to film.
-        </p>
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            if (!busy) setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-          className={cn(
-            "flex min-h-44 flex-col items-center justify-center gap-3 rounded-group px-4 py-6 text-center transition-colors duration-(--dur-fast)",
-            dragging ? "bg-fill-2 outline-2 outline-offset-2 outline-focus" : "bg-elevated",
-          )}
-        >
-          {upload.kind === "idle" ? (
-            <>
-              <Upload aria-hidden="true" className="size-6 text-label-2" />
-              <p className="text-body text-label-2">Drop a script file here, or</p>
-              <Button onClick={() => fileInput.current?.click()} disabled={busy}>
-                Choose File
-              </Button>
-              <input
-                ref={fileInput}
-                type="file"
-                accept=".txt,.md,.docx,.pdf"
-                className="sr-only"
-                tabIndex={-1}
-                aria-hidden="true"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (file) void uploadFile(file);
-                }}
-              />
-            </>
-          ) : (
-            <div className="flex w-full flex-col items-stretch gap-3 text-left" aria-live="polite">
-              <p className="flex items-center gap-2 text-body text-label">
-                <FileText aria-hidden="true" className="size-(--icon) shrink-0 text-label-2" />
-                <span className="min-w-0 truncate">{upload.name}</span>
-              </p>
-              <ProgressBar
-                value={upload.kind === "uploading" ? upload.progress : null}
-                aria-label="Upload progress"
-              />
-              <p className="text-callout text-label-2">
-                {upload.kind === "uploading"
-                  ? `Uploading… ${Math.round(upload.progress)}%`
-                  : "Opening the script…"}
-              </p>
-            </div>
-          )}
-        </div>
-        {uploadError ? (
-          <p role="alert" className="text-callout text-red">
-            {uploadError}
-          </p>
-        ) : null}
-        <Hint>Text, Markdown, Word or PDF, up to 10 MB.</Hint>
-      </section>
-    </div>
+        </section>
+      </div>
+    </>
   );
 }

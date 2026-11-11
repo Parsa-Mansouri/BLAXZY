@@ -1,13 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { BlockDetail } from "@/server/production";
-import { Button, IconButton, ProgressBar, formatDurationLong } from "@/ui";
-import { AssetThumb } from "../../_components/asset-thumb";
-import { BackLink } from "../../_components/back-link";
+import {
+  Button,
+  PaperSheet,
+  PictureTile,
+  ProgressBar,
+  StatusLine,
+  formatDurationLong,
+  stagger,
+} from "@/ui";
+import { fileSrc } from "@/lib/file-src";
+import { ChangeRequest, type IssueChoice } from "../../_components/change-request";
+import { useRefreshReviewList } from "../../_components/review-list-context";
 import { usePolling } from "../../../_lib/use-polling";
 import { blocksHref } from "../../../_lib/production-routes";
 import {
@@ -17,11 +26,11 @@ import {
   setAssetsAction,
 } from "../actions";
 import { blockKey } from "../_lib/block-key";
+import { BLOCK_STATE_TONES, blockStateLabel } from "../_lib/block-state";
 import { AssetPickerSheet } from "./asset-picker-sheet";
-import { BlockStateLabel } from "./block-state-label";
 import { PromptView } from "./prompt-view";
-import { RequestChangesSheet, type IssueChoice } from "./request-changes-sheet";
 
+export type { IssueChoice };
 export type BlockView = Omit<BlockDetail, "takes">;
 
 const FAST_POLL_MS = 2000;
@@ -86,14 +95,14 @@ function Section({
   action,
 }: {
   title: string;
-  children: React.ReactNode;
-  action?: React.ReactNode;
+  children: ReactNode;
+  action?: ReactNode;
 }) {
-  const heading = title.toLowerCase().replaceAll(" ", "-");
+  const heading = `block-${title.toLowerCase().replaceAll(" ", "-")}`;
   return (
-    <section aria-labelledby={`block-${heading}`} className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-4">
-        <h3 id={`block-${heading}`} className="text-title-2">
+    <section aria-labelledby={heading} className="flex flex-col gap-4">
+      <div className="flex min-h-(--btn-sm) items-center justify-between gap-4">
+        <h3 id={heading} className="text-section">
           {title}
         </h3>
         {action}
@@ -103,13 +112,15 @@ function Section({
   );
 }
 
-/** One shot: its assets lead, then the script, the prepared prompt and what to do about it. */
+/**
+ * One shot in the focus area of the shot review: its title, state and decision first, then the
+ * assets it shows, its script on paper and the prepared prompt. "Request Changes" replaces the
+ * decision with the issue chips and a note, in place.
+ */
 export function BlockScreen({
   projectId,
   block,
   position,
-  previousHref,
-  nextHref,
   nextToReviewHref,
   issues,
   maxNote,
@@ -118,8 +129,6 @@ export function BlockScreen({
   projectId: string;
   block: BlockView;
   position: number;
-  previousHref: string | null;
-  nextHref: string | null;
   /** The next shot that waits for review, or the list when none does. */
   nextToReviewHref: string;
   issues: IssueChoice[];
@@ -128,7 +137,8 @@ export function BlockScreen({
 }) {
   const router = useRouter();
   const refresh = useBlockSync(block.lineageId, block);
-  const [changesOpen, setChangesOpen] = useState(false);
+  const refreshList = useRefreshReviewList();
+  const [asking, setAsking] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [changesError, setChangesError] = useState<string | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
@@ -149,8 +159,8 @@ export function BlockScreen({
   const locked = preparing || block.busy;
   const attachedIds = block.assets.map((a) => a.assetId);
   const room = Math.max(0, maxAssets - attachedIds.length);
-  const number = position;
-  const title = block.title ?? `Shot ${number}`;
+  const title = block.title ?? `Shot ${position}`;
+  const canAsk = (reviewable || approved) && !asking;
 
   // The waiting state takes focus, so the change is not silent for keyboard and screen reader users.
   const wasPreparing = useRef(preparing);
@@ -167,6 +177,7 @@ export function BlockScreen({
         setActionError(result.error);
         return;
       }
+      refreshList();
       router.push(result.data.nextHref);
     });
   }
@@ -182,8 +193,9 @@ export function BlockScreen({
         setChangesError(result.error);
         return;
       }
-      setChangesOpen(false);
+      setAsking(false);
       refresh();
+      refreshList();
     });
   }
 
@@ -199,6 +211,7 @@ export function BlockScreen({
       }
       setPickerOpen(false);
       refresh();
+      refreshList();
     });
   }
 
@@ -211,97 +224,121 @@ export function BlockScreen({
         return;
       }
       refresh();
+      refreshList();
     });
   }
 
+  const meta = [
+    `Shot ${position}`,
+    block.durationSeconds ? formatDurationLong(block.durationSeconds) : null,
+    blockStateLabel(block.stage),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  function decision() {
+    if (failed) {
+      return (
+        <Button variant="primary" size="large" loading={pending} onClick={retry}>
+          Try Again
+        </Button>
+      );
+    }
+    if (!canAsk) return null;
+    const ask = (
+      <Button
+        size="large"
+        onClick={() => {
+          setChangesError(null);
+          setAsking(true);
+        }}
+        disabled={pending}
+      >
+        Request Changes
+      </Button>
+    );
+    if (reviewable) {
+      return (
+        <>
+          {ask}
+          <Button variant="primary" size="large" loading={pending} onClick={approve}>
+            Approve
+          </Button>
+        </>
+      );
+    }
+    return (
+      <>
+        {ask}
+        <Button variant="primary" size="large" render={<Link href={nextToReviewHref} />}>
+          {nextToReviewHref === blocksHref(projectId) ? "Back to Shots" : "Next to Review"}
+        </Button>
+      </>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-10">
+    <article aria-labelledby="shot-title" className="flex flex-col gap-12">
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
 
-      <header className="flex flex-col gap-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <BackLink href={blocksHref(projectId)}>Shots</BackLink>
-          <nav aria-label="Shots" className="flex items-center gap-1">
-            <IconButton
-              label="Previous Shot"
-              icon={<ChevronLeft />}
-              disabled={!previousHref}
-              render={previousHref ? <Link href={previousHref} /> : undefined}
-            />
-            <IconButton
-              label="Next Shot"
-              icon={<ChevronRight />}
-              disabled={!nextHref}
-              render={nextHref ? <Link href={nextHref} /> : undefined}
-            />
-          </nav>
-        </div>
-        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-          <div className="flex min-w-0 flex-col gap-2">
-            <p className="text-callout text-label-2 tabular-nums">Shot {number}</p>
-            <h2 className="text-large-title text-balance">{title}</h2>
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-callout text-label-2 tabular-nums">
-              {block.durationSeconds ? (
-                <span>{formatDurationLong(block.durationSeconds)}</span>
-              ) : null}
-              <BlockStateLabel stage={block.stage} />
-            </p>
+      <div className="flex flex-col gap-6">
+        <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <h2
+              id="shot-title"
+              className="text-heading-sm font-semibold tracking-[-0.02em] text-balance break-words"
+            >
+              {title}
+            </h2>
+            <StatusLine tone={BLOCK_STATE_TONES[block.stage]}>{meta}</StatusLine>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {failed ? (
-              <Button variant="prominent" size="large" loading={pending} onClick={retry}>
-                Try Again
-              </Button>
-            ) : reviewable ? (
-              <>
-                <Button onClick={() => setChangesOpen(true)} disabled={pending}>
-                  Request Changes
-                </Button>
-                <Button variant="prominent" size="large" loading={pending} onClick={approve}>
-                  Approve
-                </Button>
-              </>
-            ) : approved ? (
-              <>
-                <Button onClick={() => setChangesOpen(true)} disabled={pending}>
-                  Request Changes
-                </Button>
-                <Button variant="prominent" size="large" render={<Link href={nextToReviewHref} />}>
-                  {nextToReviewHref === blocksHref(projectId) ? "Back to Shots" : "Next to Review"}
-                </Button>
-              </>
-            ) : null}
-          </div>
-        </div>
+          {!asking ? <div className="flex flex-wrap items-center gap-2">{decision()}</div> : null}
+        </header>
         {actionError ? (
-          <p role="alert" className="max-w-(--measure) text-callout text-red">
+          <p role="alert" className="max-w-(--measure) text-secondary text-failed">
             {actionError}
           </p>
         ) : null}
-      </header>
-
-      {preparing ? (
-        <div ref={waitingRef} tabIndex={-1} className="flex max-w-sm flex-col gap-2.5 outline-none">
-          <p className="text-body text-label">Preparing the shot…</p>
-          <ProgressBar value={null} aria-label="Preparing the shot" />
-          <p className="text-callout text-label-2">
-            You can leave this page. The shot is ready to review when you return.
+        {asking ? (
+          <div className="max-w-140">
+            <ChangeRequest
+              issues={issues}
+              maxNote={maxNote}
+              sending={pending}
+              serverError={changesError}
+              notePlaceholder="What the shot should do differently."
+              onSubmit={requestChanges}
+              onCancel={() => setAsking(false)}
+            />
+          </div>
+        ) : null}
+        {preparing ? (
+          <div
+            ref={waitingRef}
+            tabIndex={-1}
+            className="flex max-w-sm flex-col gap-3 rounded-card bg-elevated p-5 outline-none"
+          >
+            <p className="text-body text-label">The shot is being prepared.</p>
+            <ProgressBar value={null} aria-label="Preparing the shot" />
+            <p className="text-secondary text-label-2">
+              You can leave this page. The shot is ready to review when you return.
+            </p>
+          </div>
+        ) : null}
+        {failed ? (
+          <p role="alert" className="max-w-(--measure) text-body text-label">
+            This shot could not be prepared. {block.failure}
           </p>
-        </div>
-      ) : null}
-
-      {failed ? (
-        <p role="alert" className="max-w-(--measure) text-reading text-label">
-          This shot could not be prepared. {block.failure}
-        </p>
-      ) : null}
+        ) : null}
+      </div>
 
       <Section
         title="Assets"
         action={
           <Button
+            size="small"
             leadingIcon={<Plus aria-hidden />}
             onClick={() => {
               setPickerError(null);
@@ -314,30 +351,43 @@ export function BlockScreen({
         }
       >
         {block.assets.length > 0 ? (
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-x-4 gap-y-6">
-            {block.assets.map((asset) => (
-              <li key={asset.ref} className="group/tile relative flex min-w-0 flex-col gap-2">
-                <AssetThumb
-                  fileId={asset.thumbnailFileId}
-                  alt={`${asset.name}, sheet`}
-                  className="w-full rounded-artwork"
-                />
-                <div className="flex flex-col gap-0.5 px-0.5">
-                  <span className="line-clamp-2 text-headline">{asset.name}</span>
-                  <span className="text-callout text-label-2 capitalize">{asset.kind}</span>
-                </div>
-                <IconButton
-                  label={`Remove ${asset.name}`}
-                  icon={<X />}
-                  variant="standard"
-                  disabled={locked || pending}
-                  onClick={() =>
-                    setAssets(
-                      attachedIds.filter((id) => id !== asset.assetId),
-                      "tile",
-                    )
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,13rem),1fr))] gap-x-4 gap-y-6">
+            {block.assets.map((asset, i) => (
+              <li key={asset.ref} className="min-w-0 enter" style={stagger(i, 60)}>
+                <PictureTile
+                  label={asset.name}
+                  aspect="video"
+                  picture={
+                    asset.thumbnailFileId ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- stored media behind a redirect
+                      <img
+                        src={fileSrc(asset.thumbnailFileId)}
+                        alt={`${asset.name}, sheet`}
+                        loading="lazy"
+                        decoding="async"
+                        draggable={false}
+                      />
+                    ) : undefined
                   }
-                  className="absolute top-2 right-2 rounded-full bg-elevated-3 hover:bg-elevated-3"
+                  placeholder="No image yet"
+                  dashed
+                  coverHeading={asset.name}
+                  coverLine={<p className="text-secondary text-label-2 capitalize">{asset.kind}</p>}
+                  actions={
+                    <Button
+                      variant="dark"
+                      disabled={locked || pending}
+                      onClick={() =>
+                        setAssets(
+                          attachedIds.filter((id) => id !== asset.assetId),
+                          "tile",
+                        )
+                      }
+                    >
+                      Remove from Shot
+                    </Button>
+                  }
+                  caption={asset.name}
                 />
               </li>
             ))}
@@ -348,15 +398,17 @@ export function BlockScreen({
           </p>
         )}
         {room === 0 ? (
-          <p className="text-callout text-label-2">That is as many as this shot can use.</p>
+          <p className="text-secondary text-label-2">That is as many as this shot can use.</p>
         ) : null}
       </Section>
 
-      <Section title="Script">
-        <p className="max-w-(--measure) text-script whitespace-pre-line text-label-2">
-          {block.scriptExcerpt}
-        </p>
-      </Section>
+      {block.scriptExcerpt.trim() ? (
+        <Section title="Script">
+          <PaperSheet as="div">
+            <p className="whitespace-pre-line">{block.scriptExcerpt.trim()}</p>
+          </PaperSheet>
+        </Section>
+      ) : null}
 
       {block.prompt ? (
         <Section title="Prompt">
@@ -368,7 +420,7 @@ export function BlockScreen({
         <Section title="Notes">
           <ul className="flex max-w-(--measure) flex-col gap-1.5">
             {block.notes.map((note, i) => (
-              <li key={i} className="text-reading text-label-2">
+              <li key={i} className="text-body text-label-2">
                 {note}
               </li>
             ))}
@@ -376,17 +428,6 @@ export function BlockScreen({
         </Section>
       ) : null}
 
-      {changesOpen ? (
-        <RequestChangesSheet
-          open
-          onOpenChange={setChangesOpen}
-          issues={issues}
-          maxNote={maxNote}
-          sending={pending}
-          serverError={changesError}
-          onSubmit={requestChanges}
-        />
-      ) : null}
       {pickerOpen ? (
         <AssetPickerSheet
           open
@@ -400,6 +441,6 @@ export function BlockScreen({
           onConfirm={(ids) => setAssets(ids, "picker")}
         />
       ) : null}
-    </div>
+    </article>
   );
 }

@@ -2,41 +2,42 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
-import { Ellipsis } from "lucide-react";
-import { formatRelativeTime } from "@/lib/relative-time";
 import { stageLabel } from "@/lib/stages";
 import {
   Alert,
   Button,
-  GroupedList,
-  GroupedListField,
-  IconButton,
+  Field,
   Input,
-  Menu,
-  MenuItem,
-  MenuSeparator,
+  PictureTile,
   Sheet,
-  TitleCard,
-  cn,
+  StatusLine,
+  stagger,
   useToast,
 } from "@/ui";
 import { archiveProjectAction, renameProjectAction } from "../actions";
-import { projectHref, type ProjectSummary } from "../_lib/summary";
+import { projectHref, stageLine, stageTone, type ProjectSummary } from "../_lib/summary";
 
 const RENAME_FORM_ID = "rename-project-form";
 
-/** A project on the shelf: title-card artwork, caption beneath, and an actions menu. */
+/**
+ * A film on the shelf (Home.dc.html, Projects.dc.html): its title on a flat tile, and on hover or
+ * keyboard focus a panel slides up over the whole tile with Continue, Rename and Archive.
+ */
 export function ProjectTile({
   project,
+  index,
+  baseDelay,
   onRenamed,
   onArchived,
 }: {
   project: ProjectSummary;
+  /** Position in the grid, for the staggered entrance. */
+  index: number;
+  baseDelay: number;
   onRenamed: (project: ProjectSummary) => void;
   onArchived: (id: string) => void;
 }) {
   const toast = useToast();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<"rename" | "archive" | null>(null);
   const [title, setTitle] = useState(project.title);
   const [error, setError] = useState<string | undefined>();
@@ -77,56 +78,48 @@ export function ProjectTile({
     });
   }
 
-  const label = stageLabel(project.stage);
+  const tone = stageTone(project.stage);
+  const verb = project.stage === "done" ? "Open" : "Continue";
 
   return (
-    <li className="group/tile relative">
-      <Link href={projectHref(project)} className="group/link flex flex-col gap-2 outline-none">
-        <TitleCard
-          title={project.title}
-          className="group-hover/tile:bg-elevated-2 group-focus-visible/link:outline-2 group-focus-visible/link:outline-offset-2 group-focus-visible/link:outline-focus"
-        />
-        <span className="truncate px-0.5 text-callout text-label-2">
-          {label} ·{" "}
-          <time dateTime={project.updatedAt} suppressHydrationWarning>
-            {formatRelativeTime(project.updatedAt)}
-          </time>
-        </span>
-      </Link>
-
-      <div
-        className={cn(
-          "absolute top-2 right-2 opacity-0 transition-opacity duration-(--dur-fast)",
-          "group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 pointer-coarse:opacity-100",
-          menuOpen && "opacity-100",
-        )}
-      >
-        <Menu
-          open={menuOpen}
-          onOpenChange={setMenuOpen}
-          align="end"
-          trigger={
-            <IconButton
-              label={`Actions for ${project.title}`}
-              tooltip={false}
-              variant="standard"
-              icon={<Ellipsis />}
-              className="rounded-full bg-elevated-3 hover:bg-elevated-3"
-            />
-          }
-        >
-          <MenuItem
-            onClick={() => {
-              setTitle(project.title);
-              setDialog("rename");
-            }}
-          >
-            Rename…
-          </MenuItem>
-          <MenuSeparator />
-          <MenuItem onClick={() => setDialog("archive")}>Archive…</MenuItem>
-        </Menu>
-      </div>
+    <li className="min-w-0">
+      <PictureTile
+        label={project.title}
+        overlay={project.title}
+        actionsInline
+        coverLine={<StatusLine tone={tone}>{stageLine(project)}</StatusLine>}
+        actions={
+          <>
+            <Button
+              variant="primary"
+              render={<Link href={projectHref(project)} />}
+              aria-label={`${verb} ${project.title}`}
+            >
+              {verb}
+            </Button>
+            <Button
+              variant="dark"
+              onClick={() => {
+                setTitle(project.title);
+                setDialog("rename");
+              }}
+              aria-label={`Rename ${project.title}`}
+            >
+              Rename
+            </Button>
+            <Button
+              variant="plain"
+              onClick={() => setDialog("archive")}
+              aria-label={`Archive ${project.title}`}
+            >
+              Archive
+            </Button>
+          </>
+        }
+        status={<StatusLine tone={tone}>{stageLabel(project.stage)}</StatusLine>}
+        className="enter"
+        style={stagger(index, baseDelay)}
+      />
 
       <Sheet
         open={dialog === "rename"}
@@ -134,27 +127,25 @@ export function ProjectTile({
         title="Rename Project"
         footer={
           <>
-            <Button variant="standard" onClick={close} disabled={pending}>
+            <Button variant="outlined" onClick={close} disabled={pending}>
               Cancel
             </Button>
-            <Button type="submit" form={RENAME_FORM_ID} variant="prominent" loading={pending}>
+            <Button type="submit" form={RENAME_FORM_ID} variant="primary" loading={pending}>
               Rename
             </Button>
           </>
         }
       >
         <form id={RENAME_FORM_ID} onSubmit={rename} noValidate>
-          <GroupedList>
-            <GroupedListField label="Title" required error={error}>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                maxLength={200}
-                autoFocus
-                autoComplete="off"
-              />
-            </GroupedListField>
-          </GroupedList>
+          <Field label="Title" required error={error}>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={200}
+              autoFocus
+              autoComplete="off"
+            />
+          </Field>
         </form>
       </Sheet>
 

@@ -8,6 +8,11 @@ export interface StyleOption {
   value: string;
   label: string;
   description: string;
+  /**
+   * A real example picture for the option's tile (a path under `public/`). None exist yet; the
+   * tile shows a neutral "Example image" placeholder until one is added here.
+   */
+  image?: string;
 }
 
 export const VISUAL_STYLES: readonly StyleOption[] = [

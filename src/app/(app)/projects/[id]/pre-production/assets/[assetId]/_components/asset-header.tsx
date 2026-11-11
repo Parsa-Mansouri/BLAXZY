@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Ellipsis } from "lucide-react";
+import { Ellipsis } from "lucide-react";
 import type { AssetStage } from "@/server/assets";
 import {
   Alert,
-  Badge,
   Button,
   Field,
   IconButton,
@@ -15,18 +13,17 @@ import {
   Menu,
   MenuItem,
   MenuSeparator,
+  PageHeader,
   Sheet,
+  StatusLine,
   Textarea,
-  type BadgeTone,
 } from "@/ui";
-import { stageLabel } from "../_lib/asset-view";
+import { StageStatus } from "../../../_components/asset-stage";
 import { removeAssetAction, updateDetailsAction } from "../actions";
 import { useAssetScreen } from "./asset-context";
 import { ErrorLine, formatNumber, type AssetInfo } from "./shared";
 
-const TONES: Partial<Record<AssetStage, BadgeTone>> = { ready: "success", failed: "danger" };
-
-/** Back to the category, the asset's name and status, its description and its actions. */
+/** The asset's name (in its own case) as the page title, its state and description, its menu. */
 export function AssetHeader({
   projectId,
   asset,
@@ -47,60 +44,46 @@ export function AssetHeader({
   const [dialog, setDialog] = useState<"edit" | "remove" | null>(null);
 
   return (
-    <header className="flex flex-col gap-4">
-      <div>
-        <Link
-          href={category.href}
-          className="-ml-1 inline-flex items-center gap-0.5 rounded-control py-0.5 pr-1.5 text-body text-label-2 focus-ring transition-colors duration-(--dur-fast) hover:text-label"
-        >
-          <ChevronLeft aria-hidden="true" className="size-(--icon)" />
-          {category.label}
-        </Link>
-      </div>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-2">
-          <h2
-            data-asset-title
-            className="scroll-mt-[calc(var(--toolbar-h)+1rem)] text-large-title text-balance break-words"
-          >
-            {asset.name}
-          </h2>
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-callout text-label-2">
-            <span>{kindName}</span>
+    <div data-asset-title className="scroll-mt-[calc(var(--toolbar-h)+1rem)]">
+      <PageHeader
+        keepCase
+        title={asset.name}
+        description={
+          <div className="flex flex-col gap-2">
             {asset.removed ? (
-              <Badge>Removed</Badge>
+              <StatusLine tone="none">{kindName} · Removed</StatusLine>
             ) : (
-              <Badge tone={TONES[stage] ?? "neutral"}>{stageLabel(stage)}</Badge>
+              <StageStatus stage={stage} />
             )}
+            {asset.description ? (
+              <p className="line-clamp-3 max-w-(--measure) text-body text-pretty text-label-2">
+                {asset.description}
+              </p>
+            ) : null}
           </div>
-        </div>
-        {asset.removed ? null : (
-          <Menu
-            align="end"
-            trigger={
-              <IconButton
-                label={`Actions for ${asset.name}`}
-                tooltip={false}
-                variant="standard"
-                size="large"
-                icon={<Ellipsis />}
-                className="rounded-full"
-              />
-            }
-          >
-            <MenuItem onClick={() => setDialog("edit")}>Edit Details…</MenuItem>
-            <MenuSeparator />
-            <MenuItem destructive disabled={busy} onClick={() => setDialog("remove")}>
-              Remove Asset…
-            </MenuItem>
-          </Menu>
-        )}
-      </div>
-      {asset.description ? (
-        <p className="max-w-(--measure) text-reading text-pretty text-label-2">
-          {asset.description}
-        </p>
-      ) : null}
+        }
+        actions={
+          asset.removed ? undefined : (
+            <Menu
+              align="end"
+              trigger={
+                <IconButton
+                  label={`Actions for ${asset.name}`}
+                  tooltip={false}
+                  variant="outlined"
+                  icon={<Ellipsis />}
+                />
+              }
+            >
+              <MenuItem onClick={() => setDialog("edit")}>Edit Details…</MenuItem>
+              <MenuSeparator />
+              <MenuItem destructive disabled={busy} onClick={() => setDialog("remove")}>
+                Remove Asset…
+              </MenuItem>
+            </Menu>
+          )
+        }
+      />
 
       {dialog === "edit" ? (
         <EditDetailsSheet
@@ -117,7 +100,7 @@ export function AssetHeader({
         categoryHref={category.href}
         onClose={() => setDialog(null)}
       />
-    </header>
+    </div>
   );
 }
 
@@ -181,7 +164,7 @@ function EditDetailsSheet({
           <Button variant="plain" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button variant="prominent" loading={saving} onClick={save}>
+          <Button variant="primary" loading={saving} onClick={save}>
             Save
           </Button>
         </>

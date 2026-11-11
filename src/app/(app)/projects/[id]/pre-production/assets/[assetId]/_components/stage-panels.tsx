@@ -2,11 +2,11 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import type { LookView, SheetView } from "@/server/assets";
-import { Alert, Button, ProgressBar, cn } from "@/ui";
+import { Alert, Button, ProgressBar, StatusLine, SwapFade, cn } from "@/ui";
 import { isCreditsFailure, lookOrigin, type HeldImage } from "../_lib/asset-view";
 import { retryAction, reviewLookAction, reviewSheetAction, startOverAction } from "../actions";
+import { RequestChangesPanel } from "../../../_components/request-changes-panel";
 import { StageHeading, useAssetScreen } from "./asset-context";
-import { RequestChangesSheet } from "./request-changes-sheet";
 import {
   Artwork,
   ErrorLine,
@@ -22,7 +22,7 @@ import {
 const SAMPLE_IMAGE = "Sample image. A placeholder from the test generator, not a real result.";
 const SAMPLE_SHEET = "Sample sheet. A placeholder from the test generator, not a real result.";
 
-/** The image large on the leading side, what to do with it on the trailing side. */
+/** The picture large on the leading side (`in-2`), what to do with it beside it (`in-3`). */
 export function StageLayout({
   frame,
   rail,
@@ -33,9 +33,9 @@ export function StageLayout({
   frameClassName?: string;
 }) {
   return (
-    <div className="grid items-start gap-x-12 gap-y-8 @4xl:grid-cols-[minmax(0,1fr)_minmax(17rem,21rem)]">
-      <div className={cn("min-w-0", frameClassName)}>{frame}</div>
-      <div className="flex min-w-0 flex-col gap-5 @4xl:pt-1">{rail}</div>
+    <div className="flex flex-wrap items-start gap-x-16 gap-y-10">
+      <div className={cn("min-w-0 flex-[3_1_480px] in-2", frameClassName)}>{frame}</div>
+      <div className="flex max-w-105 min-w-0 flex-[1_1_340px] in-3 flex-col gap-8">{rail}</div>
     </div>
   );
 }
@@ -43,7 +43,7 @@ export function StageLayout({
 /** "Image 2 · From your answers · 11 Nov, 14:02". */
 function VersionLine({ label, origin, date }: { label: string; origin?: string; date: Date }) {
   return (
-    <p className="text-callout text-label-2">
+    <p className="text-meta text-label-2">
       {label}
       {origin ? ` · ${origin}` : ""} · <When date={date} />
     </p>
@@ -69,9 +69,9 @@ function InsetImage({
         alt={alt}
         shape={orientation}
         size="inset"
-        className={orientation === "portrait" ? "max-w-44" : undefined}
+        className={orientation === "portrait" ? "max-w-44" : "max-w-72"}
       />
-      <figcaption className="text-callout text-label-2">{caption}</figcaption>
+      <figcaption className="text-meta text-label-2">{caption}</figcaption>
     </figure>
   );
 }
@@ -88,7 +88,7 @@ export function WaitingStage({
   held: HeldImage | null;
   orientation: Orientation;
 }) {
-  const title = kind === "look" ? "Creating the Image…" : "Building the Reference Sheet…";
+  const title = kind === "look" ? "Creating the Image" : "Building the Reference Sheet";
   const shape = held
     ? held.kind === "sheet"
       ? "sheet"
@@ -111,21 +111,21 @@ export function WaitingStage({
             fileId={held?.fileId ?? null}
             alt={held ? `${assetName}, ${held.kind === "sheet" ? "previous sheet" : "image"}` : ""}
             shape={shape}
-            className={held ? undefined : "animate-pulse motion-reduce:animate-none"}
           />
           {heldCaption ? (
-            <figcaption className="text-callout text-label-2">{heldCaption}</figcaption>
+            <figcaption className="text-meta text-label-2">{heldCaption}</figcaption>
           ) : null}
         </figure>
       }
       rail={
         <div className="flex flex-col gap-4">
-          <StageHeading className="text-title-2">{title}</StageHeading>
+          <StageHeading className="text-heading-sm">{title}</StageHeading>
+          <StatusLine tone="working">{kind === "look" ? "Generating" : "Building"}</StatusLine>
           <ProgressBar value={null} aria-label={title} />
-          <p className="text-reading text-label-2">
+          <p className="text-body text-label-2">
             {kind === "look"
               ? "You can leave this page. The image appears here when it is ready."
-              : "The sheet shows the accepted image from several views. You can leave this page and carry on with another asset."}
+              : "You can leave this page and carry on with another asset."}
           </p>
         </div>
       }
@@ -134,31 +134,31 @@ export function WaitingStage({
 }
 
 /** Accept or reject one look or sheet; reports errors in place. */
-function useReview(projectId: string) {
+function useReview(projectId: string, initialAsking: boolean) {
   const { refresh } = useAssetScreen();
   const [accepting, startAccepting] = useTransition();
   const [sending, startSending] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [sheetError, setSheetError] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [panelError, setPanelError] = useState<string | null>(null);
+  const [asking, setAsking] = useState(initialAsking);
 
   function run(
     target: { kind: "look" | "sheet"; id: string },
     review: { decision: "accepted" | "rejected"; issueCodes?: string[]; note?: string },
-    fromSheet: boolean,
+    fromPanel: boolean,
   ) {
     const start = review.decision === "accepted" ? startAccepting : startSending;
-    (fromSheet ? setSheetError : setError)(null);
+    (fromPanel ? setPanelError : setError)(null);
     start(async () => {
       const result =
         target.kind === "look"
           ? await reviewLookAction(projectId, target.id, review)
           : await reviewSheetAction(projectId, target.id, review);
       if (!result.ok) {
-        (fromSheet ? setSheetError : setError)(result.error);
+        (fromPanel ? setPanelError : setError)(result.error);
         return;
       }
-      setSheetOpen(false);
+      setAsking(false);
       refresh();
     });
   }
@@ -167,14 +167,101 @@ function useReview(projectId: string) {
     accepting,
     sending,
     error,
-    sheetError,
-    sheetOpen,
-    setSheetOpen: (open: boolean) => {
-      setSheetError(null);
-      setSheetOpen(open);
+    panelError,
+    asking,
+    setAsking: (open: boolean) => {
+      setPanelError(null);
+      setAsking(open);
     },
     run,
   };
+}
+
+/** "Is this Mara?" with Accept and Request Changes; Request Changes swaps in the issue panel. */
+function Decision({
+  assetName,
+  subject,
+  lead,
+  meta,
+  review,
+  acceptLabel,
+  acceptDisabled,
+  onAccept,
+  secondary,
+  footer,
+  issues,
+  maxNote,
+  price,
+  balance,
+  onSend,
+}: {
+  assetName: string;
+  subject: "image" | "sheet";
+  lead: string;
+  meta: ReactNode;
+  review: ReturnType<typeof useReview>;
+  acceptLabel: string;
+  acceptDisabled: boolean;
+  onAccept: () => void;
+  /** Replaces Request Changes (an uploaded image is replaced, not fixed). */
+  secondary?: ReactNode;
+  footer?: ReactNode;
+  issues: IssueChoice[];
+  maxNote: number;
+  price: number | null;
+  balance: number;
+  onSend: (input: { issueCodes: string[]; note: string }) => void;
+}) {
+  const busy = review.accepting || review.sending;
+  return (
+    <SwapFade swapKey={review.asking ? "asking" : "deciding"} className="flex flex-col gap-8">
+      {review.asking ? (
+        <RequestChangesPanel
+          subject={subject}
+          issues={issues}
+          maxNote={maxNote}
+          sending={review.sending}
+          serverError={review.panelError}
+          price={price}
+          balance={balance}
+          onSubmit={onSend}
+          onCancel={() => review.setAsking(false)}
+          headingAs={StageHeading}
+        />
+      ) : (
+        <>
+          <div className="flex flex-col gap-3">
+            <StageHeading className="text-heading text-balance">Is this {assetName}?</StageHeading>
+            <p className="text-body text-pretty text-label-2">{lead}</p>
+            {meta}
+          </div>
+          <div className="flex flex-col gap-3">
+            <Button
+              variant="primary"
+              size="large"
+              loading={review.accepting}
+              disabled={busy || acceptDisabled}
+              onClick={onAccept}
+            >
+              {acceptLabel}
+            </Button>
+            {secondary ?? (
+              <Button
+                variant="outlined"
+                size="large"
+                disabled={busy}
+                onClick={() => review.setAsking(true)}
+              >
+                Request Changes
+              </Button>
+            )}
+            <ErrorLine>{review.error}</ErrorLine>
+          </div>
+          {footer}
+        </>
+      )}
+    </SwapFade>
+  );
 }
 
 export function LookReviewStage({
@@ -186,6 +273,7 @@ export function LookReviewStage({
   maxNote,
   prices,
   balance,
+  initialAsking = false,
 }: {
   projectId: string;
   assetName: string;
@@ -195,9 +283,11 @@ export function LookReviewStage({
   maxNote: number;
   prices: { look: number | null; sheet: number | null };
   balance: number;
+  /** Open with the request-changes panel (a card's Request Changes led here). */
+  initialAsking?: boolean;
 }) {
-  const review = useReview(projectId);
   const uploaded = look.source === "uploaded";
+  const review = useReview(projectId, initialAsking && !uploaded);
   const target = { kind: "look" as const, id: look.id };
   const busy = review.accepting || review.sending;
   return (
@@ -206,75 +296,50 @@ export function LookReviewStage({
         <Artwork fileId={look.fileId} alt={`${assetName}, image to review`} shape={orientation} />
       }
       rail={
-        <>
-          <div className="flex flex-col gap-2">
-            <StageHeading className="text-title-2">Review the Image</StageHeading>
-            <p className="text-reading text-pretty text-label-2">
-              Check that it shows {assetName} as the script describes. Once accepted, a reference
-              sheet is built from it.
-            </p>
-            <VersionLine
-              label={`Image ${look.versionNumber}`}
-              origin={lookOrigin(look)}
-              date={look.createdAt}
-            />
-            {look.isSample ? <p className="text-callout text-label-2">{SAMPLE_IMAGE}</p> : null}
-          </div>
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-3">
+        <Decision
+          assetName={assetName}
+          subject="image"
+          lead="Accepting builds the reference sheet from this image."
+          meta={
+            <>
+              <VersionLine
+                label={`Image ${look.versionNumber}`}
+                origin={lookOrigin(look)}
+                date={look.createdAt}
+              />
+              {look.isSample ? <p className="text-meta text-label-2">{SAMPLE_IMAGE}</p> : null}
+            </>
+          }
+          review={review}
+          acceptLabel="Accept Image"
+          acceptDisabled={!canAfford(prices.sheet, balance)}
+          onAccept={() => review.run(target, { decision: "accepted" }, false)}
+          secondary={
+            uploaded ? (
               <Button
-                variant="prominent"
+                variant="outlined"
                 size="large"
-                loading={review.accepting}
-                disabled={busy || !canAfford(prices.sheet, balance)}
-                onClick={() => review.run(target, { decision: "accepted" }, false)}
+                loading={review.sending}
+                disabled={busy}
+                onClick={() =>
+                  review.run(
+                    target,
+                    { decision: "rejected", note: "Replaced with a different upload." },
+                    false,
+                  )
+                }
               >
-                Accept
+                Use a Different Image
               </Button>
-              {uploaded ? (
-                <Button
-                  size="large"
-                  loading={review.sending}
-                  disabled={busy}
-                  onClick={() =>
-                    review.run(
-                      target,
-                      { decision: "rejected", note: "Replaced with a different upload." },
-                      false,
-                    )
-                  }
-                >
-                  Use a Different Image
-                </Button>
-              ) : (
-                <Button size="large" disabled={busy} onClick={() => review.setSheetOpen(true)}>
-                  Request Changes
-                </Button>
-              )}
-            </div>
-            {prices.sheet !== null ? (
-              <div className="flex flex-col gap-1">
-                <p className="text-callout text-label-2">Accepting builds the sheet.</p>
-                <PriceLine price={prices.sheet} balance={balance} action="sheet" />
-              </div>
-            ) : null}
-            <ErrorLine>{review.error}</ErrorLine>
-          </div>
-          {review.sheetOpen ? (
-            <RequestChangesSheet
-              open
-              onOpenChange={review.setSheetOpen}
-              subject="image"
-              issues={issues}
-              maxNote={maxNote}
-              sending={review.sending}
-              serverError={review.sheetError}
-              price={prices.look}
-              balance={balance}
-              onSubmit={(input) => review.run(target, { decision: "rejected", ...input }, true)}
-            />
-          ) : null}
-        </>
+            ) : undefined
+          }
+          footer={<PriceLine price={prices.sheet} balance={balance} action="sheet" />}
+          issues={issues}
+          maxNote={maxNote}
+          price={prices.look}
+          balance={balance}
+          onSend={(input) => review.run(target, { decision: "rejected", ...input }, true)}
+        />
       }
     />
   );
@@ -290,6 +355,7 @@ export function SheetReviewStage({
   maxNote,
   sheetPrice,
   balance,
+  initialAsking = false,
 }: {
   projectId: string;
   assetName: string;
@@ -300,10 +366,10 @@ export function SheetReviewStage({
   maxNote: number;
   sheetPrice: number | null;
   balance: number;
+  initialAsking?: boolean;
 }) {
-  const review = useReview(projectId);
+  const review = useReview(projectId, initialAsking);
   const target = { kind: "sheet" as const, id: sheet.id };
-  const busy = review.accepting || review.sending;
   return (
     <StageLayout
       frame={
@@ -314,55 +380,36 @@ export function SheetReviewStage({
         />
       }
       rail={
-        <>
-          <div className="flex flex-col gap-2">
-            <StageHeading className="text-title-2">Review the Sheet</StageHeading>
-            <p className="text-reading text-pretty text-label-2">
-              Every view should show the same {assetName} as the accepted image.
-            </p>
-            <VersionLine label={`Sheet ${sheet.versionNumber}`} date={sheet.createdAt} />
-            {sheet.isSample ? <p className="text-callout text-label-2">{SAMPLE_SHEET}</p> : null}
-          </div>
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="prominent"
-                size="large"
-                loading={review.accepting}
-                disabled={busy}
-                onClick={() => review.run(target, { decision: "accepted" }, false)}
-              >
-                Accept
-              </Button>
-              <Button size="large" disabled={busy} onClick={() => review.setSheetOpen(true)}>
-                Request Changes
-              </Button>
-            </div>
-            <ErrorLine>{review.error}</ErrorLine>
-          </div>
-          {look?.fileId ? (
-            <InsetImage
-              fileId={look.fileId}
-              caption={`Accepted image (Image ${look.versionNumber})`}
-              alt={`${assetName}, accepted image`}
-              orientation={orientation}
-            />
-          ) : null}
-          {review.sheetOpen ? (
-            <RequestChangesSheet
-              open
-              onOpenChange={review.setSheetOpen}
-              subject="sheet"
-              issues={issues}
-              maxNote={maxNote}
-              sending={review.sending}
-              serverError={review.sheetError}
-              price={sheetPrice}
-              balance={balance}
-              onSubmit={(input) => review.run(target, { decision: "rejected", ...input }, true)}
-            />
-          ) : null}
-        </>
+        <Decision
+          assetName={assetName}
+          subject="sheet"
+          lead={`Accepting the sheet makes ${assetName} ready for Production.`}
+          meta={
+            <>
+              <VersionLine label={`Sheet ${sheet.versionNumber}`} date={sheet.createdAt} />
+              {sheet.isSample ? <p className="text-meta text-label-2">{SAMPLE_SHEET}</p> : null}
+            </>
+          }
+          review={review}
+          acceptLabel="Accept Sheet"
+          acceptDisabled={false}
+          onAccept={() => review.run(target, { decision: "accepted" }, false)}
+          footer={
+            look?.fileId ? (
+              <InsetImage
+                fileId={look.fileId}
+                caption={`Accepted image (Image ${look.versionNumber})`}
+                alt={`${assetName}, accepted image`}
+                orientation={orientation}
+              />
+            ) : null
+          }
+          issues={issues}
+          maxNote={maxNote}
+          price={sheetPrice}
+          balance={balance}
+          onSend={(input) => review.run(target, { decision: "rejected", ...input }, true)}
+        />
       }
     />
   );
@@ -375,6 +422,7 @@ export function ReadyStage({
   sheet,
   look,
   orientation,
+  initialConfirming = false,
 }: {
   projectId: string;
   assetId: string;
@@ -382,9 +430,11 @@ export function ReadyStage({
   sheet: SheetView | null;
   look: LookView | null;
   orientation: Orientation;
+  /** Open with the confirmation to change the image (a card's Change Image led here). */
+  initialConfirming?: boolean;
 }) {
   const { refresh } = useAssetScreen();
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState(initialConfirming);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -412,10 +462,12 @@ export function ReadyStage({
       }
       rail={
         <>
-          <div className="flex flex-col gap-2">
-            <StageHeading className="text-title-2">Ready</StageHeading>
-            <p className="text-reading text-pretty text-label-2">
-              This sheet and image keep {assetName} the same in every shot.
+          <div className="flex flex-col gap-3">
+            <StageHeading className="text-heading-sm text-balance">
+              {assetName} is ready.
+            </StageHeading>
+            <p className="text-body text-pretty text-label-2">
+              This sheet keeps {assetName} the same in every shot.
             </p>
             {sheet ? (
               <VersionLine
@@ -424,7 +476,12 @@ export function ReadyStage({
                 date={sheet.decidedAt ?? sheet.createdAt}
               />
             ) : null}
-            {sheet?.isSample ? <p className="text-callout text-label-2">{SAMPLE_SHEET}</p> : null}
+            {sheet?.isSample ? <p className="text-meta text-label-2">{SAMPLE_SHEET}</p> : null}
+          </div>
+          <div>
+            <Button variant="outlined" size="large" onClick={() => setConfirming(true)}>
+              Change Image
+            </Button>
           </div>
           {look?.fileId ? (
             <InsetImage
@@ -434,18 +491,15 @@ export function ReadyStage({
               orientation={orientation}
             />
           ) : null}
-          <div>
-            <Button onClick={() => setConfirming(true)}>Start Over</Button>
-          </div>
           <Alert
             open={confirming}
             onOpenChange={(open) => {
               setConfirming(open);
               if (!open) setError(null);
             }}
-            title={`Start ${assetName} Over?`}
+            title={`Change ${assetName}’s Image?`}
             message="The image and sheet stay in History. You then add a new image."
-            confirmLabel="Start Over"
+            confirmLabel="Change Image"
             onConfirm={startOver}
             loading={pending}
             error={error}
@@ -513,35 +567,33 @@ export function FailedStage({
         </Artwork>
       }
       rail={
-        <div role="alert" className="flex flex-col gap-5">
-          <div className="flex flex-col gap-2">
-            <StageHeading className="text-title-2 text-balance">{title}</StageHeading>
-            <p className="text-reading text-pretty text-label-2">
+        <div role="alert" className="flex flex-col gap-8">
+          <div className="flex flex-col gap-3">
+            <StageHeading className="text-heading-sm text-balance">{title}</StageHeading>
+            <p className="text-body text-pretty text-label-2">
               {failed.failure ?? "Something went wrong while it was being made."}
             </p>
             {credits ? (
-              <p className="text-reading text-label tabular-nums">
+              <p className="text-body text-label tabular-nums">
                 You now have {formatNumber(balance)} {balance === 1 ? "credit" : "credits"}.
               </p>
             ) : null}
           </div>
           <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="prominent"
-                size="large"
-                loading={pending}
-                disabled={!canAfford(price, balance)}
-                onClick={retry}
-              >
-                Try Again
+            <Button
+              variant="primary"
+              size="large"
+              loading={pending}
+              disabled={!canAfford(price, balance)}
+              onClick={retry}
+            >
+              Try Again
+            </Button>
+            {onAnotherWay ? (
+              <Button variant="outlined" size="large" onClick={onAnotherWay} disabled={pending}>
+                Add Image Another Way
               </Button>
-              {onAnotherWay ? (
-                <Button size="large" onClick={onAnotherWay} disabled={pending}>
-                  Add Image Another Way
-                </Button>
-              ) : null}
-            </div>
+            ) : null}
             <PriceLine
               price={price}
               balance={balance}

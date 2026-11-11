@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { House, LayoutGrid, Plus } from "lucide-react";
@@ -13,7 +12,6 @@ import {
   SidebarSection,
 } from "@/ui";
 import { Wordmark } from "@/app/_components/wordmark";
-import { NewProjectDialog } from "../dashboard/_components/new-project-dialog";
 import { SidebarAccount } from "./sidebar-account";
 
 /**
@@ -30,13 +28,12 @@ export function LibrarySidebarView({
   recent: { id: string; title: string }[];
 }) {
   const pathname = usePathname();
-  const [creating, setCreating] = useState(false);
   return (
     <>
       <SidebarHeader>
         <Wordmark href="/dashboard" />
       </SidebarHeader>
-      <SidebarAction icon={<Plus strokeWidth={1.5} />} onClick={() => setCreating(true)}>
+      <SidebarAction icon={<Plus strokeWidth={1.5} />} render={<Link href="/projects/new" />}>
         New Project
       </SidebarAction>
       <SidebarBody aria-label="Library">
@@ -79,7 +76,6 @@ export function LibrarySidebarView({
       <SidebarFooter>
         <SidebarAccount name={name} email={email} />
       </SidebarFooter>
-      <NewProjectDialog open={creating} onOpenChange={setCreating} />
     </>
   );
 }

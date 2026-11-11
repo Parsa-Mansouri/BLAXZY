@@ -16,10 +16,11 @@ import { ASSET_KIND_LABELS, type AssetKindKey } from "../../_lib/asset-kinds";
 
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: string };
 
-/** The accepted sheet of an asset, as the pass shows it. */
+/** The sheet of an asset as the review shows it: accepted, or waiting for the user. */
 export interface ReviewSheet {
   sheetId: string;
   fileId: string;
+  status: "accepted" | "in_review";
 }
 
 export interface NotReadyAsset {
@@ -41,7 +42,10 @@ function failure(error: unknown): { ok: false; error: string } {
   return { ok: false, error: SERVER_PROBLEM };
 }
 
-/** The accepted sheet of an asset; null data when the asset is no longer ready. */
+/**
+ * The sheet of an asset: the accepted one of a ready asset, or the one in review. Null data when
+ * the asset has neither (a sheet is being built again, or it went back a step).
+ */
 export async function loadReviewSheetAction(
   assetId: string,
 ): Promise<ActionResult<ReviewSheet | null>> {
@@ -50,14 +54,21 @@ export async function loadReviewSheetAction(
     const detail = await getAssetDetail(assetId, user.id);
     if (!detail) return { ok: false, error: "This asset no longer exists." };
     const sheet =
-      detail.stage === "ready" ? detail.sheets.find((s) => s.status === "accepted") : null;
-    return { ok: true, data: sheet?.fileId ? { sheetId: sheet.id, fileId: sheet.fileId } : null };
+      detail.stage === "ready"
+        ? detail.sheets.find((s) => s.status === "accepted")
+        : detail.stage === "sheet_review" && detail.sheets[0]?.status === "in_review"
+          ? detail.sheets[0]
+          : null;
+    if (!sheet?.fileId || (sheet.status !== "accepted" && sheet.status !== "in_review")) {
+      return { ok: true, data: null };
+    }
+    return { ok: true, data: { sheetId: sheet.id, fileId: sheet.fileId, status: sheet.status } };
   } catch (error) {
     return failure(error);
   }
 }
 
-/** Sends a ready asset's sheet back for changes: a new sheet is built from the notes. */
+/** Sends a sheet (accepted or in review) back for changes: a new one is built from the notes. */
 export async function requestSheetChangesAction(
   sheetId: string,
   input: { issueCodes: string[]; note: string },

@@ -85,7 +85,7 @@ export function Artwork({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-artwork",
+        "relative w-full overflow-hidden rounded-card",
         ASPECTS[shape],
         size === "hero" && "max-h-[min(70dvh,48rem)]",
         fileId ? "bg-ground" : "bg-elevated",
@@ -119,8 +119,8 @@ export function Artwork({
 export function MissingImage({ label }: { label: string }) {
   return (
     <>
-      <ImageOff aria-hidden="true" className="size-6 text-label-3" />
-      <span className="text-callout text-label-2">{label}</span>
+      <ImageOff aria-hidden="true" strokeWidth={1.5} className="size-6 text-label-3" />
+      <span className="text-meta text-label-3">{label}</span>
     </>
   );
 }
@@ -144,13 +144,13 @@ export function PriceLine({
   const credits = (n: number) => `${formatNumber(n)} ${n === 1 ? "credit" : "credits"}`;
   if (balance >= price) {
     return (
-      <p className="text-callout text-label-2 tabular-nums">
+      <p className="text-secondary text-label-2 tabular-nums">
         {PRICE_ACTIONS[action]} costs {credits(price)}. You have {formatNumber(balance)}.
       </p>
     );
   }
   return (
-    <p role="status" className="text-callout text-orange tabular-nums">
+    <p role="status" className="text-secondary text-label tabular-nums">
       You need {credits(price)} and have {formatNumber(balance)}. Add credits to your account to
       continue.
     </p>
@@ -164,7 +164,7 @@ export const canAfford = (price: number | null, balance: number) =>
 export function ErrorLine({ id, children }: { id?: string; children: ReactNode }) {
   if (!children) return null;
   return (
-    <p id={id} role="alert" className="text-callout text-red">
+    <p id={id} role="alert" className="text-secondary text-red">
       {children}
     </p>
   );

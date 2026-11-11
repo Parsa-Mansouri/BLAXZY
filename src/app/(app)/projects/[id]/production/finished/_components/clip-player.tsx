@@ -79,12 +79,13 @@ export function ClipPlayer({
             className="flex size-full flex-col bg-ground text-label outline-none"
           >
             <div className="flex items-center justify-between gap-4 px-(--content-x) py-3">
-              <BaseDialog.Title className="min-w-0 truncate text-title-3">
+              <BaseDialog.Title className="min-w-0 truncate text-row font-semibold">
                 {clip.title}
               </BaseDialog.Title>
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="flex shrink-0 items-center gap-2">
                 <Button
-                  variant="plain"
+                  variant="dark"
+                  size="small"
                   leadingIcon={<Download aria-hidden />}
                   onClick={onDownload}
                   loading={downloading}
@@ -124,7 +125,7 @@ export function ClipPlayer({
               {failed ? (
                 <p
                   role="alert"
-                  className="absolute inset-x-0 bottom-4 text-center text-callout text-label-2"
+                  className="absolute inset-x-0 bottom-4 text-center text-secondary text-label-2"
                 >
                   This clip could not be played. Download it instead.
                 </p>
@@ -137,10 +138,10 @@ export function ClipPlayer({
                 icon={playing ? <Pause /> : <Play />}
                 onClick={toggle}
               />
-              <span className="w-10 shrink-0 text-callout text-label-2 tabular-nums">
+              <span className="w-10 shrink-0 text-meta text-label-2 tabular-nums">
                 {clock(time)}
               </span>
-              <div className="relative flex h-8 min-w-0 flex-1 items-center rounded-control focus-ring-within">
+              <div className="relative flex h-8 min-w-0 flex-1 items-center rounded-row focus-ring-within">
                 <div className="h-1 w-full overflow-hidden rounded-capsule bg-fill-2">
                   <div className="h-full bg-accent" style={{ width: `${percent}%` }} />
                 </div>
@@ -162,7 +163,7 @@ export function ClipPlayer({
                   className="absolute inset-0 size-full cursor-pointer opacity-0 outline-none disabled:cursor-default"
                 />
               </div>
-              <span className="w-10 shrink-0 text-right text-callout text-label-2 tabular-nums">
+              <span className="w-10 shrink-0 text-right text-meta text-label-2 tabular-nums">
                 {clock(duration)}
               </span>
             </div>

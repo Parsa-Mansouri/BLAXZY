@@ -1,9 +1,9 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Download, Play } from "lucide-react";
-import { fileSrc } from "@/lib/file-src";
-import { Button, ProgressBar, formatDurationLong, cn } from "@/ui";
+import { Download } from "lucide-react";
+import { Button, PageHeader, ProgressBar, StatusLine, cn, formatDurationLong, stagger } from "@/ui";
+import { PosterTile } from "../../_components/poster-tile";
 import { usePolling } from "../../../_lib/use-polling";
 import {
   clipDownloadAction,
@@ -82,80 +82,10 @@ function useExport(projectId: string) {
   return { state, start, starting };
 }
 
-function Poster({
-  clip,
-  number,
-  portrait,
-  onOpen,
-  onDownload,
-  downloading,
-}: {
-  clip: FinishedClip;
-  number: number;
-  portrait: boolean;
-  onOpen: (clip: FinishedClip, trigger: HTMLElement) => void;
-  onDownload: (clip: FinishedClip) => void;
-  downloading: boolean;
-}) {
-  const title = clip.title ?? `Shot ${number}`;
-  return (
-    <li className="flex min-w-0 flex-col gap-2.5">
-      <button
-        type="button"
-        onClick={(e) => onOpen(clip, e.currentTarget)}
-        aria-label={`Play ${title}`}
-        className={cn(
-          "group/poster relative block w-full overflow-hidden rounded-artwork bg-elevated focus-ring outline-offset-4",
-          portrait ? "aspect-[9/16]" : "aspect-video",
-        )}
-      >
-        {clip.posterFileId ? (
-          // eslint-disable-next-line @next/next/no-img-element -- stored media behind a redirect
-          <img
-            src={fileSrc(clip.posterFileId)}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            draggable={false}
-            className="absolute inset-0 size-full bg-ground object-contain"
-          />
-        ) : null}
-        <span
-          aria-hidden
-          className="absolute inset-0 flex items-center justify-center bg-scrim opacity-0 transition-opacity duration-(--dur-base) group-hover/poster:opacity-100 group-focus-visible/poster:opacity-100 pointer-coarse:opacity-100"
-        >
-          <span className="flex size-12 items-center justify-center rounded-full bg-accent text-on-accent">
-            <Play className="size-5 translate-x-px" fill="currentColor" />
-          </span>
-        </span>
-      </button>
-      <div className="flex items-start justify-between gap-3 px-0.5">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="line-clamp-2 text-headline">
-            <span className="mr-2 text-label-2 tabular-nums">{number}</span>
-            {title}
-          </span>
-          {clip.durationSeconds ? (
-            <span className="text-callout text-label-2 tabular-nums">
-              {formatDurationLong(clip.durationSeconds)}
-            </span>
-          ) : null}
-        </div>
-        <Button
-          variant="plain"
-          leadingIcon={<Download aria-hidden />}
-          aria-label={`Download ${title}`}
-          loading={downloading}
-          onClick={() => onDownload(clip)}
-        >
-          Download
-        </Button>
-      </div>
-    </li>
-  );
-}
-
-/** The finished film as a shelf: every final clip in story order, each playable and downloadable. */
+/**
+ * The finished film as a shelf: every final clip in story order as a poster card. Hovering or
+ * focusing a card slides up Play and Download; Download All packs every clip into one ZIP.
+ */
 export function FinishedScreen({
   projectId,
   initial,
@@ -206,90 +136,119 @@ export function FinishedScreen({
   const working = state.phase === "working";
 
   return (
-    <div className="flex flex-col gap-10">
-      <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <h2 className="text-large-title">Finished</h2>
-          <p className="max-w-(--measure) text-reading text-label-2">
-            Every shot of this film, ready for your editor. The script, assets and takes remain
-            available in the earlier stages.
-          </p>
-        </div>
-        <Button
-          variant="prominent"
-          size="large"
-          leadingIcon={<Download aria-hidden />}
-          loading={exporting.starting || working}
-          onClick={exporting.start}
-        >
-          Download All
-        </Button>
-      </header>
+    <>
+      <PageHeader
+        title="Finished"
+        description="Every shot of this film, ready for your editor."
+        actions={
+          <Button
+            variant="primary"
+            size="large"
+            leadingIcon={<Download aria-hidden />}
+            loading={exporting.starting || working}
+            onClick={exporting.start}
+          >
+            Download All
+          </Button>
+        }
+      />
 
-      <div aria-live="polite" className="flex flex-col gap-2.5 empty:hidden">
+      <div aria-live="polite" className="mb-10 flex in-2 flex-col gap-3 empty:hidden">
         {working ? (
-          <div className="flex max-w-sm flex-col gap-2.5">
-            <p className="text-body text-label">Preparing the download…</p>
+          <div className="flex max-w-sm flex-col gap-3">
+            <StatusLine tone="working">
+              Packing {shotsWords(state.clipCount)} into one ZIP
+            </StatusLine>
             <ProgressBar value={null} aria-label="Preparing the download" />
-            <p className="text-callout text-label-2 tabular-nums">
-              Packing {shotsWords(state.clipCount)} into one ZIP. The download starts when it is
-              ready.
-            </p>
+            <p className="text-secondary text-label-2">The download starts when it is ready.</p>
           </div>
         ) : null}
         {state.phase === "ready" ? (
-          <p className="text-callout text-label-2">
-            The download has started. If nothing happened,{" "}
-            <button
-              type="button"
-              onClick={() => saveFrom(state.url)}
-              className="rounded-control text-label underline underline-offset-2 focus-ring"
-            >
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <StatusLine tone="done">The download has started</StatusLine>
+            <Button variant="plain" size="small" onClick={() => saveFrom(state.url)}>
               Download Again
-            </button>
-            .
-          </p>
+            </Button>
+          </div>
         ) : null}
         {state.phase === "failed" ? (
-          <p role="alert" className="max-w-(--measure) text-callout text-red">
-            {state.reason}
+          <p role="alert" className="max-w-(--measure)">
+            <StatusLine as="span" tone="failed">
+              {state.reason}
+            </StatusLine>
           </p>
         ) : null}
       </div>
 
-      <section aria-label="Clips" className="flex flex-col gap-6">
+      <section aria-label="Clips" className="flex in-3 flex-col gap-8">
         <ol
           className={cn(
-            "grid gap-x-5 gap-y-9",
+            "grid gap-x-7 gap-y-10",
             portrait
               ? "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))]"
-              : "grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))]",
+              : "grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))]",
           )}
         >
-          {clips.map((clip) => (
-            <Poster
-              key={clip.lineageId}
-              clip={clip}
-              number={clip.orderIndex + 1}
-              portrait={portrait}
-              onOpen={(c, trigger) => {
-                returnFocus.current = trigger;
-                setPlaying(c);
-              }}
-              onDownload={download}
-              downloading={saving === clip.lineageId}
-            />
-          ))}
+          {clips.map((clip, i) => {
+            const number = clip.orderIndex + 1;
+            const title = clip.title ?? `Shot ${number}`;
+            return (
+              <li key={clip.lineageId} className="min-w-0 enter" style={stagger(Math.min(i, 12))}>
+                <PosterTile
+                  label={`${number}, ${title}`}
+                  shape={portrait ? "portrait" : "landscape"}
+                  posterFileId={clip.posterFileId}
+                  placeholder={clip.posterFileId ? undefined : "No poster"}
+                  coverHeading={title}
+                  coverLine={
+                    clip.durationSeconds ? (
+                      <p className="text-secondary text-label-2 tabular-nums">
+                        {formatDurationLong(clip.durationSeconds)}
+                      </p>
+                    ) : null
+                  }
+                  actions={
+                    <>
+                      <Button
+                        variant="dark"
+                        aria-label={`Play ${title}`}
+                        onClick={(e) => {
+                          returnFocus.current = e.currentTarget;
+                          setPlaying(clip);
+                        }}
+                      >
+                        Play
+                      </Button>
+                      <Button
+                        variant="dark"
+                        aria-label={`Download ${title}`}
+                        loading={saving === clip.lineageId}
+                        onClick={() => void download(clip)}
+                      >
+                        Download
+                      </Button>
+                    </>
+                  }
+                  caption={
+                    <>
+                      <span className="mr-2 text-label-2 tabular-nums">{number}</span>
+                      {title}
+                    </>
+                  }
+                />
+              </li>
+            );
+          })}
         </ol>
         {cursor ? (
           <div>
-            <Button onClick={more} loading={loading}>
-              Load More
+            <Button size="small" onClick={more} loading={loading}>
+              Show More Clips
             </Button>
           </div>
         ) : null}
         {error ? (
-          <p role="alert" className="text-callout text-red">
+          <p role="alert" className="text-secondary text-failed">
             {error}
           </p>
         ) : null}
@@ -309,6 +268,6 @@ export function FinishedScreen({
           returnFocus={returnFocus}
         />
       ) : null}
-    </div>
+    </>
   );
 }

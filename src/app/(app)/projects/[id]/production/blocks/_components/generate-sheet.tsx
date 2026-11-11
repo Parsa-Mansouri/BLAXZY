@@ -78,7 +78,7 @@ export function GenerateSheet({
             Cancel
           </Button>
           <Button
-            variant="prominent"
+            variant="primary"
             loading={starting}
             disabled={!quote || short || quote.count === 0}
             onClick={confirm}
@@ -94,16 +94,16 @@ export function GenerateSheet({
             <p className="text-body text-label-2">No approved shots are waiting for a draft.</p>
           ) : (
             <>
-              <p className="text-reading tabular-nums">
+              <p className="text-body text-label tabular-nums">
                 Drafts for {shotsWords(quote.count)} cost {creditsWords(quote.credits)}. You have{" "}
                 {formatNumber(quote.balance)}.
               </p>
-              <p className="text-body text-label-2 tabular-nums">
+              <p className="text-secondary text-label-2 tabular-nums">
                 Each shot you accept is then finished in full quality for{" "}
                 {creditsWords(quote.finalsEach)}.
               </p>
               {short ? (
-                <p role="status" className="text-callout text-orange tabular-nums">
+                <p role="status" className="text-secondary text-label tabular-nums">
                   You need {creditsWords(quote.credits - quote.balance)} more. Add credits to your
                   account to continue.
                 </p>
@@ -116,9 +116,9 @@ export function GenerateSheet({
             <Skeleton className="h-4 w-3/5" />
           </div>
         )}
-        {notice ? <p className="text-callout text-orange">{notice}</p> : null}
+        {notice ? <p className="text-secondary text-label">{notice}</p> : null}
         {error ? (
-          <p role="alert" className="text-callout text-red">
+          <p role="alert" className="text-secondary text-failed">
             {error}
           </p>
         ) : null}

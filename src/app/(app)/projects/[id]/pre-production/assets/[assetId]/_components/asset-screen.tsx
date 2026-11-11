@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ToolbarBack } from "@/app/(app)/projects/[id]/_components/project-chrome";
 import { usePolling } from "../../../../_lib/use-polling";
 import type { AssetStage } from "@/server/assets";
 import {
@@ -12,8 +13,9 @@ import {
   versionsKey,
   type DetailVersions,
 } from "../_lib/asset-view";
+import type { AssetIntent } from "../_lib/intent";
 import { pollAssetAction } from "../actions";
-import { AddImage } from "./add-image";
+import { AddImage, type AddMethod } from "./add-image";
 import { AssetScreenProvider } from "./asset-context";
 import { AssetHeader } from "./asset-header";
 import { HistoryStrip, HistoryViewer } from "./history";
@@ -40,7 +42,15 @@ export interface AssetScreenProps {
   lookIssues: IssueChoice[];
   sheetIssues: IssueChoice[];
   limits: Limits;
+  /** Where a card action asked the page to open (`?open=...`), read once. */
+  intent: AssetIntent | null;
 }
+
+const INTENT_METHODS: Partial<Record<AssetIntent, AddMethod>> = {
+  questions: "guided",
+  prompt: "prompt",
+  upload: "upload",
+};
 
 /** Stages that end by themselves: the worker is (or is about to be) producing something. */
 const WORKING_STAGES: readonly AssetStage[] = ["generating", "building_sheet"];
@@ -114,6 +124,15 @@ export function AssetScreen(props: AssetScreenProps) {
   const { projectId, asset, versions, orientation, prices, balance } = props;
   const { stage, looks, sheets } = versions;
   const refresh = useAssetSync(asset.id, versions);
+  // The intent applies to the panel first shown; it is then dropped from the address, so a reload
+  // or a later stage does not reopen it.
+  const [intent] = useState(props.intent);
+  useEffect(() => {
+    if (!props.intent) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("open");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, [props.intent]);
   // False while the page is first shown; panels that mount later take focus (see StageHeading).
   const shown = useRef(false);
   // Set after a tick, not in the effect itself: development double-runs effects on mount.
@@ -144,7 +163,7 @@ export function AssetScreen(props: AssetScreenProps) {
   function stageView() {
     if (asset.removed) {
       return (
-        <p className="max-w-(--measure) text-reading text-label-2">
+        <p className="max-w-(--measure) in-2 text-body text-label-2">
           This asset was removed from the project. Its images and sheets are kept below.
         </p>
       );
@@ -157,6 +176,7 @@ export function AssetScreen(props: AssetScreenProps) {
           assetName={asset.name}
           recording={acceptedLook(looks)}
           busy={versions.busy}
+          initialReplacing={intent === "change"}
         />
       );
     }
@@ -172,6 +192,7 @@ export function AssetScreen(props: AssetScreenProps) {
             price={prices.look}
             balance={balance}
             orientation={orientation}
+            initialMethod={intent ? INTENT_METHODS[intent] : undefined}
           />
         );
       case "generating":
@@ -195,6 +216,7 @@ export function AssetScreen(props: AssetScreenProps) {
             maxNote={props.limits.note}
             prices={prices}
             balance={balance}
+            initialAsking={intent === "changes"}
           />
         );
       }
@@ -212,6 +234,7 @@ export function AssetScreen(props: AssetScreenProps) {
             maxNote={props.limits.note}
             sheetPrice={prices.sheet}
             balance={balance}
+            initialAsking={intent === "changes"}
           />
         );
       }
@@ -224,6 +247,7 @@ export function AssetScreen(props: AssetScreenProps) {
             sheet={sheets[0] ?? null}
             look={acceptedLook(looks)}
             orientation={orientation}
+            initialConfirming={intent === "change"}
           />
         );
       case "failed": {
@@ -261,7 +285,8 @@ export function AssetScreen(props: AssetScreenProps) {
 
   return (
     <AssetScreenProvider value={context}>
-      <div className="@container flex flex-col gap-10">
+      <div className="flex flex-col">
+        <ToolbarBack href={props.category.href} label={props.category.label} />
         <p role="status" aria-live="polite" className="sr-only">
           {announcement}
         </p>
@@ -287,6 +312,7 @@ export function AssetScreen(props: AssetScreenProps) {
           stageView()
         )}
         <HistoryStrip
+          className="mt-16"
           items={items}
           voice={voice}
           selectedKey={viewing?.key ?? null}

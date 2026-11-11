@@ -90,7 +90,7 @@ export function AssetPickerSheet({
             Cancel
           </Button>
           <Button
-            variant="prominent"
+            variant="primary"
             loading={saving}
             disabled={selected.length === 0}
             onClick={() => onConfirm([...attachedIds, ...selected])}
@@ -129,7 +129,7 @@ export function AssetPickerSheet({
                     aria-disabled={blocked || undefined}
                     onClick={() => (blocked ? undefined : toggle(item.id))}
                     className={cn(
-                      "group/pick flex w-full min-w-0 flex-col gap-1.5 rounded-control text-left focus-ring outline-offset-2",
+                      "group/pick flex w-full min-w-0 press flex-col gap-1.5 rounded-tile text-left focus-ring outline-offset-2",
                       blocked && "opacity-40",
                     )}
                   >
@@ -137,7 +137,7 @@ export function AssetPickerSheet({
                       <AssetThumb
                         fileId={item.thumbnailFileId}
                         className={cn(
-                          "w-full rounded-artwork",
+                          "w-full rounded-tile",
                           checked && "outline-2 -outline-offset-2 outline-accent",
                         )}
                       />
@@ -150,7 +150,7 @@ export function AssetPickerSheet({
                         </span>
                       ) : null}
                     </span>
-                    <span className="truncate px-0.5 text-callout text-label">{item.name}</span>
+                    <span className="truncate px-0.5 text-secondary text-label">{item.name}</span>
                   </button>
                 </li>
               );
@@ -159,16 +159,16 @@ export function AssetPickerSheet({
         )}
         {cursor ? (
           <div>
-            <Button onClick={more} loading={loading}>
+            <Button size="small" onClick={more} loading={loading}>
               Load More
             </Button>
           </div>
         ) : null}
         {full && room > 0 ? (
-          <p className="text-callout text-label-2">That is as many as this shot can use.</p>
+          <p className="text-secondary text-label-2">That is as many as this shot can use.</p>
         ) : null}
         {error || serverError ? (
-          <p role="alert" className="text-callout text-red">
+          <p role="alert" className="text-secondary text-failed">
             {error ?? serverError}
           </p>
         ) : null}

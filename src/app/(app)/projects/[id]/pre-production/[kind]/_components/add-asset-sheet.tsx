@@ -67,7 +67,7 @@ export function AddAssetSheet({
           <Button variant="plain" onClick={() => changeOpen(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button variant="prominent" loading={saving} onClick={submit}>
+          <Button variant="primary" loading={saving} onClick={submit}>
             Add
           </Button>
         </>

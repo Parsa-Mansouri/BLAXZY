@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Alert, Button, Field, Select, Sheet, useToast } from "@/ui";
-import type { GalleryItem } from "../../_components/asset-gallery";
+import type { GalleryItem } from "../../_components/gallery-item";
 import { mergeAssetsAction } from "../actions";
 
 /** Picks two assets of the category, names which one is kept, and merges the other into it. */
@@ -80,7 +80,7 @@ export function MergeAssets({
             <Button variant="plain" onClick={() => changeOpen(false)}>
               Cancel
             </Button>
-            <Button variant="prominent" onClick={review}>
+            <Button variant="primary" onClick={review}>
               Review Merge
             </Button>
           </>
@@ -114,7 +114,7 @@ export function MergeAssets({
             />
           </Field>
           {error ? (
-            <p role="alert" className="text-callout text-red">
+            <p role="alert" className="text-secondary text-red">
               {error}
             </p>
           ) : null}

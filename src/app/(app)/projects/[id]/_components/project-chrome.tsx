@@ -12,6 +12,12 @@ interface BackTarget {
   label: string;
 }
 
+const PRODUCTION_SECTIONS: Record<string, string> = {
+  blocks: "Shots",
+  clips: "Clips",
+  finished: "Finished",
+};
+
 const BackContext = createContext<((target: BackTarget | null) => void) | null>(null);
 
 /** Stage label for a URL slug ("pre-production" is "Pre-production"). */
@@ -51,9 +57,16 @@ export function ProjectChrome({
     : [];
   const stageSlug = segments[0];
   const stageLabel = stageSlug ? stageLabelForSlug(stageSlug) : undefined;
-  const deeper = segments.length > 1 && stageLabel !== undefined;
+  // Production has no page of its own: its shots, clips and finished screens are the stage pages,
+  // so only the pages below them get a back control.
+  const section = stageSlug === "production" ? segments[1] : undefined;
+  const sectionLabel = section ? PRODUCTION_SECTIONS[section] : undefined;
+  const deeper = stageLabel !== undefined && segments.length > (sectionLabel ? 2 : 1);
   const back: BackTarget | null = deeper
-    ? (override ?? { href: `${base}/${stageSlug}`, label: stageLabel })
+    ? (override ??
+      (sectionLabel
+        ? { href: `${base}/${stageSlug}/${section}`, label: sectionLabel }
+        : { href: `${base}/${stageSlug}`, label: stageLabel }))
     : null;
 
   return (

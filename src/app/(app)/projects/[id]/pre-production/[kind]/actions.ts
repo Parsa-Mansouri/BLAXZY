@@ -5,22 +5,24 @@ import { requireUser } from "@/server/auth";
 import {
   addAsset,
   AssetInputError,
-  getPreProductionOverview,
+  getAssetDetail,
   listAssetCards,
   mergeAssets,
   MAX_CARD_PAGE_SIZE,
+  submitSheetReview,
 } from "@/server/assets";
 import { ASSET_KIND_LABELS, type AssetKindKey } from "../../_lib/asset-kinds";
-import type { GalleryItem } from "../_components/asset-gallery";
-import { toGalleryItem } from "../_components/gallery-item";
+import { toGalleryItem, type GalleryItem } from "../_components/gallery-item";
+import { countKindStages } from "../_lib/load-categories";
+import type { StageCounts } from "../_lib/status-words";
 
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: string };
 
 export interface CardsPage {
   items: GalleryItem[];
   nextCursor: string | null;
-  total: number;
-  ready: number;
+  /** How many assets of the kind are at each stage (all of them, not only this page). */
+  counts: StageCounts;
 }
 
 const MISSING = "This project no longer exists. It may have been archived.";
@@ -43,8 +45,8 @@ async function readCards(
   cursor: string | null,
   want: number,
 ): Promise<CardsPage | null> {
-  const overview = await getPreProductionOverview(projectId, userId);
-  if (!overview) return null;
+  const counts = await countKindStages(projectId, userId, kind);
+  if (!counts) return null;
   const items: GalleryItem[] = [];
   let next = cursor;
   do {
@@ -57,8 +59,7 @@ async function readCards(
     items.push(...page.items.map(toGalleryItem));
     next = page.nextCursor;
   } while (next && items.length < want);
-  const counts = overview.kinds.find((k) => k.kind === kind);
-  return { items, nextCursor: next, total: counts?.total ?? 0, ready: counts?.ready ?? 0 };
+  return { items, nextCursor: next, counts };
 }
 
 /** The next page of a category. */
@@ -90,6 +91,34 @@ export async function refreshCardsAction(
   try {
     const page = await readCards(projectId, user.id, key, null, Math.max(24, Math.min(count, 500)));
     return page ? { ok: true, data: page } : { ok: false, error: MISSING };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * Accepts the sheet waiting for review on an asset, straight from its card. The card only knows
+ * the asset, so the sheet in review is looked up here.
+ */
+export async function acceptSheetAction(projectId: string, assetId: string): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    const detail = await getAssetDetail(assetId, user.id);
+    if (!detail || detail.asset.projectId !== projectId) {
+      return { ok: false, error: "This asset no longer exists." };
+    }
+    const sheet = detail.sheets[0];
+    if (detail.stage !== "sheet_review" || !sheet || sheet.status !== "in_review") {
+      return { ok: false, error: "This sheet was already reviewed. Open the asset to see it." };
+    }
+    const stage = await submitSheetReview({
+      sheetId: sheet.id,
+      userId: user.id,
+      decision: "accepted",
+    });
+    if (!stage) return { ok: false, error: "This asset no longer exists." };
+    revalidatePath(`/projects/${projectId}`, "layout");
+    return { ok: true, data: null };
   } catch (error) {
     return failure(error);
   }

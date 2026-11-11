@@ -3,14 +3,16 @@
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, GitMerge, Plus } from "lucide-react";
-import { Button, ProgressBar } from "@/ui";
-import { categoryHref, readyWords, type AssetKindKey } from "../../../_lib/asset-kinds";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Button, PageHeader, StatusLine, cn, stagger } from "@/ui";
+import { ASSET_KIND_LABELS, categoryHref, type AssetKindKey } from "../../../_lib/asset-kinds";
 import { usePolling } from "../../../_lib/use-polling";
-import { AssetGallery, type GalleryItem } from "../../_components/asset-gallery";
 import { isWorking } from "../../_components/asset-stage";
+import { KIND_ASPECTS, type GalleryItem } from "../../_components/gallery-item";
+import { statusWords, type StageCounts } from "../../_lib/status-words";
 import { loadCardsAction, refreshCardsAction } from "../actions";
 import { AddAssetSheet } from "./add-asset-sheet";
+import { AssetCard } from "./asset-card";
 import { MergeAssets } from "./merge-assets";
 
 interface Neighbour {
@@ -18,15 +20,27 @@ interface Neighbour {
   plural: string;
 }
 
-/** One category: the asset tiles, with Add, Merge, Load More and live progress. */
+/** Grid columns by picture shape: wide pictures get wider cards. */
+const GRID: Record<"video" | "portrait" | "square", string> = {
+  portrait: "grid-cols-[repeat(auto-fill,minmax(min(100%,208px),1fr))]",
+  square: "grid-cols-[repeat(auto-fill,minmax(min(100%,208px),1fr))]",
+  video: "grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))]",
+};
+
+const ASPECT_CLASS = {
+  portrait: "aspect-[4/5]",
+  square: "aspect-square",
+  video: "aspect-video",
+} as const;
+
+/** One category: picture cards with their actions, Add, Merge, Load More and live status. */
 export function CategoryPanel({
   projectId,
   kind,
   plural,
   initial,
   initialCursor,
-  total: initialTotal,
-  ready: initialReady,
+  counts: initialCounts,
   previous,
   next,
 }: {
@@ -35,15 +49,14 @@ export function CategoryPanel({
   plural: string;
   initial: GalleryItem[];
   initialCursor: string | null;
-  total: number;
-  ready: number;
+  counts: StageCounts;
   previous: Neighbour | null;
   next: Neighbour | null;
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
   const [cursor, setCursor] = useState(initialCursor);
-  const [counts, setCounts] = useState({ total: initialTotal, ready: initialReady });
+  const [counts, setCounts] = useState(initialCounts);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
   const [addOpen, setAddOpen] = useState(false);
@@ -54,7 +67,7 @@ export function CategoryPanel({
     setSeen(initial);
     setItems(initial);
     setCursor(initialCursor);
-    setCounts({ total: initialTotal, ready: initialReady });
+    setCounts(initialCounts);
   }
 
   const working = items.some((item) => isWorking(item.stage));
@@ -64,7 +77,7 @@ export function CategoryPanel({
     if (!isActive() || !result.ok || loadingRef.current) return;
     setItems(result.data.items);
     setCursor(result.data.nextCursor);
-    setCounts({ total: result.data.total, ready: result.data.ready });
+    setCounts(result.data.counts);
   }, working);
 
   function more() {
@@ -80,65 +93,78 @@ export function CategoryPanel({
         }
         setItems((list) => [...list, ...result.data.items]);
         setCursor(result.data.nextCursor);
-        setCounts({ total: result.data.total, ready: result.data.ready });
+        setCounts(result.data.counts);
       } finally {
         loadingRef.current = false;
       }
     });
   }
 
-  const words = readyWords(counts.ready, counts.total);
-  const percent = counts.total === 0 ? 0 : (counts.ready / counts.total) * 100;
+  const words = statusWords(counts);
+  const aspect = KIND_ASPECTS[kind];
+  const one = ASSET_KIND_LABELS.find((k) => k.kind === kind)?.one ?? "asset";
+  const addLabel = `Add ${one.replace(/\b\p{Ll}/gu, (c) => c.toUpperCase())}`;
 
   return (
-    <div className="flex flex-col gap-10">
-      <header className="flex flex-col gap-5">
-        <Link
-          href={`/projects/${projectId}/pre-production`}
-          className="-ml-1.5 inline-flex w-fit items-center gap-0.5 rounded-control px-1.5 py-0.5 text-body text-label-2 focus-ring hover:text-label"
-        >
-          <ChevronLeft aria-hidden className="size-(--icon)" />
-          Pre-production
-        </Link>
-        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-          <div className="flex min-w-0 flex-col gap-2">
-            <h2 className="text-large-title">{plural}</h2>
-            <p className="text-reading text-label-2 tabular-nums" aria-live="polite">
-              {words}
-            </p>
-            <ProgressBar
-              value={percent}
-              tone={counts.total > 0 && counts.ready === counts.total ? "success" : "default"}
-              aria-label={`${plural}: ${words}`}
-              className="w-56"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              leadingIcon={<GitMerge aria-hidden />}
-              onClick={() => setMergeOpen(true)}
-              disabled={items.length < 2}
-            >
+    <div className="flex flex-col">
+      <PageHeader
+        title={plural}
+        description={
+          <StatusLine tone={words.tone}>
+            <span aria-live="polite">{words.text}</span>
+          </StatusLine>
+        }
+        actions={
+          items.length >= 2 ? (
+            <Button variant="outlined" onClick={() => setMergeOpen(true)}>
               Merge
             </Button>
-            <Button leadingIcon={<Plus aria-hidden />} onClick={() => setAddOpen(true)}>
-              Add
-            </Button>
-          </div>
-        </div>
-      </header>
+          ) : undefined
+        }
+      />
 
-      <AssetGallery projectId={projectId} items={items} />
+      <ul className={cn("grid in-2 gap-x-7 gap-y-10", GRID[aspect])}>
+        {items.map((item, i) => (
+          <li key={item.id} className="min-w-0">
+            <AssetCard
+              projectId={projectId}
+              item={item}
+              className="enter"
+              style={stagger(Math.min(i, 12))}
+            />
+          </li>
+        ))}
+        <li className="min-w-0">
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="flex w-full press enter flex-col gap-3 rounded-card text-left focus-ring"
+            style={stagger(Math.min(items.length, 12))}
+          >
+            <span
+              className={cn(
+                "flex w-full items-center justify-center rounded-card border border-dashed border-separator-opaque text-label-2 transition-colors duration-(--dur-press) hover:text-label",
+                ASPECT_CLASS[aspect],
+              )}
+            >
+              <Plus aria-hidden="true" strokeWidth={1.4} className="size-6" />
+            </span>
+            <span className="px-0.5 text-row font-semibold tracking-[-0.01em] text-label-2">
+              {addLabel}
+            </span>
+          </button>
+        </li>
+      </ul>
 
       {cursor ? (
-        <div>
+        <div className="mt-10">
           <Button onClick={more} loading={loading}>
             Load More
           </Button>
         </div>
       ) : null}
       {error ? (
-        <p role="alert" className="text-callout text-red">
+        <p role="alert" className="mt-4 text-secondary text-red">
           {error}
         </p>
       ) : null}
@@ -146,18 +172,15 @@ export function CategoryPanel({
       {previous || next ? (
         <nav
           aria-label="Categories"
-          className="flex items-center justify-between gap-4 pt-4 hairline-t"
+          className="mt-16 flex in-3 items-center justify-between gap-4 pt-6 hairline-t"
         >
           {previous ? (
             <Link
               href={categoryHref(projectId, previous.kind)}
-              className="inline-flex items-center gap-1 rounded-control py-2 text-body text-label focus-ring hover:text-label-2"
+              className="inline-flex items-center gap-1 rounded-row py-2 text-body font-medium text-label-2 focus-ring hover:text-label"
             >
-              <ChevronLeft aria-hidden className="size-(--icon)" />
-              <span className="flex flex-col">
-                <span className="text-callout text-label-2">Previous</span>
-                {previous.plural}
-              </span>
+              <ChevronLeft aria-hidden="true" className="size-(--icon)" />
+              {previous.plural}
             </Link>
           ) : (
             <span />
@@ -165,13 +188,10 @@ export function CategoryPanel({
           {next ? (
             <Link
               href={categoryHref(projectId, next.kind)}
-              className="inline-flex items-center gap-1 rounded-control py-2 text-right text-body text-label focus-ring hover:text-label-2"
+              className="inline-flex items-center gap-1 rounded-row py-2 text-body font-medium text-label-2 focus-ring hover:text-label"
             >
-              <span className="flex flex-col">
-                <span className="text-callout text-label-2">Next</span>
-                {next.plural}
-              </span>
-              <ChevronRight aria-hidden className="size-(--icon)" />
+              {next.plural}
+              <ChevronRight aria-hidden="true" className="size-(--icon)" />
             </Link>
           ) : (
             <span />

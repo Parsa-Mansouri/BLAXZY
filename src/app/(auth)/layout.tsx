@@ -1,11 +1,7 @@
-import { Wordmark } from "@/app/_components/wordmark";
-
-/** Sign-in pages: the wordmark and one narrow column, set high on the page rather than floating. */
+/**
+ * Sign-in pages (Login.dc.html, Signup.dc.html): a rounded hero panel on the left and the form on
+ * the right. Each page renders both through `AuthScreen`, so the title can differ per screen.
+ */
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="flex min-h-dvh flex-col items-center px-(--content-x) pt-[clamp(2.5rem,13vh,8rem)] pb-16">
-      <Wordmark className="mb-12" />
-      <div className="w-full max-w-(--form-w)">{children}</div>
-    </main>
-  );
+  return <div className="flex min-h-dvh flex-wrap bg-ground">{children}</div>;
 }

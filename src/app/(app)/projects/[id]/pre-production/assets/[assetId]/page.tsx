@@ -18,6 +18,7 @@ import { loadProject } from "../../../_lib/load-project";
 import { loadProjectForStage } from "../../../_lib/load-stage";
 import { AssetScreen } from "./_components/asset-screen";
 import { kindSlug } from "./_lib/asset-view";
+import { parseIntent } from "./_lib/intent";
 
 type Params = Promise<{ id: string; assetId: string }>;
 
@@ -38,8 +39,15 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return { title: detail ? `${detail.asset.name} · ${project.title} · BLAXZY` : undefined };
 }
 
-export default async function AssetPage({ params }: { params: Params }) {
+export default async function AssetPage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id, assetId } = await params;
+  const { open } = await searchParams;
   const project = await loadProjectForStage(id, "pre_production");
   const user = await requireUser();
   const detail = await loadDetail(project.id, assetId);
@@ -93,6 +101,7 @@ export default async function AssetPage({ params }: { params: Params }) {
         name: MAX_ASSET_NAME_LENGTH,
         description: MAX_ASSET_DESCRIPTION_LENGTH,
       }}
+      intent={parseIntent(open)}
     />
   );
 }

@@ -9,6 +9,7 @@ import {
   promptParts,
   shotTitle,
   statusLine,
+  statusTone,
   takeLabels,
   type StageCounts,
 } from "./clip-view";
@@ -52,17 +53,24 @@ describe("statusLine", () => {
   it("says what needs attention, never a total", () => {
     expect(
       statusLine(counts({ draft_review: 1, final_review: 1, draft_generating: 1, done: 4 })),
-    ).toBe("2 to review. 1 rendering.");
-    expect(statusLine(counts({ failed: 1, final_generating: 2 }))).toBe(
-      "1 needs attention. 2 rendering.",
-    );
-    expect(statusLine(counts({ failed: 2 }))).toBe("2 need attention.");
+    ).toBe("2 to review · 1 rendering");
+    expect(statusLine(counts({ failed: 1, final_generating: 2 }))).toBe("1 failed · 2 rendering");
+    expect(statusLine(counts({ draft_review: 2, failed: 1 }))).toBe("2 to review · 1 failed");
   });
 
   it("says when every shot is final, and when there is nothing to do", () => {
-    expect(statusLine(counts({ done: 7 }))).toBe("All shots are final.");
-    expect(statusLine(counts({}))).toBe("There are no shots yet.");
-    expect(statusLine(counts({ block_review: 2, done: 1 }))).toBe("2 in shot review.");
+    expect(statusLine(counts({ done: 7 }))).toBe("Every shot is final");
+    expect(statusLine(counts({}))).toBe("No shots yet");
+    expect(statusLine(counts({ block_review: 2, done: 1 }))).toBe("2 in shot review");
+  });
+});
+
+describe("statusTone", () => {
+  it("is red for a failure, amber for a review, green when final, else grey", () => {
+    expect(statusTone(counts({ failed: 1, draft_review: 1 }))).toBe("failed");
+    expect(statusTone(counts({ draft_review: 1, draft_generating: 2 }))).toBe("waiting");
+    expect(statusTone(counts({ done: 3 }))).toBe("done");
+    expect(statusTone(counts({ draft_generating: 1, done: 3 }))).toBe("working");
   });
 });
 

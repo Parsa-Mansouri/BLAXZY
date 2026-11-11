@@ -1,10 +1,9 @@
-import { ImageOff } from "lucide-react";
 import { fileSrc } from "@/lib/file-src";
 import { cn } from "@/ui";
 
 /**
- * An asset's sheet as a small frame on black. The image is contained, never stretched; without
- * one the frame stays empty so the layout does not move.
+ * An asset's sheet as a small frame. The image covers the frame; without one the frame stays
+ * as a flat empty tile so the layout does not move (never a fake image).
  */
 export function AssetThumb({
   fileId,
@@ -18,7 +17,7 @@ export function AssetThumb({
   return (
     <div
       className={cn(
-        "relative aspect-video shrink-0 overflow-hidden rounded-control bg-elevated",
+        "relative aspect-video shrink-0 overflow-hidden rounded-[8px] bg-elevated",
         className,
       )}
     >
@@ -32,11 +31,7 @@ export function AssetThumb({
           draggable={false}
           className="absolute inset-0 size-full object-cover"
         />
-      ) : (
-        <div className="flex size-full items-center justify-center text-label-3">
-          <ImageOff aria-hidden strokeWidth={1.25} className="size-5" />
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }

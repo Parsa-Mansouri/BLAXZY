@@ -77,13 +77,13 @@ export function StageHeading({
   const ref = useRef<HTMLHeadingElement>(null);
   useFocusOnArrival(() => ref.current);
   return (
-    <h3
+    <h2
       ref={ref}
       id={id}
       tabIndex={-1}
       className={cn("scroll-mt-[calc(var(--toolbar-h)+1rem)] outline-none", className)}
     >
       {children}
-    </h3>
+    </h2>
   );
 }

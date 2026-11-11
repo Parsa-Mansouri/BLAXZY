@@ -1,230 +1,261 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Badge, Button, cn, type BadgeTone } from "@/ui";
+import { MessageSquarePlus } from "lucide-react";
+import { Button, PageHeader, StatusLine, SwapFade, cn } from "@/ui";
+import { blockIndexAt, sceneIndexAt, splitScenes, type Scene } from "../_lib/scenes";
 import { findQuote } from "../_lib/screenplay";
 import { submitReviewAction } from "../actions";
 import { RequestChangesSheet } from "./request-changes-sheet";
+import { LineComment, isSendable, useDraftComments, type DraftComment } from "./review-comments";
+import { BlockText, ON_PAPER, PaperLayers, SHEET_X, TitlePage } from "./screenplay-sheet";
 import {
-  CommentComposer,
-  CommentEditor,
-  useDraftComments,
-  type DraftComment,
-} from "./review-comments";
-import {
-  ScriptDocument,
-  type DocumentHighlight,
-  type PassagePick,
-  type ScriptDocumentHandle,
-} from "./script-document";
-import {
-  InspectorSection,
-  ReadOnlyBar,
-  TitleBlock,
-  VersionList,
+  FindingNote,
+  SAMPLE_LINE,
+  SceneList,
+  ScenesLayout,
+  VersionNotes,
+  VersionTabs,
+  sceneName,
   useVersionViewer,
+  type Finding,
   type IssueChoice,
   type VersionSummary,
   type VersionView,
 } from "./shared";
 
-type Finding = NonNullable<VersionView["findings"]>[number];
-
-const SEVERITY: Record<Finding["severity"], { label: string; tone: BadgeTone }> = {
-  blocker: { label: "Must Fix", tone: "danger" },
-  major: { label: "Important", tone: "warning" },
-  minor: { label: "Minor", tone: "neutral" },
-};
-
-const CATEGORY: Record<Finding["category"], string> = {
-  duration: "Length",
-  filmability: "Hard to Film",
-  format: "Format",
-  continuity: "Continuity",
-  structure: "Structure",
-  character: "Characters",
-  dialogue: "Dialogue",
-  project_fit: "Fit with the Style",
-  safety: "Content",
-  other: "Other",
-};
-
-/** The notes that came with a version, titled by where it came from. */
-export function VersionNotes({ version }: { version: VersionView }) {
-  if (version.notes.length === 0) return null;
-  const title =
-    version.source === "revised"
-      ? "What Changed"
-      : version.source === "uploaded"
-        ? "Script Check"
-        : "Writer’s Notes";
-  const verdict =
-    version.checkVerdict === "ready" ? (
-      <Badge tone="success">Ready to Film</Badge>
-    ) : version.checkVerdict === "needs_attention" ? (
-      <Badge tone="warning">Needs Attention</Badge>
-    ) : null;
-  return (
-    <InspectorSection title={title} accessory={verdict}>
-      <ul className="flex flex-col gap-2.5">
-        {version.notes.map((note, i) => (
-          <li key={i} className="text-body text-pretty text-label-2">
-            {note}
-          </li>
-        ))}
-      </ul>
-    </InspectorSection>
-  );
+interface PlacedFinding {
+  finding: Finding;
+  scene: number;
+  block: number;
 }
 
-function FindingsList({
-  findings,
+/** Findings that quote a line go beside it; the rest are about the whole script. */
+function placeFindings(content: string, scenes: Scene[], findings: Finding[] | null) {
+  const placed: PlacedFinding[] = [];
+  const loose: Finding[] = [];
+  for (const finding of findings ?? []) {
+    const range = finding.quote ? findQuote(content, finding.quote) : null;
+    if (!range || scenes.length === 0) {
+      loose.push(finding);
+      continue;
+    }
+    const scene = sceneIndexAt(scenes, range.start);
+    const blocks = scenes[scene]?.blocks ?? [];
+    placed.push({ finding, scene, block: blockIndexAt(blocks, range.start) });
+  }
+  return { placed, loose };
+}
+
+interface CommentApi {
+  comments: DraftComment[];
+  add: (range: { start: number; end: number; quote: string }) => DraftComment;
+  update: (id: string, note: string) => void;
+  remove: (id: string) => void;
+}
+
+/**
+ * One scene on the paper with the margin beside it. With room (about 800px), each line's
+ * comments and script checks sit in a 224px column on the black beside the line; with less, they
+ * sit under their line on the sheet, in a dark card. Point at a line (or tab to it) to comment.
+ */
+function ReviewSheet({
+  scene,
+  sceneIndex,
   content,
-  activeIndex,
-  onChoose,
+  titlePage,
+  findings,
+  comments,
 }: {
-  findings: Finding[];
+  scene: Scene;
+  sceneIndex: number;
   content: string;
-  activeIndex: number | null;
-  onChoose: (index: number, range: { start: number; end: number }) => void;
+  titlePage: { title: string; logline: string | null } | null;
+  findings: PlacedFinding[];
+  /** Null on an older version: read only. */
+  comments: CommentApi | null;
 }) {
+  const [focusId, setFocusId] = useState<string | null>(null);
+
+  function focusAdd(start: number) {
+    requestAnimationFrame(() => document.getElementById(`comment-on-${start}`)?.focus());
+  }
+
   return (
-    <InspectorSection
-      title="Findings"
-      accessory={<span className="text-callout text-label-2 tabular-nums">{findings.length}</span>}
-    >
-      {findings.length === 0 ? (
-        <p className="text-body text-label-2">Nothing to fix was found.</p>
-      ) : (
-        <ul className="-mx-2 flex flex-col gap-1">
-          {findings.map((finding, index) => {
-            const range = finding.quote ? findQuote(content, finding.quote) : null;
-            const severity = SEVERITY[finding.severity];
-            const body = (
-              <>
-                <span className="flex flex-wrap items-center gap-2">
-                  <Badge tone={severity.tone}>{severity.label}</Badge>
-                  <span className="text-callout text-label-2">{CATEGORY[finding.category]}</span>
-                </span>
-                {finding.quote ? (
-                  <span className="line-clamp-2 text-callout text-label-2 italic">
-                    “{finding.quote}”
-                  </span>
-                ) : null}
-                <span className="text-body text-label">{finding.explanation}</span>
-                {finding.suggestion ? (
-                  <span className="text-body text-label-2">{finding.suggestion}</span>
-                ) : null}
-                {!range ? (
-                  <span className="text-callout text-label-2">
-                    {finding.quote
-                      ? "The quoted line is not in the text."
-                      : "About the whole script."}
-                  </span>
-                ) : null}
-              </>
-            );
-            return (
-              <li key={index}>
-                {range ? (
-                  <button
-                    type="button"
-                    aria-pressed={activeIndex === index}
-                    onClick={() => onChoose(index, range)}
+    <div className="@container">
+      <article
+        aria-label={sceneName(scene)}
+        className={cn(
+          "relative isolate flex flex-col gap-6 py-11 font-script text-script text-ink",
+          "[--sheet-w:100%] @min-[50rem]:[--sheet-w:min(42.5rem,100%_-_15.5rem)]",
+        )}
+      >
+        <PaperLayers className="w-(--sheet-w)" />
+        {titlePage ? (
+          <div className={cn("w-(--sheet-w)", SHEET_X, ON_PAPER)}>
+            <TitlePage title={titlePage.title} logline={titlePage.logline} />
+          </div>
+        ) : null}
+        {scene.blocks.map((block, b) => {
+          const lineId = `line-${block.start}`;
+          const own =
+            comments?.comments.filter((c) => blockIndexAt(scene.blocks, c.start) === b) ?? [];
+          const checks = findings.filter((f) => f.scene === sceneIndex && f.block === b);
+          const marked = own.length > 0;
+          const canAdd = comments !== null && own.length === 0;
+          const hasSide = own.length > 0 || checks.length > 0;
+          return (
+            <div
+              key={block.start}
+              className="group/line relative flex flex-col @min-[50rem]:flex-row @min-[50rem]:items-start @min-[50rem]:gap-6"
+            >
+              <div className={cn("w-(--sheet-w) shrink-0", SHEET_X, ON_PAPER)}>
+                <div
+                  className={cn(
+                    "-mx-2 rounded-[4px] px-2 py-0.5 transition-colors duration-(--dur-press)",
+                    marked ? "bg-ink/10" : "group-hover/line:bg-ink/5",
+                  )}
+                >
+                  <BlockText block={block} id={lineId} />
+                </div>
+              </div>
+
+              <div
+                className={cn(
+                  "flex shrink-0 flex-col gap-3 font-sans text-body text-label",
+                  "@min-[50rem]:w-56",
+                )}
+              >
+                {hasSide ? (
+                  <div
                     className={cn(
-                      "flex w-full flex-col items-start gap-1.5 rounded-control px-2 py-2.5 text-left focus-ring",
-                      "transition-colors duration-(--dur-fast) hover:bg-fill-4",
-                      activeIndex === index && "bg-selection hover:bg-selection",
+                      "mx-[clamp(20px,4vw,48px)] mt-3 flex flex-col gap-3 rounded-tile bg-elevated p-3",
+                      "@min-[50rem]:mx-0 @min-[50rem]:mt-0 @min-[50rem]:bg-transparent @min-[50rem]:p-0",
                     )}
                   >
-                    {body}
-                  </button>
-                ) : (
-                  <div className="flex flex-col items-start gap-1.5 px-2 py-2.5">{body}</div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </InspectorSection>
+                    {checks.map((c, i) => (
+                      <FindingNote key={i} finding={c.finding} />
+                    ))}
+                    {comments
+                      ? own.map((c) => (
+                          <LineComment
+                            key={c.id}
+                            comment={c}
+                            autoFocus={c.id === focusId}
+                            describedBy={lineId}
+                            onChange={(note) => comments.update(c.id, note)}
+                            onRemove={() => {
+                              comments.remove(c.id);
+                              focusAdd(block.start);
+                            }}
+                          />
+                        ))
+                      : null}
+                  </div>
+                ) : null}
+
+                {canAdd ? (
+                  <div
+                    className={cn(
+                      "absolute top-full right-[clamp(20px,4vw,48px)] z-10 -translate-y-1",
+                      "@min-[50rem]:static @min-[50rem]:translate-y-0",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      id={`comment-on-${block.start}`}
+                      aria-label="Comment on this line"
+                      aria-describedby={lineId}
+                      onClick={() => {
+                        if (!comments) return;
+                        const comment = comments.add({
+                          start: block.start,
+                          end: block.end,
+                          quote: content.slice(block.start, block.end),
+                        });
+                        setFocusId(comment.id);
+                      }}
+                      className={cn(
+                        "flex press items-center justify-center rounded-capsule text-meta focus-ring",
+                        "opacity-0 transition-opacity duration-(--dur-press) group-hover/line:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100",
+                        // Narrow: a round icon on the paper, in the gap under the line.
+                        "size-7 border border-ink/30 bg-paper text-ink focus-visible:outline-ink",
+                        // Wide: the outlined "Comment" pill on the black beside the line.
+                        "@min-[50rem]:h-7 @min-[50rem]:w-auto @min-[50rem]:border-outline @min-[50rem]:bg-transparent @min-[50rem]:px-3 @min-[50rem]:text-label-2 @min-[50rem]:hover:text-label @min-[50rem]:focus-visible:outline-(--focus)",
+                      )}
+                    >
+                      <MessageSquarePlus
+                        aria-hidden="true"
+                        className="size-3.5 @min-[50rem]:hidden"
+                        strokeWidth={1.75}
+                      />
+                      <span aria-hidden="true" className="hidden @min-[50rem]:inline">
+                        Comment
+                      </span>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </article>
+    </div>
   );
 }
 
-function CommentsList({
+/** The scene list and the sheet for one version (keyed by version, so the scene resets). */
+function ReviewBody({
+  version,
+  fallbackTitle,
   comments,
-  activeId,
-  onChoose,
-  onUpdate,
-  onRemove,
 }: {
-  comments: DraftComment[];
-  activeId: string | null;
-  onChoose: (comment: DraftComment) => void;
-  onUpdate: (id: string, note: string) => void;
-  onRemove: (id: string) => void;
+  version: VersionView;
+  fallbackTitle: string;
+  comments: CommentApi | null;
 }) {
-  const [editing, setEditing] = useState<string | null>(null);
+  const content = version.content ?? "";
+  const scenes = useMemo(() => splitScenes(content), [content]);
+  const [index, setIndex] = useState(0);
+  const { placed, loose } = useMemo(
+    () => placeFindings(content, scenes, version.findings),
+    [content, scenes, version.findings],
+  );
+
+  const counts = scenes.map(
+    (_, i) =>
+      placed.filter((f) => f.scene === i).length +
+      (comments?.comments.filter((c) => c.note.trim() !== "" && sceneIndexAt(scenes, c.start) === i)
+        .length ?? 0),
+  );
+  const scene = scenes[Math.min(index, scenes.length - 1)];
+  const title = version.title ?? fallbackTitle;
+
   return (
-    <InspectorSection
-      title="Comments"
-      accessory={
-        comments.length > 0 ? (
-          <span className="text-callout text-label-2 tabular-nums">{comments.length}</span>
+    <ScenesLayout
+      side={
+        scenes.length > 1 ? (
+          <SceneList scenes={scenes} index={index} onSelect={setIndex} counts={counts} />
         ) : null
       }
     >
-      {comments.length === 0 ? (
-        <p className="text-body text-label-2">
-          Select text in the script to comment on it. With the keyboard, move to a line and press
-          Enter.
-        </p>
+      {scene ? (
+        <SwapFade swapKey={scene.key}>
+          <ReviewSheet
+            scene={scene}
+            sceneIndex={index}
+            content={content}
+            titlePage={index === 0 ? { title, logline: version.logline } : null}
+            findings={placed}
+            comments={comments}
+          />
+        </SwapFade>
       ) : (
-        <ul className="-mx-2 flex flex-col gap-1">
-          {comments.map((comment) => (
-            <li
-              key={comment.id}
-              className={cn(
-                "flex flex-col gap-1.5 rounded-control px-2 py-2.5",
-                activeId === comment.id && "bg-selection",
-              )}
-            >
-              <button
-                type="button"
-                onClick={() => onChoose(comment)}
-                className="line-clamp-2 rounded-control-inner text-left text-callout text-label-2 italic focus-ring hover:text-label"
-              >
-                “{comment.quote}”
-              </button>
-              {editing === comment.id ? (
-                <CommentEditor
-                  initial={comment.note}
-                  confirmLabel="Save"
-                  onConfirm={(note) => {
-                    onUpdate(comment.id, note);
-                    setEditing(null);
-                  }}
-                  onCancel={() => setEditing(null)}
-                />
-              ) : (
-                <>
-                  <p className="text-body whitespace-pre-wrap text-label">{comment.note}</p>
-                  <div className="-ml-2 flex gap-1">
-                    <Button variant="plain" onClick={() => setEditing(comment.id)}>
-                      Edit
-                    </Button>
-                    <Button variant="plain" onClick={() => onRemove(comment.id)}>
-                      Remove
-                    </Button>
-                  </div>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
+        <p className="text-body text-label-2">This version has no text.</p>
       )}
-    </InspectorSection>
+      <VersionNotes version={version} looseFindings={loose} />
+    </ScenesLayout>
   );
 }
 
@@ -245,11 +276,8 @@ export function ScriptReview({
 }) {
   const router = useRouter();
   const content = version.content ?? "";
-  const doc = useRef<ScriptDocumentHandle>(null);
   const drafts = useDraftComments(version.id, content);
   const viewer = useVersionViewer(projectId, version.id);
-  const [pick, setPick] = useState<PassagePick | null>(null);
-  const [focus, setFocus] = useState<{ key: string; start: number; end: number } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sending, startSending] = useTransition();
   const [accepting, startAccepting] = useTransition();
@@ -258,20 +286,7 @@ export function ScriptReview({
 
   const shown = viewer.viewing ?? version;
   const readOnly = viewer.viewing !== null;
-  const shownContent = shown.content ?? "";
-
-  const highlights = useMemo<DocumentHighlight[]>(() => {
-    const list: DocumentHighlight[] = readOnly
-      ? []
-      : drafts.comments.map((c) => ({ id: c.id, start: c.start, end: c.end, kind: "comment" }));
-    if (focus) list.push({ id: focus.key, start: focus.start, end: focus.end, kind: "focus" });
-    return list;
-  }, [drafts.comments, focus, readOnly]);
-
-  function reveal(key: string, range: { start: number; end: number }) {
-    setFocus({ key, ...range });
-    doc.current?.reveal(range.start);
-  }
+  const sendable = drafts.comments.filter(isSendable);
 
   function accept() {
     setError(null);
@@ -288,16 +303,20 @@ export function ScriptReview({
 
   function requestChanges(input: { issueCodes: string[]; note: string }) {
     setSheetError(null);
+    if (drafts.comments.some((c) => c.note.trim().length > 4000)) {
+      setSheetError("One of your comments is over 4,000 characters. Shorten it first.");
+      return;
+    }
     startSending(async () => {
       const result = await submitReviewAction(projectId, version.id, {
         decision: "rejected",
         issueCodes: input.issueCodes,
         note: input.note || undefined,
-        comments: drafts.comments.map(({ quote, start, end, note }) => ({
+        comments: sendable.map(({ quote, start, end, note }) => ({
           quote,
           start,
           end,
-          note,
+          note: note.trim(),
         })),
       });
       if (!result.ok) {
@@ -310,128 +329,51 @@ export function ScriptReview({
     });
   }
 
-  const findings = shown.findings;
-  const focusedFinding = focus?.key.startsWith("finding-") ? Number(focus.key.slice(8)) : null;
-  const focusedComment = focus && !focus.key.startsWith("finding-") ? focus.key : null;
-
   return (
-    <div className="flex flex-col gap-8">
-      <div className="sticky top-(--toolbar-h) z-(--z-toolbar) -mx-(--content-x) flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-ground px-(--content-x) py-3 hairline-b">
-        <p className="text-callout text-label-2">
-          {readOnly ? (
-            <>Reading version {shown.versionNumber}</>
-          ) : (
-            <>
-              Version {version.versionNumber} is ready for review
-              {drafts.comments.length > 0
-                ? ` · ${drafts.comments.length} ${drafts.comments.length === 1 ? "comment" : "comments"}`
-                : ""}
-            </>
-          )}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            onClick={() => {
-              setSheetError(null);
-              setSheetOpen(true);
-            }}
-            disabled={readOnly || accepting}
-          >
-            Request Changes
-          </Button>
-          <Button
-            variant="prominent"
-            onClick={accept}
-            loading={accepting}
-            disabled={readOnly || sending}
-          >
-            Accept
-          </Button>
-        </div>
-      </div>
+    <>
+      <PageHeader
+        title="Script"
+        description="Comment on any line, then accept it or ask for changes."
+        actions={
+          <>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setSheetError(null);
+                setSheetOpen(true);
+              }}
+              disabled={readOnly || accepting}
+            >
+              Request Changes
+            </Button>
+            <Button
+              variant="primary"
+              onClick={accept}
+              loading={accepting}
+              disabled={readOnly || sending}
+            >
+              Accept Script
+            </Button>
+          </>
+        }
+      />
       {error ? (
-        <p role="alert" className="-mt-4 text-callout text-red">
+        <p role="alert" className="-mt-4 mb-6 text-secondary text-red">
           {error}
         </p>
       ) : null}
+      {sample || shown.isSample ? (
+        <StatusLine className="mb-6 in-1">{SAMPLE_LINE}</StatusLine>
+      ) : null}
 
-      <div className="grid items-start gap-x-14 gap-y-12 @4xl:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
-        <article aria-labelledby="script-title" className="flex min-w-0 flex-col gap-10">
-          {readOnly ? <ReadOnlyBar version={shown} onBack={viewer.back} /> : null}
-          <TitleBlock version={shown} fallbackTitle={fallbackTitle} sample={sample} />
-          <ScriptDocument
-            ref={doc}
-            content={shownContent}
-            highlights={highlights}
-            onPick={
-              readOnly
-                ? undefined
-                : (p) => {
-                    setFocus(null);
-                    setPick(p);
-                  }
-            }
-            overlay={
-              pick && !readOnly ? (
-                <CommentComposer
-                  pick={pick}
-                  onCancel={() => {
-                    setPick(null);
-                    doc.current?.focusAt(pick.start);
-                  }}
-                  onAdd={(note) => {
-                    drafts.add(pick, note);
-                    setPick(null);
-                    window.getSelection()?.removeAllRanges();
-                    doc.current?.focusAt(pick.start);
-                  }}
-                />
-              ) : null
-            }
-            className="max-w-[72ch]"
-            aria-label="Script. Select text to comment on it."
-          />
-        </article>
+      <VersionTabs versions={versions} shownId={shown.id} viewer={viewer} />
 
-        <aside
-          aria-label="Review"
-          className={cn(
-            "flex min-w-0 flex-col gap-5",
-            "@4xl:sticky @4xl:top-[calc(var(--toolbar-h)+4.5rem)] @4xl:-mx-2 @4xl:max-h-[calc(100dvh-var(--toolbar-h)-6rem)] @4xl:overflow-x-hidden @4xl:overflow-y-auto @4xl:px-2",
-          )}
-        >
-          <VersionNotes version={shown} />
-          {findings ? (
-            <FindingsList
-              findings={findings}
-              content={shownContent}
-              activeIndex={focusedFinding}
-              onChoose={(index, range) => reveal(`finding-${index}`, range)}
-            />
-          ) : null}
-          {!readOnly ? (
-            <CommentsList
-              comments={drafts.comments}
-              activeId={focusedComment}
-              onChoose={(c) => reveal(c.id, c)}
-              onUpdate={drafts.update}
-              onRemove={(id) => {
-                drafts.remove(id);
-                if (focus?.key === id) setFocus(null);
-              }}
-            />
-          ) : null}
-          {versions.length > 1 ? (
-            <VersionList
-              versions={versions}
-              selectedId={shown.id}
-              loadingId={viewer.loadingId}
-              error={viewer.error}
-              onSelect={viewer.open}
-            />
-          ) : null}
-        </aside>
-      </div>
+      <ReviewBody
+        key={shown.id}
+        version={shown}
+        fallbackTitle={fallbackTitle}
+        comments={readOnly ? null : drafts}
+      />
 
       <RequestChangesSheet
         open={sheetOpen}
@@ -439,11 +381,11 @@ export function ScriptReview({
           if (!sending) setSheetOpen(open);
         }}
         issues={issues}
-        commentCount={drafts.comments.length}
+        commentCount={sendable.length}
         sending={sending}
         serverError={sheetError}
         onSubmit={requestChanges}
       />
-    </div>
+    </>
   );
 }

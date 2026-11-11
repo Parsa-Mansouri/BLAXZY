@@ -4,7 +4,6 @@ import { getDamiMode, SCRIPT_ISSUE_LIST } from "@/server/damis";
 import { getScriptState, getScriptVersion, MAX_BRIEF_CHARS } from "@/server/script";
 import { loadBackgroundStatus } from "../_lib/background-status";
 import { loadProjectForStage } from "../_lib/load-stage";
-import { styleSummary } from "../_lib/style-summary";
 import { ScriptScreen } from "./_components/script-screen";
 
 export default async function ScriptPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,7 +28,6 @@ export default async function ScriptPage({ params }: { params: Promise<{ id: str
     <ScriptScreen
       projectId={project.id}
       projectTitle={project.title}
-      styleLine={project.style ? styleSummary(project.style) : ""}
       current={current}
       previous={previous}
       versions={state.versions}

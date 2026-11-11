@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState, type DragEvent } from "react";
 import { AudioLines, ImageUp } from "lucide-react";
-import { Button, Hint, ProgressBar, cn } from "@/ui";
+import { Button, ProgressBar, cn } from "@/ui";
 import { createAssetUploadAction, finishAssetUploadAction } from "../actions";
 import { useAssetScreen } from "./asset-context";
 import { ErrorLine } from "./shared";
@@ -144,8 +144,8 @@ export function UploadZone({
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         className={cn(
-          "flex min-h-52 flex-col items-center justify-center gap-3 rounded-artwork px-5 py-8 text-center transition-colors duration-(--dur-fast)",
-          dragging ? "bg-fill-2 outline-2 outline-offset-2 outline-focus" : "bg-elevated",
+          "flex min-h-52 flex-col items-center justify-center gap-3 rounded-block border border-dashed px-5 py-8 text-center transition-colors duration-(--dur-press)",
+          dragging ? "border-label bg-elevated-2" : "border-separator-opaque bg-elevated",
         )}
       >
         {phase.kind === "idle" ? (
@@ -154,7 +154,7 @@ export function UploadZone({
             <p className="text-body text-label-2">
               {audio ? "Drop a recording here, or" : "Drop an image here, or"}
             </p>
-            <Button onClick={() => input.current?.click()} disabled={busy}>
+            <Button variant="outlined" onClick={() => input.current?.click()} disabled={busy}>
               Choose File
             </Button>
             <input
@@ -184,7 +184,7 @@ export function UploadZone({
               value={phase.kind === "uploading" ? phase.progress : null}
               aria-label="Upload progress"
             />
-            <p className="text-callout text-label-2 tabular-nums">
+            <p className="text-meta text-label-2 tabular-nums">
               {phase.kind === "uploading"
                 ? `Uploading… ${Math.round(phase.progress)}%`
                 : audio
@@ -195,11 +195,11 @@ export function UploadZone({
         )}
       </div>
       <ErrorLine>{error}</ErrorLine>
-      <Hint>
+      <p className="text-secondary text-label-2">
         {audio
           ? "MP3, WAV or M4A, up to 25 MB. A clean recording of the voice alone works best."
           : "PNG, JPEG or WebP, up to 25 MB. The subject alone, whole and evenly lit works best."}
-      </Hint>
+      </p>
     </div>
   );
 }

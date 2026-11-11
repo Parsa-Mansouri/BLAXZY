@@ -88,6 +88,7 @@ export function SplitView({
 }: SplitViewProps) {
   const sidebarId = useId();
   const wide = useIsWide();
+  const mac = useIsMac();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [lastKey, setLastKey] = useState(navigationKey);
@@ -197,8 +198,17 @@ export function SplitView({
               "shell:group-data-[sidebar=collapsed]/shell:-translate-x-full",
             )}
           >
-            <div className="flex min-h-0 flex-1 flex-col gap-6 rounded-panel bg-sidebar px-2.5 pt-5 pb-3">
+            <div className="relative flex min-h-0 flex-1 flex-col gap-6 rounded-panel bg-sidebar px-2.5 pt-5 pb-3">
               {sidebar}
+              <IconButton
+                label="Hide Sidebar"
+                shortcut={mac ? "⌘\\" : "Ctrl+\\"}
+                icon={<PanelLeft />}
+                aria-controls={sidebarId}
+                aria-expanded={sidebarVisible}
+                onClick={toggle}
+                className="absolute top-3 right-2.5 text-label-2 hover:text-label"
+              />
             </div>
           </aside>
         </div>

@@ -1,9 +1,19 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Alert, Button, ProgressBar } from "@/ui";
+import {
+  Alert,
+  Button,
+  FeatureBlock,
+  PageHeader,
+  ProgressBar,
+  QuietTile,
+  StatusLine,
+  cn,
+  stagger,
+} from "@/ui";
 import { usePolling } from "../../../_lib/use-polling";
 import { blockHref, phaseHref } from "../../../_lib/production-routes";
 import {
@@ -12,14 +22,18 @@ import {
   refreshBlocksAction,
   type BlocksSnapshot,
 } from "../actions";
-import { attentionWords, needsReview } from "../_lib/block-state";
+import { attentionTone, attentionWords, needsReview } from "../_lib/block-state";
 import { BlockRow } from "./block-row";
 import { GenerateSheet } from "./generate-sheet";
 
 const FAST_POLL_MS = 2000;
 const SETTLED_POLL_MS = 10000;
 
-/** The shots of the film in story order: review them, approve them, then generate the drafts. */
+/**
+ * The shots of the film in story order. The one next step leads as a white block (review the
+ * next shot, or generate the drafts), Approve All stays beside it as the quieter road, and every
+ * shot is listed below to open in any order.
+ */
 export function BlocksScreen({
   projectId,
   initial,
@@ -36,7 +50,7 @@ export function BlocksScreen({
   const [approveError, setApproveError] = useState<string | undefined>();
   const [generateOpen, setGenerateOpen] = useState(false);
   const busyRef = useRef(false);
-  const statusRef = useRef<HTMLParagraphElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
 
   const { items, nextCursor, counts } = snapshot;
   const preparing = counts.preparing > 0;
@@ -95,7 +109,7 @@ export function BlocksScreen({
         }
         setApproveOpen(false);
         adopt(result.data);
-        // The status line now reads "All shots are approved."; move there for screen readers.
+        // The status line now says every shot is approved; move there for screen readers.
         window.setTimeout(() => statusRef.current?.focus(), 0);
       } finally {
         busyRef.current = false;
@@ -104,86 +118,137 @@ export function BlocksScreen({
   }
 
   const firstToReview = items.find((b) => needsReview(b.stage));
-  const status = attentionWords(counts);
   const allPreparing = items.length > 0 && items.every((b) => b.stage === "preparing");
+  const words = allPreparing ? "Preparing the shots" : attentionWords(counts);
+  const tone = allPreparing ? "working" : attentionTone(counts);
 
-  return (
-    <div className="flex flex-col gap-10">
-      <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <h2 className="text-large-title">Shots</h2>
-          <p
-            ref={statusRef}
-            tabIndex={-1}
-            role="status"
-            aria-live="polite"
-            className="text-reading text-label-2 outline-none"
-          >
-            {allPreparing
-              ? "Preparing the shots…"
-              : status || "Each shot is checked before its clip is made."}
-          </p>
-        </div>
-        {!allPreparing && items.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {counts.block_review > 0 ? (
-              <Button onClick={() => setApproveOpen(true)}>Approve All</Button>
-            ) : null}
-            {reviewable > 0 ? (
-              firstToReview ? (
-                <Button
-                  variant="prominent"
-                  size="large"
-                  render={<Link href={blockHref(projectId, firstToReview.lineageId)} />}
-                >
-                  Review Next Shot
-                </Button>
-              ) : nextCursor ? (
-                <Button variant="prominent" size="large" onClick={more} loading={loading}>
-                  Review Next Shot
-                </Button>
-              ) : null
-            ) : snapshot.canStartDrafts ? (
-              <Button variant="prominent" size="large" onClick={() => setGenerateOpen(true)}>
-                Generate Drafts
-              </Button>
-            ) : null}
+  function nextStep() {
+    if (allPreparing) {
+      return (
+        <section
+          aria-label="Preparing the shots"
+          className="flex min-h-75 flex-col justify-between gap-10 rounded-block bg-elevated p-6 sm:p-10"
+        >
+          <h2 className="max-w-[22ch] text-heading font-semibold tracking-[-0.03em] text-balance">
+            The shots are being prepared.
+          </h2>
+          <div className="flex max-w-sm flex-col gap-3">
+            <ProgressBar value={null} aria-label="Preparing the shots" />
+            <p className="text-body text-label-2">
+              You can leave this page. The shots are ready to review when you return.
+            </p>
           </div>
-        ) : null}
-      </header>
-
-      {allPreparing ? (
-        <div className="flex max-w-sm flex-col gap-2.5">
-          <ProgressBar value={null} aria-label="Preparing the shots" />
-          <p className="text-callout text-label-2">
-            You can leave this page. The shots are ready to review when you return.
-          </p>
-        </div>
-      ) : items.length === 0 ? (
-        <p className="max-w-(--measure) text-reading text-label-2">
+        </section>
+      );
+    }
+    if (items.length === 0) {
+      return (
+        <p className="max-w-(--measure) text-body text-label-2">
           There are no shots yet. They appear here once the script has been cut into shots.
         </p>
-      ) : (
-        <section aria-label="Shots" className="flex flex-col gap-4">
-          <ol className="flex flex-col">
-            {items.map((block) => (
-              <BlockRow key={block.lineageId} projectId={projectId} block={block} />
+      );
+    }
+
+    let lead: ReactNode = null;
+    if (reviewable > 0 && firstToReview) {
+      const number = firstToReview.orderIndex + 1;
+      lead = (
+        <FeatureBlock
+          className="flex-[2_1_320px]"
+          render={<Link href={blockHref(projectId, firstToReview.lineageId)} />}
+          title="Review Next Shot"
+          description={`${number} · ${firstToReview.title ?? `Shot ${number}`}`}
+          cta="Review"
+        />
+      );
+    } else if (reviewable > 0 && nextCursor) {
+      lead = (
+        <FeatureBlock
+          className="flex-[2_1_320px]"
+          title="Review Next Shot"
+          cta={loading ? "Loading…" : "Review"}
+          disabled={loading}
+          onClick={more}
+        />
+      );
+    } else if (reviewable === 0 && snapshot.canStartDrafts) {
+      lead = (
+        <FeatureBlock
+          className="flex-[2_1_320px]"
+          title="Generate Drafts"
+          description="A quick, lower-quality version of each shot, to check the action and framing before the full-quality clip."
+          cta="See the Price"
+          onClick={() => setGenerateOpen(true)}
+        />
+      );
+    }
+    if (!lead && counts.block_review === 0) return null;
+
+    return (
+      <div className="flex flex-wrap gap-3">
+        {lead}
+        {counts.block_review > 0 ? (
+          <div className={cn("flex flex-col gap-3", lead ? "flex-[1_1_220px]" : "w-full max-w-90")}>
+            <QuietTile
+              className="flex-1"
+              title="Approve All"
+              description="Every shot waiting for review is approved as prepared."
+              onClick={() => setApproveOpen(true)}
+            />
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Shots"
+        description={
+          words ? (
+            <div
+              ref={statusRef}
+              tabIndex={-1}
+              role="status"
+              aria-live="polite"
+              className="outline-none"
+            >
+              <StatusLine tone={tone}>{words}</StatusLine>
+            </div>
+          ) : undefined
+        }
+      />
+
+      <div className="in-2">{nextStep()}</div>
+
+      {!allPreparing && items.length > 0 ? (
+        <section aria-label="Every shot" className="mt-12 flex in-3 flex-col gap-4">
+          <ol className="flex flex-col gap-0.5">
+            {items.map((block, i) => (
+              <BlockRow
+                key={block.lineageId}
+                projectId={projectId}
+                block={block}
+                className="enter"
+                style={stagger(Math.min(i, 12))}
+              />
             ))}
           </ol>
           {nextCursor ? (
             <div>
-              <Button onClick={more} loading={loading}>
-                Load More
+              <Button size="small" onClick={more} loading={loading}>
+                Show More Shots
               </Button>
             </div>
           ) : null}
           {error ? (
-            <p role="alert" className="text-callout text-red">
+            <p role="alert" className="text-secondary text-failed">
               {error}
             </p>
           ) : null}
         </section>
-      )}
+      ) : null}
 
       <Alert
         open={approveOpen}
@@ -199,6 +264,6 @@ export function BlocksScreen({
       {generateOpen ? (
         <GenerateSheet open onOpenChange={setGenerateOpen} projectId={projectId} />
       ) : null}
-    </div>
+    </>
   );
 }

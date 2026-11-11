@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
-import { Check } from "lucide-react";
 import type { ScriptVersionSummary, ScriptVersionView } from "@/server/script";
-import { cn } from "@/ui";
+import { SelectRow, StatusLine, Tabs, stagger } from "@/ui";
+import type { Scene } from "../_lib/scenes";
 import { loadVersionAction } from "../actions";
 
 export type VersionView = ScriptVersionView;
 export type VersionSummary = ScriptVersionSummary;
+export type Finding = NonNullable<VersionView["findings"]>[number];
 
 export interface IssueChoice {
   code: string;
@@ -18,95 +19,21 @@ export interface IssueChoice {
 export const SAMPLE_LINE = "Sample output. Add an API key to write real scripts.";
 
 const STATUS_LABELS: Record<VersionSummary["status"], string> = {
-  pending: "In Progress",
-  in_review: "In Review",
+  pending: "In progress",
+  in_review: "In review",
   accepted: "Accepted",
-  rejected: "Changes Requested",
+  rejected: "Changes requested",
   superseded: "Replaced",
   failed: "Failed",
 };
 
-const SOURCE_LABELS: Record<VersionSummary["source"], string> = {
-  generated: "Written from your description",
-  uploaded: "Uploaded",
-  revised: "Revised",
-  edited: "Edited by you",
-};
-
 export const statusLabel = (status: VersionSummary["status"]) => STATUS_LABELS[status];
-export const sourceLabel = (source: VersionSummary["source"]) => SOURCE_LABELS[source];
 
-const dateFormat = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-/** A date in the reader's time zone (the server render may differ, so hydration is tolerant). */
-export function When({ date }: { date: Date }) {
-  return (
-    <time dateTime={date.toISOString()} suppressHydrationWarning>
-      {dateFormat.format(date)}
-    </time>
-  );
-}
-
-/** The script's title, logline and status, set as a title page. */
-export function TitleBlock({
-  version,
-  fallbackTitle,
-  sample,
-  status,
-}: {
-  version: VersionView;
-  fallbackTitle: string;
-  sample: boolean;
-  status?: ReactNode;
-}) {
-  return (
-    <header className="flex max-w-(--measure) flex-col gap-3">
-      <div className="flex flex-col gap-1.5">
-        <h2 id="script-title" className="text-large-title text-balance">
-          {version.title ?? fallbackTitle}
-        </h2>
-        {version.logline ? (
-          <p className="text-reading text-pretty text-label-2">{version.logline}</p>
-        ) : null}
-      </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-callout text-label-2">
-        {status}
-        <span>
-          Version {version.versionNumber} · {sourceLabel(version.source)}
-        </span>
-      </div>
-      {sample || version.isSample ? (
-        <p className="text-callout text-label-2">{SAMPLE_LINE}</p>
-      ) : null}
-    </header>
-  );
-}
-
-/** A quiet inspector section: a headline, then its content. */
-export function InspectorSection({
-  title,
-  accessory,
-  children,
-}: {
-  title: string;
-  accessory?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-3 pt-5 hairline-t first:pt-0 first:shadow-none">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-headline">{title}</h3>
-        {accessory}
-      </div>
-      {children}
-    </section>
-  );
-}
+const SEVERITY: Record<Finding["severity"], string> = {
+  blocker: "Must fix",
+  major: "Important",
+  minor: "Minor",
+};
 
 /** Lets the reader open an older version read-only, and come back to the latest. */
 export function useVersionViewer(projectId: string, latestId: string) {
@@ -118,6 +45,7 @@ export function useVersionViewer(projectId: string, latestId: string) {
   function open(versionId: string) {
     setError(null);
     if (versionId === latestId) {
+      setLoadingId(null);
       setViewing(null);
       return;
     }
@@ -133,78 +61,174 @@ export function useVersionViewer(projectId: string, latestId: string) {
   return { viewing, open, back: () => setViewing(null), error, loadingId };
 }
 
-/** The version switcher: newest first; the latest is the working one, older ones read-only. */
-export function VersionList({
+export type VersionViewer = ReturnType<typeof useVersionViewer>;
+
+/** The version tab strip (newest first, one sliding underline). Nothing when there is one. */
+export function VersionTabs({
   versions,
-  selectedId,
-  loadingId,
-  error,
-  onSelect,
+  shownId,
+  viewer,
+  onOpen,
 }: {
   versions: VersionSummary[];
-  selectedId: string;
-  loadingId: string | null;
-  error: string | null;
-  onSelect: (id: string) => void;
+  shownId: string;
+  viewer: VersionViewer;
+  onOpen?: (id: string) => void;
 }) {
+  if (versions.length <= 1) return null;
+  const latest = versions[0];
   return (
-    <InspectorSection title="Versions">
-      <ul className="-mx-2 flex flex-col">
-        {versions.map((v) => {
-          const selected = v.id === selectedId;
-          return (
-            <li key={v.id}>
-              <button
-                type="button"
-                aria-current={selected ? "true" : undefined}
-                onClick={() => onSelect(v.id)}
-                className={cn(
-                  "flex min-h-(--row-h) w-full items-center gap-2 rounded-control px-2 text-left text-body focus-ring",
-                  "transition-colors duration-(--dur-fast) hover:bg-fill-4",
-                  selected && "bg-selection hover:bg-selection",
-                )}
-              >
-                <span className="flex size-(--icon) shrink-0 items-center justify-center">
-                  {selected ? <Check aria-hidden="true" className="size-(--icon-sm)" /> : null}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block">Version {v.versionNumber}</span>
-                  <span className="block text-callout text-label-2">
-                    {statusLabel(v.status)} · <When date={v.createdAt} />
-                  </span>
-                </span>
-                {loadingId === v.id ? (
-                  <span className="text-callout text-label-2">Opening…</span>
-                ) : null}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {error ? (
-        <p role="alert" className="text-callout text-red">
-          {error}
+    <div className="mb-8 in-2">
+      <Tabs
+        aria-label="Versions"
+        value={viewer.loadingId ?? shownId}
+        onValueChange={(id) => {
+          onOpen?.(id);
+          viewer.open(id);
+        }}
+        tabs={versions.map((v) => ({ value: v.id, label: `Version ${v.versionNumber}` }))}
+        trailing={
+          viewer.loadingId
+            ? "Opening…"
+            : latest && shownId !== latest.id
+              ? "Earlier version, read only"
+              : undefined
+        }
+      />
+      {viewer.error ? (
+        <p role="alert" className="mt-3 text-secondary text-red">
+          {viewer.error}
         </p>
       ) : null}
-    </InspectorSection>
+    </div>
   );
 }
 
-/** Bar above an older version: says it is read-only and leads back to the latest. */
-export function ReadOnlyBar({ version, onBack }: { version: VersionView; onBack: () => void }) {
+/** Name of a scene in the list: its heading, or "Opening" for the text before the first one. */
+export const sceneName = (scene: Scene) => scene.heading ?? "Opening";
+
+/** The scene list on the left; it chooses which scene the sheet shows. */
+export function SceneList({
+  scenes,
+  index,
+  onSelect,
+  counts,
+}: {
+  scenes: Scene[];
+  index: number;
+  onSelect: (index: number) => void;
+  /** Comments and script checks on each scene, shown at the row's end. */
+  counts?: number[];
+}) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-group bg-elevated px-4 py-3">
-      <p className="text-body text-label">
-        Version {version.versionNumber} · {statusLabel(version.status)}.{" "}
-        <span className="text-label-2">Older versions are read-only.</span>
-      </p>
-      <button
-        type="button"
-        onClick={onBack}
-        className="text-body font-medium text-label underline-offset-4 focus-ring hover:underline"
-      >
-        Back to Latest
-      </button>
+    <nav aria-label="Scenes" className="flex flex-col gap-0.5">
+      {scenes.map((scene, i) => {
+        const count = counts?.[i] ?? 0;
+        return (
+          <SelectRow
+            key={scene.key}
+            size="regular"
+            label={sceneName(scene)}
+            active={i === index}
+            onClick={() => onSelect(i)}
+            trailing={
+              count > 0 ? (
+                <>
+                  <span aria-hidden="true">{count}</span>
+                  <span className="sr-only">
+                    , {count} {count === 1 ? "note" : "notes"}
+                  </span>
+                </>
+              ) : undefined
+            }
+            className="enter"
+            style={stagger(i)}
+          />
+        );
+      })}
+    </nav>
+  );
+}
+
+/**
+ * Scenes left, sheet right. The list is slim so the screenplay gets a comfortable width; below
+ * about 760px of content the sheet wraps under the list.
+ */
+export function ScenesLayout({ side, children }: { side: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex in-3 flex-wrap items-start gap-x-6 gap-y-8">
+      {side ? (
+        <div className="flex min-w-0 flex-[1_1_176px] flex-col gap-6 sm:max-w-44">{side}</div>
+      ) : null}
+      <div className="min-w-0 flex-[4_1_560px]">{children}</div>
     </div>
+  );
+}
+
+/** A script check finding: a status line, what is wrong, and what to do. */
+export function FindingNote({ finding }: { finding: Finding }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <StatusLine tone="waiting">Script check · {SEVERITY[finding.severity]}</StatusLine>
+      <p className="text-secondary text-label">{finding.explanation}</p>
+      {finding.suggestion ? (
+        <p className="text-secondary text-label-2">{finding.suggestion}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The notes that came with a version (titled by where it came from), and any script check that
+ * is about the whole script rather than one line.
+ */
+export function VersionNotes({
+  version,
+  looseFindings = [],
+}: {
+  version: VersionView;
+  looseFindings?: Finding[];
+}) {
+  if (version.notes.length === 0 && looseFindings.length === 0) return null;
+  const title =
+    version.source === "revised"
+      ? "What Changed"
+      : version.source === "uploaded"
+        ? "Script Check"
+        : "Writer’s Notes";
+  return (
+    <section
+      aria-labelledby="version-notes"
+      className="mt-12 flex max-w-170 flex-col gap-4 pt-6 hairline-t"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 id="version-notes" className="text-section">
+          {title}
+        </h2>
+        {version.checkVerdict === "ready" ? (
+          <StatusLine tone="done">Ready to film</StatusLine>
+        ) : version.checkVerdict === "needs_attention" ? (
+          <StatusLine tone="waiting">Needs attention</StatusLine>
+        ) : null}
+      </div>
+      {version.notes.length > 0 ? (
+        <ul className="flex flex-col gap-2.5">
+          {version.notes.map((note, i) => (
+            <li key={i} className="text-body text-pretty text-label-2">
+              {note}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {looseFindings.length > 0 ? (
+        <ul className="flex flex-col gap-4">
+          {looseFindings.map((finding, i) => (
+            <li key={i}>
+              <FindingNote finding={finding} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }

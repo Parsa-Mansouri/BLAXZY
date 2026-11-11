@@ -1,25 +1,73 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight } from "lucide-react";
 import { stageHref } from "@/lib/stages";
-import { Badge, Button, Hint, Textarea, cn } from "@/ui";
+import { Button, PageHeader, StatusLine, SwapFade, cn } from "@/ui";
 import type { BackgroundStatus } from "../../_lib/background-status";
+import { splitScenes } from "../_lib/scenes";
 import { editAcceptedAction } from "../actions";
-import { BackgroundStatusView, useBackgroundStatus } from "./background-status";
-import { VersionNotes } from "./script-review";
-import { ScriptDocument } from "./script-document";
+import { BackgroundFailure, useBackgroundStatus } from "./background-status";
+import { ON_PAPER, PaperLayers, ReadingSheet, SHEET_X, TitlePage } from "./screenplay-sheet";
 import {
-  InspectorSection,
-  ReadOnlyBar,
-  TitleBlock,
-  VersionList,
+  SAMPLE_LINE,
+  SceneList,
+  ScenesLayout,
+  VersionNotes,
+  VersionTabs,
+  sceneName,
+  statusLabel,
   useVersionViewer,
   type VersionSummary,
   type VersionView,
 } from "./shared";
+
+/** The accepted script (or an older version) read one scene at a time, on paper. */
+function AcceptedBody({
+  version,
+  fallbackTitle,
+  side,
+}: {
+  version: VersionView;
+  fallbackTitle: string;
+  side: ReactNode;
+}) {
+  const content = version.content ?? "";
+  const scenes = useMemo(() => splitScenes(content), [content]);
+  const [index, setIndex] = useState(0);
+  const scene = scenes[Math.min(index, scenes.length - 1)];
+
+  return (
+    <ScenesLayout
+      side={
+        <>
+          {side}
+          {scenes.length > 1 ? (
+            <SceneList scenes={scenes} index={index} onSelect={setIndex} />
+          ) : null}
+        </>
+      }
+    >
+      {scene ? (
+        <SwapFade swapKey={scene.key}>
+          <ReadingSheet
+            aria-label={sceneName(scene)}
+            scenes={[scene]}
+            top={
+              index === 0 ? (
+                <TitlePage title={version.title ?? fallbackTitle} logline={version.logline} />
+              ) : null
+            }
+          />
+        </SwapFade>
+      ) : (
+        <p className="text-body text-label-2">This version has no text.</p>
+      )}
+      <VersionNotes version={version} />
+    </ScenesLayout>
+  );
+}
 
 export function ScriptAccepted({
   projectId,
@@ -73,121 +121,95 @@ export function ScriptAccepted({
 
   const unchanged = draft.replace(/\r\n?/g, "\n").trim() === (version.content ?? "").trim();
 
+  const side = (
+    <div className="flex flex-col gap-4 px-3.5 pb-6 hairline-b">
+      <StatusLine tone={shown.status === "accepted" ? "done" : "none"} srPrefix="Status">
+        {statusLabel(shown.status)}
+      </StatusLine>
+      {!readOnly && status?.state === "failed" ? (
+        <BackgroundFailure
+          projectId={projectId}
+          status={status}
+          onRetried={() => {
+            setStatus({ ...status, state: "running", failure: null, detected: false });
+            router.refresh();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+
   return (
-    <div className="flex flex-col gap-8">
-      <div className="sticky top-(--toolbar-h) z-(--z-toolbar) -mx-(--content-x) flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-ground px-(--content-x) py-3 hairline-b">
-        <p className="text-callout text-label-2">
-          {editing
-            ? "Editing the accepted script"
-            : readOnly
-              ? `Reading version ${shown.versionNumber}`
-              : "The script is accepted"}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          {editing ? (
+    <>
+      <PageHeader
+        title="Script"
+        description={
+          editing
+            ? "After you save, characters, places and shots are found again, and changed shots are marked to be made again."
+            : "This is the version the film is built from."
+        }
+        actions={
+          editing ? (
             <>
               <Button variant="plain" onClick={() => setEditing(false)} disabled={saving}>
                 Cancel
               </Button>
-              <Button variant="prominent" onClick={save} loading={saving} disabled={unchanged}>
+              <Button variant="primary" onClick={save} loading={saving} disabled={unchanged}>
                 Save Changes
               </Button>
             </>
           ) : (
             <>
-              <Button onClick={startEditing}>Edit Script</Button>
+              <Button variant="outlined" onClick={startEditing}>
+                Edit Script
+              </Button>
               <Button
-                variant="prominent"
-                trailingIcon={<ArrowRight aria-hidden="true" />}
+                variant="primary"
                 render={<Link href={stageHref(projectId, "pre_production")} />}
               >
                 Continue to Pre-production
               </Button>
             </>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
+      {(sample || shown.isSample) && !readOnly && shown.source !== "edited" ? (
+        <StatusLine className="mb-6 in-1">{SAMPLE_LINE}</StatusLine>
+      ) : null}
 
-      <div className="grid items-start gap-x-14 gap-y-12 @4xl:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
-        <article aria-labelledby="script-title" className="flex min-w-0 flex-col gap-10">
-          {readOnly ? <ReadOnlyBar version={shown} onBack={viewer.back} /> : null}
-          <TitleBlock
-            version={shown}
-            fallbackTitle={fallbackTitle}
-            sample={sample && !readOnly && shown.source !== "edited"}
-            status={
-              shown.status === "accepted" ? <Badge tone="success">Accepted</Badge> : undefined
-            }
-          />
-          {editing ? (
-            <div className="flex max-w-[72ch] flex-col gap-3">
-              <Hint id="edit-hint">
-                After you save, characters, places and shots are detected again. Shots whose part of
-                the script changed are marked to be made again.
-              </Hint>
-              <Textarea
-                aria-describedby="edit-hint"
-                aria-label="Script text"
-                textStyle="script"
-                value={draft}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  if (error) setError(null);
-                }}
-                minRows={16}
-                maxRows={40}
-                autoFocus
-                spellCheck
-              />
-              {error ? (
-                <p role="alert" className="text-callout text-red">
-                  {error}
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <ScriptDocument
-              content={shown.content ?? ""}
-              className="max-w-[72ch]"
-              aria-label="Script"
-            />
-          )}
-        </article>
-
-        <aside
-          aria-label="Script details"
-          className={cn(
-            "flex min-w-0 flex-col gap-5",
-            "@4xl:sticky @4xl:top-[calc(var(--toolbar-h)+4.5rem)] @4xl:-mx-2 @4xl:max-h-[calc(100dvh-var(--toolbar-h)-6rem)] @4xl:overflow-x-hidden @4xl:overflow-y-auto @4xl:px-2",
-          )}
-        >
-          {status ? (
-            <InspectorSection title="Pre-production">
-              <BackgroundStatusView
-                projectId={projectId}
-                status={status}
-                onRetried={() => {
-                  setStatus({ ...status, state: "running", failure: null, detected: false });
-                  router.refresh();
-                }}
-              />
-            </InspectorSection>
-          ) : null}
-          <VersionNotes version={shown} />
-          {versions.length > 1 ? (
-            <VersionList
-              versions={versions}
-              selectedId={shown.id}
-              loadingId={viewer.loadingId}
-              error={viewer.error}
-              onSelect={(id) => {
-                setEditing(false);
-                viewer.open(id);
+      {editing ? (
+        <div className="flex max-w-170 swap-in flex-col gap-3">
+          <div className="relative isolate">
+            <PaperLayers className="right-0" />
+            <textarea
+              aria-label="Script text"
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                if (error) setError(null);
               }}
+              autoFocus
+              spellCheck
+              className={cn(
+                "block field-sizing-content min-h-[60dvh] w-full resize-none rounded-paper bg-transparent py-11 font-script text-script text-ink outline-none",
+                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--focus)",
+                SHEET_X,
+                ON_PAPER,
+              )}
             />
+          </div>
+          {error ? (
+            <p role="alert" className="text-secondary text-red">
+              {error}
+            </p>
           ) : null}
-        </aside>
-      </div>
-    </div>
+        </div>
+      ) : (
+        <>
+          <VersionTabs versions={versions} shownId={shown.id} viewer={viewer} />
+          <AcceptedBody key={shown.id} version={shown} fallbackTitle={fallbackTitle} side={side} />
+        </>
+      )}
+    </>
   );
 }

@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { callAuth } from "@/lib/auth-call";
 import { describeAuthFailure } from "@/lib/auth-errors";
-import { Button, GroupedList, GroupedListField, Input } from "@/ui";
+import { Button, stagger } from "@/ui";
 import { FormMessage } from "@/app/_components/form-message";
-import { PasswordField } from "@/app/_components/password-field";
-import { AuthHeading, AuthLink, AuthLinks } from "../_components/auth-parts";
+import { AuthField, AuthPasswordField } from "../_components/auth-fields";
+import { AuthLink, AuthLinks, AuthScreen } from "../_components/auth-parts";
 import { CheckEmail } from "../_components/check-email";
 
 export function LoginForm({ next }: { next: string }) {
@@ -47,7 +47,7 @@ export function LoginForm({ next }: { next: string }) {
     return (
       <CheckEmail
         email={email.trim()}
-        title="Verify Your Email"
+        title={["Verify Your", "Email"]}
         intro="This email address is not verified yet, so a new link was sent."
         callbackURL={next}
         onBack={() => setNeedsVerification(false)}
@@ -57,47 +57,47 @@ export function LoginForm({ next }: { next: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <AuthHeading title="Sign In" />
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-        <GroupedList size="large">
-          <GroupedListField label="Email" required>
-            <Input
-              name="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              autoCapitalize="none"
-              spellCheck={false}
-              autoFocus
-            />
-          </GroupedListField>
-          <PasswordField
-            label="Password"
-            name="password"
-            value={password}
-            onChange={setPassword}
-            autoComplete="current-password"
-          />
-        </GroupedList>
-        {error ? <FormMessage tone="error">{error}</FormMessage> : null}
-        <Button
-          type="submit"
-          variant="prominent"
-          size="large"
-          loading={submitting}
-          className="mt-2 w-full"
+    <AuthScreen
+      title={["Sign In"]}
+      description="Your films are where you left them."
+      label="Sign in"
+    >
+      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+        <AuthField
+          label="Email"
+          name="email"
+          type="email"
+          value={email}
+          onChange={setEmail}
+          autoComplete="email"
+          placeholder="you@example.com"
+          autoFocus
+          style={stagger(0)}
+        />
+        <AuthPasswordField
+          label="Password"
+          name="password"
+          value={password}
+          onChange={setPassword}
+          autoComplete="current-password"
+          style={stagger(1)}
         >
-          Sign In
-        </Button>
+          <div className="mt-2">
+            <AuthLink href="/forgot-password">Forgot Password?</AuthLink>
+          </div>
+        </AuthPasswordField>
+        {error ? <FormMessage tone="error">{error}</FormMessage> : null}
+        <div className="mt-3 flex enter flex-col items-start gap-6" style={stagger(2)}>
+          <Button type="submit" variant="primary" size="large" loading={submitting}>
+            Sign In
+          </Button>
+          <AuthLinks>
+            <p>
+              No account yet? <AuthLink href="/signup">Create one.</AuthLink>
+            </p>
+          </AuthLinks>
+        </div>
       </form>
-      <AuthLinks>
-        <AuthLink href="/forgot-password">Forgot Password?</AuthLink>
-        <p>
-          No account? <AuthLink href="/signup">Create Account</AuthLink>
-        </p>
-      </AuthLinks>
-    </div>
+    </AuthScreen>
   );
 }

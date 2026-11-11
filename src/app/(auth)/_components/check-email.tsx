@@ -4,15 +4,16 @@ import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { callAuth } from "@/lib/auth-call";
 import { describeAuthFailure } from "@/lib/auth-errors";
-import { Button, Hint } from "@/ui";
+import { Button, stagger } from "@/ui";
 import { FormMessage } from "@/app/_components/form-message";
-import { AuthHeading } from "./auth-parts";
+import { AuthScreen } from "./auth-parts";
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
 export interface CheckEmailProps {
   email: string;
-  title: string;
+  /** One string per title line. */
+  title: string[];
   /** One sentence under the title. */
   intro: string;
   callbackURL: string;
@@ -58,28 +59,32 @@ export function CheckEmail({
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <AuthHeading title={title}>
-        {intro} The link was sent to <span className="text-label">{email}</span> and expires in one
-        hour.
-      </AuthHeading>
-      <div className="flex flex-col gap-3">
-        {message ? <FormMessage tone={message.tone}>{message.text}</FormMessage> : null}
+    <AuthScreen
+      title={title}
+      label="Check your email"
+      description={
+        <>
+          {intro} The link was sent to <span className="text-label">{email}</span> and expires in
+          one hour. If it has not arrived, check your spam folder.
+        </>
+      }
+    >
+      {message ? <FormMessage tone={message.tone}>{message.text}</FormMessage> : null}
+      <div className="flex enter flex-wrap items-center gap-x-4 gap-y-3" style={stagger(0)}>
         <Button
-          variant="standard"
+          variant="outlined"
           size="large"
           onClick={resend}
           loading={sending}
           disabled={cooldown > 0}
-          className="w-full tabular-nums"
+          className="tabular-nums"
         >
           {cooldown > 0 ? `Send New Link in ${cooldown}s` : "Send New Link"}
         </Button>
-        <Button variant="plain" size="large" onClick={onBack} className="w-full">
+        <Button variant="plain" size="large" onClick={onBack}>
           {backLabel}
         </Button>
       </div>
-      <Hint className="text-center">If the email has not arrived, check your spam folder.</Hint>
-    </div>
+    </AuthScreen>
   );
 }

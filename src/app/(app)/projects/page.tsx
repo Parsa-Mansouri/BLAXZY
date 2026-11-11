@@ -4,7 +4,7 @@ import { DEFAULT_PAGE_SIZE, listProjects } from "@/server/projects";
 import { toSummary } from "../dashboard/_lib/summary";
 import { AllProjectsView } from "./_components/all-projects-view";
 
-export const metadata: Metadata = { title: "All Projects · BLAXZY" };
+export const metadata: Metadata = { title: "Projects · BLAXZY" };
 
 export default async function AllProjectsPage() {
   const user = await requireUser();

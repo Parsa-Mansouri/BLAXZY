@@ -1,21 +1,38 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, ProgressBar } from "@/ui";
+import { Button, PageHeader, ProgressBar, StatusDot, StatusLine } from "@/ui";
 import { usePolling } from "../../_lib/use-polling";
+import { splitScenes } from "../_lib/scenes";
 import { pollScriptAction, retryVersionAction } from "../actions";
-import { ScriptDocument } from "./script-document";
-import { sourceLabel, type VersionView } from "./shared";
+import { ReadingSheet } from "./screenplay-sheet";
+import type { VersionView } from "./shared";
 
-const WORKING: Record<VersionView["source"], string> = {
-  generated: "Writing the script…",
-  uploaded: "Reading your script…",
-  revised: "Revising the script…",
-  edited: "Saving the script…",
+type Source = VersionView["source"];
+
+const WORKING_DESCRIPTION: Record<Source, string> = {
+  generated: "Written from your description and the style you chose.",
+  uploaded: "Your script is checked for format, length and anything hard to film.",
+  revised: "Revised from your comments and the changes you asked for.",
+  edited: "Your edits are being saved.",
 };
 
-const FAILED: Record<VersionView["source"], string> = {
+const WORKING_HEADING: Record<Source, string> = {
+  generated: "Your script is being written.",
+  uploaded: "Your script is being read.",
+  revised: "Your script is being revised.",
+  edited: "Your script is being saved.",
+};
+
+const WORKING_STATUS: Record<Source, string> = {
+  generated: "Writing the script",
+  uploaded: "Reading your script",
+  revised: "Revising the script",
+  edited: "Saving the script",
+};
+
+const FAILED_HEADING: Record<Source, string> = {
   generated: "The script could not be written.",
   uploaded: "Your script could not be read.",
   revised: "The script could not be revised.",
@@ -32,6 +49,21 @@ function useRefreshWhenDone(projectId: string, versionId: string) {
   }, true);
 }
 
+/** "What you asked for": the description the script is written from. */
+function AskedFor({ brief }: { brief: string }) {
+  return (
+    <section
+      aria-labelledby="asked-for"
+      className="mt-16 flex max-w-160 in-3 flex-col gap-3 pt-6 hairline-t"
+    >
+      <h2 id="asked-for" className="text-section">
+        What You Asked For
+      </h2>
+      <p className="text-body whitespace-pre-wrap text-label-2">{brief}</p>
+    </section>
+  );
+}
+
 export function ScriptWorking({
   projectId,
   version,
@@ -43,42 +75,42 @@ export function ScriptWorking({
   previous: VersionView | null;
 }) {
   useRefreshWhenDone(projectId, version.id);
-  const label = WORKING[version.source];
+  const status = WORKING_STATUS[version.source];
+  const previousContent = previous?.content ?? "";
+  const previousScenes = useMemo(() => splitScenes(previousContent), [previousContent]);
+
   return (
-    <div className="flex flex-col gap-14">
-      <section role="status" aria-live="polite" className="flex max-w-(--measure) flex-col gap-4">
-        <h3 className="text-title-1">{label}</h3>
-        <ProgressBar value={null} aria-label={label} className="max-w-sm" />
-        <p className="text-reading text-label-2">
+    <>
+      <PageHeader title="Script" description={WORKING_DESCRIPTION[version.source]} />
+      <section aria-labelledby="working" className="flex max-w-180 in-2 flex-col gap-6">
+        <h2 id="working" className="text-heading text-balance">
+          {WORKING_HEADING[version.source]}
+        </h2>
+        <div className="flex flex-col gap-3">
+          <ProgressBar value={null} aria-label={status} />
+          <div role="status" aria-live="polite">
+            <StatusLine tone="working">{status}</StatusLine>
+          </div>
+        </div>
+        <p className="max-w-[56ch] text-body text-label-2">
           You can leave this page. The script will be here when you return.
         </p>
-        {version.source === "generated" && version.brief ? (
-          <blockquote className="mt-2 flex flex-col gap-1">
-            <span className="text-callout text-label-2">From your description</span>
-            <span className="text-script text-pretty text-label">{version.brief}</span>
-          </blockquote>
-        ) : null}
       </section>
 
-      {previous?.content ? (
-        <section aria-labelledby="previous-title" className="flex flex-col gap-6">
-          <header className="flex flex-col gap-1 pt-6 hairline-t">
-            <h3 id="previous-title" className="text-title-3">
-              {previous.title ?? "Previous Version"}
-            </h3>
-            <p className="text-callout text-label-2">
-              Version {previous.versionNumber} · {sourceLabel(previous.source)}. Shown while the
-              revision is written.
-            </p>
-          </header>
-          <ScriptDocument
-            content={previous.content}
-            className="max-w-(--measure) text-label-2"
-            aria-label="Previous version"
-          />
+      {version.source === "generated" && version.brief ? <AskedFor brief={version.brief} /> : null}
+
+      {previous && previousScenes.length > 0 ? (
+        <section
+          aria-labelledby="previous-version"
+          className="mt-16 flex in-3 flex-col gap-6 pt-6 hairline-t"
+        >
+          <h2 id="previous-version" className="text-section">
+            The Version Being Revised
+          </h2>
+          <ReadingSheet aria-label="Previous version" scenes={previousScenes} />
         </section>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -89,11 +121,12 @@ export function ScriptFailed({
 }: {
   projectId: string;
   version: VersionView;
-  onStartOver: (() => void) | null;
+  onStartOver: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const fromBrief = version.source === "generated";
 
   function retry() {
     setError(null);
@@ -105,23 +138,35 @@ export function ScriptFailed({
   }
 
   return (
-    <section role="alert" className="flex max-w-(--measure) flex-col gap-4">
-      <h3 className="text-title-1">{FAILED[version.source]}</h3>
-      <p className="text-reading text-label-2">
-        {version.failure ?? "Something went wrong while it was being prepared."} Nothing you wrote
-        was lost.
-      </p>
-      <div className="flex flex-wrap items-center gap-3 pt-2">
-        <Button variant="prominent" size="large" loading={pending} onClick={retry}>
-          Try Again
-        </Button>
-        {onStartOver ? (
-          <Button size="large" onClick={onStartOver} disabled={pending}>
-            Start Over
+    <>
+      <PageHeader
+        title="Script"
+        description={
+          fromBrief ? "Nothing was lost; your description is kept below." : "Nothing was lost."
+        }
+      />
+      <section role="alert" className="flex max-w-180 in-2 flex-col gap-8">
+        <div className="flex flex-col gap-3">
+          <h2 className="flex items-baseline gap-4 text-heading">
+            <StatusDot tone="failed" className="size-2.5 -translate-y-1" />
+            <span className="text-balance">{FAILED_HEADING[version.source]}</span>
+          </h2>
+          <p className="max-w-[56ch] pl-6.5 text-body text-label-2">
+            {version.failure ?? "Something went wrong while it was being prepared."}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 pl-6.5">
+          <Button variant="primary" size="large" onClick={onStartOver} disabled={pending}>
+            {fromBrief ? "Change the Description" : "Start Over"}
           </Button>
-        ) : null}
-      </div>
-      {error ? <p className="text-callout text-red">{error}</p> : null}
-    </section>
+          <Button variant="outlined" size="large" loading={pending} onClick={retry}>
+            Try Again
+          </Button>
+        </div>
+        {error ? <p className="pl-6.5 text-secondary text-red">{error}</p> : null}
+      </section>
+
+      {fromBrief && version.brief ? <AskedFor brief={version.brief} /> : null}
+    </>
   );
 }

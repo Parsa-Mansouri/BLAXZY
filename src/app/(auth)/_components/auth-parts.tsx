@@ -1,21 +1,75 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { Wordmark } from "@/app/_components/wordmark";
 import { cn } from "@/ui";
 
-/** The page title and an optional sentence under it. */
-export function AuthHeading({ title, children }: { title: string; children?: ReactNode }) {
+/**
+ * One sign-in screen: the hero panel (wordmark, the title rising line by line, the rule, one
+ * sentence) beside the form column. `title` is one string per line; fixed words are set in
+ * capitals. Changing the title replays the entrance, so state swaps (check your email) feel like
+ * a new screen.
+ */
+export function AuthScreen({
+  title,
+  description,
+  label,
+  children,
+}: {
+  title: string[];
+  description?: ReactNode;
+  /** Accessible name of the form column. */
+  label: string;
+  children: ReactNode;
+}) {
+  const lastLine = title.length - 1;
   return (
-    <div className="flex flex-col items-center gap-2 text-center">
-      <h1 className="text-large-title">{title}</h1>
-      {children ? <p className="text-reading text-balance text-label-2">{children}</p> : null}
+    <div key={title.join(" ")} className="contents">
+      <section aria-label="BLAXZY" className="flex min-w-0 flex-[3_1_480px] p-3">
+        <div className="flex min-h-[320px] flex-1 flex-col justify-between gap-16 rounded-block bg-hero px-5 pt-7 pb-10 sm:px-10">
+          <div>
+            <Wordmark />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-[clamp(48px,6.6vw,96px)] leading-[0.96] font-semibold tracking-[-0.05em] break-words uppercase">
+              {title.map((line, index) => (
+                <span
+                  key={line}
+                  className="rise-mask"
+                  style={{ paddingBottom: index === lastLine ? "0.12em" : "0.1em" }}
+                >
+                  <span className="rise" style={{ animationDelay: `${index * 90}ms` }}>
+                    {line}
+                  </span>
+                </span>
+              ))}
+            </h1>
+            <div
+              aria-hidden="true"
+              className="mt-3 h-[3px] w-12 rule-in rounded-capsule bg-accent"
+              style={{ animationDelay: `${180 + lastLine * 90}ms` }}
+            />
+            {description ? (
+              <p className="mt-3 max-w-(--measure) in-1 text-body text-pretty text-label-2">
+                {description}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
+      <main
+        aria-label={label}
+        className="flex min-w-0 flex-[2_1_400px] flex-col justify-center px-5 py-12 sm:px-[clamp(20px,5vw,64px)]"
+      >
+        <div className="flex w-full max-w-[400px] flex-col gap-5">{children}</div>
+      </main>
     </div>
   );
 }
 
-/** Quiet text links under the form. */
+/** Quiet text under the form's button. */
 export function AuthLinks({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("flex flex-col items-center gap-2 text-body text-label-2", className)}>
+    <div className={cn("flex flex-col items-start gap-3 text-secondary text-label-2", className)}>
       {children}
     </div>
   );
@@ -25,7 +79,7 @@ export function AuthLink({ href, children }: { href: string; children: ReactNode
   return (
     <Link
       href={href}
-      className="rounded-control text-label underline-offset-4 focus-ring hover:underline"
+      className="rounded-row text-label underline underline-offset-[3px] focus-ring hover:text-label-2"
     >
       {children}
     </Link>

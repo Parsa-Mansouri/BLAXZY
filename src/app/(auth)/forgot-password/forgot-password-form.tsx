@@ -5,8 +5,9 @@ import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import { callAuth } from "@/lib/auth-call";
 import { describeAuthFailure } from "@/lib/auth-errors";
-import { Button, GroupedList, GroupedListField, Input } from "@/ui";
-import { AuthHeading, AuthLink, AuthLinks } from "../_components/auth-parts";
+import { Button, stagger } from "@/ui";
+import { AuthField } from "../_components/auth-fields";
+import { AuthLink, AuthLinks, AuthScreen } from "../_components/auth-parts";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -41,56 +42,56 @@ export function ForgotPasswordForm() {
 
   if (done) {
     return (
-      <div className="flex flex-col gap-8">
-        <AuthHeading title="Check Your Email">
-          If there is an account for <span className="text-label">{email.trim()}</span>, a reset
-          link is on its way. It expires in one hour.
-        </AuthHeading>
-        <div className="flex flex-col gap-3">
-          <Button variant="standard" size="large" onClick={() => setDone(false)} className="w-full">
+      <AuthScreen
+        title={["Check Your", "Email"]}
+        label="Check your email"
+        description={
+          <>
+            If there is an account for <span className="text-label">{email.trim()}</span>, a reset
+            link is on its way. It expires in one hour.
+          </>
+        }
+      >
+        <div className="flex enter flex-wrap items-center gap-x-4 gap-y-3" style={stagger(0)}>
+          <Button variant="outlined" size="large" onClick={() => setDone(false)}>
             Use a Different Email
           </Button>
-          <Button variant="plain" size="large" render={<Link href="/login" />} className="w-full">
+          <Button variant="plain" size="large" render={<Link href="/login" />}>
             Back to Sign In
           </Button>
         </div>
-      </div>
+      </AuthScreen>
     );
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <AuthHeading title="Reset Password">
-        Enter the email for your account to receive a link for choosing a new password.
-      </AuthHeading>
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-        <GroupedList size="large">
-          <GroupedListField label="Email" required error={error ?? undefined}>
-            <Input
-              name="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              autoCapitalize="none"
-              spellCheck={false}
-              autoFocus
-            />
-          </GroupedListField>
-        </GroupedList>
-        <Button
-          type="submit"
-          variant="prominent"
-          size="large"
-          loading={submitting}
-          className="mt-2 w-full"
-        >
-          Send Reset Link
-        </Button>
+    <AuthScreen
+      title={["Reset", "Password"]}
+      label="Reset password"
+      description="Enter the email for your account to receive a link for choosing a new password."
+    >
+      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+        <AuthField
+          label="Email"
+          name="email"
+          type="email"
+          value={email}
+          onChange={setEmail}
+          autoComplete="email"
+          placeholder="you@example.com"
+          error={error ?? undefined}
+          autoFocus
+          style={stagger(0)}
+        />
+        <div className="mt-3 flex enter flex-col items-start gap-6" style={stagger(1)}>
+          <Button type="submit" variant="primary" size="large" loading={submitting}>
+            Send Reset Link
+          </Button>
+          <AuthLinks>
+            <AuthLink href="/login">Back to Sign In</AuthLink>
+          </AuthLinks>
+        </div>
       </form>
-      <AuthLinks>
-        <AuthLink href="/login">Back to Sign In</AuthLink>
-      </AuthLinks>
-    </div>
+    </AuthScreen>
   );
 }

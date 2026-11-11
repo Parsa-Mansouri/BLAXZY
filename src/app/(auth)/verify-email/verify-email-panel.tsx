@@ -4,8 +4,9 @@ import { useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth-client";
 import { callAuth } from "@/lib/auth-call";
 import { describeAuthFailure } from "@/lib/auth-errors";
-import { Button, GroupedList, GroupedListField, Input } from "@/ui";
-import { AuthHeading, AuthLink, AuthLinks } from "../_components/auth-parts";
+import { Button, stagger } from "@/ui";
+import { AuthField } from "../_components/auth-fields";
+import { AuthLink, AuthLinks, AuthScreen } from "../_components/auth-parts";
 import { CheckEmail } from "../_components/check-email";
 
 /** Landing page for "your email is not verified": explains it and sends a new link. */
@@ -42,7 +43,7 @@ export function VerifyEmailPanel() {
     return (
       <CheckEmail
         email={sentTo}
-        title="Check Your Email"
+        title={["Check Your", "Email"]}
         intro="Open the link in the email to confirm your address."
         callbackURL="/dashboard"
         onBack={() => setSentTo(null)}
@@ -52,38 +53,33 @@ export function VerifyEmailPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <AuthHeading title="Verify Email">
-        Confirm your address with the link in the email. To get a new link, enter your email.
-      </AuthHeading>
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-        <GroupedList size="large">
-          <GroupedListField label="Email" required error={error ?? undefined}>
-            <Input
-              name="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              autoCapitalize="none"
-              spellCheck={false}
-              autoFocus
-            />
-          </GroupedListField>
-        </GroupedList>
-        <Button
-          type="submit"
-          variant="prominent"
-          size="large"
-          loading={submitting}
-          className="mt-2 w-full"
-        >
-          Send Link
-        </Button>
+    <AuthScreen
+      title={["Verify", "Email"]}
+      label="Verify email"
+      description="Confirm your address with the link in the email. To get a new link, enter your email."
+    >
+      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+        <AuthField
+          label="Email"
+          name="email"
+          type="email"
+          value={email}
+          onChange={setEmail}
+          autoComplete="email"
+          placeholder="you@example.com"
+          error={error ?? undefined}
+          autoFocus
+          style={stagger(0)}
+        />
+        <div className="mt-3 flex enter flex-col items-start gap-6" style={stagger(1)}>
+          <Button type="submit" variant="primary" size="large" loading={submitting}>
+            Send Link
+          </Button>
+          <AuthLinks>
+            <AuthLink href="/login">Back to Sign In</AuthLink>
+          </AuthLinks>
+        </div>
       </form>
-      <AuthLinks>
-        <AuthLink href="/login">Back to Sign In</AuthLink>
-      </AuthLinks>
-    </div>
+    </AuthScreen>
   );
 }

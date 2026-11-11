@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Button, Textarea } from "@/ui";
-import type { PassagePick } from "./script-document";
+import { useEffect, useRef, useState } from "react";
+import { Textarea } from "@/ui";
 
 export interface DraftComment {
   id: string;
@@ -36,6 +35,10 @@ function readStored(versionId: string): DraftComment[] {
   }
 }
 
+/** A comment the reviser can use: it says something and fits the limits. */
+export const isSendable = (c: DraftComment) =>
+  c.note.trim().length > 0 && c.note.trim().length <= MAX_COMMENT_CHARS;
+
 /**
  * The review's pending comments. Kept in this browser until they are sent, so a reload does not
  * lose them.
@@ -46,7 +49,9 @@ export function useDraftComments(versionId: string, content: string) {
 
   useEffect(() => {
     // Only comments whose passage is still where it was (the text is the same version's).
-    const stored = readStored(versionId).filter((c) => content.slice(c.start, c.end) === c.quote);
+    const stored = readStored(versionId).filter(
+      (c) => content.slice(c.start, c.end) === c.quote && c.note.trim() !== "",
+    );
     // eslint-disable-next-line react-hooks/set-state-in-effect -- browser storage is read after hydration
     setComments(stored);
     loaded.current = true;
@@ -55,8 +60,9 @@ export function useDraftComments(versionId: string, content: string) {
   useEffect(() => {
     if (!loaded.current) return;
     try {
-      if (comments.length === 0) window.localStorage.removeItem(STORAGE_PREFIX + versionId);
-      else window.localStorage.setItem(STORAGE_PREFIX + versionId, JSON.stringify(comments));
+      const kept = comments.filter((c) => c.note.trim() !== "");
+      if (kept.length === 0) window.localStorage.removeItem(STORAGE_PREFIX + versionId);
+      else window.localStorage.setItem(STORAGE_PREFIX + versionId, JSON.stringify(kept));
     } catch {
       // Storage may be unavailable (private window); comments still work for this visit.
     }
@@ -64,13 +70,14 @@ export function useDraftComments(versionId: string, content: string) {
 
   return {
     comments,
-    add: (pick: PassagePick, note: string) => {
+    /** A new, empty comment on the passage; it is dropped again if left empty. */
+    add: (range: { start: number; end: number; quote: string }) => {
       const comment: DraftComment = {
         id: crypto.randomUUID(),
-        quote: pick.quote,
-        start: pick.start,
-        end: pick.end,
-        note,
+        quote: range.quote.slice(0, MAX_QUOTE_CHARS),
+        start: range.start,
+        end: Math.min(range.end, range.start + MAX_QUOTE_CHARS),
+        note: "",
       };
       setComments((list) => [...list, comment].sort((a, b) => a.start - b.start));
       return comment;
@@ -82,114 +89,63 @@ export function useDraftComments(versionId: string, content: string) {
   };
 }
 
-/** A comment's note: Cancel and Add or Save, Escape cancels, Cmd/Ctrl+Enter confirms. */
-export function CommentEditor({
-  initial = "",
-  confirmLabel,
-  onConfirm,
-  onCancel,
-  autoFocus = true,
+/**
+ * A comment beside its line: the note is edited in place (it is kept as you type), Remove takes
+ * it away, and leaving it empty removes it.
+ */
+export function LineComment({
+  comment,
+  autoFocus,
+  describedBy,
+  onChange,
+  onRemove,
 }: {
-  initial?: string;
-  confirmLabel: string;
-  onConfirm: (note: string) => void;
-  onCancel: () => void;
+  comment: DraftComment;
   autoFocus?: boolean;
+  /** id of the line the comment is about. */
+  describedBy?: string;
+  onChange: (note: string) => void;
+  onRemove: () => void;
 }) {
-  const [note, setNote] = useState(initial);
-  const [error, setError] = useState<string | null>(null);
-
-  function confirm() {
-    const value = note.trim();
-    if (!value) {
-      setError("Write what should change, or cancel.");
-      return;
-    }
-    if (value.length > MAX_COMMENT_CHARS) {
-      setError("Keep the comment under 4,000 characters.");
-      return;
-    }
-    onConfirm(value);
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      onCancel();
-    } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault();
-      confirm();
-    }
-  }
-
+  const tooLong = comment.note.trim().length > MAX_COMMENT_CHARS;
   return (
-    <div className="flex flex-col gap-2">
+    <div
+      className="flex swap-in flex-col items-end gap-1.5"
+      onBlur={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        if (comment.note.trim() === "") onRemove();
+      }}
+    >
       <Textarea
-        aria-label="Comment"
-        value={note}
-        onChange={(e) => {
-          setNote(e.target.value);
-          if (error) setError(null);
+        className="w-full"
+        aria-label="Your comment on this line"
+        aria-describedby={describedBy}
+        aria-invalid={tooLong ? true : undefined}
+        value={comment.note}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && comment.note.trim() === "") {
+            e.preventDefault();
+            onRemove();
+          }
         }}
-        onKeyDown={onKeyDown}
-        placeholder="What should change here?"
+        placeholder="What should change?"
         minRows={2}
         maxRows={8}
         autoFocus={autoFocus}
-        aria-invalid={error ? true : undefined}
       />
-      {error ? (
-        <p role="alert" className="text-callout text-red">
-          {error}
+      {tooLong ? (
+        <p role="alert" className="self-start text-meta text-red">
+          Keep the comment under 4,000 characters.
         </p>
       ) : null}
-      <div className="flex justify-end gap-2">
-        <Button variant="plain" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button onClick={confirm}>{confirmLabel}</Button>
-      </div>
-    </div>
-  );
-}
-
-/** The floating composer under the chosen passage. */
-export function CommentComposer({
-  pick,
-  onAdd,
-  onCancel,
-}: {
-  pick: PassagePick;
-  onAdd: (note: string) => void;
-  onCancel: () => void;
-}) {
-  const tooLong = pick.quote.length > MAX_QUOTE_CHARS;
-  return (
-    <div
-      role="dialog"
-      aria-label="Add Comment"
-      className="absolute inset-x-0 z-20 flex justify-start"
-      style={{ top: pick.top + 8 }}
-    >
-      <div
-        className="flex w-full max-w-[24rem] popup-motion flex-col gap-3 rounded-popover bg-elevated-2 p-3 shadow-float"
-        style={{ marginLeft: `clamp(0px, ${pick.left}px, calc(100% - 24rem))` }}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="press rounded-row text-meta text-label-2 underline underline-offset-[3px] focus-ring hover:text-label"
       >
-        <p className="line-clamp-2 text-callout text-label-2">“{pick.quote}”</p>
-        {tooLong ? (
-          <>
-            <p role="alert" className="text-callout text-red">
-              This passage is too long for one comment. Select up to 5,000 characters.
-            </p>
-            <div className="flex justify-end">
-              <Button onClick={onCancel}>Close</Button>
-            </div>
-          </>
-        ) : (
-          <CommentEditor confirmLabel="Add Comment" onConfirm={onAdd} onCancel={onCancel} />
-        )}
-      </div>
+        Remove
+      </button>
     </div>
   );
 }

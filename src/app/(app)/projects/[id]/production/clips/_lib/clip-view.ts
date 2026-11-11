@@ -29,6 +29,23 @@ export const CLIP_STATE_LABELS: Record<BlockProductionStage, string> = {
   failed: "Needs Attention",
 };
 
+/** Status colours of the kit's StatusLine / StatusDot. */
+export type ClipTone = "done" | "waiting" | "working" | "failed";
+
+/** Amber waits for the user, grey works or waits for something else, green is final, red failed. */
+export const CLIP_STATE_TONES: Record<BlockProductionStage, ClipTone> = {
+  preparing: "working",
+  prepare_failed: "failed",
+  block_review: "working",
+  approved: "working",
+  draft_generating: "working",
+  draft_review: "waiting",
+  final_generating: "working",
+  final_review: "waiting",
+  done: "done",
+  failed: "failed",
+};
+
 export const REVIEW_STAGES: readonly BlockProductionStage[] = ["draft_review", "final_review"];
 export const RENDERING_STAGES: readonly BlockProductionStage[] = [
   "draft_generating",
@@ -60,23 +77,32 @@ export type StageCounts = Record<BlockProductionStage, number>;
 
 /**
  * The board's one status line, saying what needs attention rather than totals:
- * "2 to review. 1 rendering.", "All shots are final.".
+ * "2 to review · 1 rendering", "Every shot is final".
  */
 export function statusLine(counts: StageCounts): string {
   const review = counts.draft_review + counts.final_review;
   const rendering = counts.draft_generating + counts.final_generating;
-  const attention = counts.failed + counts.prepare_failed;
+  const failed = counts.failed + counts.prepare_failed;
   const before = counts.preparing + counts.block_review + counts.approved;
   const all = Object.values(counts).reduce((sum, n) => sum + n, 0);
-  if (all === 0) return "There are no shots yet.";
-  if (counts.done === all) return "All shots are final.";
+  if (all === 0) return "No shots yet";
+  if (counts.done === all) return "Every shot is final";
   const parts: string[] = [];
-  if (attention > 0) parts.push(`${attention} ${attention === 1 ? "needs" : "need"} attention.`);
-  if (review > 0) parts.push(`${review} to review.`);
-  if (rendering > 0) parts.push(`${rendering} rendering.`);
-  if (before > 0) parts.push(`${before} in shot review.`);
-  if (parts.length === 0) return "Nothing to review right now.";
-  return parts.join(" ");
+  if (review > 0) parts.push(`${review} to review`);
+  if (failed > 0) parts.push(`${failed} failed`);
+  if (rendering > 0) parts.push(`${rendering} rendering`);
+  if (before > 0) parts.push(`${before} in shot review`);
+  if (parts.length === 0) return "Nothing to review right now";
+  return parts.join(" · ");
+}
+
+/** The colour of the board's status line. */
+export function statusTone(counts: StageCounts): ClipTone {
+  if (counts.failed + counts.prepare_failed > 0) return "failed";
+  if (counts.draft_review + counts.final_review > 0) return "waiting";
+  const all = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  if (all > 0 && counts.done === all) return "done";
+  return "working";
 }
 
 /** "Draft 2", "Final", "Final 2": each take named by its kind and its place among that kind. */

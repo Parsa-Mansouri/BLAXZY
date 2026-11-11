@@ -1,5 +1,17 @@
-import type { AssetCard } from "@/server/assets";
-import type { GalleryItem } from "./asset-gallery";
+import type { Asset, AssetCard, AssetStage } from "@/server/assets";
+import type { PictureAspect } from "@/ui";
+
+type Kind = Asset["kind"];
+
+/** What a tile needs of an asset. Plain data, so client components can hold it. */
+export interface GalleryItem {
+  id: string;
+  kind: Kind;
+  name: string;
+  description: string | null;
+  stage: AssetStage;
+  thumbnailFileId: string | null;
+}
 
 export function toGalleryItem(card: AssetCard): GalleryItem {
   return {
@@ -11,3 +23,14 @@ export function toGalleryItem(card: AssetCard): GalleryItem {
     thumbnailFileId: card.thumbnailFileId,
   };
 }
+
+/** The picture shape of each kind: people stand, places are wide, things are square. */
+export const KIND_ASPECTS: Record<Kind, PictureAspect> = {
+  character: "portrait",
+  creature: "portrait",
+  costume: "portrait",
+  location: "video",
+  prop: "square",
+  voice: "square",
+  other: "square",
+};

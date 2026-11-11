@@ -38,7 +38,7 @@ export function AudioPlayer({ fileId, label }: { fileId: string; label: string }
         <IconButton
           label={playing ? `Pause ${label}` : `Play ${label}`}
           tooltip={false}
-          variant="prominent"
+          variant="primary"
           size="large"
           icon={playing ? <Pause /> : <Play />}
           onClick={toggle}
@@ -72,12 +72,12 @@ export function AudioPlayer({ fileId, label }: { fileId: string; label: string }
             "disabled:cursor-default disabled:opacity-40",
           )}
         />
-        <span className="shrink-0 text-callout text-label-2 tabular-nums">
+        <span className="shrink-0 text-meta text-label-2 tabular-nums">
           {clock(time)} / {clock(duration)}
         </span>
       </div>
       {failed ? (
-        <p role="alert" className="text-callout text-red">
+        <p role="alert" className="text-secondary text-red">
           This recording cannot be played here. Upload it again as an MP3 file.
         </p>
       ) : null}
@@ -103,6 +103,7 @@ export function VoiceStage({
   assetName,
   recording,
   busy,
+  initialReplacing = false,
 }: {
   projectId: string;
   assetId: string;
@@ -110,23 +111,25 @@ export function VoiceStage({
   /** The accepted recording, when there is one. */
   recording: LookView | null;
   busy: boolean;
+  /** Open with the upload that replaces the recording (a card's action led here). */
+  initialReplacing?: boolean;
 }) {
-  const [replacing, setReplacing] = useState(false);
+  const [replacing, setReplacing] = useState(initialReplacing && Boolean(recording?.fileId));
 
   if (recording?.fileId && !replacing) {
     return (
-      <section aria-labelledby="voice-title" className="flex max-w-2xl flex-col gap-6">
+      <section aria-labelledby="voice-title" className="flex max-w-170 in-2 flex-col gap-6">
         <div className="flex flex-col gap-1.5">
-          <StageHeading id="voice-title" className="text-title-1">
+          <StageHeading id="voice-title" className="text-heading-sm">
             Recording
           </StageHeading>
-          <p className="text-callout text-label-2">
+          <p className="text-meta text-label-2">
             Recording {recording.versionNumber} · Uploaded · <When date={recording.createdAt} />
           </p>
         </div>
         <AudioPlayer fileId={recording.fileId} label={`${assetName} recording`} />
         <div>
-          <Button onClick={() => setReplacing(true)} disabled={busy}>
+          <Button variant="outlined" onClick={() => setReplacing(true)} disabled={busy}>
             Replace Recording
           </Button>
         </div>
@@ -135,12 +138,12 @@ export function VoiceStage({
   }
 
   return (
-    <section aria-labelledby="voice-title" className="flex max-w-2xl flex-col gap-6">
+    <section aria-labelledby="voice-title" className="flex max-w-170 in-2 flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <StageHeading id="voice-title" className="text-title-1">
+        <StageHeading id="voice-title" className="text-heading-sm">
           {replacing ? "Replace Recording" : "Add a Recording"}
         </StageHeading>
-        <p className="text-reading text-label-2">
+        <p className="text-body text-label-2">
           Upload a recording of {assetName}’s voice. It is used as is: there is nothing to generate
           or review.
         </p>
@@ -148,7 +151,9 @@ export function VoiceStage({
       <UploadZone projectId={projectId} assetId={assetId} audio />
       {replacing ? (
         <div>
-          <Button onClick={() => setReplacing(false)}>Cancel</Button>
+          <Button variant="plain" onClick={() => setReplacing(false)}>
+            Cancel
+          </Button>
         </div>
       ) : null}
     </section>

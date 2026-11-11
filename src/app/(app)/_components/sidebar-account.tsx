@@ -6,12 +6,27 @@ import { ChevronsUpDown } from "lucide-react";
 import { HelpTip, Menu, MenuItem, MenuLabel, MenuSeparator, cn } from "@/ui";
 import { useSignOut } from "../_lib/use-sign-out";
 
+const creditFormat = new Intl.NumberFormat("en-US");
+
+function formatCredits(credits: number): string {
+  return `${creditFormat.format(credits)} ${credits === 1 ? "Credit" : "Credits"}`;
+}
+
 function initialOf(name: string, email: string): string {
   return (name.trim()[0] ?? email[0] ?? "?").toUpperCase();
 }
 
 /** Bottom of the sidebar: the account row (opens the account menu) and the credits line. */
-export function SidebarAccount({ name, email }: { name: string; email: string }) {
+export function SidebarAccount({
+  name,
+  email,
+  credits,
+}: {
+  name: string;
+  email: string;
+  /** The account's credit balance. */
+  credits: number;
+}) {
   const pathname = usePathname();
   const { signOut, pending } = useSignOut();
   const onAccount = pathname === "/account";
@@ -49,10 +64,10 @@ export function SidebarAccount({ name, email }: { name: string; email: string })
         </MenuItem>
       </Menu>
       <div className="flex items-center gap-1.5 px-2 text-callout text-label-2">
-        <span>0 Credits</span>
+        <span>{formatCredits(credits)}</span>
         <HelpTip title="Credits" label="About Credits" side="top">
-          Credits pay for generating images, video and voices. The balance appears here once
-          generation is available.
+          Credits pay for generating images, video and voices. Each generation shows its price
+          before it starts; a failed one gives its credits back.
         </HelpTip>
       </div>
     </>

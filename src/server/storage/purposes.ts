@@ -29,6 +29,38 @@ export const FILE_PURPOSES = {
       "image/webp": ["webp"],
     },
   },
+  /** A look image produced by a generation provider. */
+  generated_image: {
+    maxBytes: 50 * MB,
+    types: {
+      "image/png": ["png"],
+      "image/jpeg": ["jpg", "jpeg"],
+      "image/webp": ["webp"],
+    },
+  },
+  /** An asset sheet (character, prop or location sheet) produced by a generation provider. */
+  sheet_image: {
+    maxBytes: 50 * MB,
+    types: {
+      "image/png": ["png"],
+      "image/jpeg": ["jpg", "jpeg"],
+      "image/webp": ["webp"],
+    },
+  },
+  /** A voice asset's recording, uploaded by the user. */
+  asset_audio: {
+    maxBytes: 25 * MB,
+    types: {
+      "audio/mpeg": ["mp3"],
+      "audio/mp3": ["mp3"],
+      "audio/wav": ["wav"],
+      "audio/x-wav": ["wav"],
+      "audio/wave": ["wav"],
+      "audio/mp4": ["m4a"],
+      "audio/x-m4a": ["m4a"],
+      "audio/m4a": ["m4a"],
+    },
+  },
 } as const satisfies Record<string, PurposeRule>;
 
 export type FilePurpose = keyof typeof FILE_PURPOSES;

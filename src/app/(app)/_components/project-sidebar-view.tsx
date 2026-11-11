@@ -18,11 +18,13 @@ import { SidebarAccount } from "./sidebar-account";
 export function ProjectSidebarView({
   name,
   email,
+  credits,
   title,
   stages,
 }: {
   name: string;
   email: string;
+  credits: number;
   title: string;
   stages: StageListItem[];
 }) {
@@ -44,7 +46,7 @@ export function ProjectSidebarView({
         </div>
       </SidebarBody>
       <SidebarFooter>
-        <SidebarAccount name={name} email={email} />
+        <SidebarAccount name={name} email={email} credits={credits} />
       </SidebarFooter>
     </>
   );

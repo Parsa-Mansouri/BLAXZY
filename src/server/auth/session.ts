@@ -62,7 +62,10 @@ export function toSessionResult(raw: RawSession): SessionResult | null {
  * and route handlers.
  */
 export const getSession = cache(async (): Promise<SessionResult | null> => {
-  const raw = await getAuth().api.getSession({ headers: await headers() });
+  // Read the headers first: that marks the route dynamic before anything needs the runtime env
+  // (otherwise `next build` without env fails while trying to prerender signed-in pages).
+  const requestHeaders = await headers();
+  const raw = await getAuth().api.getSession({ headers: requestHeaders });
   return raw ? toSessionResult(raw) : null;
 });
 

@@ -7,6 +7,7 @@ export {
   type JobPayload,
 } from "./define";
 export {
+  generationRun,
   scriptCheck,
   scriptDetectAssets,
   scriptRevise,

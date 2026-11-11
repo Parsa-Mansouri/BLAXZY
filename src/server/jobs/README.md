@@ -20,6 +20,10 @@ export const scriptGenerate = defineJob({
 await enqueue(scriptGenerate, { scriptVersionId }); // job id, or null if deduplicated
 ```
 
+With `allowFollowUp: true` (needs a dedupe key) the queue keeps one queued job beside the running
+one per key, so a running handler can enqueue a delayed follow-up of itself (`generation.run` does
+this to wait for a free per-user slot); two jobs with the same key still never run at once.
+
 `enqueue` validates the payload (throws `InvalidJobPayloadError`) and connects lazily on first use,
 so importing this module never opens a connection (`next build` needs no env).
 

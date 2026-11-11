@@ -45,6 +45,9 @@ All configuration is read from the environment (see `.env.example` and `src/serv
 | `DAMI_DEFAULT_MODEL`                                                  | unset                            | Overrides every dami's default Claude model (unset = per-dami defaults)                                     |
 | `DAMI_MAX_CONCURRENCY`                                                | `4`                              | Per-process limit on concurrent Claude calls made by damis                                                  |
 | `DAMI_MAX_RETRIES`                                                    | `4`                              | Retries per Claude call for rate limits, overloads and network errors                                       |
+| `GENERATION_PROVIDER`                                                 | `sample`                         | `sample` renders placeholder images locally (no cost); `higgsfield` is not wired yet                        |
+| `GENERATION_SAMPLE_DELAY_MS`                                          | `2500`                           | How long one sample generation takes (`0` in tests)                                                         |
+| `GENERATION_MAX_PER_USER`                                             | `3`                              | Generations one user may have running at once; extra jobs are rescheduled, not failed                       |
 
 ## Damis
 
@@ -63,6 +66,18 @@ whole Script stage then runs end to end locally:
 ```bash
 pnpm worker            # in one terminal
 pnpm dev:script-flow   # creates a project for testuser@gmail.com and runs brief → blocks
+```
+
+## Generation and credits
+
+Images (and later video) are made through the provider layer (`src/server/providers`), paid with
+credits (`src/server/billing`) and run by the `generation.run` job (`src/server/generation`; see
+their READMEs). By default the **sample provider** renders placeholder PNGs locally:
+
+```bash
+pnpm dev:credits testuser@gmail.com 100   # grant credits (development only)
+pnpm worker                               # in one terminal
+pnpm dev:generation                       # one look and one sheet on the user's latest project
 ```
 
 ## Background jobs and storage

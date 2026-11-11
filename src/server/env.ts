@@ -67,6 +67,12 @@ export const envSchema = z.object({
   WORKER_POLL_INTERVAL_SECONDS: z.coerce.number().min(0.5).default(2),
   /** How long shutdown waits for in-flight jobs before they are failed (and retried elsewhere). */
   WORKER_SHUTDOWN_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(25),
+  /** Image and video generation provider. `sample` renders placeholder images locally (no cost). */
+  GENERATION_PROVIDER: z.enum(["sample", "higgsfield"]).default("sample"),
+  /** How long a sample-provider job takes to finish, so the flow feels real (`0` in tests). */
+  GENERATION_SAMPLE_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(2500),
+  /** Generations one user may have running at once; extra jobs wait (rescheduled, not failed). */
+  GENERATION_MAX_PER_USER: z.coerce.number().int().positive().max(100).default(3),
   /** `console` prints emails to the server log (development); `smtp` sends them. */
   EMAIL_TRANSPORT: z.enum(["console", "smtp"]).default("console"),
   EMAIL_FROM: z.string().min(1).default("BLAXZY <no-reply@blaxzy.local>"),

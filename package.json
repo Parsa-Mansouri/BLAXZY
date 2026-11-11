@@ -12,7 +12,7 @@
     "start": "next start",
     "worker": "tsx worker/index.ts",
     "worker:dev": "tsx watch worker/index.ts",
-    "worker:build": "esbuild worker/index.ts --bundle --platform=node --format=cjs --target=node22 --external:pg-native --tsconfig=tsconfig.json --outfile=dist/worker.cjs",
+    "worker:build": "esbuild worker/index.ts --bundle --platform=node --format=cjs --target=node22 --external:pg-native --external:sharp --tsconfig=tsconfig.json --outfile=dist/worker.cjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -23,7 +23,9 @@
     "db:studio": "drizzle-kit studio",
     "dev:user": "tsx scripts/dev-user.ts",
     "dami:run": "tsx scripts/dami-run.ts",
-    "dev:script-flow": "tsx scripts/dev-script-flow.ts"
+    "dev:script-flow": "tsx scripts/dev-script-flow.ts",
+    "dev:credits": "tsx scripts/dev-credits.ts",
+    "dev:generation": "tsx scripts/dev-generation.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.7.0",
@@ -42,6 +44,7 @@
     "pg-boss": "^12.38.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "sharp": "0.35.5",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.7"
   },

@@ -53,3 +53,22 @@ export const scriptSection = defineJob({
   payload: scriptPayload,
   options: { ...damiJob, expireInSeconds: 90 * 60 },
 });
+
+/*
+ * Generation engine (see docs/M2_M3_CONTRACTS.md). One job per generation: create the provider job
+ * once, poll it, store the result, settle or refund. A handler over the per-user limit schedules a
+ * follow-up of itself (`allowFollowUp`) instead of failing.
+ */
+export const generationRun = defineJob({
+  name: "generation.run",
+  payload: z.object({ generationId: z.string().uuid() }),
+  options: {
+    retryLimit: 3,
+    retryDelaySeconds: 5,
+    retryBackoff: true,
+    retryDelayMaxSeconds: 120,
+    expireInSeconds: 20 * 60,
+  },
+  dedupeKey: (p) => p.generationId,
+  allowFollowUp: true,
+});

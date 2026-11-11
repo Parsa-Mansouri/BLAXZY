@@ -4,6 +4,7 @@ import { scriptDetectAssetsHandler } from "./script-detect-assets";
 import { scriptReviseHandler } from "./script-revise";
 import { scriptSectionHandler } from "./script-section";
 import { scriptWriteHandler } from "./script-write";
+import { generationRunHandler } from "./generation-run";
 import { systemPingHandler } from "./system-ping";
 
 /** Every job handler this worker runs. Add new handlers here. */
@@ -14,4 +15,5 @@ export const handlers: JobHandler[] = [
   scriptReviseHandler,
   scriptDetectAssetsHandler,
   scriptSectionHandler,
+  generationRunHandler,
 ];

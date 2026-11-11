@@ -109,19 +109,20 @@ function queueOptions(options: JobOptions) {
 /**
  * Create the job type's queue once per process (idempotent across processes: the insert is
  * `ON CONFLICT DO NOTHING` under an advisory lock). A job type with a dedupe key uses the
- * `exclusive` policy: one queued-or-active job per key.
+ * `exclusive` policy: one queued-or-active job per key; with `allowFollowUp` the `stately` policy:
+ * one queued and one active job per key, and a queued one is not fetched while another is active.
  */
 export function ensureQueue(backend: QueueBackend, job: JobDefinition): Promise<void> {
   let pending = backend.queues.get(job.name);
   if (!pending) {
     pending = (async () => {
-      const policy = job.dedupeKey ? "exclusive" : "standard";
+      const policy = !job.dedupeKey ? "standard" : job.allowFollowUp ? "stately" : "exclusive";
       await backend.boss.createQueue(job.name, { policy, ...queueOptions(job.options) });
       const queue = await backend.boss.getQueue(job.name);
       if (queue?.policy !== policy) {
         throw new Error(
           `Queue "${job.name}" exists with policy "${queue?.policy}" but its definition needs ` +
-            `"${policy}"; recreate the queue (dedupeKey was added or removed)`,
+            `"${policy}"; recreate the queue (dedupeKey or allowFollowUp changed)`,
         );
       }
     })();

@@ -10,10 +10,12 @@ import { SidebarAccount } from "./sidebar-account";
 export function LibrarySidebarView({
   name,
   email,
+  credits,
   recent,
 }: {
   name: string;
   email: string;
+  credits: number;
   recent: { id: string; title: string }[];
 }) {
   const pathname = usePathname();
@@ -55,7 +57,7 @@ export function LibrarySidebarView({
         ) : null}
       </SidebarBody>
       <SidebarFooter>
-        <SidebarAccount name={name} email={email} />
+        <SidebarAccount name={name} email={email} credits={credits} />
       </SidebarFooter>
     </>
   );

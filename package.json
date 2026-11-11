@@ -27,7 +27,8 @@
     "dev:credits": "tsx scripts/dev-credits.ts",
     "dev:generation": "tsx scripts/dev-generation.ts",
     "dev:preprod-flow": "tsx scripts/dev-preprod-flow.ts",
-    "dev:sweep": "tsx scripts/dev-sweep.ts"
+    "dev:sweep": "tsx scripts/dev-sweep.ts",
+    "dev:production-flow": "tsx scripts/dev-production-flow.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.7.0",

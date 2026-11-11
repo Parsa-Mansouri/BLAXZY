@@ -123,3 +123,51 @@ export const assetSheetFix = defineJob({
   options: damiJob,
   dedupeKey: (p) => p.sheetId,
 });
+
+/*
+ * Production (see docs/M4_CONTRACTS.md). Preparation and fixes run a dami; a take's job requests
+ * its generation, whose completion hook moves the take to review. Every job is keyed by its row,
+ * and every handler checks the row is still waiting for it.
+ */
+const blockPayload = z.object({ blockId: z.string().uuid() });
+const takePayload = z.object({ takeId: z.string().uuid() });
+
+/** Prepare a block version for generation (text-blocks). */
+export const productionPrepare = defineJob({
+  name: "production.prepare",
+  payload: blockPayload,
+  options: damiJob,
+  dedupeKey: (p) => p.blockId,
+});
+
+/** Revise a block version from the review of its predecessor (block-reviser). */
+export const blockRevise = defineJob({
+  name: "block.revise",
+  payload: blockPayload,
+  options: damiJob,
+  dedupeKey: (p) => p.blockId,
+});
+
+/** Request a take's generation (a draft, or a final from its accepted draft). */
+export const takeGenerate = defineJob({
+  name: "take.generate",
+  payload: takePayload,
+  options: damiJob,
+  dedupeKey: (p) => p.takeId,
+});
+
+/** Fix a rejected take's prompt from its review (take-fixer), then request the new draft. */
+export const takeFix = defineJob({
+  name: "take.fix",
+  payload: takePayload,
+  options: damiJob,
+  dedupeKey: (p) => p.takeId,
+});
+
+/** Build the ZIP of a project's finished clips, streamed from and to object storage. */
+export const exportBuild = defineJob({
+  name: "export.build",
+  payload: z.object({ exportId: z.string().uuid() }),
+  options: { retryLimit: 2, retryDelaySeconds: 30, retryBackoff: true, expireInSeconds: 60 * 60 },
+  dedupeKey: (p) => p.exportId,
+});

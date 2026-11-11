@@ -5,6 +5,10 @@ import { assetLookFixHandler, assetLookGenerateHandler } from "./asset-look";
 import { assetSheetFixHandler, assetSheetGenerateHandler } from "./asset-sheet";
 import { generationRunHandler } from "./generation-run";
 import { generationSweepHandler, generationSweepSchedule } from "./generation-sweep";
+import { exportBuildHandler } from "./production-export";
+import { productionGenerationHook } from "./production-generation-hook";
+import { blockReviseHandler, productionPrepareHandler } from "./production-prepare";
+import { takeFixHandler, takeGenerateHandler } from "./production-take";
 import { scriptCheckHandler } from "./script-check";
 import { scriptDetectAssetsHandler } from "./script-detect-assets";
 import { scriptReviseHandler } from "./script-revise";
@@ -12,10 +16,13 @@ import { scriptSectionHandler } from "./script-section";
 import { scriptWriteHandler } from "./script-write";
 import { systemPingHandler } from "./system-ping";
 
-export { assetGenerationHook };
+export { assetGenerationHook, productionGenerationHook };
 
 /** Generation completion hooks, registered once per process (worker, `dev:sweep`). */
-export const generationHooks: GenerationFinishedHandler[] = [assetGenerationHook];
+export const generationHooks: GenerationFinishedHandler[] = [
+  assetGenerationHook,
+  productionGenerationHook,
+];
 
 /** Recurring jobs (one schedule per job type for the whole fleet). */
 export const schedules: JobSchedule[] = [generationSweepSchedule];
@@ -34,4 +41,9 @@ export const handlers: JobHandler[] = [
   assetLookFixHandler,
   assetSheetGenerateHandler,
   assetSheetFixHandler,
+  productionPrepareHandler,
+  blockReviseHandler,
+  takeGenerateHandler,
+  takeFixHandler,
+  exportBuildHandler,
 ];

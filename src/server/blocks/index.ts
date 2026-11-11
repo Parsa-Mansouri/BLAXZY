@@ -24,3 +24,21 @@ export {
   type SectioningState,
   type SectioningStatus,
 } from "./service";
+/** For `@/server/production` and its job handlers (no ownership checks). */
+export {
+  approveBlocks,
+  claimBlocksForPreparation,
+  createNextBlockVersion,
+  failBlockPreparation,
+  getBlockVersion,
+  getCurrentBlock,
+  getCurrentBlocks,
+  getPreviousCurrentBlock,
+  getPreviousVersion,
+  listCurrentBlockStates,
+  MAX_PRODUCTION_BLOCKS,
+  pageCurrentBlocks,
+  restartBlockPreparation,
+  storeBlockPreparation,
+  type BlockStateRow,
+} from "./production";

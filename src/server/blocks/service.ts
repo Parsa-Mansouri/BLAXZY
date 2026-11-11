@@ -81,8 +81,9 @@ function sameAssets(a: string[], b: string[]): boolean {
 /**
  * Replaces the project's current blocks with a new set, in one transaction. A current block whose
  * excerpt (whitespace-normalised) equals a new block's keeps its lineage: a new row with the next
- * version number (identical content when prompt and assets are unchanged). Other blocks start a
- * new lineage. Every previous current row gets `supersededAt`.
+ * version number (identical content when prompt and assets are unchanged; an identical, prepared
+ * block also keeps its production preparation and approval). Other blocks start a new lineage.
+ * Every previous current row gets `supersededAt`.
  */
 export async function replaceBlocks(input: {
   projectId: string;
@@ -141,6 +142,9 @@ export async function replaceBlocks(input: {
       carried++;
       const unchanged =
         match.prompt === block.prompt && sameAssets(match.assetRefs, block.assetRefs);
+      // An identical block keeps its finished preparation (and its approval), so Production
+      // keeps its takes; anything else is prepared again.
+      const keepProduction = unchanged && match.productionState === "ready";
       return {
         ...fields,
         lineageId: match.lineageId,
@@ -150,6 +154,16 @@ export async function replaceBlocks(input: {
         assetRefs: unchanged ? match.assetRefs : block.assetRefs,
         // An identical carry keeps pointing at the run that wrote the prompt.
         damiRunId: unchanged ? match.damiRunId : fields.damiRunId,
+        ...(keepProduction
+          ? {
+              productionState: match.productionState,
+              productionPrompt: match.productionPrompt,
+              productionAssetRefs: match.productionAssetRefs,
+              productionNotes: match.productionNotes,
+              productionDamiRunId: match.productionDamiRunId,
+              approvedAt: match.approvedAt,
+            }
+          : {}),
       };
     });
     await tx.insert(promptBlock).values(rows);

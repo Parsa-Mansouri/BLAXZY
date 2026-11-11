@@ -52,6 +52,14 @@ export {
   type AssetDetail,
   type PreProductionOverview,
 } from "./preproduction";
+/** For `@/server/production`: assets as block references (no ownership checks). */
+export {
+  describeAssetRefs,
+  describeAssetsById,
+  listReadyReferenceAssets,
+  parseAssetRef,
+  type ReferenceAsset,
+} from "./references";
 /** Worker only. */
 export {
   applyGenerationResult,

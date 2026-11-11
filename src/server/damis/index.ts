@@ -4,6 +4,7 @@
  */
 import { assetDetector } from "./asset-detector/dami";
 import { assetFixer } from "./asset-fixer/dami";
+import { blockReviser } from "./block-reviser/dami";
 import { assetPromptWriter } from "./asset-prompt-writer/dami";
 import type { AnyDami } from "./framework/define";
 import { promptSectioner } from "./prompt-sectioner/dami";
@@ -12,6 +13,8 @@ import { scriptReviser } from "./script-reviser/dami";
 import { scriptWriter } from "./script-writer/dami";
 import { sheetFixer } from "./sheet-fixer/dami";
 import { sheetGenerator } from "./sheet-generator/dami";
+import { takeFixer } from "./take-fixer/dami";
+import { textBlocks } from "./text-blocks/dami";
 
 // Framework
 export { defineDami } from "./framework/define";
@@ -179,6 +182,54 @@ export {
   type ReferenceAsset,
 } from "./shared/reference";
 
+// Production (text-blocks, block and take review)
+export { textBlocks, blockReviser, takeFixer };
+export {
+  textBlocksInputSchema,
+  textBlocksOutputSchema,
+  type TextBlocksInput,
+  type TextBlocksOutput,
+} from "./text-blocks/schema";
+export {
+  blockReviserInputSchema,
+  blockReviserOutputSchema,
+  blockIssueCodeSchema,
+  blockReviewSchema,
+  type BlockReviserInput,
+  type BlockReviserOutput,
+} from "./block-reviser/schema";
+export {
+  BLOCK_ISSUES,
+  BLOCK_ISSUE_CODES,
+  BLOCK_ISSUE_LIST,
+  type BlockIssueCode,
+  type BlockIssueDefinition,
+} from "./block-reviser/issues";
+export {
+  takeFixerInputSchema,
+  takeFixerOutputSchema,
+  takeIssueCodeSchema,
+  takeReviewSchema,
+  TAKE_STAGES,
+  type TakeFixerInput,
+  type TakeFixerOutput,
+} from "./take-fixer/schema";
+export {
+  TAKE_ISSUES,
+  TAKE_ISSUE_CODES,
+  TAKE_ISSUE_LIST,
+  type TakeIssueCode,
+  type TakeIssueDefinition,
+} from "./take-fixer/issues";
+export {
+  blockAssetSchema,
+  checkBlockPrompt,
+  imageToken,
+  IMAGE_TOKEN_PATTERN,
+  MAX_REFERENCE_IMAGES,
+  type BlockAsset,
+} from "./shared/block";
+
 /** Every dami by key (for the CLI and, later, Pro's dami picker). */
 export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [scriptWriter.key]: scriptWriter,
@@ -190,4 +241,7 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [assetFixer.key]: assetFixer,
   [sheetGenerator.key]: sheetGenerator,
   [sheetFixer.key]: sheetFixer,
+  [textBlocks.key]: textBlocks,
+  [blockReviser.key]: blockReviser,
+  [takeFixer.key]: takeFixer,
 };

@@ -17,6 +17,7 @@ import {
   sampleSheetFixer,
   sampleSheetGenerator,
 } from "./reference";
+import { sampleBlockReviser, sampleTakeFixer, sampleTextBlocks } from "./production";
 import { samplePromptSectioner } from "./prompt-sectioner";
 import { sampleScriptChecker } from "./script-checker";
 import { sampleScriptReviser } from "./script-reviser";
@@ -33,6 +34,9 @@ export const SAMPLE_GENERATORS: Readonly<Record<string, (input: unknown) => unkn
   "asset-fixer": sampleAssetFixer,
   "sheet-generator": sampleSheetGenerator,
   "sheet-fixer": sampleSheetFixer,
+  "text-blocks": sampleTextBlocks,
+  "block-reviser": sampleBlockReviser,
+  "take-fixer": sampleTakeFixer,
 };
 
 function wait(ms: number, signal: AbortSignal | undefined): Promise<void> {

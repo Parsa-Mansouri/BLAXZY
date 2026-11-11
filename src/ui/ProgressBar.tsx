@@ -1,7 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Progress } from "@base-ui/react/progress";
+import { useId, type ReactNode } from "react";
 import { cn } from "./cn";
 
 export interface ProgressBarProps {
@@ -23,6 +22,7 @@ const fills = {
   danger: "bg-red",
 } as const;
 
+/** A thin progress bar with the progressbar role; nothing is rendered for assistive tech only. */
 export function ProgressBar({
   value,
   label,
@@ -31,30 +31,44 @@ export function ProgressBar({
   className,
   "aria-label": ariaLabel,
 }: ProgressBarProps) {
+  const labelId = useId();
+  const percent = value === null ? null : Math.min(100, Math.max(0, value));
   return (
-    <Progress.Root
-      value={value}
+    <div
+      role="progressbar"
       aria-label={label ? undefined : ariaLabel}
+      aria-labelledby={label ? labelId : undefined}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent === null ? undefined : Math.round(percent)}
+      aria-valuetext={percent === null ? undefined : `${Math.round(percent)}%`}
       className={cn("flex flex-col gap-1.5", className)}
     >
       {label || showValue ? (
         <div className="flex items-baseline justify-between gap-3 text-callout">
-          {label ? <Progress.Label className="text-label">{label}</Progress.Label> : <span />}
-          {showValue && value !== null ? (
-            <span className="text-label-2 tabular-nums">{Math.round(value)}%</span>
+          {label ? (
+            <span id={labelId} className="text-label">
+              {label}
+            </span>
+          ) : (
+            <span />
+          )}
+          {showValue && percent !== null ? (
+            <span className="text-label-2 tabular-nums">{Math.round(percent)}%</span>
           ) : null}
         </div>
       ) : null}
-      <Progress.Track className="relative h-1 w-full overflow-hidden rounded-capsule bg-fill-3">
-        <Progress.Indicator
+      <div className="relative h-1 w-full overflow-hidden rounded-capsule bg-fill-3">
+        <div
+          style={percent === null ? undefined : { width: `${percent}%` }}
           className={cn(
-            "rounded-capsule transition-[width] duration-(--dur-base) ease-out",
+            "h-full rounded-capsule transition-[width] duration-(--dur-base) ease-out",
             fills[tone],
-            value === null &&
+            percent === null &&
               "absolute inset-y-0 w-1/3 animate-indeterminate motion-reduce:animate-pulse",
           )}
         />
-      </Progress.Track>
-    </Progress.Root>
+      </div>
+    </div>
   );
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePolling } from "../../../../_lib/use-polling";
+import type { AssetStage } from "@/server/assets";
 import {
   acceptedLook,
   failedVersion,
@@ -13,6 +14,7 @@ import {
 } from "../_lib/asset-view";
 import { pollAssetAction } from "../actions";
 import { AddImage } from "./add-image";
+import { AssetScreenProvider } from "./asset-context";
 import { AssetHeader } from "./asset-header";
 import { HistoryStrip, HistoryViewer } from "./history";
 import {
@@ -40,21 +42,95 @@ export interface AssetScreenProps {
   limits: Limits;
 }
 
-/** Refreshes the page when the asset's state moves on, polling while something is produced. */
-function useRefreshOnChange(assetId: string, versions: DetailVersions) {
+/** Stages that end by themselves: the worker is (or is about to be) producing something. */
+const WORKING_STAGES: readonly AssetStage[] = ["generating", "building_sheet"];
+
+const FAST_POLL_MS = 2000;
+const SETTLED_POLL_MS = 10000;
+/** When to check again after an action: its own refresh may have raced the server. */
+const RECHECK_MS = [1000, 3500];
+
+/**
+ * Keeps the page in step with the server. It polls while a stage is not settled (even when no job
+ * is recorded yet: the sheet row appears a moment after an image is accepted) and slowly when it is,
+ * so a refresh that was lost never leaves an old stage on screen. `refresh` is for after an action:
+ * it refreshes at once, then checks again shortly after.
+ */
+function useAssetSync(assetId: string, versions: DetailVersions) {
   const router = useRouter();
   const key = versionsKey(versions);
-  usePolling(async () => {
-    const next = await pollAssetAction(assetId);
-    if (next !== key) router.refresh();
-  }, versions.busy);
+  const keyRef = useRef(key);
+  const alive = useRef(true);
+  const timers = useRef<number[]>([]);
+  useEffect(() => {
+    keyRef.current = key;
+  });
+  useEffect(() => {
+    alive.current = true;
+    const pending = timers.current;
+    return () => {
+      alive.current = false;
+      pending.forEach(clearTimeout);
+    };
+  }, []);
+
+  const check = useCallback(
+    async (isActive: () => boolean) => {
+      const next = await pollAssetAction(assetId);
+      if (isActive() && alive.current && next !== keyRef.current) router.refresh();
+    },
+    [assetId, router],
+  );
+
+  const unsettled = versions.busy || WORKING_STAGES.includes(versions.stage);
+  usePolling(check, true, unsettled ? FAST_POLL_MS : SETTLED_POLL_MS);
+
+  const refresh = useCallback(() => {
+    if (!alive.current) return;
+    router.refresh();
+    timers.current.forEach(clearTimeout);
+    timers.current = RECHECK_MS.map((ms) =>
+      window.setTimeout(() => void check(() => alive.current).catch(() => {}), ms),
+    );
+  }, [check, router]);
+
+  return refresh;
 }
+
+/** What a screen reader hears when the stage moves on (the visible panel is not a live region). */
+const ANNOUNCEMENTS: Record<AssetStage, string> = {
+  needs_image: "Add an image.",
+  needs_recording: "Add a recording.",
+  generating: "Creating the image.",
+  look_review: "The image is ready to review.",
+  building_sheet: "Building the sheet.",
+  sheet_review: "The sheet is ready to review.",
+  ready: "The asset is ready.",
+  failed: "Something went wrong. The details are on the page.",
+};
 
 /** One asset of pre-production: its image leads, its state decides what can be done. */
 export function AssetScreen(props: AssetScreenProps) {
   const { projectId, asset, versions, orientation, prices, balance } = props;
   const { stage, looks, sheets } = versions;
-  useRefreshOnChange(asset.id, versions);
+  const refresh = useAssetSync(asset.id, versions);
+  // False while the page is first shown; panels that mount later take focus (see StageHeading).
+  const shown = useRef(false);
+  // Set after a tick, not in the effect itself: development double-runs effects on mount.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      shown.current = true;
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const context = useMemo(() => ({ refresh, shown }), [refresh]);
+  // Announce a stage change, but not the stage the page opened on.
+  const [announcement, setAnnouncement] = useState("");
+  const [announcedStage, setAnnouncedStage] = useState(stage);
+  if (announcedStage !== stage) {
+    setAnnouncedStage(stage);
+    setAnnouncement(ANNOUNCEMENTS[stage]);
+  }
 
   const voice = asset.kind === "voice";
   const items = useMemo(() => historyItems(looks, sheets), [looks, sheets]);
@@ -184,39 +260,44 @@ export function AssetScreen(props: AssetScreenProps) {
   }
 
   return (
-    <div className="@container flex flex-col gap-10">
-      <AssetHeader
-        projectId={projectId}
-        asset={asset}
-        kindName={props.kindName}
-        category={props.category}
-        stage={stage}
-        busy={versions.busy}
-        limits={props.limits}
-      />
-      {viewing ? (
-        <HistoryViewer
-          item={viewing}
-          assetName={asset.name}
-          voice={voice}
-          orientation={orientation}
-          questions={props.questions}
-          onBack={() => setViewingKey(null)}
+    <AssetScreenProvider value={context}>
+      <div className="@container flex flex-col gap-10">
+        <p role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
+        <AssetHeader
+          projectId={projectId}
+          asset={asset}
+          kindName={props.kindName}
+          category={props.category}
+          stage={stage}
+          busy={versions.busy}
+          limits={props.limits}
         />
-      ) : (
-        stageView()
-      )}
-      <HistoryStrip
-        items={items}
-        voice={voice}
-        selectedKey={viewing?.key ?? null}
-        onSelect={(key) => {
-          setViewingKey(key);
-          if (!key) return;
-          const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-          window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
-        }}
-      />
-    </div>
+        {viewing ? (
+          <HistoryViewer
+            item={viewing}
+            assetName={asset.name}
+            voice={voice}
+            orientation={orientation}
+            questions={props.questions}
+            onBack={() => setViewingKey(null)}
+          />
+        ) : (
+          stageView()
+        )}
+        <HistoryStrip
+          items={items}
+          voice={voice}
+          selectedKey={viewing?.key ?? null}
+          onSelect={(key) => {
+            setViewingKey(key);
+            if (!key) return;
+            const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+          }}
+        />
+      </div>
+    </AssetScreenProvider>
   );
 }

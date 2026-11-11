@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { AssetStage } from "@/server/assets";
 import { cn } from "@/ui";
+import { ASSET_STATUS_LABELS } from "../../_lib/asset-status";
 
 interface StageView {
   label: string;
@@ -20,14 +21,34 @@ interface StageView {
 }
 
 export const STAGE_VIEWS: Record<AssetStage, StageView> = {
-  needs_image: { label: "Needs Image", icon: ImagePlus, working: false, tone: "quiet" },
-  needs_recording: { label: "Needs Recording", icon: Mic, working: false, tone: "quiet" },
-  generating: { label: "Creating Image", icon: Loader, working: true, tone: "quiet" },
-  look_review: { label: "Review Image", icon: Eye, working: false, tone: "quiet" },
-  building_sheet: { label: "Building Sheet", icon: LayoutGrid, working: true, tone: "quiet" },
-  sheet_review: { label: "Review Sheet", icon: Eye, working: false, tone: "quiet" },
-  ready: { label: "Ready", icon: CircleCheck, working: false, tone: "good" },
-  failed: { label: "Needs Attention", icon: TriangleAlert, working: false, tone: "warn" },
+  needs_image: {
+    label: ASSET_STATUS_LABELS.needs_image,
+    icon: ImagePlus,
+    working: false,
+    tone: "quiet",
+  },
+  needs_recording: {
+    label: ASSET_STATUS_LABELS.needs_recording,
+    icon: Mic,
+    working: false,
+    tone: "quiet",
+  },
+  generating: { label: ASSET_STATUS_LABELS.generating, icon: Loader, working: true, tone: "quiet" },
+  look_review: { label: ASSET_STATUS_LABELS.look_review, icon: Eye, working: false, tone: "quiet" },
+  building_sheet: {
+    label: ASSET_STATUS_LABELS.building_sheet,
+    icon: LayoutGrid,
+    working: true,
+    tone: "quiet",
+  },
+  sheet_review: {
+    label: ASSET_STATUS_LABELS.sheet_review,
+    icon: Eye,
+    working: false,
+    tone: "quiet",
+  },
+  ready: { label: ASSET_STATUS_LABELS.ready, icon: CircleCheck, working: false, tone: "good" },
+  failed: { label: ASSET_STATUS_LABELS.failed, icon: TriangleAlert, working: false, tone: "warn" },
 };
 
 /** True while the worker is producing something for the asset. */

@@ -45,7 +45,7 @@ export function Toolbar({ title, leading, trailing, className }: ToolbarProps) {
     >
       <SidebarToggle />
       <h1 className="min-w-0 truncate pl-1 text-title-3">{title}</h1>
-      {leading ? <div className="flex min-w-0 items-center">{leading}</div> : null}
+      {leading ? <div className="flex shrink-0 items-center">{leading}</div> : null}
       {trailing ? <div className="ml-auto flex shrink-0 items-center gap-2">{trailing}</div> : null}
     </header>
   );

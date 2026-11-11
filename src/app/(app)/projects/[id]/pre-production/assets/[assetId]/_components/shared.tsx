@@ -125,21 +125,34 @@ export function MissingImage({ label }: { label: string }) {
   );
 }
 
-/** Credits for a generation and the balance, in one quiet line; says what to do when short. */
-export function PriceLine({ price, balance }: { price: number | null; balance: number }) {
+const PRICE_ACTIONS = { image: "Creating this image", sheet: "Building the sheet" } as const;
+
+/**
+ * Credits for a generation and the balance, in one quiet line that says what costs them; says what
+ * to do when short.
+ */
+export function PriceLine({
+  price,
+  balance,
+  action,
+}: {
+  price: number | null;
+  balance: number;
+  action: keyof typeof PRICE_ACTIONS;
+}) {
   if (price === null) return null;
-  const credits = `${formatNumber(price)} ${price === 1 ? "credit" : "credits"}`;
+  const credits = (n: number) => `${formatNumber(n)} ${n === 1 ? "credit" : "credits"}`;
   if (balance >= price) {
     return (
       <p className="text-callout text-label-2 tabular-nums">
-        {credits}. You have {formatNumber(balance)}.
+        {PRICE_ACTIONS[action]} costs {credits(price)}. You have {formatNumber(balance)}.
       </p>
     );
   }
   return (
     <p role="status" className="text-callout text-orange tabular-nums">
-      {credits}. You have {formatNumber(balance)}, which is not enough. Ask the workspace owner to
-      add credits, then come back to this page.
+      You need {credits(price)} and have {formatNumber(balance)}. Add credits to your account to
+      continue.
     </p>
   );
 }

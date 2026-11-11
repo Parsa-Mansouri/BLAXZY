@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import type { LookView, SheetView } from "@/server/assets";
 import { Alert, Button, ProgressBar, cn } from "@/ui";
 import { isCreditsFailure, lookOrigin, type HeldImage } from "../_lib/asset-view";
 import { retryAction, reviewLookAction, reviewSheetAction, startOverAction } from "../actions";
+import { StageHeading, useAssetScreen } from "./asset-context";
 import { RequestChangesSheet } from "./request-changes-sheet";
 import {
   Artwork,
@@ -119,8 +119,8 @@ export function WaitingStage({
         </figure>
       }
       rail={
-        <div role="status" aria-live="polite" className="flex flex-col gap-4">
-          <h3 className="text-title-2">{title}</h3>
+        <div className="flex flex-col gap-4">
+          <StageHeading className="text-title-2">{title}</StageHeading>
           <ProgressBar value={null} aria-label={title} />
           <p className="text-reading text-label-2">
             {kind === "look"
@@ -135,7 +135,7 @@ export function WaitingStage({
 
 /** Accept or reject one look or sheet; reports errors in place. */
 function useReview(projectId: string) {
-  const router = useRouter();
+  const { refresh } = useAssetScreen();
   const [accepting, startAccepting] = useTransition();
   const [sending, startSending] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -159,7 +159,7 @@ function useReview(projectId: string) {
         return;
       }
       setSheetOpen(false);
-      router.refresh();
+      refresh();
     });
   }
 
@@ -208,7 +208,7 @@ export function LookReviewStage({
       rail={
         <>
           <div className="flex flex-col gap-2">
-            <h3 className="text-title-2">Review the Image</h3>
+            <StageHeading className="text-title-2">Review the Image</StageHeading>
             <p className="text-reading text-pretty text-label-2">
               Check that it shows {assetName} as the script describes. Once accepted, a reference
               sheet is built from it.
@@ -255,7 +255,7 @@ export function LookReviewStage({
             {prices.sheet !== null ? (
               <div className="flex flex-col gap-1">
                 <p className="text-callout text-label-2">Accepting builds the sheet.</p>
-                <PriceLine price={prices.sheet} balance={balance} />
+                <PriceLine price={prices.sheet} balance={balance} action="sheet" />
               </div>
             ) : null}
             <ErrorLine>{review.error}</ErrorLine>
@@ -316,21 +316,13 @@ export function SheetReviewStage({
       rail={
         <>
           <div className="flex flex-col gap-2">
-            <h3 className="text-title-2">Review the Sheet</h3>
+            <StageHeading className="text-title-2">Review the Sheet</StageHeading>
             <p className="text-reading text-pretty text-label-2">
               Every view should show the same {assetName} as the accepted image.
             </p>
             <VersionLine label={`Sheet ${sheet.versionNumber}`} date={sheet.createdAt} />
             {sheet.isSample ? <p className="text-callout text-label-2">{SAMPLE_SHEET}</p> : null}
           </div>
-          {look?.fileId ? (
-            <InsetImage
-              fileId={look.fileId}
-              caption={`Accepted image (Image ${look.versionNumber})`}
-              alt={`${assetName}, accepted image`}
-              orientation={orientation}
-            />
-          ) : null}
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-3">
               <Button
@@ -348,6 +340,14 @@ export function SheetReviewStage({
             </div>
             <ErrorLine>{review.error}</ErrorLine>
           </div>
+          {look?.fileId ? (
+            <InsetImage
+              fileId={look.fileId}
+              caption={`Accepted image (Image ${look.versionNumber})`}
+              alt={`${assetName}, accepted image`}
+              orientation={orientation}
+            />
+          ) : null}
           {review.sheetOpen ? (
             <RequestChangesSheet
               open
@@ -383,7 +383,7 @@ export function ReadyStage({
   look: LookView | null;
   orientation: Orientation;
 }) {
-  const router = useRouter();
+  const { refresh } = useAssetScreen();
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -397,7 +397,7 @@ export function ReadyStage({
         return;
       }
       setConfirming(false);
-      router.refresh();
+      refresh();
     });
   }
 
@@ -413,7 +413,7 @@ export function ReadyStage({
       rail={
         <>
           <div className="flex flex-col gap-2">
-            <h3 className="text-title-2">Ready</h3>
+            <StageHeading className="text-title-2">Ready</StageHeading>
             <p className="text-reading text-pretty text-label-2">
               This sheet and image keep {assetName} the same in every shot.
             </p>
@@ -475,7 +475,7 @@ export function FailedStage({
   balance: number;
   onAnotherWay: (() => void) | null;
 }) {
-  const router = useRouter();
+  const { refresh } = useAssetScreen();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const credits = isCreditsFailure(failed.failure);
@@ -490,7 +490,7 @@ export function FailedStage({
         setError(result.error);
         return;
       }
-      router.refresh();
+      refresh();
     });
   }
 
@@ -515,7 +515,7 @@ export function FailedStage({
       rail={
         <div role="alert" className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
-            <h3 className="text-title-2 text-balance">{title}</h3>
+            <StageHeading className="text-title-2 text-balance">{title}</StageHeading>
             <p className="text-reading text-pretty text-label-2">
               {failed.failure ?? "Something went wrong while it was being made."}
             </p>
@@ -542,7 +542,11 @@ export function FailedStage({
                 </Button>
               ) : null}
             </div>
-            <PriceLine price={price} balance={balance} />
+            <PriceLine
+              price={price}
+              balance={balance}
+              action={failed.kind === "look" ? "image" : "sheet"}
+            />
             <ErrorLine>{error}</ErrorLine>
           </div>
         </div>

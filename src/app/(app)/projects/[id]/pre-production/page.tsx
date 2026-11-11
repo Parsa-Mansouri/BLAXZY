@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/server/auth";
 import { listBlocks } from "@/server/blocks";
 import { getScriptState } from "@/server/script";
+import { stageHref } from "@/lib/stages";
 import { Button, ProgressBar } from "@/ui";
 import { readyWords, reviewHref } from "../_lib/asset-kinds";
 import { loadBackgroundStatus } from "../_lib/background-status";
@@ -30,6 +31,8 @@ export default async function PreProductionPage({ params }: { params: Promise<{ 
   const running = status.state === "running";
   const hasAssets = overview.total > 0;
   const allReady = hasAssets && overview.ready === overview.total;
+  // Once the project has moved on, Pre-production is finished: the way on is Production.
+  const moved = project.stage !== "pre_production";
   const percent = hasAssets ? (overview.ready / overview.total) * 100 : 0;
   const words = readyWords(overview.ready, overview.total);
 
@@ -41,14 +44,29 @@ export default async function PreProductionPage({ params }: { params: Promise<{ 
           <div className="flex min-w-0 flex-col gap-1.5">
             <h2 className="text-large-title">Pre-production</h2>
             <p className="max-w-(--measure) text-reading text-label-2">
-              {allReady
-                ? "Every asset is ready. Look through the sheets once more, then continue."
-                : "Give every character, place and prop an image. Each one becomes a reference sheet."}
+              {moved
+                ? "Pre-production is complete. Continue to Production, or look through the sheets again."
+                : allReady
+                  ? "Every asset is ready. Look through the sheets once more, then continue."
+                  : "Give every character, place and prop an image. Each one becomes a reference sheet."}
             </p>
           </div>
           {hasAssets ? (
             <div className="flex flex-col items-start gap-2 sm:items-end">
-              {allReady ? (
+              {moved ? (
+                <>
+                  <Button
+                    variant="prominent"
+                    size="large"
+                    render={<Link href={stageHref(project.id, "production")} />}
+                  >
+                    Continue to Production
+                  </Button>
+                  <Button variant="standard" render={<Link href={reviewHref(project.id)} />}>
+                    Review All Sheets
+                  </Button>
+                </>
+              ) : allReady ? (
                 <Button
                   variant="prominent"
                   size="large"

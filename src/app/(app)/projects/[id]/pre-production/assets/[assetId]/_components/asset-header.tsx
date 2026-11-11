@@ -21,6 +21,7 @@ import {
 } from "@/ui";
 import { stageLabel } from "../_lib/asset-view";
 import { removeAssetAction, updateDetailsAction } from "../actions";
+import { useAssetScreen } from "./asset-context";
 import { ErrorLine, formatNumber, type AssetInfo } from "./shared";
 
 const TONES: Partial<Record<AssetStage, BadgeTone>> = { ready: "success", failed: "danger" };
@@ -58,7 +59,12 @@ export function AssetHeader({
       </div>
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-2">
-          <h2 className="text-large-title text-balance break-words">{asset.name}</h2>
+          <h2
+            data-asset-title
+            className="scroll-mt-[calc(var(--toolbar-h)+1rem)] text-large-title text-balance break-words"
+          >
+            {asset.name}
+          </h2>
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-callout text-label-2">
             <span>{kindName}</span>
             {asset.removed ? (
@@ -126,7 +132,7 @@ function EditDetailsSheet({
   limits: { name: number; description: number };
   onClose: () => void;
 }) {
-  const router = useRouter();
+  const { refresh } = useAssetScreen();
   const [name, setName] = useState(asset.name);
   const [description, setDescription] = useState(asset.description ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -158,7 +164,7 @@ function EditDetailsSheet({
         return;
       }
       onClose();
-      router.refresh();
+      refresh();
     });
   }
 

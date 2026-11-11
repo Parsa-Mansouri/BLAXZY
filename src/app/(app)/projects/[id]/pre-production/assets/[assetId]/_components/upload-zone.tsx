@@ -1,10 +1,10 @@
 "use client";
 
 import { useId, useRef, useState, type DragEvent } from "react";
-import { useRouter } from "next/navigation";
 import { AudioLines, ImageUp } from "lucide-react";
 import { Button, Hint, ProgressBar, cn } from "@/ui";
 import { createAssetUploadAction, finishAssetUploadAction } from "../actions";
+import { useAssetScreen } from "./asset-context";
 import { ErrorLine } from "./shared";
 
 const MB = 1024 * 1024;
@@ -64,7 +64,7 @@ export function UploadZone({
   audio?: boolean;
   disabled?: boolean;
 }) {
-  const router = useRouter();
+  const { refresh } = useAssetScreen();
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -121,7 +121,7 @@ export function UploadZone({
       setError(finished.error);
       return;
     }
-    router.refresh();
+    refresh();
   }
 
   function onDrop(event: DragEvent<HTMLDivElement>) {

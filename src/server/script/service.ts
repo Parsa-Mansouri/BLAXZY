@@ -60,7 +60,7 @@ export type ScriptState = {
 };
 
 const BUSY_MESSAGE = "A script is still being prepared. Wait for it to finish, then try again.";
-const ENQUEUE_FAILURE = "We could not start this step. Try again in a moment.";
+const ENQUEUE_FAILURE = "This step could not start. Try again in a moment.";
 
 /** The job that produces a version of each source. */
 const JOB_FOR_SOURCE: Record<ScriptSource, JobDefinition<typeof scriptWrite.payload> | null> = {
@@ -371,7 +371,7 @@ export async function submitScriptReview(input: {
   }
   if (decision === "rejected" && issueCodes.length === 0 && !note && comments.length === 0) {
     throw new ScriptInputError(
-      "Tell us what to change: pick an issue, write a note or comment on the text.",
+      "Say what to change: pick an issue, write a note or comment on the text.",
     );
   }
 

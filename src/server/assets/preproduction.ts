@@ -92,7 +92,7 @@ export const MAX_CARD_PAGE_SIZE = 100;
 const BUSY_MESSAGE = "This asset is still being worked on. Wait for it to finish, then try again.";
 const REMOVED_MESSAGE = "This asset was removed from the project.";
 const STAGE_MESSAGE = "Accept a script before starting pre-production.";
-const ENQUEUE_FAILURE = "We could not start this step. Try again in a moment.";
+const ENQUEUE_FAILURE = "This step could not start. Try again in a moment.";
 
 const uuid = z.uuid();
 const isUuid = (value: string) => uuid.safeParse(value).success;
@@ -119,7 +119,7 @@ const promptInput = assetRefInput.extend({
 
 const guidedInput = assetRefInput.extend({
   answers: z.record(
-    z.string().max(64, "That question is not one we asked."),
+    z.string().max(64, "That is not one of the questions."),
     z
       .string({ error: "Answers must be text." })
       .max(
@@ -333,8 +333,7 @@ export function validateGuidedAnswers(
   }
   const byId = new Map(questions.map((q) => [q.id, q]));
   for (const id of Object.keys(answers)) {
-    if (!byId.has(id))
-      throw new AssetInputError("One of the answers is for a question we did not ask.");
+    if (!byId.has(id)) throw new AssetInputError("One answer does not match any question.");
   }
   const result: Record<string, string> = {};
   for (const question of questions) {
@@ -624,7 +623,7 @@ export async function startLookFromGuided(input: {
 /* Reviews                                                                                     */
 /* ------------------------------------------------------------------------------------------ */
 
-const NEEDS_REASON = "Tell us what is wrong: pick an issue or write a note.";
+const NEEDS_REASON = "Say what is wrong: pick an issue or write a note.";
 const NOT_IN_REVIEW = "This is no longer waiting for review. Reload the page.";
 
 /**

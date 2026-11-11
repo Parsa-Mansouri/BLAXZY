@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { stageStep, stageViews } from "@/lib/stages";
+import { stageLabel, stageStep, stageViews } from "@/lib/stages";
 import { Toolbar } from "@/ui";
 import { loadProject } from "./_lib/load-project";
+import { LockedNotice } from "./_components/locked-notice";
 import { StageIndicator } from "./_components/stage-indicator";
 
 export async function generateMetadata({
@@ -37,6 +38,7 @@ export default async function ProjectLayout({
         title={project.title}
         leading={<StageIndicator step={stageStep(project.stage)} stages={stages} />}
       />
+      <LockedNotice stageLabel={stageLabel(project.stage)} />
       <div className="px-(--content-x) pt-4 pb-16 shell:pt-8">{children}</div>
     </>
   );

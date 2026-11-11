@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Radio } from "@base-ui/react/radio";
 import { RadioGroup } from "@base-ui/react/radio-group";
 import { Check } from "lucide-react";
 import { Button, Hint, ProgressBar, Textarea, cn } from "@/ui";
 import type { GuidedDraft } from "../_lib/guided-draft";
 import { startFromGuidedAction } from "../actions";
+import { focusIsFree, keepTitleVisible, useAssetScreen } from "./asset-context";
 import { ErrorLine, PriceLine, canAfford, formatNumber, type GuidedQuestion } from "./shared";
 
 /** One question at a time, then a summary of the answers before the image is generated. */
@@ -36,7 +36,7 @@ export function GuidedFlow({
   onClear: () => void;
   onExit: () => void;
 }) {
-  const router = useRouter();
+  const { refresh, shown } = useAssetScreen();
   const id = useId();
   const body = useRef<HTMLDivElement>(null);
   const [answers, setAnswers] = useState<Record<string, string>>(initial?.answers ?? {});
@@ -50,16 +50,18 @@ export function GuidedFlow({
   const question = onSummary ? null : questions[step];
   const answer = question ? (answers[question.id] ?? "") : "";
 
-  // After moving between questions, put focus on the new question's control.
+  // After moving between questions, put focus on the new question's control. The first question
+  // takes focus too when the user opened the questions (not when the page was first shown).
   useEffect(() => {
-    if (!moved.current) return;
+    if (!moved.current && !(shown.current && focusIsFree())) return;
     const root = body.current;
     if (!root) return;
     const target =
       root.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]') ??
       root.querySelector<HTMLElement>('[role="radio"], textarea, [data-step-focus]');
-    target?.focus();
-  }, [step]);
+    target?.focus({ preventScroll: true });
+    if (!moved.current) keepTitleVisible();
+  }, [step, shown]);
 
   function go(next: number, nextAnswers = answers) {
     moved.current = true;
@@ -121,7 +123,7 @@ export function GuidedFlow({
         return;
       }
       onClear();
-      router.refresh();
+      refresh();
     });
   }
 
@@ -294,7 +296,7 @@ export function GuidedFlow({
             </dl>
 
             <div className="flex flex-col gap-3 pt-2">
-              <PriceLine price={price} balance={balance} />
+              <PriceLine price={price} balance={balance} action="image" />
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   variant="prominent"

@@ -58,10 +58,10 @@ export function CategoryPanel({
   }
 
   const working = items.some((item) => isWorking(item.stage));
-  usePolling(async () => {
+  usePolling(async (isActive) => {
     if (loadingRef.current) return;
     const result = await refreshCardsAction(projectId, kind, items.length);
-    if (!result.ok || loadingRef.current) return;
+    if (!isActive() || !result.ok || loadingRef.current) return;
     setItems(result.data.items);
     setCursor(result.data.nextCursor);
     setCounts({ total: result.data.total, ready: result.data.ready });

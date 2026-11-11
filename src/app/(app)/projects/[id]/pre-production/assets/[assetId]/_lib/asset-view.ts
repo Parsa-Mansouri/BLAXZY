@@ -21,18 +21,7 @@ const STATUS_LABELS: Record<LookStatus, string> = {
 
 export const versionStatusLabel = (status: LookStatus) => STATUS_LABELS[status];
 
-const STAGE_LABELS: Record<AssetStage, string> = {
-  needs_image: "Needs an Image",
-  needs_recording: "Needs a Recording",
-  generating: "Creating the Image",
-  look_review: "Image to Review",
-  building_sheet: "Building the Sheet",
-  sheet_review: "Sheet to Review",
-  ready: "Ready",
-  failed: "Needs Attention",
-};
-
-export const stageLabel = (stage: AssetStage) => STAGE_LABELS[stage];
+export { assetStatusLabel as stageLabel } from "../../../../_lib/asset-status";
 
 /** How a look came to be, in a few words. */
 export function lookOrigin(look: LookView): string {

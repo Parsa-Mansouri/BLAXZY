@@ -284,7 +284,9 @@ describe.skipIf(!reachable)(
       };
       const start = (answers: Record<string, string>) =>
         assets.startLookFromGuided({ assetId: place.id, userId, answers });
-      await expect(start({ ...valid, colour: "red" })).rejects.toThrow(/did not ask/);
+      await expect(start({ ...valid, colour: "red" })).rejects.toThrow(
+        /does not match any question/,
+      );
       const { mood: _mood, ...missing } = valid;
       void _mood;
       await expect(start(missing)).rejects.toThrow(/What is the mood/);

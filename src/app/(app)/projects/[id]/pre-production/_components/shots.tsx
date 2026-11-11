@@ -19,9 +19,10 @@ export function PreProductionPoller({
   blockCount: number;
 }) {
   const router = useRouter();
-  usePolling(async () => {
+  usePolling(async (isActive) => {
     const next = await pollPreProductionAction(projectId);
-    if (next && (next.state !== state || next.blockCount !== blockCount)) router.refresh();
+    if (isActive() && next && (next.state !== state || next.blockCount !== blockCount))
+      router.refresh();
   }, state === "running");
   if (state !== "running") return null;
   return (

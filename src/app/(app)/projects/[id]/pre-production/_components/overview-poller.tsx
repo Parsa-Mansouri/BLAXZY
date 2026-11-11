@@ -15,9 +15,9 @@ export function OverviewPoller({
   signature: string;
 }) {
   const router = useRouter();
-  usePolling(async () => {
+  usePolling(async (isActive) => {
     const next = await pollOverviewAction(projectId);
-    if (next && next.signature !== signature) router.refresh();
+    if (isActive() && next && next.signature !== signature) router.refresh();
   }, busy);
   return null;
 }

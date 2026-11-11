@@ -20,9 +20,9 @@ export function useBackgroundStatus(
     setSeen(initial);
     setStatus(initial);
   }
-  usePolling(async () => {
+  usePolling(async (isActive) => {
     const next = await backgroundStatusAction(projectId, acceptedId);
-    if (next) setStatus(next);
+    if (isActive() && next) setStatus(next);
   }, status?.state === "running");
   return [status, setStatus] as const;
 }

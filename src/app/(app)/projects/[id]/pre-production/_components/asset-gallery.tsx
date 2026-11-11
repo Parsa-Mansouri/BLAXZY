@@ -63,10 +63,11 @@ const FRAME_RATIO: Record<Frame, readonly [number, number]> = {
   square: [800, 800],
 };
 
+/** Two tiles per row on phones for portrait and square frames; one for wide. */
 const GRID_COLUMNS: Record<Frame, string> = {
-  portrait: "grid-cols-[repeat(auto-fill,minmax(min(100%,13.75rem),1fr))]",
+  portrait: "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(13.75rem,1fr))]",
   wide: "grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))]",
-  square: "grid-cols-[repeat(auto-fill,minmax(min(100%,13.75rem),1fr))]",
+  square: "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(13.75rem,1fr))]",
 };
 
 const TILE_LINK =

@@ -98,8 +98,7 @@ export const POSTER_PARAM = "posterFileId";
 export const RESERVED_PARAMS: readonly string[] = [LABEL_PARAM, DRAFT_PARAM, POSTER_PARAM];
 
 const FINISHED: readonly GenerationStatus[] = ["succeeded", "failed", "cancelled"];
-const ENQUEUE_FAILURE =
-  "We could not start this generation. Your credits were returned; try again.";
+const ENQUEUE_FAILURE = "This generation could not start. Your credits were returned; try again.";
 
 const uuid = z.uuid();
 const purposeSchema = z.enum(GENERATION_PURPOSES, { error: "Unknown kind of generation." });

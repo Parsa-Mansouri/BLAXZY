@@ -1,11 +1,11 @@
 "use client";
 
 import { useId, useRef, useState, useTransition, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, ImagePlus, ImageUp, ListChecks, PenLine } from "lucide-react";
 import { Button, Hint, cn } from "@/ui";
 import { useGuidedDraft } from "../_lib/guided-draft";
 import { startFromPromptAction } from "../actions";
+import { StageHeading, useAssetScreen } from "./asset-context";
 import { GuidedFlow } from "./guided-flow";
 import { StageLayout } from "./stage-panels";
 import {
@@ -29,6 +29,21 @@ const PLACEHOLDERS: Partial<Record<AssetInfo["kind"], string>> = {
   creature: "What kind of creature, its size, body, colours and face.",
   costume: "Every garment, its fabric, colours, fit and condition.",
   other: "Its shape, materials, colours and the details that must not change.",
+};
+
+const SUBJECT_HINT =
+  "A good reference image shows the subject alone and whole, evenly lit, on a plain background.";
+
+/** The footnote under the prompt: what makes a good reference for this kind of asset. */
+const PROMPT_HINTS: Partial<Record<AssetInfo["kind"], string>> = {
+  character: `${SUBJECT_HINT} Concrete words work better than moods: name the colours, materials, age and clothing.`,
+  creature: `${SUBJECT_HINT} Concrete words work better than moods: name the colours, size, body and markings.`,
+  costume: `${SUBJECT_HINT} Concrete words work better than moods: name each garment, its fabric, colours and fit.`,
+  location:
+    "A good reference image shows the place whole, in even daylight, without people. Concrete words work better than moods: name the era, materials, colours, light and weather.",
+  prop: "A good reference image shows the object alone and whole, evenly lit, on a plain background. Concrete words work better than moods: name the material, size, colours and condition.",
+  other:
+    "A good reference image shows the subject whole and evenly lit. Concrete words work better than moods: name the shape, materials and colours.",
 };
 
 export interface AddImageProps {
@@ -89,9 +104,9 @@ export function AddImage(props: AddImageProps) {
       <section aria-labelledby="upload-title" className="flex max-w-2xl flex-col gap-6">
         <BackToChooser onClick={() => setPicked("chooser")} />
         <div className="flex flex-col gap-1.5">
-          <h3 id="upload-title" className="text-title-1">
+          <StageHeading id="upload-title" className="text-title-1">
             Upload an Image
-          </h3>
+          </StageHeading>
           <p className="text-reading text-label-2">
             Use a photo, a drawing or a still you already have. You review it before the sheet is
             built.
@@ -106,9 +121,9 @@ export function AddImage(props: AddImageProps) {
   const chooser = (
     <section aria-labelledby="add-title" className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <h3 id="add-title" className="text-title-1">
+        <StageHeading id="add-title" className="text-title-1">
           {props.title ?? "Add Image"}
-        </h3>
+        </StageHeading>
         <p className="text-reading text-label-2">
           The image becomes the reference every shot of {asset.name} is made from.
         </p>
@@ -140,7 +155,7 @@ export function AddImage(props: AddImageProps) {
         />
       </ul>
 
-      <PriceLine price={props.price} balance={props.balance} />
+      <PriceLine price={props.price} balance={props.balance} action="image" />
       {props.onCancel ? (
         <div>
           <Button onClick={props.onCancel}>Cancel</Button>
@@ -232,7 +247,7 @@ function PromptWriter({
   balance: number;
   onBack: () => void;
 }) {
-  const router = useRouter();
+  const { refresh } = useAssetScreen();
   const id = useId();
   const area = useRef<HTMLTextAreaElement>(null);
   const [prompt, setPrompt] = useState("");
@@ -259,7 +274,7 @@ function PromptWriter({
         setError(result.error);
         return;
       }
-      router.refresh();
+      refresh();
     });
   }
 
@@ -267,9 +282,9 @@ function PromptWriter({
     <section aria-labelledby={`${id}-title`} className="flex max-w-2xl flex-col gap-6">
       <BackToChooser onClick={onBack} />
       <div className="flex flex-col gap-1.5">
-        <h3 id={`${id}-title`} className="text-title-1">
+        <StageHeading id={`${id}-title`} className="text-title-1">
           Write a Prompt
-        </h3>
+        </StageHeading>
         <p className="text-reading text-label-2">
           Describe how {asset.name} should look in the reference image.
         </p>
@@ -335,13 +350,10 @@ function PromptWriter({
         </div>
       </div>
 
-      <Hint id={`${id}-hint`}>
-        A good reference image shows the subject alone and whole, evenly lit, on a plain background.
-        Concrete words work better than moods: name the colours, materials, age and clothing.
-      </Hint>
+      <Hint id={`${id}-hint`}>{PROMPT_HINTS[asset.kind] ?? PROMPT_HINTS.other}</Hint>
 
       <div className="flex flex-col gap-3">
-        <PriceLine price={price} balance={balance} />
+        <PriceLine price={price} balance={balance} action="image" />
         <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="prominent"

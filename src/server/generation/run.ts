@@ -353,7 +353,7 @@ function classify(error: unknown, aborted: boolean): FailureDecision {
     return {
       message:
         error.code === "invalid_file"
-          ? "The provider returned a file we cannot use. Your credits were returned."
+          ? "The provider returned a file that cannot be used. Your credits were returned."
           : "A file needed for this generation is missing. Your credits were returned.",
       retryable: false,
     };

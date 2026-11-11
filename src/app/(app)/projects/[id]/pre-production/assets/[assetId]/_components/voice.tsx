@@ -5,6 +5,7 @@ import { Pause, Play } from "lucide-react";
 import type { LookView } from "@/server/assets";
 import { fileSrc } from "@/lib/file-src";
 import { Button, IconButton, cn } from "@/ui";
+import { StageHeading } from "./asset-context";
 import { UploadZone } from "./upload-zone";
 import { When } from "./shared";
 
@@ -116,9 +117,9 @@ export function VoiceStage({
     return (
       <section aria-labelledby="voice-title" className="flex max-w-2xl flex-col gap-6">
         <div className="flex flex-col gap-1.5">
-          <h3 id="voice-title" className="text-title-1">
+          <StageHeading id="voice-title" className="text-title-1">
             Recording
-          </h3>
+          </StageHeading>
           <p className="text-callout text-label-2">
             Recording {recording.versionNumber} · Uploaded · <When date={recording.createdAt} />
           </p>
@@ -136,9 +137,9 @@ export function VoiceStage({
   return (
     <section aria-labelledby="voice-title" className="flex max-w-2xl flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <h3 id="voice-title" className="text-title-1">
+        <StageHeading id="voice-title" className="text-title-1">
           {replacing ? "Replace Recording" : "Add a Recording"}
-        </h3>
+        </StageHeading>
         <p className="text-reading text-label-2">
           Upload a recording of {assetName}’s voice. It is used as is: there is nothing to generate
           or review.

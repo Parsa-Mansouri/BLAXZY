@@ -4,6 +4,7 @@ import { AudioLines, ImageOff } from "lucide-react";
 import { fileSrc } from "@/lib/file-src";
 import { Button, cn } from "@/ui";
 import { lookOrigin, versionStatusLabel, type HistoryItem } from "../_lib/asset-view";
+import { StageHeading } from "./asset-context";
 import { StageLayout } from "./stage-panels";
 import { Artwork, MissingImage, When, type GuidedQuestion, type Orientation } from "./shared";
 import { AudioPlayer } from "./voice";
@@ -164,7 +165,7 @@ export function HistoryViewer({
         rail={
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <h3 className="text-title-2">{title}</h3>
+              <StageHeading className="text-title-2">{title}</StageHeading>
               <p className="text-callout text-label-2">
                 {look ? `${lookOrigin(look)} · ` : ""}
                 <When date={version.createdAt} />

@@ -137,7 +137,7 @@ export function RequestChangesSheet({
           />
         </Field>
 
-        <PriceLine price={price} balance={balance} />
+        <PriceLine price={price} balance={balance} action={subject} />
         <ErrorLine>{error ?? serverError}</ErrorLine>
       </div>
     </Sheet>

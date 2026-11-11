@@ -5,8 +5,16 @@ import { useEffect, useRef } from "react";
 /**
  * Calls `poll` every `intervalMs` while `enabled`, one call at a time. Pauses while the tab is
  * hidden and polls at once when it becomes visible or focused again.
+ *
+ * `poll` receives `isActive`, which turns false once the poller is disabled or its component has
+ * unmounted. A poll that was in flight when the user navigated away must check it before calling
+ * `router.refresh()`: refreshing the page that is being navigated to races its navigation.
  */
-export function usePolling(poll: () => Promise<void>, enabled: boolean, intervalMs = 2000) {
+export function usePolling(
+  poll: (isActive: () => boolean) => Promise<void>,
+  enabled: boolean,
+  intervalMs = 2000,
+) {
   const latest = useRef(poll);
   useEffect(() => {
     latest.current = poll;
@@ -28,7 +36,7 @@ export function usePolling(poll: () => Promise<void>, enabled: boolean, interval
       if (running || stopped || document.visibilityState === "hidden") return;
       running = true;
       try {
-        await latest.current();
+        await latest.current(() => !stopped);
       } catch {
         // A failed poll (offline, server restart) is retried on the next tick.
       } finally {

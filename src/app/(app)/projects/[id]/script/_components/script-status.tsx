@@ -25,8 +25,9 @@ const FAILED: Record<VersionView["source"], string> = {
 /** Polls until the latest version leaves `pending`, then refreshes the page. */
 function useRefreshWhenDone(projectId: string, versionId: string) {
   const router = useRouter();
-  usePolling(async () => {
+  usePolling(async (isActive) => {
     const poll = await pollScriptAction(projectId);
+    if (!isActive()) return;
     if (!poll || poll.versionId !== versionId || poll.status !== "pending") router.refresh();
   }, true);
 }

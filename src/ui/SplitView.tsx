@@ -93,6 +93,7 @@ export function SplitView({
   const [lastKey, setLastKey] = useState(navigationKey);
   const toggleRef = useRef<HTMLElement | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
+  const returnFocus = useRef(false);
 
   // Close the drawer on navigation and whenever the window grows past the breakpoint.
   if (lastKey !== navigationKey) {
@@ -133,11 +134,19 @@ export function SplitView({
       ?.focus();
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      returnFocus.current = true;
       setDrawerOpen(false);
-      toggleRef.current?.focus();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, [drawerOpen]);
+
+  // The content is inert while the drawer is open, so the toggle can take focus only once the
+  // drawer has closed and the content is live again.
+  useEffect(() => {
+    if (drawerOpen || !returnFocus.current) return;
+    returnFocus.current = false;
+    toggleRef.current?.focus();
   }, [drawerOpen]);
 
   const registerToggle = useCallback((node: HTMLElement | null) => {

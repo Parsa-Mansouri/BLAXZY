@@ -104,7 +104,7 @@ export const ASSET_QUESTIONS: Readonly<Record<AssetKind, GuidedQuestion[]>> = {
     ),
     text(
       "defining_detail",
-      "Is there one detail we should always notice?",
+      "Is there one detail that must always show?",
       "A scar, a pair of glasses, a necklace, a limp, a tattoo. Something that makes them recognisable in every shot.",
       true,
     ),
@@ -167,7 +167,7 @@ export const ASSET_QUESTIONS: Readonly<Record<AssetKind, GuidedQuestion[]>> = {
     text(
       "signature_detail",
       "What is the one thing that makes this place unmistakable?",
-      "A crooked door, a red neon sign without words, a huge fig tree in the yard. We will keep it in every shot.",
+      "A crooked door, a red neon sign without words, a huge fig tree in the yard. It stays in every shot.",
       true,
     ),
   ],
@@ -239,7 +239,7 @@ export const ASSET_QUESTIONS: Readonly<Record<AssetKind, GuidedQuestion[]>> = {
     ),
     text(
       "defining_detail",
-      "Is there one detail we should always notice?",
+      "Is there one detail that must always show?",
       "A notched ear, a white patch, a collar, a glowing eye.",
       true,
     ),
@@ -303,7 +303,7 @@ export const ASSET_QUESTIONS: Readonly<Record<AssetKind, GuidedQuestion[]>> = {
     ]),
     text(
       "defining_detail",
-      "What is the one detail we should always notice?",
+      "What is the one detail that must always show?",
       "The thing that makes it recognisable at a glance.",
       true,
     ),

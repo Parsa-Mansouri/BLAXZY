@@ -129,8 +129,10 @@ export function DashboardView({
         anchor={newButton}
         title="Create a Project"
         onDismiss={tip.dismiss}
-        side={upNext ? "bottom" : "right"}
-        align={upNext ? "end" : "center"}
+        // Beside the button, in the toolbar row, so it never covers the Up Next frame below.
+        side={upNext ? "left" : "right"}
+        align="center"
+        className="w-[26rem]"
       >
         Each film starts as a project. Give it a working title and BLAXZY guides you through the
         four stages.

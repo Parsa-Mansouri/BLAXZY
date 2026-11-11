@@ -16,7 +16,7 @@ export async function generateMetadata({
 
 /**
  * Inside a project: the toolbar (project name or back control, and the four-stage strip), then
- * the page. Pages start with a PageHeader, which holds the h1.
+ * the page in a full-height flex column. Pages start with a PageHeader, which holds the h1.
  */
 export default async function ProjectLayout({
   children,
@@ -39,7 +39,11 @@ export default async function ProjectLayout({
   return (
     <ProjectChrome projectId={project.id} title={project.title} stages={stages}>
       <LockedNotice stageLabel={stageLabel(project.stage)} />
-      <div className="px-(--content-x) pt-8 pb-18">{children}</div>
+      {/*
+        A flex column that fills the height under the toolbar: a stage page that is one
+        composition gives its main region `flex-1` (or uses FocusLayout `fill`) to use it.
+      */}
+      <div className="flex flex-1 flex-col px-(--content-x) pt-8 pb-10">{children}</div>
     </ProjectChrome>
   );
 }

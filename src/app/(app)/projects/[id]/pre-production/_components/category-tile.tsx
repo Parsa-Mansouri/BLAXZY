@@ -56,9 +56,11 @@ function nextStep(
 export function CategoryFeature({
   projectId,
   category,
+  className,
 }: {
   projectId: string;
   category: OverviewCategory;
+  className?: string;
 }) {
   const words = statusWords(category.counts);
   const step = nextStep(projectId, category.assets);
@@ -67,7 +69,10 @@ export function CategoryFeature({
   return (
     <section
       aria-labelledby={titleId}
-      className="flex min-h-100 flex-wrap gap-x-12 gap-y-10 rounded-block bg-elevated p-6 sm:p-10"
+      className={cn(
+        "flex min-h-100 flex-wrap gap-x-12 gap-y-10 rounded-block bg-elevated p-6 sm:p-10",
+        className,
+      )}
     >
       <div className="flex min-w-0 flex-[1_1_320px] flex-col justify-between gap-10">
         <div className="flex flex-col gap-3">
@@ -91,11 +96,11 @@ export function CategoryFeature({
           </Button>
         </div>
       </div>
-      <ul className="flex min-w-0 flex-[1.4_1_420px] flex-wrap items-end justify-end gap-x-3 gap-y-4 self-end">
+      <ul className="flex min-w-0 flex-[1.6_1_420px] flex-wrap items-end justify-end gap-x-4 gap-y-4 self-end">
         {shown.map((asset, i) => (
           <li
             key={asset.id}
-            className="flex max-w-30 min-w-0 flex-[1_1_80px] enter flex-col gap-2"
+            className="flex max-w-56 min-w-0 flex-[1_1_96px] enter flex-col gap-2"
             style={stagger(i)}
           >
             <div

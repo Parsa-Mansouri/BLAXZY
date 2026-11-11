@@ -75,7 +75,7 @@ export function ShotDetails({
           <h3 id={`${id}-script`} className="text-section">
             Script
           </h3>
-          <PaperSheet as="div">
+          <PaperSheet as="div" className="max-w-205">
             <p className="break-words whitespace-pre-wrap">{scriptExcerpt.trim()}</p>
           </PaperSheet>
         </section>

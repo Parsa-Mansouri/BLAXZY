@@ -13,6 +13,7 @@ export default async function StylePage({ params }: { params: Promise<{ id: stri
         orientation: project.style.orientation,
         totalDurationSeconds: project.style.totalDurationSeconds,
         episodeDurationSeconds: project.style.episodeDurationSeconds ?? null,
+        ...(project.style.references ? { references: project.style.references } : {}),
       }
     : null;
 

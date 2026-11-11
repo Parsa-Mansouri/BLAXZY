@@ -10,6 +10,7 @@ import {
 import { projectStyleSchema } from "@/server/damis";
 import type { Project } from "./service";
 import { ProjectInputError, uuidSchema } from "./schemas";
+import { applyStyleReferences, assertReferenceFiles, referenceFileIds } from "./style-references";
 
 export type Episode = typeof episode.$inferSelect;
 
@@ -71,6 +72,7 @@ function validateStyle(style: unknown) {
       orientation: "Choose landscape or portrait.",
       totalDurationSeconds: "Enter a valid total duration.",
       episodeDurationSeconds: "Enter a valid episode duration.",
+      references: "Add a film or show name, a reference image or a description.",
     };
     throw new ProjectInputError(
       (typeof path === "string" ? friendly[path] : undefined) ?? "That style is not valid.",
@@ -111,7 +113,7 @@ function validateStyle(style: unknown) {
  */
 export async function saveStyle(input: SaveStyleInput): Promise<Project | null> {
   if (!uuidSchema.safeParse(input.projectId).success) return null;
-  const style = validateStyle(input.style);
+  const style = applyStyleReferences(validateStyle(input.style));
   return getDb().transaction(async (tx) => {
     const [existing] = await tx
       .select()
@@ -119,6 +121,10 @@ export async function saveStyle(input: SaveStyleInput): Promise<Project | null> 
       .where(and(eq(project.id, input.projectId), eq(project.ownerId, input.userId), notArchived))
       .for("update");
     if (!existing) return null;
+    await assertReferenceFiles(referenceFileIds(style), {
+      userId: input.userId,
+      projectId: existing.id,
+    });
 
     const count =
       style.format === "series" && style.episodeDurationSeconds !== undefined
@@ -155,7 +161,8 @@ export async function saveStyle(input: SaveStyleInput): Promise<Project | null> 
       projectId: existing.id,
       userId: input.userId,
       type: first ? "style.saved" : "style.changed",
-      payload: { format: style.format, episodes: count },
+      // The whole style, so the event log keeps every version of the answers.
+      payload: { format: style.format, episodes: count, style },
     });
     if (existing.stage === "style") {
       await advanceStage({ projectId: existing.id, from: "style", to: "script" }, tx);

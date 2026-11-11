@@ -21,33 +21,39 @@ export default async function AccountPage() {
   return (
     <>
       <Toolbar />
-      <div className="px-(--content-x) pt-8 pb-18">
+      <div className="flex flex-1 flex-col px-(--content-x) pt-8 pb-18">
         <PageHeader title="Account" description="Your details, your password and your credits." />
-        <div className="flex max-w-(--settings-w) flex-col gap-12">
-          <ProfileForm name={user.name} email={user.email} />
-          <ChangePasswordForm
-            minPasswordLength={MIN_PASSWORD_LENGTH}
-            maxPasswordLength={MAX_PASSWORD_LENGTH}
-          />
-          <section
-            aria-labelledby="acc-credits"
-            className="flex enter flex-col"
-            style={stagger(0, 420)}
-          >
-            <h2 id="acc-credits" className="mb-4 text-section">
-              Credits
-            </h2>
-            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-y border-separator py-4">
-              <div className="w-24 shrink-0 text-secondary text-label-2">Balance</div>
-              <div className="min-w-0 flex-1 text-row font-medium tabular-nums">
-                {formatCredits(credits)}
+        <div className="grid flex-1 gap-x-16 gap-y-12 lg:grid-cols-2">
+          <div className="flex flex-col gap-12">
+            <ProfileForm name={user.name} email={user.email} />
+            <ChangePasswordForm
+              minPasswordLength={MIN_PASSWORD_LENGTH}
+              maxPasswordLength={MAX_PASSWORD_LENGTH}
+            />
+          </div>
+          <div className="flex flex-col gap-12">
+            <section
+              aria-labelledby="acc-credits"
+              className="flex enter flex-col"
+              style={stagger(0, 420)}
+            >
+              <h2 id="acc-credits" className="mb-4 text-section">
+                Credits
+              </h2>
+              <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-y border-separator py-4">
+                <div className="w-24 shrink-0 text-secondary text-label-2">Balance</div>
+                <div className="min-w-0 flex-1 text-row font-medium tabular-nums">
+                  {formatCredits(credits)}
+                </div>
               </div>
+              <p className="mt-3 text-secondary text-label-2">
+                The price of each step is shown before anything is generated.
+              </p>
+            </section>
+            <div className="mt-auto">
+              <SignOutButton />
             </div>
-            <p className="mt-3 text-secondary text-label-2">
-              The price of each step is shown before anything is generated.
-            </p>
-          </section>
-          <SignOutButton />
+          </div>
         </div>
       </div>
     </>

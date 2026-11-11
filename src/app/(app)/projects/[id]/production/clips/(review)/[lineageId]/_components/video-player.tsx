@@ -28,10 +28,23 @@ import { focusIsFree } from "../../../_components/clips-context";
 const FRAME = 1 / 24;
 const SECOND_STEP = 1;
 
-/** The frame: a reserved box of the film's shape, contained on black, never larger than the view. */
+/**
+ * The frame: a box of the film's shape, as large as the space allows. Its width is the smaller
+ * of the column and what the viewport height allows (the height left under the toolbar, the page
+ * header and the shot title, at least 18rem), so the clip and its controls fit on screen.
+ */
 const FRAME_BOX: Record<Orientation, string> = {
-  landscape: "aspect-video w-full max-h-[min(70dvh,48rem)]",
-  portrait: "aspect-[9/16] h-[min(72dvh,48rem)] max-w-full mx-auto",
+  landscape:
+    "mx-auto aspect-video w-[min(100%,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*16/9))]",
+  portrait:
+    "mx-auto aspect-[9/16] w-[min(100%,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*9/16))]",
+};
+
+/** The control bar under the frame: as wide as the frame (an upright frame: at least 22rem). */
+const CONTROLS_BOX: Record<Orientation, string> = {
+  landscape: "mx-auto w-[min(100%,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*16/9))]",
+  portrait:
+    "mx-auto w-full max-w-[max(22rem,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*9/16))]",
 };
 
 type FullscreenVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
@@ -373,9 +386,7 @@ export function VideoPlayer({
       <div
         className={cn(
           "flex items-center gap-1 max-sm:flex-wrap max-sm:gap-y-0",
-          orientation === "portrait" &&
-            !fullscreen &&
-            "mx-auto w-full max-w-[max(calc(min(72dvh,48rem)*9/16),22rem)]",
+          !fullscreen && CONTROLS_BOX[orientation],
         )}
       >
         <ControlButton

@@ -270,9 +270,11 @@ export function BlockScreen({
     return (
       <>
         {ask}
-        <Button variant="primary" size="large" render={<Link href={nextToReviewHref} />}>
-          {nextToReviewHref === blocksHref(projectId) ? "Back to Shots" : "Next to Review"}
-        </Button>
+        {nextToReviewHref !== blocksHref(projectId) ? (
+          <Button variant="primary" size="large" render={<Link href={nextToReviewHref} />}>
+            Next to Review
+          </Button>
+        ) : null}
       </>
     );
   }
@@ -302,7 +304,7 @@ export function BlockScreen({
           </p>
         ) : null}
         {asking ? (
-          <div className="max-w-140">
+          <div className="max-w-180">
             <ChangeRequest
               issues={issues}
               maxNote={maxNote}
@@ -404,7 +406,7 @@ export function BlockScreen({
 
       {block.scriptExcerpt.trim() ? (
         <Section title="Script">
-          <PaperSheet as="div">
+          <PaperSheet as="div" className="max-w-205">
             <p className="whitespace-pre-line">{block.scriptExcerpt.trim()}</p>
           </PaperSheet>
         </Section>

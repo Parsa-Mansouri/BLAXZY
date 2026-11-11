@@ -6,6 +6,7 @@ import type { Asset } from "@/server/assets";
 import type { GuidedQuestion } from "@/server/damis";
 import { fileSrc } from "@/lib/file-src";
 import { cn } from "@/ui";
+import { PICTURE_MAX_H } from "../../../_lib/fill";
 
 export type { GuidedQuestion };
 
@@ -87,7 +88,7 @@ export function Artwork({
       className={cn(
         "relative w-full overflow-hidden rounded-card",
         ASPECTS[shape],
-        size === "hero" && "max-h-[min(70dvh,48rem)]",
+        size === "hero" && PICTURE_MAX_H,
         fileId ? "bg-ground" : "bg-elevated",
         className,
       )}

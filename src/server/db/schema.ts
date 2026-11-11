@@ -112,6 +112,17 @@ export type FileStatus = (typeof FILE_STATUSES)[number];
 /* JSON shapes                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * What the user gave when no listed look or genre fitted ("Not what you have in mind?"): any mix
+ * of film or show names, reference images (ids of `file` rows, purpose `style_reference`) and a
+ * description. At least one of the three is present.
+ */
+export type StyleReference = {
+  titles: string[];
+  description?: string;
+  fileIds: string[];
+};
+
 /** Output_01: the answers of the Style stage. Durations are in seconds. */
 export type ProjectStyle = {
   visualStyle: string;
@@ -124,6 +135,16 @@ export type ProjectStyle = {
   episodeDurationSeconds?: number;
   /** Anything else the Style stage collects (tone, audience, language, ...). */
   extras?: Record<string, string>;
+  /**
+   * References behind a look or genre the user described themselves. When present, the matching
+   * `visualStyle` / `genre` string is the readable summary of it (see `@/lib/style-references`),
+   * so everything that reads only the string keeps working. Older projects have none: their
+   * typed "other" value is just the string.
+   */
+  references?: {
+    visualStyle?: StyleReference;
+    genre?: StyleReference;
+  };
 };
 
 /** A comment anchored to a passage of the reviewed text. */

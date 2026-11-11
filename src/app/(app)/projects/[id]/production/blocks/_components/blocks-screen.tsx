@@ -25,6 +25,7 @@ import {
 import { attentionTone, attentionWords, needsReview } from "../_lib/block-state";
 import { BlockRow } from "./block-row";
 import { GenerateSheet } from "./generate-sheet";
+import { FillPage } from "../../_components/fill-page";
 
 const FAST_POLL_MS = 2000;
 const SETTLED_POLL_MS = 10000;
@@ -127,7 +128,7 @@ export function BlocksScreen({
       return (
         <section
           aria-label="Preparing the shots"
-          className="flex min-h-75 flex-col justify-between gap-10 rounded-block bg-elevated p-6 sm:p-10"
+          className="flex min-h-75 flex-1 flex-col justify-between gap-10 rounded-block bg-elevated p-6 sm:p-10"
         >
           <h2 className="max-w-[22ch] text-heading font-semibold tracking-[-0.03em] text-balance">
             The shots are being prepared.
@@ -185,7 +186,7 @@ export function BlocksScreen({
     if (!lead && counts.block_review === 0) return null;
 
     return (
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-1 flex-wrap gap-3">
         {lead}
         {counts.block_review > 0 ? (
           <div className={cn("flex flex-col gap-3", lead ? "flex-[1_1_220px]" : "w-full max-w-90")}>
@@ -201,8 +202,11 @@ export function BlocksScreen({
     );
   }
 
+  const step = nextStep();
+  const grow = step !== null && (allPreparing || items.length > 0);
+
   return (
-    <>
+    <FillPage>
       <PageHeader
         title="Shots"
         description={
@@ -220,7 +224,7 @@ export function BlocksScreen({
         }
       />
 
-      <div className="in-2">{nextStep()}</div>
+      <div className={cn("flex in-2 flex-col", grow && "flex-1")}>{step}</div>
 
       {!allPreparing && items.length > 0 ? (
         <section aria-label="Every shot" className="mt-12 flex in-3 flex-col gap-4">
@@ -264,6 +268,6 @@ export function BlocksScreen({
       {generateOpen ? (
         <GenerateSheet open onOpenChange={setGenerateOpen} projectId={projectId} />
       ) : null}
-    </>
+    </FillPage>
   );
 }

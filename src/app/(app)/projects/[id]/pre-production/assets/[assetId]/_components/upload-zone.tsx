@@ -58,11 +58,14 @@ export function UploadZone({
   assetId,
   audio = false,
   disabled = false,
+  grow = false,
 }: {
   projectId: string;
   assetId: string;
   audio?: boolean;
   disabled?: boolean;
+  /** Let the drop area grow to fill the space it is given. */
+  grow?: boolean;
 }) {
   const { refresh } = useAssetScreen();
   const id = useId();
@@ -135,7 +138,7 @@ export function UploadZone({
   const Icon = audio ? AudioLines : ImageUp;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className={cn("flex flex-col gap-3", grow && "flex-1")}>
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -144,6 +147,7 @@ export function UploadZone({
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         className={cn(
+          grow && "flex-1",
           "flex min-h-52 flex-col items-center justify-center gap-3 rounded-block border border-dashed px-5 py-8 text-center transition-colors duration-(--dur-press)",
           dragging ? "border-label bg-elevated-2" : "border-separator-opaque bg-elevated",
         )}

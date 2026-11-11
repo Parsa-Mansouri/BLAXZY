@@ -14,6 +14,7 @@ import {
   type DetailVersions,
 } from "../_lib/asset-view";
 import type { AssetIntent } from "../_lib/intent";
+import { FILL_PAGE } from "../../../_lib/fill";
 import { pollAssetAction } from "../actions";
 import { AddImage, type AddMethod } from "./add-image";
 import { AssetScreenProvider } from "./asset-context";
@@ -290,27 +291,32 @@ export function AssetScreen(props: AssetScreenProps) {
         <p role="status" aria-live="polite" className="sr-only">
           {announcement}
         </p>
-        <AssetHeader
-          projectId={projectId}
-          asset={asset}
-          kindName={props.kindName}
-          category={props.category}
-          stage={stage}
-          busy={versions.busy}
-          limits={props.limits}
-        />
-        {viewing ? (
-          <HistoryViewer
-            item={viewing}
-            assetName={asset.name}
-            voice={voice}
-            orientation={orientation}
-            questions={props.questions}
-            onBack={() => setViewingKey(null)}
+        {/* The header and the stage fill the screen; History follows below the fold. */}
+        <div className={FILL_PAGE}>
+          <AssetHeader
+            projectId={projectId}
+            asset={asset}
+            kindName={props.kindName}
+            category={props.category}
+            stage={stage}
+            busy={versions.busy}
+            limits={props.limits}
           />
-        ) : (
-          stageView()
-        )}
+          <div className="flex flex-1 flex-col *:flex-1">
+            {viewing ? (
+              <HistoryViewer
+                item={viewing}
+                assetName={asset.name}
+                voice={voice}
+                orientation={orientation}
+                questions={props.questions}
+                onBack={() => setViewingKey(null)}
+              />
+            ) : (
+              stageView()
+            )}
+          </div>
+        </div>
         <HistoryStrip
           className="mt-16"
           items={items}

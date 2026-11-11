@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { PageHeader, StatusLine, SwapFade } from "@/ui";
-import { ToolbarBack } from "../../../_components/project-chrome";
 import { usePolling } from "../../../_lib/use-polling";
+import { FillPage } from "../../_components/fill-page";
 import { ReviewLayout } from "../../_components/review-layout";
 import { ReviewListContext } from "../../_components/review-list-context";
 import { ShotList, type ShotListItem } from "../../_components/shot-list";
@@ -20,7 +20,7 @@ import {
   statusTone,
   type ClipTileData,
 } from "../_lib/clip-view";
-import { boardHref, clipHref } from "../_lib/routes";
+import { clipHref } from "../_lib/routes";
 
 const FAST_POLL_MS = 2000;
 const SETTLED_POLL_MS = 10000;
@@ -124,28 +124,29 @@ export function ClipReviewFrame({
 
   return (
     <ReviewListContext.Provider value={() => void refresh()}>
-      <ToolbarBack href={boardHref(projectId)} label="Clips" />
-      <PageHeader
-        title="Clips"
-        description={
-          <StatusLine tone={statusTone(summary.counts)}>{statusLine(summary.counts)}</StatusLine>
-        }
-      />
-      <ReviewLayout
-        listLabel="Shots"
-        list={
-          <ShotList
-            items={tiles.map((t) => toItem(projectId, t))}
-            activeId={activeId}
-            nextCursor={nextCursor}
-            loading={loading}
-            onMore={more}
-            error={error}
-          />
-        }
-      >
-        <SwapFade swapKey={activeId ?? "none"}>{children}</SwapFade>
-      </ReviewLayout>
+      <FillPage>
+        <PageHeader
+          title="Clips"
+          description={
+            <StatusLine tone={statusTone(summary.counts)}>{statusLine(summary.counts)}</StatusLine>
+          }
+        />
+        <ReviewLayout
+          listLabel="Shots"
+          list={
+            <ShotList
+              items={tiles.map((t) => toItem(projectId, t))}
+              activeId={activeId}
+              nextCursor={nextCursor}
+              loading={loading}
+              onMore={more}
+              error={error}
+            />
+          }
+        >
+          <SwapFade swapKey={activeId ?? "none"}>{children}</SwapFade>
+        </ReviewLayout>
+      </FillPage>
     </ReviewListContext.Provider>
   );
 }

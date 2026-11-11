@@ -50,8 +50,9 @@ function AcceptedBody({
       }
     >
       {scene ? (
-        <SwapFade swapKey={scene.key}>
+        <SwapFade swapKey={scene.key} className="flex flex-1 flex-col items-center">
           <ReadingSheet
+            className="flex-1"
             aria-label={sceneName(scene)}
             scenes={[scene]}
             top={
@@ -64,7 +65,7 @@ function AcceptedBody({
       ) : (
         <p className="text-body text-label-2">This version has no text.</p>
       )}
-      <VersionNotes version={version} />
+      <VersionNotes version={version} className="self-center" />
     </ScenesLayout>
   );
 }
@@ -178,7 +179,7 @@ export function ScriptAccepted({
       ) : null}
 
       {editing ? (
-        <div className="flex max-w-170 swap-in flex-col gap-3">
+        <div className="mx-auto flex w-full max-w-205 flex-1 swap-in flex-col gap-3">
           <div className="relative isolate">
             <PaperLayers className="right-0" />
             <textarea

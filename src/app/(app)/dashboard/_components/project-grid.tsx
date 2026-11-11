@@ -29,7 +29,7 @@ export function ProjectGrid({
   return (
     <div className="flex flex-col gap-10">
       {items.length > 0 ? (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-x-6 gap-y-9">
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-x-6 gap-y-9">
           {items.map((project, index) => (
             <ProjectTile
               key={project.id}

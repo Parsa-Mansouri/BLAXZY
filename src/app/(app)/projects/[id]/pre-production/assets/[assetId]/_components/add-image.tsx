@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition, type ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import { Button, FeatureBlock, QuietTile, cn } from "@/ui";
 import { useGuidedDraft } from "../_lib/guided-draft";
@@ -17,6 +17,19 @@ import {
   type Orientation,
 } from "./shared";
 import { UploadZone } from "./upload-zone";
+import { PICTURE_MAX_H } from "../../../_lib/fill";
+
+/** The empty frame on the leading side, the way of adding the image filling the rest. */
+function WithFrame({ orientation, children }: { orientation: Orientation; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-stretch gap-x-12 gap-y-10">
+      <div className="min-w-0 flex-[1_1_280px] in-2">
+        <EmptyFrame orientation={orientation} />
+      </div>
+      <div className="flex min-w-0 flex-[2_1_420px] flex-col gap-5">{children}</div>
+    </div>
+  );
+}
 
 export type AddMethod = "chooser" | "guided" | "prompt" | "upload";
 
@@ -48,7 +61,8 @@ function EmptyFrame({ orientation }: { orientation: Orientation }) {
   return (
     <div
       className={cn(
-        "flex w-full items-center justify-center rounded-card border border-dashed border-separator-opaque text-meta text-label-3",
+        "mx-auto flex w-full items-center justify-center rounded-card border border-dashed border-separator-opaque text-meta text-label-3",
+        PICTURE_MAX_H,
         orientation === "portrait" ? "aspect-[9/16]" : "aspect-video",
       )}
     >
@@ -110,6 +124,7 @@ export function AddImage(props: AddImageProps) {
         maxLength={props.limits.prompt}
         price={props.price}
         balance={props.balance}
+        orientation={props.orientation}
         onBack={() => setPicked("chooser")}
       />
     );
@@ -117,18 +132,20 @@ export function AddImage(props: AddImageProps) {
 
   if (method === "upload") {
     return (
-      <section aria-labelledby="upload-title" className="flex max-w-170 in-2 flex-col gap-6">
-        <BackToChooser onClick={() => setPicked("chooser")} />
-        <div className="flex flex-col gap-3">
-          <StageHeading id="upload-title" className="text-heading-sm">
-            Upload an Image
-          </StageHeading>
-          <p className="text-body text-label-2">
-            Use a photo, a drawing or a still you already have. No credits needed.
-          </p>
-        </div>
-        <UploadZone projectId={props.projectId} assetId={asset.id} />
-      </section>
+      <WithFrame orientation={props.orientation}>
+        <section aria-labelledby="upload-title" className="flex flex-1 in-2 flex-col gap-6">
+          <BackToChooser onClick={() => setPicked("chooser")} />
+          <div className="flex flex-col gap-3">
+            <StageHeading id="upload-title" className="text-heading-sm">
+              Upload an Image
+            </StageHeading>
+            <p className="text-body text-label-2">
+              Use a photo, a drawing or a still you already have. No credits needed.
+            </p>
+          </div>
+          <UploadZone projectId={props.projectId} assetId={asset.id} grow />
+        </section>
+      </WithFrame>
     );
   }
 
@@ -160,61 +177,56 @@ function Chooser({
   const lead = useRef<HTMLElement>(null);
   useFocusOnArrival(() => lead.current);
   return (
-    <div className="flex flex-wrap items-start gap-x-12 gap-y-10">
-      <div className="max-w-80 min-w-0 flex-[1_1_240px] in-2">
-        <EmptyFrame orientation={orientation} />
-      </div>
-      <div className="flex max-w-170 min-w-0 flex-[2_1_360px] flex-col gap-5">
-        {title ? <StageHeading className="in-2 text-heading-sm">{title}</StageHeading> : null}
-        <div className="flex flex-wrap gap-3">
+    <WithFrame orientation={orientation}>
+      {title ? <StageHeading className="in-2 text-heading-sm">{title}</StageHeading> : null}
+      <div className="flex flex-1 flex-wrap items-stretch gap-3">
+        {hasQuestions ? (
+          <FeatureBlock
+            ref={lead}
+            className="flex-[2_1_300px] enter"
+            style={{ animationDelay: "300ms" }}
+            title={resuming ? "Continue Answering" : "Answer a Few Questions"}
+            description={`We ask about ${asset.name}, one thing at a time, and write the prompt for you.`}
+            cta={resuming ? "Continue" : "Start"}
+            onClick={() => onPick("guided")}
+          />
+        ) : (
+          <FeatureBlock
+            ref={lead}
+            className="flex-[2_1_300px] enter"
+            style={{ animationDelay: "300ms" }}
+            title="Write a Prompt"
+            description={`Describe how ${asset.name} should look, in your own words.`}
+            cta="Start"
+            onClick={() => onPick("prompt")}
+          />
+        )}
+        <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-3">
           {hasQuestions ? (
-            <FeatureBlock
-              ref={lead}
-              className="flex-[2_1_300px] enter"
-              style={{ animationDelay: "300ms" }}
-              title={resuming ? "Continue Answering" : "Answer a Few Questions"}
-              description={`We ask about ${asset.name}, one thing at a time, and write the prompt for you.`}
-              cta={resuming ? "Continue" : "Start"}
-              onClick={() => onPick("guided")}
-            />
-          ) : (
-            <FeatureBlock
-              ref={lead}
-              className="flex-[2_1_300px] enter"
-              style={{ animationDelay: "300ms" }}
-              title="Write a Prompt"
-              description={`Describe how ${asset.name} should look, in your own words.`}
-              cta="Start"
-              onClick={() => onPick("prompt")}
-            />
-          )}
-          <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-3">
-            {hasQuestions ? (
-              <QuietTile
-                className="flex-1 enter"
-                style={{ animationDelay: "340ms" }}
-                title="Write a Prompt"
-                onClick={() => onPick("prompt")}
-              />
-            ) : null}
             <QuietTile
               className="flex-1 enter"
-              style={{ animationDelay: "380ms" }}
-              title="Upload an Image"
-              onClick={() => onPick("upload")}
+              style={{ animationDelay: "340ms" }}
+              title="Write a Prompt"
+              onClick={() => onPick("prompt")}
             />
-          </div>
-        </div>
-        <div className="flex in-3 flex-col items-start gap-4">
-          <PriceLine price={price} balance={balance} action="image" />
-          {onCancel ? (
-            <Button variant="plain" onClick={onCancel}>
-              Cancel
-            </Button>
           ) : null}
+          <QuietTile
+            className="flex-1 enter"
+            style={{ animationDelay: "380ms" }}
+            title="Upload an Image"
+            onClick={() => onPick("upload")}
+          />
         </div>
       </div>
-    </div>
+      <div className="flex in-3 flex-col items-start gap-4">
+        <PriceLine price={price} balance={balance} action="image" />
+        {onCancel ? (
+          <Button variant="plain" onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : null}
+      </div>
+    </WithFrame>
   );
 }
 
@@ -234,6 +246,7 @@ function PromptWriter({
   maxLength,
   price,
   balance,
+  orientation,
   onBack,
 }: {
   projectId: string;
@@ -241,6 +254,7 @@ function PromptWriter({
   maxLength: number;
   price: number | null;
   balance: number;
+  orientation: Orientation;
   onBack: () => void;
 }) {
   const { refresh } = useAssetScreen();
@@ -277,90 +291,95 @@ function PromptWriter({
   }
 
   return (
-    <section aria-labelledby={`${id}-title`} className="flex max-w-170 in-2 flex-col gap-6">
-      <BackToChooser onClick={onBack} />
-      <div className="flex flex-col gap-3">
-        <StageHeading id={`${id}-title`} className="text-heading-sm">
-          Write a Prompt
-        </StageHeading>
-        <p id={`${id}-hint`} className="text-body text-pretty text-label-2">
-          {PROMPT_HINTS[asset.kind] ?? PROMPT_HINTS.other}
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <label htmlFor={`${id}-prompt`} className="sr-only">
-          Description of the image
-        </label>
-        <textarea
-          ref={area}
-          id={`${id}-prompt`}
-          value={prompt}
-          onChange={(e) => {
-            setPrompt(e.target.value);
-            if (error) setError(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              generate();
-            }
-          }}
-          rows={6}
-          placeholder={PLACEHOLDERS[asset.kind] ?? PLACEHOLDERS.other}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={`${id}-hint${showCount ? ` ${id}-count` : ""}`}
-          disabled={sending}
-          className={cn(
-            "field-sizing-content max-h-[55dvh] min-h-[calc(var(--ts-script-lh)*6+2rem)] w-full resize-none rounded-tile border border-separator-opaque bg-elevated px-4 py-3.5 text-script text-label outline-none placeholder:text-label-3",
-            "focus-visible:border-label-2 disabled:text-label-2",
-          )}
-        />
-        <div className="flex items-baseline justify-between gap-4">
-          {asset.description ? (
-            <button
-              type="button"
-              disabled={sending}
-              onClick={() => {
-                setPrompt((current) =>
-                  current.trim()
-                    ? `${current.trim()}\n\n${asset.description}`
-                    : (asset.description ?? ""),
-                );
-                area.current?.focus();
-              }}
-              className="rounded-row text-secondary text-label underline-offset-4 focus-ring hover:underline disabled:text-label-3"
-            >
-              Start from the Script’s Description
-            </button>
-          ) : (
-            <span />
-          )}
-          {showCount ? (
-            <p
-              id={`${id}-count`}
-              className={cn("shrink-0 text-meta tabular-nums", over ? "text-red" : "text-label-2")}
-            >
-              <span className="sr-only">Characters used: </span>
-              {formatNumber(prompt.length)} / {formatNumber(maxLength)}
-            </p>
-          ) : null}
+    <WithFrame orientation={orientation}>
+      <section aria-labelledby={`${id}-title`} className="flex flex-1 in-2 flex-col gap-6">
+        <BackToChooser onClick={onBack} />
+        <div className="flex flex-col gap-3">
+          <StageHeading id={`${id}-title`} className="text-heading-sm">
+            Write a Prompt
+          </StageHeading>
+          <p id={`${id}-hint`} className="text-body text-pretty text-label-2">
+            {PROMPT_HINTS[asset.kind] ?? PROMPT_HINTS.other}
+          </p>
         </div>
-      </div>
 
-      <div className="flex flex-col items-start gap-3">
-        <PriceLine price={price} balance={balance} action="image" />
-        <Button
-          variant="primary"
-          size="large"
-          loading={sending}
-          disabled={!affordable}
-          onClick={generate}
-        >
-          Generate Image
-        </Button>
-        <ErrorLine>{error}</ErrorLine>
-      </div>
-    </section>
+        <div className="flex flex-col gap-2">
+          <label htmlFor={`${id}-prompt`} className="sr-only">
+            Description of the image
+          </label>
+          <textarea
+            ref={area}
+            id={`${id}-prompt`}
+            value={prompt}
+            onChange={(e) => {
+              setPrompt(e.target.value);
+              if (error) setError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                generate();
+              }
+            }}
+            rows={6}
+            placeholder={PLACEHOLDERS[asset.kind] ?? PLACEHOLDERS.other}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={`${id}-hint${showCount ? ` ${id}-count` : ""}`}
+            disabled={sending}
+            className={cn(
+              "field-sizing-content max-h-[55dvh] min-h-[calc(var(--ts-script-lh)*6+2rem)] w-full resize-none rounded-tile border border-separator-opaque bg-elevated px-4 py-3.5 text-script text-label outline-none placeholder:text-label-3",
+              "focus-visible:border-label-2 disabled:text-label-2",
+            )}
+          />
+          <div className="flex items-baseline justify-between gap-4">
+            {asset.description ? (
+              <button
+                type="button"
+                disabled={sending}
+                onClick={() => {
+                  setPrompt((current) =>
+                    current.trim()
+                      ? `${current.trim()}\n\n${asset.description}`
+                      : (asset.description ?? ""),
+                  );
+                  area.current?.focus();
+                }}
+                className="rounded-row text-secondary text-label underline-offset-4 focus-ring hover:underline disabled:text-label-3"
+              >
+                Start from the Script’s Description
+              </button>
+            ) : (
+              <span />
+            )}
+            {showCount ? (
+              <p
+                id={`${id}-count`}
+                className={cn(
+                  "shrink-0 text-meta tabular-nums",
+                  over ? "text-red" : "text-label-2",
+                )}
+              >
+                <span className="sr-only">Characters used: </span>
+                {formatNumber(prompt.length)} / {formatNumber(maxLength)}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-auto flex flex-col items-start gap-3">
+          <PriceLine price={price} balance={balance} action="image" />
+          <Button
+            variant="primary"
+            size="large"
+            loading={sending}
+            disabled={!affordable}
+            onClick={generate}
+          >
+            Generate Image
+          </Button>
+          <ErrorLine>{error}</ErrorLine>
+        </div>
+      </section>
+    </WithFrame>
   );
 }

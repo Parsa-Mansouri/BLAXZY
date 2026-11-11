@@ -30,6 +30,15 @@ export const FILE_PURPOSES = {
       "image/webp": ["webp"],
     },
   },
+  /** A screenshot or still the user gives as a reference for the film's look or genre (Style). */
+  style_reference: {
+    maxBytes: 15 * MB,
+    types: {
+      "image/png": ["png"],
+      "image/jpeg": ["jpg", "jpeg"],
+      "image/webp": ["webp"],
+    },
+  },
   /** A look image produced by a generation provider. */
   generated_image: {
     maxBytes: 50 * MB,

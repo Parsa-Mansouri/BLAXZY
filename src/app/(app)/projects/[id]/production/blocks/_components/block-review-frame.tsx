@@ -4,9 +4,9 @@ import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode
 import { useParams } from "next/navigation";
 import type { ProductionBlock } from "@/server/production";
 import { PageHeader, StatusLine, SwapFade } from "@/ui";
-import { ToolbarBack } from "../../../_components/project-chrome";
 import { usePolling } from "../../../_lib/use-polling";
-import { blockHref, blocksHref } from "../../../_lib/production-routes";
+import { blockHref } from "../../../_lib/production-routes";
+import { FillPage } from "../../_components/fill-page";
 import { ReviewLayout } from "../../_components/review-layout";
 import { ReviewListContext } from "../../_components/review-list-context";
 import { ShotList, type ShotListItem } from "../../_components/shot-list";
@@ -121,34 +121,35 @@ export function BlockReviewFrame({
 
   return (
     <ReviewListContext.Provider value={() => void refresh()}>
-      <ToolbarBack href={blocksHref(projectId)} label="Shots" />
-      <PageHeader
-        title="Shots"
-        description={
-          words ? (
-            <StatusLine tone={attentionTone(counts)} as="div">
-              <span role="status" aria-live="polite">
-                {words}
-              </span>
-            </StatusLine>
-          ) : undefined
-        }
-      />
-      <ReviewLayout
-        listLabel="Shots"
-        list={
-          <ShotList
-            items={items.map((b) => toItem(projectId, b))}
-            activeId={activeId}
-            nextCursor={nextCursor}
-            loading={loading}
-            onMore={more}
-            error={error}
-          />
-        }
-      >
-        <SwapFade swapKey={activeId ?? "none"}>{children}</SwapFade>
-      </ReviewLayout>
+      <FillPage>
+        <PageHeader
+          title="Shots"
+          description={
+            words ? (
+              <StatusLine tone={attentionTone(counts)} as="div">
+                <span role="status" aria-live="polite">
+                  {words}
+                </span>
+              </StatusLine>
+            ) : undefined
+          }
+        />
+        <ReviewLayout
+          listLabel="Shots"
+          list={
+            <ShotList
+              items={items.map((b) => toItem(projectId, b))}
+              activeId={activeId}
+              nextCursor={nextCursor}
+              loading={loading}
+              onMore={more}
+              error={error}
+            />
+          }
+        >
+          <SwapFade swapKey={activeId ?? "none"}>{children}</SwapFade>
+        </ReviewLayout>
+      </FillPage>
     </ReviewListContext.Provider>
   );
 }

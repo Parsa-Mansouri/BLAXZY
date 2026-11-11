@@ -54,12 +54,12 @@ function AskedFor({ brief }: { brief: string }) {
   return (
     <section
       aria-labelledby="asked-for"
-      className="mt-16 flex max-w-160 in-3 flex-col gap-3 pt-6 hairline-t"
+      className="mt-auto flex in-3 flex-col gap-3 pt-6 hairline-t"
     >
       <h2 id="asked-for" className="text-section">
         What You Asked For
       </h2>
-      <p className="text-body whitespace-pre-wrap text-label-2">{brief}</p>
+      <p className="max-w-[70ch] text-body whitespace-pre-wrap text-label-2">{brief}</p>
     </section>
   );
 }
@@ -82,7 +82,7 @@ export function ScriptWorking({
   return (
     <>
       <PageHeader title="Script" description={WORKING_DESCRIPTION[version.source]} />
-      <section aria-labelledby="working" className="flex max-w-180 in-2 flex-col gap-6">
+      <section aria-labelledby="working" className="mb-16 flex in-2 flex-col gap-6">
         <h2 id="working" className="text-heading text-balance">
           {WORKING_HEADING[version.source]}
         </h2>
@@ -145,7 +145,7 @@ export function ScriptFailed({
           fromBrief ? "Nothing was lost; your description is kept below." : "Nothing was lost."
         }
       />
-      <section role="alert" className="flex max-w-180 in-2 flex-col gap-8">
+      <section role="alert" className="mb-16 flex in-2 flex-col gap-8">
         <div className="flex flex-col gap-3">
           <h2 className="flex items-baseline gap-4 text-heading">
             <StatusDot tone="failed" className="size-2.5 -translate-y-1" />

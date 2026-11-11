@@ -26,6 +26,12 @@ export interface OptionTileProps {
   aspectRatio?: string;
   /** Fixed tile width, e.g. "288px" for a landscape frame next to a "162px" portrait one. */
   width?: string;
+  /**
+   * Fill the tile's grid cell: the picture grows to the cell's height instead of keeping
+   * `aspectRatio` (use in a grid whose rows share the free height, e.g. `auto-rows-[minmax(180px,1fr)]`,
+   * so tiles are as large as the screen allows). A real `src` is cropped to fit (object-cover).
+   */
+  fill?: boolean;
   disabled?: boolean;
   className?: string;
   /** For `stagger(i)` with `className="enter"`. */
@@ -45,6 +51,7 @@ export function OptionTile({
   kind = "example",
   aspectRatio = "16 / 9",
   width,
+  fill = false,
   disabled,
   className,
   style,
@@ -59,13 +66,15 @@ export function OptionTile({
       style={{ ...style, width }}
       className={cn(
         "group/option flex max-w-full min-w-0 press flex-col gap-2.5 rounded-tile text-left focus-ring",
+        fill && "h-full",
         "disabled:pointer-events-none disabled:opacity-40",
         className,
       )}
     >
       <span
-        style={{ aspectRatio }}
+        style={fill ? undefined : { aspectRatio }}
         className={cn(
+          fill && "min-h-28 flex-1",
           "relative flex w-full items-center justify-center overflow-hidden rounded-tile text-meta text-label-3",
           "transition-[box-shadow,border-color] duration-(--dur-press)",
           other ? "border border-dashed border-outline" : "bg-elevated",

@@ -43,7 +43,7 @@ export function AllProjectsView({
   return (
     <>
       <Toolbar />
-      <div className="px-(--content-x) pt-8 pb-18">
+      <div className="flex flex-1 flex-col px-(--content-x) pt-8 pb-18">
         <PageHeader
           title="Projects"
           description="Every film you have started, and where each one stands."
@@ -58,7 +58,7 @@ export function AllProjectsView({
           tabs={FILTERS}
           value={filter}
           onValueChange={(next) => setFilter(next as Filter)}
-          className="in-2"
+          className="flex flex-1 in-2 flex-col"
         >
           {(value) => {
             const items = shown(value as Filter);
@@ -66,7 +66,7 @@ export function AllProjectsView({
             if (items.length === 0 && !hasMore) {
               const empty = EMPTY[value as Filter];
               return (
-                <div className="flex max-w-[520px] flex-col items-start gap-2 pt-4">
+                <div className="flex min-h-[50dvh] max-w-[520px] flex-col items-start justify-center gap-2">
                   <p className="text-section">{empty.title}</p>
                   <p className="text-body text-label-2">{empty.text}</p>
                   {value === "finished" ? (

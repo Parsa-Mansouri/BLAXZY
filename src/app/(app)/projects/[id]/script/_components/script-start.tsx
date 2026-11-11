@@ -177,7 +177,8 @@ export function ScriptStart({
         description="Start from an idea, or bring a script you already have."
       />
 
-      <div className="flex max-w-260 flex-wrap gap-3">
+      {/* Both roads fill the page: the white block grows, the upload tile beside it. */}
+      <div className="flex flex-1 flex-wrap gap-3">
         <section
           aria-labelledby={`${id}-describe`}
           className="flex min-h-105 min-w-0 flex-[2_1_420px] in-2 flex-col gap-6 rounded-block bg-accent p-8 text-on-accent max-sm:p-6"

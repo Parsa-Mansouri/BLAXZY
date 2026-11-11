@@ -9,7 +9,8 @@ import { finishProductionAction, loadBoardAction, refreshBoardAction } from "../
 import type { BoardPage } from "../_lib/clip-data";
 import { isUnsettled, statusLine, statusTone, type Orientation } from "../_lib/clip-view";
 import { clipHref, finishedHref } from "../_lib/routes";
-import { ClipTile, BoardGrid } from "./clip-tile";
+import { ClipTile, BoardGrid, FEW_POSTERS } from "./clip-tile";
+import { FillPage } from "../../_components/fill-page";
 import { useClips } from "./clips-context";
 
 const FAST_POLL_MS = 2000;
@@ -135,7 +136,7 @@ export function ClipsBoard({
     0;
 
   return (
-    <>
+    <FillPage>
       <PageHeader
         title="Clips"
         description={
@@ -154,7 +155,7 @@ export function ClipsBoard({
       {summary.canComplete ? (
         <div className="mb-12 flex in-2 flex-col gap-3">
           <FeatureBlock
-            className="w-full max-w-180"
+            className="w-full"
             title="Finish the Film"
             description="Every shot is final. Finish to download every clip, one by one or together."
             cta={finishing ? "Finishing…" : "Finish"}
@@ -171,7 +172,7 @@ export function ClipsBoard({
       ) : null}
 
       <section aria-label="Every shot" className="flex in-3 flex-col gap-8">
-        <BoardGrid orientation={orientation}>
+        <BoardGrid orientation={orientation} few={tiles.length <= FEW_POSTERS && !nextCursor}>
           {tiles.map((tile, i) => (
             <ClipTile
               key={tile.lineageId}
@@ -197,6 +198,6 @@ export function ClipsBoard({
           </p>
         ) : null}
       </section>
-    </>
+    </FillPage>
   );
 }

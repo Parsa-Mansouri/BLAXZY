@@ -25,7 +25,8 @@ const reachable = await databaseReachable();
 describe.skipIf(!reachable)("stage state machine (integration)", async () => {
   const projects = await import("@/server/projects");
   const { getDb, closeDb } = await import("@/server/db/client");
-  const { project, projectEvent, episode, user } = await import("@/server/db/schema");
+  const { project, projectEvent, episode, user, file } = await import("@/server/db/schema");
+  const { putFileBytes } = await import("@/server/storage");
 
   const userIds: string[] = [];
   async function newUser(): Promise<string> {
@@ -81,6 +82,7 @@ describe.skipIf(!reachable)("stage state machine (integration)", async () => {
         .from(project)
         .where(inArray(project.ownerId, userIds));
       const ids = owned.map((p) => p.id);
+      await db.delete(file).where(inArray(file.ownerId, userIds));
       if (ids.length > 0) {
         await db.delete(episode).where(inArray(episode.projectId, ids));
         await db.delete(projectEvent).where(inArray(projectEvent.projectId, ids));
@@ -89,6 +91,41 @@ describe.skipIf(!reachable)("stage state machine (integration)", async () => {
       await db.delete(user).where(inArray(user.id, userIds));
     }
     await closeDb();
+  });
+
+  it("stores a look described by references, checking its images", async () => {
+    const { ownerId, p } = await newProject();
+    const image = await putFileBytes({
+      ownerId,
+      projectId: p.id,
+      name: "still.png",
+      mimeType: "image/png",
+      purpose: "style_reference",
+      bytes: new Uint8Array([137, 80, 78, 71]),
+    });
+    const style = {
+      ...movie(600),
+      visualStyle: "anything",
+      references: {
+        visualStyle: {
+          titles: ["Heat", " heat "],
+          description: "Night city.",
+          fileIds: [image.id],
+        },
+      },
+    };
+    const saved = await projects.saveStyle({ projectId: p.id, userId: ownerId, style });
+    expect(saved?.style?.visualStyle).toBe("Like Heat. Night city.");
+    expect(saved?.style?.references?.visualStyle).toEqual({
+      titles: ["Heat"],
+      description: "Night city.",
+      fileIds: [image.id],
+    });
+
+    const other = await newProject();
+    await expect(
+      projects.saveStyle({ projectId: other.p.id, userId: other.ownerId, style }),
+    ).rejects.toThrow(/could not be found/);
   });
 
   it("first save advances style to script, later saves do not", async () => {

@@ -57,7 +57,7 @@ interface CommentApi {
 
 /**
  * One scene on the paper with the margin beside it. With room (about 800px), each line's
- * comments and script checks sit in a 224px column on the black beside the line; with less, they
+ * comments and script checks sit in a column of at least 224px on the black beside the line; with less, they
  * sit under their line on the sheet, in a dark card. Point at a line (or tab to it) to comment.
  */
 function ReviewSheet({
@@ -83,12 +83,13 @@ function ReviewSheet({
   }
 
   return (
-    <div className="@container">
+    <div className="@container flex flex-1 flex-col">
       <article
         aria-label={sceneName(scene)}
         className={cn(
-          "relative isolate flex flex-col gap-6 py-11 font-script text-script text-ink",
-          "[--sheet-w:100%] @min-[50rem]:[--sheet-w:min(42.5rem,100%_-_15.5rem)]",
+          "relative isolate flex flex-1 flex-col gap-6 py-11 font-script text-script text-ink",
+          // The paper grows to 820px; the comment margin takes the rest (at least 224px).
+          "[--sheet-w:100%] @min-[50rem]:[--sheet-w:min(51.25rem,100%_-_15.5rem)]",
         )}
       >
         <PaperLayers className="w-(--sheet-w)" />
@@ -124,7 +125,7 @@ function ReviewSheet({
               <div
                 className={cn(
                   "flex shrink-0 flex-col gap-3 font-sans text-body text-label",
-                  "@min-[50rem]:w-56",
+                  "@min-[50rem]:min-w-56 @min-[50rem]:flex-1",
                 )}
               >
                 {hasSide ? (
@@ -241,7 +242,7 @@ function ReviewBody({
       }
     >
       {scene ? (
-        <SwapFade swapKey={scene.key}>
+        <SwapFade swapKey={scene.key} className="flex flex-1 flex-col">
           <ReviewSheet
             scene={scene}
             sceneIndex={index}

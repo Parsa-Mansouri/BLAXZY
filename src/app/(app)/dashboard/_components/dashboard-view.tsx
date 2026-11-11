@@ -43,7 +43,7 @@ function ContinueHero({ film }: { film: ProjectSummary }) {
   return (
     <section
       aria-label="Continue your film"
-      className="relative mx-3 mb-3 flex min-h-[520px] flex-col justify-end gap-7 overflow-hidden rounded-block bg-hero p-5 sm:p-10"
+      className="relative mx-3 mb-3 flex min-h-[max(520px,56dvh)] flex-col justify-end gap-7 overflow-hidden rounded-block bg-hero p-5 sm:p-10"
     >
       <HeroGlows />
       <div className="relative flex flex-col gap-5">
@@ -79,7 +79,7 @@ function EmptyHero() {
   return (
     <section
       aria-label="Start your first film"
-      className="relative mx-3 mb-3 flex min-h-[520px] flex-col justify-end gap-10 overflow-hidden rounded-block bg-hero p-5 sm:p-10"
+      className="relative mx-3 mb-3 flex min-h-[max(520px,56dvh)] flex-1 flex-col justify-end gap-10 overflow-hidden rounded-block bg-hero p-5 sm:p-10"
     >
       <HeroGlows />
       <div className="relative flex flex-col gap-5">
@@ -92,7 +92,7 @@ function EmptyHero() {
           next.
         </p>
       </div>
-      <div className="relative max-w-[760px] in-3">
+      <div className="relative in-3">
         <StartFilm emphasis />
       </div>
     </section>
@@ -116,10 +116,7 @@ export function DashboardView({
         <>
           <ContinueHero film={upNext} />
           <div className="flex flex-col gap-16 px-(--content-x) pt-11 pb-18">
-            <section
-              aria-labelledby="start-film"
-              className="flex max-w-[760px] in-3 flex-col gap-4"
-            >
+            <section aria-labelledby="start-film" className="flex in-3 flex-col gap-4">
               <h2 id="start-film" className="text-section">
                 Start a New Film
               </h2>

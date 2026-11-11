@@ -9,6 +9,7 @@ import { ASSET_KIND_LABELS, categoryHref, type AssetKindKey } from "../../../_li
 import { usePolling } from "../../../_lib/use-polling";
 import { isWorking } from "../../_components/asset-stage";
 import { KIND_ASPECTS, type GalleryItem } from "../../_components/gallery-item";
+import { FILL_PAGE } from "../../_lib/fill";
 import { statusWords, type StageCounts } from "../../_lib/status-words";
 import { loadCardsAction, refreshCardsAction } from "../actions";
 import { AddAssetSheet } from "./add-asset-sheet";
@@ -22,9 +23,9 @@ interface Neighbour {
 
 /** Grid columns by picture shape: wide pictures get wider cards. */
 const GRID: Record<"video" | "portrait" | "square", string> = {
-  portrait: "grid-cols-[repeat(auto-fill,minmax(min(100%,208px),1fr))]",
-  square: "grid-cols-[repeat(auto-fill,minmax(min(100%,208px),1fr))]",
-  video: "grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))]",
+  portrait: "grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))]",
+  square: "grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))]",
+  video: "grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))]",
 };
 
 const ASPECT_CLASS = {
@@ -106,7 +107,7 @@ export function CategoryPanel({
   const addLabel = `Add ${one.replace(/\b\p{Ll}/gu, (c) => c.toUpperCase())}`;
 
   return (
-    <div className="flex flex-col">
+    <div className={FILL_PAGE}>
       <PageHeader
         title={plural}
         description={
@@ -123,7 +124,7 @@ export function CategoryPanel({
         }
       />
 
-      <ul className={cn("grid in-2 gap-x-7 gap-y-10", GRID[aspect])}>
+      <ul className={cn("mb-16 grid in-2 gap-x-7 gap-y-10", GRID[aspect])}>
         {items.map((item, i) => (
           <li key={item.id} className="min-w-0">
             <AssetCard
@@ -172,7 +173,7 @@ export function CategoryPanel({
       {previous || next ? (
         <nav
           aria-label="Categories"
-          className="mt-16 flex in-3 items-center justify-between gap-4 pt-6 hairline-t"
+          className="mt-auto flex in-3 items-center justify-between gap-4 pt-6 hairline-t"
         >
           {previous ? (
             <Link

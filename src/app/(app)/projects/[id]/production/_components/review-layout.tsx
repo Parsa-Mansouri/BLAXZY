@@ -15,8 +15,8 @@ export function ReviewLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="@container">
-      <div className="flex flex-wrap items-start gap-10">
+    <div className="@container flex flex-1 flex-col">
+      <div className="flex flex-1 flex-wrap items-start gap-10">
         <nav
           aria-label={listLabel}
           className="flex min-w-0 flex-[1_1_200px] in-2 flex-col gap-0.5 @max-[799px]:order-last @min-[800px]:max-w-62"

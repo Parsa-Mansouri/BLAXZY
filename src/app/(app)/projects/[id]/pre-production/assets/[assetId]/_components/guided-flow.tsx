@@ -8,7 +8,7 @@ import { focusIsFree, keepTitleVisible, useAssetScreen } from "./asset-context";
 import { ErrorLine, PriceLine, canAfford, formatNumber, type GuidedQuestion } from "./shared";
 
 /**
- * How a question was answered: an offered answer (or, for a text question, written text), "Other"
+ * How a question was answered: an offered answer (or, for a text question, written text), "Not what you have in mind?"
  * with the user's own words, or "I'm not sure" with an optional rough idea.
  */
 type Mode = "answer" | "other" | "unsure";
@@ -42,7 +42,7 @@ function isAnswered({ mode, text }: Answer): boolean {
 function answerWords(question: GuidedQuestion, answer: Answer): string {
   const text = answer.text.trim();
   if (answer.mode === "unsure") return text ? `Not sure: ${text}` : "Not sure";
-  if (answer.mode === "other") return text || "Other";
+  if (answer.mode === "other") return text || "Something else";
   if (question.kind === "choice") {
     return question.options?.find((o) => o.value === text)?.label ?? text;
   }
@@ -57,7 +57,7 @@ function shortLabel(question: GuidedQuestion): string {
 
 /**
  * The guided questions: the answers on the left (any row opens its question again), one question
- * on the right. Every question offers "I'm not sure", and a choice also "Other", each with a box
+ * on the right. Every question offers "I'm not sure", and a choice also "Not what you have in mind?", each with a box
  * for the user's own words. There is no live image preview.
  */
 export function GuidedFlow({
@@ -134,7 +134,7 @@ export function GuidedFlow({
     save(next);
   }
 
-  /** Picks "Other" or "I'm not sure", keeping the words already written for it. */
+  /** Picks "Not what you have in mind?" or "I'm not sure", keeping the words already written for it. */
   function pickFree(mode: "other" | "unsure") {
     if (answer.mode === mode) {
       // A text question's "I'm not sure" toggles back to writing the answer.
@@ -180,7 +180,7 @@ export function GuidedFlow({
       return;
     }
     // The guided answers take an offered answer for a choice question. When a choice was answered
-    // in the user's own words ("Other", "I'm not sure"), the answers go as one written prompt.
+    // in the user's own words ("Not what you have in mind?", "I'm not sure"), the answers go as one written prompt.
     const guided: Record<string, string> = {};
     const lines: string[] = [];
     let ownWords = false;
@@ -230,6 +230,7 @@ export function GuidedFlow({
   return (
     <FocusLayout
       listLabel="Your answers"
+      fill
       list={questions.map((q, i) => {
         const a = readAnswer(q, answers);
         const done = isAnswered(a);
@@ -248,26 +249,28 @@ export function GuidedFlow({
         );
       })}
     >
-      <div ref={body} className="flex flex-col gap-12">
+      <div ref={body} className="flex flex-1 flex-col gap-12">
         {question ? (
-          <SwapFade swapKey={question.id} className="flex flex-col gap-7">
+          <SwapFade swapKey={question.id} className="flex flex-1 flex-col gap-7">
             <h2 id={`${id}-title`} className="text-heading text-balance">
               {question.label}
             </h2>
             <div className="flex flex-col gap-2">
               {question.kind === "choice" ? (
-                (question.options ?? []).map((option, i) => (
-                  <OptionRow
-                    key={option.value}
-                    selected={answer.mode === "answer" && answer.text === option.value}
-                    onSelect={() => set({ mode: "answer", text: option.value })}
-                    disabled={sending}
-                    className="enter"
-                    style={stagger(i, 40)}
-                  >
-                    {option.label}
-                  </OptionRow>
-                ))
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-2">
+                  {(question.options ?? []).map((option, i) => (
+                    <OptionRow
+                      key={option.value}
+                      selected={answer.mode === "answer" && answer.text === option.value}
+                      onSelect={() => set({ mode: "answer", text: option.value })}
+                      disabled={sending}
+                      className="enter"
+                      style={stagger(i, 40)}
+                    >
+                      {option.label}
+                    </OptionRow>
+                  ))}
+                </div>
               ) : answer.mode !== "unsure" ? (
                 <Textarea
                   aria-labelledby={`${id}-title`}
@@ -299,7 +302,7 @@ export function GuidedFlow({
                     disabled={sending}
                     className={chip(answer.mode === "other")}
                   >
-                    Other
+                    Not what you have in mind?
                   </button>
                 ) : null}
                 <button
@@ -326,25 +329,27 @@ export function GuidedFlow({
                 />
               ) : null}
             </div>
-            <ErrorLine>{error}</ErrorLine>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              <Button variant="primary" size="large" onClick={next}>
-                Continue
-              </Button>
-              {question.optional ? (
-                <Button variant="plain" size="large" onClick={skip}>
-                  Skip
+            <div className="mt-auto flex flex-col gap-3 pt-4">
+              <ErrorLine>{error}</ErrorLine>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                <Button variant="primary" size="large" onClick={next}>
+                  Continue
                 </Button>
-              ) : null}
-              {step > 0 ? (
-                <Button variant="plain" size="large" onClick={() => go(step - 1)}>
-                  Back
-                </Button>
-              ) : null}
+                {question.optional ? (
+                  <Button variant="plain" size="large" onClick={skip}>
+                    Skip
+                  </Button>
+                ) : null}
+                {step > 0 ? (
+                  <Button variant="plain" size="large" onClick={() => go(step - 1)}>
+                    Back
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </SwapFade>
         ) : (
-          <SwapFade swapKey="done" className="flex flex-col gap-7">
+          <SwapFade swapKey="done" className="flex flex-1 flex-col gap-7">
             <div className="flex flex-col gap-3">
               <h2
                 id={`${id}-title`}
@@ -358,22 +363,29 @@ export function GuidedFlow({
                 Press any answer in the list to change it before the image is made.
               </p>
             </div>
-            <PriceLine price={price} balance={balance} action="image" />
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              <Button
-                variant="primary"
-                size="large"
-                loading={sending}
-                disabled={!affordable}
-                onClick={generate}
-              >
-                Generate Image
-              </Button>
-              <Button variant="plain" size="large" onClick={() => go(total - 1)} disabled={sending}>
-                Back
-              </Button>
+            <div className="mt-auto flex flex-col gap-3 pt-4">
+              <PriceLine price={price} balance={balance} action="image" />
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                <Button
+                  variant="primary"
+                  size="large"
+                  loading={sending}
+                  disabled={!affordable}
+                  onClick={generate}
+                >
+                  Generate Image
+                </Button>
+                <Button
+                  variant="plain"
+                  size="large"
+                  onClick={() => go(total - 1)}
+                  disabled={sending}
+                >
+                  Back
+                </Button>
+              </div>
+              <ErrorLine>{error}</ErrorLine>
             </div>
-            <ErrorLine>{error}</ErrorLine>
           </SwapFade>
         )}
 

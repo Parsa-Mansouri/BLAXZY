@@ -1,5 +1,24 @@
 import { z } from "zod";
+import {
+  MAX_REFERENCE_DESCRIPTION_CHARS,
+  MAX_REFERENCE_IMAGES,
+  MAX_REFERENCE_TITLE_CHARS,
+  MAX_REFERENCE_TITLES,
+} from "@/lib/style-references";
 import { ORIENTATIONS, PROJECT_FORMATS, type ProjectStyle } from "@/server/db/schema";
+
+/** A look or genre the user described themselves: at least one of names, images or words. */
+export const styleReferenceSchema = z
+  .object({
+    titles: z
+      .array(z.string().trim().min(1).max(MAX_REFERENCE_TITLE_CHARS))
+      .max(MAX_REFERENCE_TITLES),
+    description: z.string().trim().min(1).max(MAX_REFERENCE_DESCRIPTION_CHARS).optional(),
+    fileIds: z.array(z.uuid()).max(MAX_REFERENCE_IMAGES),
+  })
+  .refine((r) => r.titles.length > 0 || r.fileIds.length > 0 || r.description !== undefined, {
+    message: "a reference needs a name, an image or a description",
+  });
 
 /** Zod mirror of `ProjectStyle` (Output_01), the input every dami is tailored to. */
 export const projectStyleSchema = z
@@ -11,6 +30,12 @@ export const projectStyleSchema = z
     totalDurationSeconds: z.number().int().positive(),
     episodeDurationSeconds: z.number().int().positive().optional(),
     extras: z.record(z.string(), z.string()).optional(),
+    references: z
+      .object({
+        visualStyle: styleReferenceSchema.optional(),
+        genre: styleReferenceSchema.optional(),
+      })
+      .optional(),
   })
   .superRefine((style, ctx) => {
     if (style.format === "series" && style.episodeDurationSeconds === undefined) {

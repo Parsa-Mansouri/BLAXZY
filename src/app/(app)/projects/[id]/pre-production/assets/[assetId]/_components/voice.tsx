@@ -33,7 +33,7 @@ export function AudioPlayer({ fileId, label }: { fileId: string; label: string }
   }
 
   return (
-    <div className="flex w-full max-w-xl flex-col gap-2">
+    <div className="flex w-full flex-col gap-2">
       <div className="flex items-center gap-3">
         <IconButton
           label={playing ? `Pause ${label}` : `Play ${label}`}
@@ -118,7 +118,7 @@ export function VoiceStage({
 
   if (recording?.fileId && !replacing) {
     return (
-      <section aria-labelledby="voice-title" className="flex max-w-170 in-2 flex-col gap-6">
+      <section aria-labelledby="voice-title" className="flex flex-1 in-2 flex-col gap-6">
         <div className="flex flex-col gap-1.5">
           <StageHeading id="voice-title" className="text-heading-sm">
             Recording
@@ -138,7 +138,7 @@ export function VoiceStage({
   }
 
   return (
-    <section aria-labelledby="voice-title" className="flex max-w-170 in-2 flex-col gap-6">
+    <section aria-labelledby="voice-title" className="flex flex-1 in-2 flex-col gap-6">
       <div className="flex flex-col gap-1.5">
         <StageHeading id="voice-title" className="text-heading-sm">
           {replacing ? "Replace Recording" : "Add a Recording"}
@@ -148,7 +148,7 @@ export function VoiceStage({
           or review.
         </p>
       </div>
-      <UploadZone projectId={projectId} assetId={assetId} audio />
+      <UploadZone projectId={projectId} assetId={assetId} audio grow />
       {replacing ? (
         <div>
           <Button variant="plain" onClick={() => setReplacing(false)}>

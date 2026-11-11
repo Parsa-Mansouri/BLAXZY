@@ -289,7 +289,7 @@ function QuestionsDemo() {
               ))}
               <OptionTile
                 kind="other"
-                label="Other"
+                label="Not what you have in mind?"
                 selected={look === "Other"}
                 onSelect={() => setLook("Other")}
                 className="enter"
@@ -587,7 +587,7 @@ function Content() {
         <div className="grid max-w-190 grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
           <OptionTile label="Cinematic" selected />
           <OptionTile label="Animation" />
-          <OptionTile label="Other" kind="other" />
+          <OptionTile label="Not what you have in mind?" kind="other" />
         </div>
         <div className="flex max-w-140 flex-col gap-2">
           <OptionRow selected>3 minutes</OptionRow>

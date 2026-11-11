@@ -6,6 +6,7 @@
  */
 import { z } from "zod";
 import { ASSET_KINDS, type ProjectStyle } from "@/server/db/schema";
+import { renderStyleReferences } from "./project";
 
 /** The kinds that get an image. Voices are recorded, never generated. */
 export const IMAGE_ASSET_KINDS = ASSET_KINDS.filter((k) => k !== "voice");
@@ -104,6 +105,7 @@ export function renderImageStyle(style: ProjectStyle): string {
     "## Project look",
     `- Visual style: ${style.visualStyle}`,
     `- Genre: ${style.genre}`,
+    ...renderStyleReferences(style),
   ];
   const extras = Object.entries(style.extras ?? {})
     .filter(([, v]) => v.trim().length > 0)

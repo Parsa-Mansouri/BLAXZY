@@ -13,6 +13,7 @@ import {
   StatusDot,
   StatusLine,
   SwapFade,
+  cn,
   stagger,
   type StatusTone,
 } from "@/ui";
@@ -21,6 +22,7 @@ import { reviewSheetAction } from "../../assets/[assetId]/actions";
 import type { IssueChoice } from "../../assets/[assetId]/_components/shared";
 import { ContinueToProduction } from "../../_components/continue-to-production";
 import { RequestChangesPanel } from "../../_components/request-changes-panel";
+import { FILL_PAGE, PICTURE_MAX_H } from "../../_lib/fill";
 import { loadReviewSheetAction, requestSheetChangesAction, type ReviewSheet } from "../actions";
 
 /** `accepted` green, `todo` waits for the user (amber), `back` is being built again (grey). */
@@ -218,7 +220,7 @@ export function SheetsReview({
   });
 
   return (
-    <div className="flex flex-col">
+    <div className={FILL_PAGE}>
       <PageHeader
         title="Review Sheets"
         description="A last look at every sheet."
@@ -245,6 +247,7 @@ export function SheetsReview({
       ) : (
         <FocusLayout
           listLabel="Sheets"
+          fill
           list={groups.map((group) => (
             <div key={group.label} className="flex flex-col gap-0.5 not-first:mt-5">
               <div className="px-3.5 pb-1.5 text-meta text-label-2">{group.label}</div>
@@ -271,7 +274,12 @@ export function SheetsReview({
         >
           {current ? (
             <SwapFade swapKey={current.id} as="article" className="flex flex-col gap-6">
-              <div className="relative aspect-video w-full overflow-hidden rounded-card bg-elevated">
+              <div
+                className={cn(
+                  "relative aspect-video w-full overflow-hidden rounded-card bg-elevated",
+                  PICTURE_MAX_H,
+                )}
+              >
                 {sheet ? (
                   // eslint-disable-next-line @next/next/no-img-element -- user media from object storage, sized by the frame
                   <img

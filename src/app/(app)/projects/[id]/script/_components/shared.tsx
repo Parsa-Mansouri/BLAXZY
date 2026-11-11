@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import type { ScriptVersionSummary, ScriptVersionView } from "@/server/script";
-import { SelectRow, StatusLine, Tabs, stagger } from "@/ui";
+import { SelectRow, StatusLine, Tabs, cn, stagger } from "@/ui";
 import type { Scene } from "../_lib/scenes";
 import { loadVersionAction } from "../actions";
 
@@ -151,16 +151,19 @@ export function SceneList({
 }
 
 /**
- * Scenes left, sheet right. The list is slim so the screenplay gets a comfortable width; below
+ * Scenes left, sheet right, filling the height left on the page (the sheet runs to the bottom
+ * like a page). The list is slim so the screenplay gets a comfortable width; below
  * about 760px of content the sheet wraps under the list.
  */
 export function ScenesLayout({ side, children }: { side: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex in-3 flex-wrap items-start gap-x-6 gap-y-8">
+    <div className="flex flex-1 in-3 flex-wrap gap-x-6 gap-y-8">
       {side ? (
-        <div className="flex min-w-0 flex-[1_1_176px] flex-col gap-6 sm:max-w-44">{side}</div>
+        <div className="flex min-w-0 flex-[1_1_176px] flex-col gap-6 self-start sm:max-w-44 2xl:max-w-60">
+          {side}
+        </div>
       ) : null}
-      <div className="min-w-0 flex-[4_1_560px]">{children}</div>
+      <div className="flex min-w-0 flex-[4_1_560px] flex-col">{children}</div>
     </div>
   );
 }
@@ -185,9 +188,11 @@ export function FindingNote({ finding }: { finding: Finding }) {
 export function VersionNotes({
   version,
   looseFindings = [],
+  className,
 }: {
   version: VersionView;
   looseFindings?: Finding[];
+  className?: string;
 }) {
   if (version.notes.length === 0 && looseFindings.length === 0) return null;
   const title =
@@ -199,7 +204,7 @@ export function VersionNotes({
   return (
     <section
       aria-labelledby="version-notes"
-      className="mt-12 flex max-w-170 flex-col gap-4 pt-6 hairline-t"
+      className={cn("mt-12 flex w-full max-w-205 flex-col gap-4 pt-6 hairline-t", className)}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h2 id="version-notes" className="text-section">

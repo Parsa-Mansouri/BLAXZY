@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { Download } from "lucide-react";
 import { Button, PageHeader, ProgressBar, StatusLine, cn, formatDurationLong, stagger } from "@/ui";
+import { FillPage } from "../../_components/fill-page";
 import { PosterTile } from "../../_components/poster-tile";
 import { usePolling } from "../../../_lib/use-polling";
 import {
@@ -134,9 +135,11 @@ export function FinishedScreen({
 
   const { state } = exporting;
   const working = state.phase === "working";
+  /** A short film gets larger posters. */
+  const few = clips.length <= 4 && !cursor;
 
   return (
-    <>
+    <FillPage>
       <PageHeader
         title="Finished"
         description="Every shot of this film, ready for your editor."
@@ -185,8 +188,12 @@ export function FinishedScreen({
           className={cn(
             "grid gap-x-7 gap-y-10",
             portrait
-              ? "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))]"
-              : "grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))]",
+              ? few
+                ? "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]"
+                : "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))]"
+              : few
+                ? "grid-cols-[repeat(auto-fill,minmax(min(100%,28rem),1fr))]"
+                : "grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))]",
           )}
         >
           {clips.map((clip, i) => {
@@ -268,6 +275,6 @@ export function FinishedScreen({
           returnFocus={returnFocus}
         />
       ) : null}
-    </>
+    </FillPage>
   );
 }

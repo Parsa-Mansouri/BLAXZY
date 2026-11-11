@@ -14,6 +14,7 @@ import { ContinueToProduction } from "./_components/continue-to-production";
 import { OverviewPoller } from "./_components/overview-poller";
 import { PreProductionPoller, ShotList } from "./_components/shots";
 import { SHOT_PAGE_SIZE, toShotRow } from "./_components/shot-types";
+import { FILL_PAGE } from "./_lib/fill";
 import { loadCategories, type OverviewCategory } from "./_lib/load-categories";
 
 /** True when something in the category waits for the user. */
@@ -62,7 +63,7 @@ export default async function PreProductionPage({ params }: { params: Promise<{ 
   ) : null;
 
   return (
-    <div className="flex flex-col">
+    <div className={FILL_PAGE}>
       <OverviewPoller projectId={project.id} busy={overview.busy} signature={overview.signature} />
       <PageHeader
         title="Pre-production"
@@ -103,10 +104,10 @@ export default async function PreProductionPage({ params }: { params: Promise<{ 
       ) : null}
 
       {leading ? (
-        <div className="flex in-2 flex-col gap-3">
-          <CategoryFeature projectId={project.id} category={leading} />
+        <div className="flex flex-1 in-2 flex-col gap-3">
+          <CategoryFeature projectId={project.id} category={leading} className="flex-1" />
           {others.length > 0 ? (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-3">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))] gap-3">
               {others.map((category, i) => (
                 <CategoryTile
                   key={category.kind}

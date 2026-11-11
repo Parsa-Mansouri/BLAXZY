@@ -98,7 +98,7 @@ export function TitlePage({ title, logline }: { title: string; logline: string |
   );
 }
 
-/** A read-only sheet: the given scenes' blocks, in Courier on paper, at most 680px wide. */
+/** A read-only sheet: the given scenes' blocks, in Courier on paper, at most 820px wide. */
 export function ReadingSheet({
   scenes,
   top,
@@ -115,7 +115,7 @@ export function ReadingSheet({
     <article
       aria-label={ariaLabel}
       className={cn(
-        "relative isolate flex w-full max-w-170 flex-col gap-6 py-11 font-script text-script text-ink",
+        "relative isolate flex w-full max-w-205 flex-col gap-6 py-11 font-script text-script text-ink",
         ON_PAPER,
         SHEET_X,
         className,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, useTransition, type ReactNode } from "react";
+import { useId, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Minus, Plus } from "lucide-react";
@@ -14,7 +14,7 @@ import {
   OptionTile,
   SelectRow,
   SwapFade,
-  Textarea,
+  cn,
   formatDurationLong,
   stagger,
   useToast,
@@ -34,7 +34,15 @@ import {
   splitChoice,
   type StyleOption,
 } from "@/lib/style-options";
+import {
+  describeReference,
+  hasReference,
+  normalizeReference,
+  summarizeReference,
+  type StyleReferenceInput,
+} from "@/lib/style-references";
 import { saveStyleAction, type StyleInput } from "../actions";
+import { ReferencePanel } from "./reference-panel";
 
 export interface SavedStyle {
   visualStyle: string;
@@ -43,6 +51,7 @@ export interface SavedStyle {
   orientation: "landscape" | "portrait";
   totalDurationSeconds: number;
   episodeDurationSeconds: number | null;
+  references?: { visualStyle?: StyleReferenceInput; genre?: StyleReferenceInput };
 }
 
 type Format = "movie" | "series";
@@ -60,15 +69,29 @@ const QUESTIONS: { key: QuestionKey; label: string }[] = [
 /** The step after the last question: the summary with the save button. */
 const DONE = QUESTIONS.length;
 
-/** Real frame proportions, side by side. */
-const FRAME_SHAPE: Record<Orientation, { width: string; aspectRatio: string }> = {
-  landscape: { width: "288px", aspectRatio: "16 / 9" },
-  portrait: { width: "162px", aspectRatio: "9 / 16" },
+/** The "Other" choice's title on every question that has one. */
+const NOT_IN_MIND = "Not what you have in mind?";
+
+/**
+ * Frame tiles keep their real proportions and grow with the space: both pictures share one
+ * height, as tall as the area allows (minus the 32px name line) and as wide as the row allows.
+ * Widths in container query units of the frame area (16:9 + 9:16 = 337/144 of the height).
+ */
+const FRAME_WIDTH: Record<Orientation, string> = {
+  landscape: "min(calc((100cqh - 32px) * 16 / 9), calc((100cqw - 16px) * 256 / 337))",
+  portrait: "min(calc((100cqh - 32px) * 9 / 16), calc((100cqw - 16px) * 81 / 337))",
 };
+const FRAME_RATIO: Record<Orientation, string> = { landscape: "16 / 9", portrait: "9 / 16" };
+
+/** Fluid picture grid: as many columns as fit, rows sharing the free height. */
+const TILE_GRID =
+  "grid min-h-0 flex-1 grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] auto-rows-[minmax(180px,1fr)] gap-4";
 
 /** Episodes a series starts with, before the user sets the count. */
 const DEFAULT_EPISODES = 6;
 const MIN_EPISODES = 2;
+
+const EMPTY_REFERENCE: StyleReferenceInput = { titles: [], fileIds: [] };
 
 /** 30 -> "30 seconds", 60 -> "1 minute", 600 -> "10 minutes", 90 -> "1 min 30 s". */
 function lengthLabel(seconds: number): string {
@@ -83,12 +106,23 @@ function lengthLabel(seconds: number): string {
 const isPreset = (seconds: number | null) =>
   seconds !== null && DURATION_PRESETS.some((p) => p.seconds === seconds);
 
-function optionLabel(options: readonly StyleOption[], value: string | null, other: string) {
-  if (value === OTHER_VALUE) return other.trim() || "Other";
-  return options.find((o) => o.value === value)?.label ?? "";
+/**
+ * The reference a saved look or genre starts from: the stored one, or (older projects) the
+ * typed "other" text as its description.
+ */
+function initialReference(
+  stored: StyleReferenceInput | undefined,
+  other: string,
+): StyleReferenceInput {
+  if (stored)
+    return { titles: stored.titles, description: stored.description, fileIds: stored.fileIds };
+  return other ? { titles: [], description: other, fileIds: [] } : EMPTY_REFERENCE;
 }
 
-/** The question in the focus area: its heading, its options, then its error. */
+const sameReference = (a: StyleReferenceInput | undefined, b: StyleReferenceInput) =>
+  JSON.stringify(a ? normalizeReference(a) : null) === JSON.stringify(normalizeReference(b));
+
+/** The question in the focus area: its heading, then its options filling the height. */
 function Question({
   heading,
   error,
@@ -100,7 +134,7 @@ function Question({
 }) {
   const id = useId();
   return (
-    <div role="group" aria-labelledby={id} className="flex min-w-0 flex-col gap-4">
+    <div role="group" aria-labelledby={id} className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
       <h2 id={id} className="mb-2 text-heading text-balance">
         {heading}
       </h2>
@@ -125,13 +159,26 @@ export function StyleForm({
 }) {
   const router = useRouter();
   const toast = useToast();
-  const initialVisual = splitChoice(saved?.visualStyle, VISUAL_STYLES);
-  const initialGenre = splitChoice(saved?.genre, GENRES);
+  const savedVisualRef = saved?.references?.visualStyle;
+  const savedGenreRef = saved?.references?.genre;
+  const initialVisual = savedVisualRef
+    ? { choice: OTHER_VALUE, other: "" }
+    : splitChoice(saved?.visualStyle, VISUAL_STYLES);
+  const initialGenre = savedGenreRef
+    ? { choice: OTHER_VALUE, other: "" }
+    : splitChoice(saved?.genre, GENRES);
 
   const [visual, setVisual] = useState<string | null>(initialVisual.choice);
-  const [visualOther, setVisualOther] = useState(initialVisual.other);
+  const [visualRef, setVisualRef] = useState(() =>
+    initialReference(savedVisualRef, initialVisual.other),
+  );
   const [genre, setGenre] = useState<string | null>(initialGenre.choice);
-  const [genreOther, setGenreOther] = useState(initialGenre.other);
+  const [genreRef, setGenreRef] = useState(() =>
+    initialReference(savedGenreRef, initialGenre.other),
+  );
+  // With "Not what you have in mind?" chosen, the references panel replaces the examples;
+  // "Show the Examples" brings them back without losing what was typed.
+  const [showExamples, setShowExamples] = useState(false);
   const [format, setFormat] = useState<Format | null>(saved?.format ?? null);
   const [orientation, setOrientation] = useState<Orientation | null>(saved?.orientation ?? null);
   // The total is the source of truth for both formats. For a series it is the episode length
@@ -153,11 +200,12 @@ export function StyleForm({
   const [serverError, setServerError] = useState<string | undefined>();
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
-  const otherField = useRef<HTMLTextAreaElement>(null);
 
   const isSeries = format === "series";
-  const visualValue = visual === OTHER_VALUE ? visualOther.trim() : (visual ?? "");
-  const genreValue = genre === OTHER_VALUE ? genreOther.trim() : (genre ?? "");
+  const visualIsRef = visual === OTHER_VALUE;
+  const genreIsRef = genre === OTHER_VALUE;
+  const visualValue = visualIsRef ? describeReference(visualRef) : (visual ?? "");
+  const genreValue = genreIsRef ? describeReference(genreRef) : (genre ?? "");
   const lengthValue = isSeries ? episode : total;
   const shownCount =
     isSeries && episode !== null && total !== null ? episodeCount(total, episode) : count;
@@ -173,9 +221,22 @@ export function StyleForm({
     return durationError("episode", episode, total) ?? durationError("total", total, null);
   }
 
+  const NEEDS_REFERENCE = "Add a film or show name, a reference image or a description.";
   const errors: Record<QuestionKey, string | null> = {
-    look: visualValue ? null : visual === OTHER_VALUE ? "Describe the look." : "Choose a look.",
-    genre: genreValue ? null : genre === OTHER_VALUE ? "Describe the genre." : "Choose a genre.",
+    look: visualIsRef
+      ? hasReference(visualRef)
+        ? null
+        : NEEDS_REFERENCE
+      : visual
+        ? null
+        : "Choose a look.",
+    genre: genreIsRef
+      ? hasReference(genreRef)
+        ? null
+        : NEEDS_REFERENCE
+      : genre
+        ? null
+        : "Choose a genre.",
     format: format ? null : "Choose a movie or a series.",
     length: lengthError(),
     frame: orientation ? null : "Choose a frame.",
@@ -191,9 +252,18 @@ export function StyleForm({
     return null;
   }
 
+  const optionValue = (
+    options: readonly StyleOption[],
+    value: string | null,
+    ref: StyleReferenceInput,
+  ) =>
+    value === OTHER_VALUE
+      ? summarizeReference(ref)
+      : (options.find((o) => o.value === value)?.label ?? "");
+
   const values: Record<QuestionKey, string> = {
-    look: optionLabel(VISUAL_STYLES, visual, visualOther),
-    genre: optionLabel(GENRES, genre, genreOther),
+    look: optionValue(VISUAL_STYLES, visual, visualRef),
+    genre: optionValue(GENRES, genre, genreRef),
     format: FORMATS.find((f) => f.value === format)?.label ?? "",
     length:
       lengthValue === null
@@ -209,6 +279,8 @@ export function StyleForm({
     saved === null ||
     saved.visualStyle !== visualValue ||
     saved.genre !== genreValue ||
+    (visualIsRef && !sameReference(savedVisualRef, visualRef)) ||
+    (genreIsRef && !sameReference(savedGenreRef, genreRef)) ||
     saved.format !== format ||
     saved.orientation !== orientation ||
     saved.totalDurationSeconds !== total ||
@@ -222,6 +294,7 @@ export function StyleForm({
   function go(next: number) {
     if (next === step) return;
     setMoved(true);
+    setShowExamples(false);
     setStep(next);
   }
 
@@ -247,6 +320,10 @@ export function StyleForm({
 
   function save() {
     if (total === null || format === null || orientation === null) return;
+    const references: NonNullable<StyleInput["references"]> = {
+      ...(visualIsRef ? { visualStyle: normalizeReference(visualRef) } : {}),
+      ...(genreIsRef ? { genre: normalizeReference(genreRef) } : {}),
+    };
     const style: StyleInput = {
       visualStyle: visualValue,
       genre: genreValue,
@@ -254,6 +331,7 @@ export function StyleForm({
       orientation,
       totalDurationSeconds: total,
       ...(isSeries && episode !== null ? { episodeDurationSeconds: episode } : {}),
+      ...(visualIsRef || genreIsRef ? { references } : {}),
     };
     setServerError(undefined);
     startTransition(async () => {
@@ -286,11 +364,6 @@ export function StyleForm({
     save();
   }
 
-  function chooseOther(setter: (v: string) => void) {
-    setter(OTHER_VALUE);
-    requestAnimationFrame(() => otherField.current?.focus());
-  }
-
   function pickLength(seconds: number) {
     setCustomOpen(false);
     setLength(seconds);
@@ -316,52 +389,54 @@ export function StyleForm({
       : MAX_EPISODES;
   const base = moved ? 40 : 300;
 
+  /** Picture options plus "Not what you have in mind?", or the references panel when chosen. */
   function optionTiles(
+    subject: "look" | "genre",
     options: readonly StyleOption[],
     value: string | null,
     onPick: (v: string) => void,
-    other?: { text: string; onText: (v: string) => void; label: string },
+    ref: StyleReferenceInput,
+    onRef: (update: (prev: StyleReferenceInput) => StyleReferenceInput) => void,
   ) {
+    if (value === OTHER_VALUE && !showExamples) {
+      return (
+        <>
+          <ReferencePanel projectId={projectId} subject={subject} value={ref} onChange={onRef} />
+          <div>
+            <Button variant="plain" onClick={() => setShowExamples(true)}>
+              Show the Examples
+            </Button>
+          </div>
+        </>
+      );
+    }
     return (
-      <>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-          {options.map((o, i) => (
-            <OptionTile
-              key={o.value}
-              label={o.label}
-              src={o.image}
-              selected={value === o.value}
-              onSelect={() => onPick(o.value)}
-              className="enter"
-              style={stagger(i, base)}
-            />
-          ))}
-          {other ? (
-            <OptionTile
-              kind="other"
-              label="Other"
-              selected={value === OTHER_VALUE}
-              onSelect={() => chooseOther(onPick)}
-              className="enter"
-              style={stagger(options.length, base)}
-            />
-          ) : null}
-        </div>
-        {other && value === OTHER_VALUE ? (
-          <Textarea
-            ref={otherField}
-            className="swap-in"
-            textStyle="script"
-            minRows={2}
-            maxRows={6}
-            maxLength={120}
-            value={other.text}
-            onChange={(e) => other.onText(e.target.value)}
-            placeholder="Describe it in your own words."
-            aria-label={other.label}
+      <div className={TILE_GRID}>
+        {options.map((o, i) => (
+          <OptionTile
+            key={o.value}
+            fill
+            label={o.label}
+            src={o.image}
+            selected={value === o.value}
+            onSelect={() => onPick(o.value)}
+            className="enter"
+            style={stagger(i, base)}
           />
-        ) : null}
-      </>
+        ))}
+        <OptionTile
+          fill
+          kind="other"
+          label={NOT_IN_MIND}
+          selected={value === OTHER_VALUE}
+          onSelect={() => {
+            onPick(OTHER_VALUE);
+            setShowExamples(false);
+          }}
+          className="enter"
+          style={stagger(options.length, base)}
+        />
+      </div>
     );
   }
 
@@ -370,30 +445,23 @@ export function StyleForm({
       case "look":
         return (
           <Question heading="What should it look like?" error={shownError("look")}>
-            {optionTiles(VISUAL_STYLES, visual, setVisual, {
-              text: visualOther,
-              onText: setVisualOther,
-              label: "Describe the look in your own words",
-            })}
+            {optionTiles("look", VISUAL_STYLES, visual, setVisual, visualRef, setVisualRef)}
           </Question>
         );
       case "genre":
         return (
           <Question heading="What kind of story is it?" error={shownError("genre")}>
-            {optionTiles(GENRES, genre, setGenre, {
-              text: genreOther,
-              onText: setGenreOther,
-              label: "Describe the genre in your own words",
-            })}
+            {optionTiles("genre", GENRES, genre, setGenre, genreRef, setGenreRef)}
           </Question>
         );
       case "format":
         return (
           <Question heading="Is it a movie or a series?" error={shownError("format")}>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+            <div className={TILE_GRID}>
               {FORMATS.map((f, i) => (
                 <OptionTile
                   key={f.value}
+                  fill
                   label={f.label}
                   selected={format === f.value}
                   onSelect={() => setFormat(f.value)}
@@ -412,13 +480,13 @@ export function StyleForm({
             }
             error={shownError("length")}
           >
-            <div className="flex max-w-140 flex-col gap-2">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] gap-3">
               {DURATION_PRESETS.map((p, i) => (
                 <OptionRow
                   key={p.seconds}
                   selected={!customLength && lengthValue === p.seconds}
                   onSelect={() => pickLength(p.seconds)}
-                  className="enter"
+                  className="min-h-32 enter items-end pb-5 text-heading-sm font-semibold"
                   style={stagger(i, base)}
                 >
                   {lengthLabel(p.seconds)}
@@ -427,71 +495,75 @@ export function StyleForm({
               <OptionRow
                 selected={customLength}
                 onSelect={() => setCustomOpen(true)}
-                className="enter"
+                className="min-h-32 enter items-end pb-5 text-heading-sm font-semibold"
                 style={stagger(DURATION_PRESETS.length, base)}
               >
                 Other Length
               </OptionRow>
             </div>
-            {customLength ? (
-              <DurationInput
-                className="swap-in"
-                value={lengthValue}
-                onValueChange={setLength}
-                max={MAX_DURATION_SECONDS}
-                aria-label={isSeries ? "Episode length" : "Length"}
-              />
-            ) : null}
-            {isSeries ? (
-              <div className="mt-2 flex max-w-140 swap-in flex-wrap items-center justify-between gap-x-6 gap-y-3">
-                <span id="episodes-label" className="text-row">
-                  Number of Episodes
-                </span>
-                <div
-                  role="group"
-                  aria-labelledby="episodes-label"
-                  className="flex items-center gap-1 rounded-capsule border border-separator-opaque p-[3px]"
-                >
-                  <IconButton
-                    label="One Episode Fewer"
-                    tooltip={false}
-                    className="bg-selected"
-                    icon={<Minus aria-hidden="true" />}
-                    onClick={() => setEpisodes(Math.max(MIN_EPISODES, shownCount - 1))}
-                    disabled={shownCount <= MIN_EPISODES}
-                  />
-                  <span aria-live="polite" className="min-w-10 text-center text-row tabular-nums">
-                    {shownCount}
+            <div className="flex flex-wrap items-center gap-x-12 gap-y-4">
+              {customLength ? (
+                <DurationInput
+                  className="swap-in"
+                  value={lengthValue}
+                  onValueChange={setLength}
+                  max={MAX_DURATION_SECONDS}
+                  aria-label={isSeries ? "Episode length" : "Length"}
+                />
+              ) : null}
+              {isSeries ? (
+                <div className="flex swap-in flex-wrap items-center gap-x-6 gap-y-3">
+                  <span id="episodes-label" className="text-row">
+                    Number of Episodes
                   </span>
-                  <IconButton
-                    label="One More Episode"
-                    tooltip={false}
-                    className="bg-selected"
-                    icon={<Plus aria-hidden="true" />}
-                    onClick={() => setEpisodes(Math.min(maxEpisodes, shownCount + 1))}
-                    disabled={shownCount >= maxEpisodes}
-                  />
+                  <div
+                    role="group"
+                    aria-labelledby="episodes-label"
+                    className="flex items-center gap-1 rounded-capsule border border-separator-opaque p-[3px]"
+                  >
+                    <IconButton
+                      label="One Episode Fewer"
+                      tooltip={false}
+                      className="bg-selected"
+                      icon={<Minus aria-hidden="true" />}
+                      onClick={() => setEpisodes(Math.max(MIN_EPISODES, shownCount - 1))}
+                      disabled={shownCount <= MIN_EPISODES}
+                    />
+                    <span aria-live="polite" className="min-w-10 text-center text-row tabular-nums">
+                      {shownCount}
+                    </span>
+                    <IconButton
+                      label="One More Episode"
+                      tooltip={false}
+                      className="bg-selected"
+                      icon={<Plus aria-hidden="true" />}
+                      onClick={() => setEpisodes(Math.min(maxEpisodes, shownCount + 1))}
+                      disabled={shownCount >= maxEpisodes}
+                    />
+                  </div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </Question>
         );
       case "frame":
         return (
           <Question heading="Which way is it framed?" error={shownError("frame")}>
-            <div className="flex flex-wrap items-end gap-4">
-              {ORIENTATION_OPTIONS.map((o, i) => (
-                <OptionTile
-                  key={o.value}
-                  label={o.label}
-                  selected={orientation === o.value}
-                  onSelect={() => setOrientation(o.value)}
-                  width={FRAME_SHAPE[o.value].width}
-                  aspectRatio={FRAME_SHAPE[o.value].aspectRatio}
-                  className="enter"
-                  style={stagger(i, base)}
-                />
-              ))}
+            <div className="[container-type:size] relative min-h-60 flex-1">
+              <div className="absolute inset-0 flex items-end justify-center gap-4">
+                {ORIENTATION_OPTIONS.map((o, i) => (
+                  <OptionTile
+                    key={o.value}
+                    label={o.label}
+                    selected={orientation === o.value}
+                    onSelect={() => setOrientation(o.value)}
+                    width={FRAME_WIDTH[o.value]}
+                    aspectRatio={FRAME_RATIO[o.value]}
+                    className="enter"
+                    style={stagger(i, base)}
+                  />
+                ))}
+              </div>
             </div>
           </Question>
         );
@@ -503,6 +575,7 @@ export function StyleForm({
   return (
     <>
       <FocusLayout
+        fill
         listLabel="Your style choices"
         list={QUESTIONS.map((q, i) => (
           <SelectRow
@@ -517,11 +590,11 @@ export function StyleForm({
           />
         ))}
       >
-        <SwapFade swapKey={step} className="flex flex-col gap-8">
+        <SwapFade swapKey={step} className="flex min-h-0 flex-1 flex-col gap-8">
           {current ? (
             <>
               {questionBody(current.key)}
-              <div className="flex flex-wrap items-center gap-6">
+              <div className="mt-auto flex flex-wrap items-center gap-6">
                 <Button variant={ready ? "primary" : "dark"} size="large" onClick={next}>
                   Next
                 </Button>
@@ -538,35 +611,58 @@ export function StyleForm({
                 <h2 className="text-heading text-balance">That is the style.</h2>
                 <p className="max-w-[44ch] text-body text-label-2">
                   {first
-                    ? "Press any choice in the list to change it before the script is written."
+                    ? "Press any choice to change it before the script is written."
                     : dirty && pastStyleStage
                       ? "Changing the style later may require the script to be revised."
-                      : "Press any choice in the list to change it."}
+                      : "Press any choice to change it."}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                {first || dirty ? (
-                  <Button variant="primary" size="large" loading={pending} onClick={submit}>
-                    {first ? "Continue to Script" : "Save Changes"}
+              <ul
+                aria-label="Your answers"
+                className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,200px),1fr))] gap-3"
+              >
+                {QUESTIONS.map((q, i) => (
+                  <li key={q.key} className="enter" style={stagger(i, base)}>
+                    <button
+                      type="button"
+                      onClick={() => go(i)}
+                      className={cn(
+                        "flex size-full min-h-40 press flex-col justify-between gap-6 rounded-card bg-elevated p-5 text-left focus-ring hover:bg-fill-4",
+                      )}
+                    >
+                      <span className="text-secondary text-label-2">{q.label}</span>
+                      <span className="text-heading-sm break-words text-label">
+                        {values[q.key] || "Not answered"}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-auto flex flex-col gap-3">
+                {serverError ? (
+                  <p role="alert" className="text-secondary text-red">
+                    {serverError}
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                  {first || dirty ? (
+                    <Button variant="primary" size="large" loading={pending} onClick={submit}>
+                      {first ? "Continue to Script" : "Save Changes"}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      size="large"
+                      render={<Link href={stageHref(projectId, "script")} />}
+                    >
+                      Continue to Script
+                    </Button>
+                  )}
+                  <Button variant="plain" size="large" onClick={() => go(DONE - 1)}>
+                    Back
                   </Button>
-                ) : (
-                  <Button
-                    variant="primary"
-                    size="large"
-                    render={<Link href={stageHref(projectId, "script")} />}
-                  >
-                    Continue to Script
-                  </Button>
-                )}
-                <Button variant="plain" size="large" onClick={() => go(DONE - 1)}>
-                  Back
-                </Button>
+                </div>
               </div>
-              {serverError ? (
-                <p role="alert" className="text-secondary text-red">
-                  {serverError}
-                </p>
-              ) : null}
             </>
           )}
         </SwapFade>

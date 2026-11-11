@@ -15,19 +15,33 @@ import {
 import { clipHref } from "../_lib/routes";
 
 /** Class names are literal so Tailwind can see them. */
+/** Fluid columns: posters grow with the window. A film with only a few shots gets larger posters. */
 const COLUMNS: Record<Orientation, string> = {
   landscape: "grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))]",
   portrait: "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(12rem,1fr))]",
 };
+const FEW_COLUMNS: Record<Orientation, string> = {
+  landscape: "grid-cols-[repeat(auto-fill,minmax(min(100%,28rem),1fr))]",
+  portrait: "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]",
+};
+
+/** Up to this many posters count as a few. */
+export const FEW_POSTERS = 4;
 
 export function BoardGrid({
   orientation,
+  few = false,
   children,
 }: {
   orientation: Orientation;
+  few?: boolean;
   children: ReactNode;
 }) {
-  return <ul className={cn("grid gap-x-7 gap-y-10", COLUMNS[orientation])}>{children}</ul>;
+  return (
+    <ul className={cn("grid gap-x-7 gap-y-10", (few ? FEW_COLUMNS : COLUMNS)[orientation])}>
+      {children}
+    </ul>
+  );
 }
 
 /**

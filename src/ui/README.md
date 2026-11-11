@@ -49,8 +49,11 @@ animation and transition finishes at once.
 
 - Window: `SplitView`, `SidebarToggle`, `SidebarHeader` / `SidebarAction` / `SidebarBody` /
   `SidebarSection` / `SidebarItem` / `SidebarFooter`, `Toolbar`, `StageStrip`, `BackControl`.
-- Page: `PageHeader`, `FocusLayout`, `SelectRow`, `Tabs`, `SwapFade`, `stagger`.
-- Pictures and options: `PictureTile`, `PicturePlaceholder`, `TitleCard`, `OptionTile`,
+- Page: `PageHeader`, `FocusLayout` (focus area takes all remaining width; `fill` makes it fill
+  the page height as a flex column so the main action can sit at the bottom with `mt-auto`),
+  `SelectRow`, `Tabs`, `SwapFade`, `stagger`.
+- Pictures and options: `PictureTile`, `PicturePlaceholder`, `TitleCard`, `OptionTile` (`fill`:
+  the picture grows to its grid cell),
   `OptionRow`, `FeatureBlock`, `QuietTile`.
 - Text: `PaperSheet`, `ScreenplayAction`, `ScreenplayDialogue`.
 - Controls: `Button` (`primary`, `outlined`, `dark`, `plain`, `destructive`; `small`, `regular`,
@@ -61,3 +64,12 @@ animation and transition finishes at once.
 - Status: `StatusLine`, `StatusDot`, `Badge`, `Spinner`, `ProgressBar`, `Skeleton`, `StageList`
   (legacy vertical list).
 - Help: `Hint`, `HelpTip`, `Tip`, `useDismissed`.
+
+## Filling the page
+
+Signed-in screens use the whole area right of the sidebar, in width and height. Grids use fluid
+columns (`repeat(auto-fit, minmax(<min>, 1fr))`), list+focus screens let the focus area take all
+the remaining width, and one-composition screens fill the height under the toolbar: project stage
+pages sit in a full-height flex column, so give the main region `flex-1` (or `FocusLayout fill`)
+and pin the main action with `mt-auto`. Running text keeps about 70ch; the screenplay paper may
+grow to about 820px.

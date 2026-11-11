@@ -330,34 +330,37 @@ export function ClipScreen(props: ClipScreenProps) {
           </div>
         ) : null}
 
-        {playing?.fileId ? (
-          <VideoPlayer
-            key={playing.id}
-            fileId={playing.fileId}
-            posterFileId={playing.posterFileId}
-            orientation={orientation}
-            label={`${playingLabel} of ${title}`}
-            pageKeys
-            caption={
-              <div className="flex flex-col gap-1 px-0.5">
-                {!viewing && playing.id !== latest?.id && playingLabel ? (
-                  <p className="text-secondary text-label-2">
-                    {heldCaption(shot.stage, playingLabel)}
-                  </p>
-                ) : null}
-                {playing.isSample && (viewing || playing.id !== latest?.id) ? (
-                  <p className="text-secondary text-label-2">
-                    Sample clip. A placeholder from the test generator, not a real result.
-                  </p>
-                ) : null}
-              </div>
-            }
-          />
-        ) : (
-          <EmptyFrame orientation={orientation} rendering={isRendering(shot.stage)} />
-        )}
-
-        <div className="flex max-w-160 flex-col gap-5">{panel()}</div>
+        <div className="flex flex-wrap items-start gap-x-10 gap-y-8">
+          <div className="min-w-0 flex-[999_1_560px]">
+            {playing?.fileId ? (
+              <VideoPlayer
+                key={playing.id}
+                fileId={playing.fileId}
+                posterFileId={playing.posterFileId}
+                orientation={orientation}
+                label={`${playingLabel} of ${title}`}
+                pageKeys
+                caption={
+                  <div className="flex flex-col gap-1 px-0.5">
+                    {!viewing && playing.id !== latest?.id && playingLabel ? (
+                      <p className="text-secondary text-label-2">
+                        {heldCaption(shot.stage, playingLabel)}
+                      </p>
+                    ) : null}
+                    {playing.isSample && (viewing || playing.id !== latest?.id) ? (
+                      <p className="text-secondary text-label-2">
+                        Sample clip. A placeholder from the test generator, not a real result.
+                      </p>
+                    ) : null}
+                  </div>
+                }
+              />
+            ) : (
+              <EmptyFrame orientation={orientation} rendering={isRendering(shot.stage)} />
+            )}
+          </div>
+          <div className="flex max-w-160 min-w-0 flex-[1_1_20rem] flex-col gap-5">{panel()}</div>
+        </div>
       </div>
 
       <TakesStrip
@@ -418,8 +421,8 @@ function EmptyFrame({ orientation, rendering }: { orientation: Orientation; rend
       className={cn(
         "flex items-center justify-center overflow-hidden rounded-card bg-elevated text-meta text-label-3",
         orientation === "portrait"
-          ? "mx-auto aspect-[9/16] h-[min(72dvh,48rem)] max-w-full"
-          : "aspect-video max-h-[min(70dvh,48rem)] w-full",
+          ? "mx-auto aspect-[9/16] w-[min(100%,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*9/16))]"
+          : "mx-auto aspect-video w-[min(100%,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*16/9))]",
         rendering && "animate-pulse motion-reduce:animate-none",
       )}
     >

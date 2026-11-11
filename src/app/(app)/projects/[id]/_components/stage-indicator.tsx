@@ -1,6 +1,8 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { useActiveStages } from "@/app/(app)/_lib/use-active-stages";
 import { Popover, StageList, type StageListItem } from "@/ui";
 
 /**
@@ -8,6 +10,7 @@ import { Popover, StageList, type StageListItem } from "@/ui";
  * hidden: collapsed on wide screens, or on narrow ones. Opens the stage list in a popover.
  */
 export function StageIndicator({ step, stages }: { step: string; stages: StageListItem[] }) {
+  const items = useActiveStages(stages);
   const current = stages.find((s) => s.status === "current");
   return (
     <div className="shell:group-data-[sidebar=expanded]/shell:hidden">
@@ -28,7 +31,7 @@ export function StageIndicator({ step, stages }: { step: string; stages: StageLi
           </button>
         }
       >
-        <StageList stages={stages} />
+        <StageList stages={items} linkAs={Link} />
       </Popover>
     </div>
   );

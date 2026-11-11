@@ -19,6 +19,29 @@ export const PROJECT_STAGES = [
 
 export type ProjectStageKey = (typeof PROJECT_STAGES)[number]["key"];
 
+/** URL slug of each stage's route, `/projects/[id]/<slug>`. */
+export const STAGE_SLUGS: Record<ProjectStageKey, string> = {
+  style: "style",
+  script: "script",
+  pre_production: "pre-production",
+  production: "production",
+};
+
+/** Route of a stage inside a project, e.g. `stageHref("abc", "script")` is `/projects/abc/script`. */
+export function stageHref(projectId: string, stage: ProjectStageKey): string {
+  return `/projects/${projectId}/${STAGE_SLUGS[stage]}`;
+}
+
+/** Route of the project's current stage; a finished project opens at its last stage. */
+export function currentStageHref(projectId: string, stage: string): string {
+  const key = KEYS.includes(stage)
+    ? (stage as ProjectStageKey)
+    : stage === "done"
+      ? "production"
+      : "style";
+  return stageHref(projectId, key);
+}
+
 export type StageStatus = "done" | "current" | "upcoming" | "locked";
 
 export interface StageView {
@@ -26,6 +49,8 @@ export interface StageView {
   label: string;
   summary: string;
   status: StageStatus;
+  /** Route of the stage; present on stages that can be opened (done and current). */
+  href?: string;
   /** Present on locked stages, e.g. "Finish Script first". */
   lockedHint?: string;
 }
@@ -53,11 +78,12 @@ export function stageStep(stage: string): string {
 }
 
 /** Earlier stages are done, the current one is current, all later ones are locked. */
-export function stageViews(stage: string): StageView[] {
+export function stageViews(stage: string, projectId?: string): StageView[] {
   const current = stageIndex(stage);
   return PROJECT_STAGES.map((s, i): StageView => {
-    if (i < current) return { ...s, status: "done" };
-    if (i === current) return { ...s, status: "current" };
+    const href = projectId ? stageHref(projectId, s.key) : undefined;
+    if (i < current) return { ...s, status: "done", href };
+    if (i === current) return { ...s, status: "current", href };
     const previous = PROJECT_STAGES[i - 1];
     return {
       ...s,

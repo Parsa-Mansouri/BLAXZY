@@ -11,6 +11,7 @@ import {
   StageList,
   type StageListItem,
 } from "@/ui";
+import { useActiveStages } from "../_lib/use-active-stages";
 import { Wordmark } from "@/app/_components/wordmark";
 import { SidebarAccount } from "./sidebar-account";
 
@@ -25,6 +26,7 @@ export function ProjectSidebarView({
   title: string;
   stages: StageListItem[];
 }) {
+  const items = useActiveStages(stages);
   return (
     <>
       <SidebarHeader>
@@ -38,7 +40,7 @@ export function ProjectSidebarView({
         </SidebarSection>
         <div className="flex flex-col gap-2">
           <p className="px-2 text-title-3 break-words">{title}</p>
-          <StageList stages={stages} aria-label="Stages" />
+          <StageList stages={items} linkAs={Link} aria-label="Stages" />
         </div>
       </SidebarBody>
       <SidebarFooter>

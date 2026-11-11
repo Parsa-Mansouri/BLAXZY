@@ -1,7 +1,18 @@
+import type { Metadata } from "next";
 import { stageStep, stageViews } from "@/lib/stages";
 import { Toolbar } from "@/ui";
 import { loadProject } from "./_lib/load-project";
 import { StageIndicator } from "./_components/stage-indicator";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const project = await loadProject(id);
+  return { title: `${project.title} · BLAXZY` };
+}
 
 export default async function ProjectLayout({
   children,
@@ -12,10 +23,11 @@ export default async function ProjectLayout({
 }) {
   const { id } = await params;
   const project = await loadProject(id);
-  const stages = stageViews(project.stage).map((stage) => ({
+  const stages = stageViews(project.stage, project.id).map((stage) => ({
     id: stage.key,
     label: stage.label,
     status: stage.status,
+    href: stage.href,
     lockedHint: stage.lockedHint,
   }));
 

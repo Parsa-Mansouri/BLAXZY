@@ -11,10 +11,11 @@ export async function ProjectSidebar({ projectId }: { projectId: string }) {
       name={user.name}
       email={user.email}
       title={project.title}
-      stages={stageViews(project.stage).map((stage) => ({
+      stages={stageViews(project.stage, project.id).map((stage) => ({
         id: stage.key,
         label: stage.label,
         status: stage.status,
+        href: stage.href,
         lockedHint: stage.lockedHint,
       }))}
     />

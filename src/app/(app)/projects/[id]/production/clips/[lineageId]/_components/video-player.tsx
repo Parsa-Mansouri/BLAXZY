@@ -344,7 +344,16 @@ export function VideoPlayer({
         {!started && !failed ? (
           <button
             type="button"
-            onClick={toggle}
+            onClick={() => {
+              toggle();
+              // This button goes away once playback starts: focus moves to the player's own
+              // play and pause control, so the keyboard stays in the player.
+              requestAnimationFrame(() =>
+                rootRef.current
+                  ?.querySelector<HTMLButtonElement>('button[aria-keyshortcuts="Space K"]')
+                  ?.focus({ preventScroll: true }),
+              );
+            }}
             aria-label={`Play ${label}`}
             className="group/play absolute inset-0 flex items-center justify-center focus-ring focus-visible:-outline-offset-4"
           >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert, Button, ProgressBar } from "@/ui";
@@ -12,6 +12,7 @@ import {
   refreshBlocksAction,
   type BlocksSnapshot,
 } from "../actions";
+import { takeArrival } from "../_lib/arrival";
 import { attentionWords, needsReview } from "../_lib/block-state";
 import { BlockRow } from "./block-row";
 import { GenerateSheet } from "./generate-sheet";
@@ -29,6 +30,18 @@ export function BlocksScreen({
 }) {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState(initial);
+  const [seen, setSeen] = useState(initial);
+  // A fresh server render (a refresh, coming back to the list) replaces the local copy, so the
+  // status line says where the shots stand now.
+  if (seen !== initial) {
+    setSeen(initial);
+    setSnapshot(initial);
+  }
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // Arriving from Approve on the last shot to review: focus starts at the list's heading.
+  useEffect(() => {
+    if (takeArrival()) headingRef.current?.focus({ preventScroll: true });
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
   const [approveOpen, setApproveOpen] = useState(false);
@@ -45,7 +58,7 @@ export function BlocksScreen({
   /** Takes a fresh snapshot; leaves the screen when the shots moved on to clips. */
   function adopt(next: BlocksSnapshot) {
     if (next.phase === "generating" || next.phase === "finished") {
-      router.push(phaseHref(projectId, next.phase));
+      router.push(phaseHref(projectId, next.phase, next.projectStage));
       return;
     }
     setSnapshot(next);
@@ -111,7 +124,9 @@ export function BlocksScreen({
     <div className="flex flex-col gap-10">
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div className="flex min-w-0 flex-col gap-1.5">
-          <h2 className="text-large-title">Shots</h2>
+          <h2 ref={headingRef} tabIndex={-1} className="text-large-title outline-none">
+            Shots
+          </h2>
           <p
             ref={statusRef}
             tabIndex={-1}

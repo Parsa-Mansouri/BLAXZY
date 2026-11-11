@@ -56,7 +56,7 @@ describe.skipIf(!reachable)("blocks service (integration)", async () => {
       blocks: [block(0, "Mara runs."), block(1, "Jonas waits."), block(2, "They meet.")],
       damiRunIds: [],
     });
-    expect(r1).toEqual({ created: 3, carried: 0, superseded: 0 });
+    expect(r1).toEqual({ created: 3, carried: 0, superseded: 0, reset: 0 });
     const first = (await blocks.listBlocks(projectId, userId))?.items ?? [];
     expect(first.map((b) => b.versionNumber)).toEqual([1, 1, 1]);
 
@@ -75,7 +75,7 @@ describe.skipIf(!reachable)("blocks service (integration)", async () => {
       ],
       damiRunIds: [],
     });
-    expect(r2).toEqual({ created: 1, carried: 2, superseded: 3 });
+    expect(r2).toEqual({ created: 1, carried: 2, superseded: 3, reset: 0 });
 
     const current = (await blocks.listBlocks(projectId, userId))?.items ?? [];
     expect(current).toHaveLength(3);

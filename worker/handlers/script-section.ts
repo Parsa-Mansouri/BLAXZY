@@ -2,26 +2,31 @@ import { getSectionerAssets } from "../../src/server/assets";
 import { hasCurrentBlocksFor, replaceBlocks, setSectioningState } from "../../src/server/blocks";
 import { sectionScript } from "../../src/server/damis";
 import { defineHandler, scriptSection } from "../../src/server/jobs";
+import { reopenProductionAfterScriptEdit } from "../../src/server/production";
 import { loadScriptJob, ScriptInputError } from "../../src/server/script";
 import { handleFailure } from "./script-failure";
 
 /**
  * Cuts the accepted script into prompt blocks (sectionScript → replaceBlocks) and marks
- * sectioning done. Skips a version that is no longer the accepted one.
+ * sectioning done with the number of shots that must be prepared again. A finished film whose
+ * shots changed returns to production. Skips a version that is no longer the accepted one.
  */
 export const scriptSectionHandler = defineHandler(scriptSection, async (payload, context) => {
   const versionId = payload.scriptVersionId;
   const job = await loadScriptJob(versionId);
   if (!job || job.version.status !== "accepted") return;
   const { project, version } = job;
-  const done = () =>
-    setSectioningState({
+  const done = async (resetBlocks?: number) => {
+    await reopenProductionAfterScriptEdit(project.id);
+    await setSectioningState({
       projectId: project.id,
       state: "done",
       scriptVersionId: versionId,
       failure: null,
       onlyFor: versionId,
+      resetBlocks,
     });
+  };
   if (await hasCurrentBlocksFor(project.id, versionId)) {
     await done();
     return;
@@ -40,13 +45,13 @@ export const scriptSectionHandler = defineHandler(scriptSection, async (payload,
       const segment = result.segments.find((s) => line >= s.startLine && line <= s.endLine);
       return segment ? result.runIds[segment.index] : undefined;
     };
-    await replaceBlocks({
+    const replaced = await replaceBlocks({
       projectId: project.id,
       scriptVersionId: versionId,
       blocks: result.blocks.map((b) => ({ ...b, damiRunId: runFor(b.startLine) })),
       damiRunIds: result.runIds,
     });
-    await done();
+    await done(replaced.reset);
   } catch (error) {
     await handleFailure(error, scriptSection, context, async (d) => {
       await setSectioningState({

@@ -5,7 +5,8 @@
  * handlers; every function that changes rows takes the caller's transaction when it must be
  * atomic with other writes. Nothing here checks ownership: callers do.
  */
-import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
 import { promptBlock } from "@/server/db/schema";
 import type { PromptBlock } from "./service";
@@ -157,6 +158,38 @@ export async function getPreviousCurrentBlock(
     .orderBy(desc(promptBlock.orderIndex), desc(promptBlock.id))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Of these block versions, the ones a script edit sent back through preparation: the version
+ * before each was cut from another script version and had been in production, and this one does
+ * not carry that preparation over. One indexed join on (lineage, version).
+ */
+export async function listScriptResetBlocks(
+  blockIds: readonly string[],
+  db: DbExecutor = getDb(),
+): Promise<Set<string>> {
+  if (blockIds.length === 0) return new Set();
+  const before = alias(promptBlock, "before");
+  const rows = await db
+    .select({ id: promptBlock.id })
+    .from(promptBlock)
+    .innerJoin(
+      before,
+      and(
+        eq(before.lineageId, promptBlock.lineageId),
+        eq(before.versionNumber, sql`${promptBlock.versionNumber} - 1`),
+      ),
+    )
+    .where(
+      and(
+        inArray(promptBlock.id, [...blockIds]),
+        ne(before.scriptVersionId, promptBlock.scriptVersionId),
+        ne(before.productionState, "none"),
+        sql`${before.productionDamiRunId} is distinct from ${promptBlock.productionDamiRunId}`,
+      ),
+    );
+  return new Set(rows.map((r) => r.id));
 }
 
 /**

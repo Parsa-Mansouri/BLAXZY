@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button, ProgressBar } from "@/ui";
 import { describeAssetCounts } from "../../_lib/asset-kinds";
 import type { BackgroundStatus } from "../../_lib/background-status";
+import { productionHref } from "../../_lib/production-routes";
 import { usePolling } from "../../_lib/use-polling";
 import { backgroundStatusAction, retrySectioningAction } from "../actions";
 
@@ -20,9 +23,13 @@ export function useBackgroundStatus(
     setSeen(initial);
     setStatus(initial);
   }
+  const router = useRouter();
   usePolling(async (isActive) => {
     const next = await backgroundStatusAction(projectId, acceptedId);
-    if (isActive() && next) setStatus(next);
+    if (!isActive() || !next) return;
+    setStatus(next);
+    // Cutting the shots can reopen a finished film: show the stage as it is now.
+    if (next.state !== "running") router.refresh();
   }, status?.state === "running");
   return [status, setStatus] as const;
 }
@@ -100,6 +107,19 @@ export function BackgroundStatusView({
       {status.state === "stale" ? (
         <p className="text-callout text-orange">
           Some shots no longer match the script and will be prepared again.
+        </p>
+      ) : null}
+      {status.state === "done" && status.resetBlocks > 0 ? (
+        <p className="text-callout text-label">
+          {status.resetBlocks === 1
+            ? "The edit changed 1 shot. It is prepared again in Production."
+            : `The edit changed ${status.resetBlocks} shots. They are prepared again in Production.`}{" "}
+          <Link
+            href={productionHref(projectId)}
+            className="rounded-control underline underline-offset-2 focus-ring"
+          >
+            Open Production
+          </Link>
         </p>
       ) : null}
     </div>

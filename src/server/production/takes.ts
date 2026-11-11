@@ -86,7 +86,11 @@ export async function listTakeViews(
   return rows.map((r) => toTakeView(r.take, r));
 }
 
-/** The newest live take of each lineage (of one project), keyed by lineage. */
+/**
+ * The newest live take of each lineage (of one project), keyed by lineage. A lineage whose newest
+ * take is superseded has none: its block changed and was prepared again, and the takes before
+ * (a rejected draft keeps its status as decided) belong to the old version.
+ */
 export async function latestLiveTakes(
   db: DbExecutor,
   projectId: string,
@@ -99,22 +103,22 @@ export async function latestLiveTakes(
     .where(
       and(
         eq(blockTake.projectId, projectId),
-        inArray(blockTake.status, LIVE_STATUSES),
         lineageIds ? inArray(blockTake.lineageId, [...lineageIds]) : undefined,
       ),
     )
     .orderBy(blockTake.lineageId, desc(blockTake.takeNumber));
-  return new Map(rows.map((r) => [r.lineageId, r]));
+  return new Map(rows.filter((r) => LIVE_STATUSES.includes(r.status)).map((r) => [r.lineageId, r]));
 }
 
+/** The lineage's newest take unless it is superseded (see `latestLiveTakes`). */
 export async function latestLiveTake(db: DbExecutor, lineageId: string): Promise<TakeRow | null> {
   const [row] = await db
     .select()
     .from(blockTake)
-    .where(and(eq(blockTake.lineageId, lineageId), ne(blockTake.status, "superseded")))
+    .where(eq(blockTake.lineageId, lineageId))
     .orderBy(desc(blockTake.takeNumber))
     .limit(1);
-  return row ?? null;
+  return row && LIVE_STATUSES.includes(row.status) ? row : null;
 }
 
 /** The newest live take with a poster of each lineage (the block's thumbnail). */

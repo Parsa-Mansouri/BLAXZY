@@ -9,6 +9,7 @@ import { assetHref, type AssetKindKey } from "../../../_lib/asset-kinds";
 import { loadReviewSheetAction, requestSheetChangesAction, type ReviewSheet } from "../actions";
 import { RequestChangesSheet, type IssueChoice } from "./request-changes-sheet";
 import { ReviewSummary } from "./review-summary";
+import { refreshCredits } from "../../../../../_lib/credits";
 
 export interface ReviewItem {
   id: string;
@@ -116,6 +117,7 @@ export function ReviewPass({
         return;
       }
       setChangesOpen(false);
+      refreshCredits();
       setApproved((list) => list.filter((id) => id !== leaving.id));
       setSentBack((list) => [...list, leaving]);
       setItems((list) => list.filter((item) => item.id !== leaving.id));

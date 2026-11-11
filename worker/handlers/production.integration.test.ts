@@ -292,7 +292,7 @@ describe.skipIf(!hasFfmpeg)(
       // Approve all; the completion gate is closed.
       expect(await production.approveAllBlocks({ projectId, userId })).toBe(3);
       await expect(production.completeProduction({ projectId, userId })).rejects.toThrow(
-        /0 of 3 are done/,
+        /3 shots are not final yet/,
       );
       overview = await production.getProductionOverview(projectId, userId);
       expect(overview).toMatchObject({ counts: { approved: 3 }, canStartDrafts: true });
@@ -444,17 +444,17 @@ describe.skipIf(!hasFfmpeg)(
       // Finished clips, one by one.
       const clips = await production.listFinishedClips(projectId, userId, { limit: 2 });
       expect(clips?.items.map((c) => c.downloadName)).toEqual([
-        "script-it_E01_B001_the-climb.mp4",
-        "script-it_E01_B002_the-lamp.mp4",
+        "script-it_B001_the-climb.mp4",
+        "script-it_B002_the-lamp.mp4",
       ]);
       const rest = await production.listFinishedClips(projectId, userId, {
         cursor: clips?.nextCursor,
       });
-      expect(rest?.items.map((c) => c.downloadName)).toEqual(["script-it_E01_B003_beam-sea.mp4"]);
+      expect(rest?.items.map((c) => c.downloadName)).toEqual(["script-it_B003_beam-sea.mp4"]);
       expect(rest?.nextCursor).toBeNull();
       const url = await production.getClipDownloadUrl({ lineageId: l1, userId });
       expect(url).toContain("response-content-disposition");
-      expect(decodeURIComponent(url ?? "")).toContain("script-it_E01_B001_the-climb.mp4");
+      expect(decodeURIComponent(url ?? "")).toContain("script-it_B001_the-climb.mp4");
 
       // The ZIP: every clip in order with its name, and shots.csv.
       const requested = await production.requestExport({ projectId, userId });
@@ -476,13 +476,11 @@ describe.skipIf(!hasFfmpeg)(
       }
       const csv = new TextDecoder().decode(files["shots.csv"]).replace(/^\uFEFF/, "");
       const lines = csv.trimEnd().split("\r\n");
-      expect(lines[0]).toBe("order,episode,title,duration_seconds,file_name,script_excerpt");
+      expect(lines[0]).toBe("order,title,duration_seconds,file_name,script_excerpt");
       expect(lines[1]).toBe(
-        "1,1,The climb,1,script-it_E01_B001_the-climb.mp4,TOMAS climbs the stairs of the lighthouse.",
+        "1,The climb,1,script-it_B001_the-climb.mp4,TOMAS climbs the stairs of the lighthouse.",
       );
-      expect(lines[3]).toBe(
-        '3,1,"Beam, sea",1,script-it_E01_B003_beam-sea.mp4,The beam sweeps the sea.',
-      );
+      expect(lines[3]).toBe('3,"Beam, sea",1,script-it_B003_beam-sea.mp4,The beam sweeps the sea.');
       // Nothing changed: the same bundle is reused.
       expect((await production.requestExport({ projectId, userId }))?.id).toBe(requested?.id);
 
@@ -689,7 +687,7 @@ describe.skipIf(!hasFfmpeg)(
       expect((await detail(l1, userId)).stage).toBe("done");
       expect((await detail(l2, userId)).stage).toBe("preparing");
       await expect(production.completeProduction({ projectId, userId })).rejects.toThrow(
-        /1 of 3 are done/,
+        /2 shots are not final yet/,
       );
 
       await production.ensurePrepared(projectId, userId);
@@ -736,6 +734,207 @@ describe.skipIf(!hasFfmpeg)(
       expect(take.status).toBe("failed");
       expect(take.failure).toMatch(/“Tomas” is not ready in Pre-production any more/);
       expect(await billing.getBalance(userId)).toBe(100);
+    });
+
+    /* -------------------------------------------------------------------------------------- */
+    /* A finished film and a script edit                                                       */
+    /* -------------------------------------------------------------------------------------- */
+
+    async function projectStage(projectId: string): Promise<string> {
+      const [row] = await getDb()
+        .select({ stage: s.project.stage })
+        .from(s.project)
+        .where(eq(s.project.id, projectId));
+      return row?.stage ?? "";
+    }
+
+    /** Accepts every draft and final waiting for review until every shot is done. */
+    async function acceptEverything(projectId: string, userId: string) {
+      for (let round = 0; round < 4; round++) {
+        await drain(projectId);
+        for (const lineageId of await lineages(projectId)) {
+          const d = await detail(lineageId, userId);
+          if (d.stage === "draft_review" || d.stage === "final_review") {
+            await production.submitTakeReview({
+              takeId: await latestTakeId(lineageId, userId),
+              userId,
+              decision: "accepted",
+            });
+          }
+        }
+      }
+      await drain(projectId);
+    }
+
+    async function finishFilm(projectId: string, userId: string) {
+      await prepareAndApprove(projectId, userId);
+      await startAllDrafts(projectId, userId);
+      await acceptEverything(projectId, userId);
+      expect(await production.completeProduction({ projectId, userId })).toBe(true);
+      expect(await projectStage(projectId)).toBe("done");
+    }
+
+    /** A new accepted script version, as an edit makes. */
+    async function newScriptVersion(projectId: string, userId: string, versionNumber: number) {
+      const [row] = await getDb()
+        .insert(s.scriptVersion)
+        .values({
+          projectId,
+          versionNumber,
+          source: "edited",
+          status: "accepted",
+          content: "INT. LIGHTHOUSE - NIGHT\nTOMAS lights the old lamp.",
+          createdBy: userId,
+          decidedAt: new Date(),
+        })
+        .returning({ id: s.scriptVersion.id });
+      if (!row) throw new Error("insert failed");
+      return row.id;
+    }
+
+    const EDITED_LAMP = {
+      ...(SHOTS[1] as (typeof SHOTS)[number]),
+      excerpt: "TOMAS lights the old lamp.",
+      prompt: "Tomas [character:tomas] lights the old Lamp [prop:lamp] at the top of the tower.",
+    };
+
+    it("a script edit reopens a finished film, keeps unchanged finals, and it finishes again", async () => {
+      const { userId, projectId, tomas, lamp } = await setup(2000);
+      const [l1, l2, l3] = await lineages(projectId);
+      if (!l1 || !l2 || !l3) throw new Error("blocks missing");
+      // The user's own choice of assets on the first shot, which the edit does not touch.
+      await production.ensurePrepared(projectId, userId);
+      await drain(projectId);
+      await production.setBlockAssets({
+        lineageId: l1,
+        userId,
+        assetIds: [tomas.assetId, lamp.assetId],
+      });
+      await finishFilm(projectId, userId);
+      const finalOf1 = await latestTakeId(l1, userId);
+      const [lampBefore] = await getDb()
+        .select({ versionNumber: s.promptBlock.versionNumber })
+        .from(s.promptBlock)
+        .where(and(eq(s.promptBlock.lineageId, l2), isNull(s.promptBlock.supersededAt)));
+
+      // The edit: one dialogue line of the second shot changes. Detection marks the blocks stale,
+      // then sectioning cuts them again and reopens the film (what script.section does).
+      await blocks.markBlocksStale({ projectId, reason: "The script changed (version 2)." });
+      expect(await production.reopenProductionAfterScriptEdit(projectId)).toBe(false); // stale
+      expect((await production.ensurePrepared(projectId, userId)).reopened).toBe(false);
+      expect(await projectStage(projectId)).toBe("done");
+      const v2 = await newScriptVersion(projectId, userId, 2);
+      const replaced = await blocks.replaceBlocks({
+        projectId,
+        scriptVersionId: v2,
+        damiRunIds: [],
+        blocks: [
+          SHOTS[0] as (typeof SHOTS)[number],
+          EDITED_LAMP,
+          SHOTS[2] as (typeof SHOTS)[number],
+        ].map((spec, i) => ({
+          title: spec.title,
+          scriptExcerpt: spec.excerpt,
+          prompt: spec.prompt,
+          durationSeconds: 1,
+          assetRefs: spec.assetRefs,
+          orderIndex: i,
+          startLine: i + 1,
+          endLine: i + 1,
+          start: i * 10,
+          end: i * 10 + 9,
+        })),
+      });
+      expect(replaced).toMatchObject({ carried: 3, created: 0, reset: 1 });
+      expect(await production.reopenProductionAfterScriptEdit(projectId)).toBe(true);
+      expect(await production.reopenProductionAfterScriptEdit(projectId)).toBe(false);
+      expect(await projectStage(projectId)).toBe("production");
+      expect(await events(projectId)).toContain("stage.reopened");
+
+      // The edited shot continues its lineage with the next version; the others are untouched.
+      expect(await lineages(projectId)).toEqual([l1, l2, l3]);
+      const [lampAfter] = await getDb()
+        .select({ versionNumber: s.promptBlock.versionNumber })
+        .from(s.promptBlock)
+        .where(and(eq(s.promptBlock.lineageId, l2), isNull(s.promptBlock.supersededAt)));
+      expect(lampAfter?.versionNumber).toBe((lampBefore?.versionNumber ?? 0) + 1);
+      const shot1 = await detail(l1, userId);
+      expect(shot1.stage).toBe("done");
+      expect(shot1.assets.map((a) => a.ref).sort()).toEqual([tomas.ref, lamp.ref].sort());
+      expect(shot1.scriptChanged).toBe(false);
+      expect((await detail(l2, userId)).stage).toBe("preparing");
+      expect((await detail(l2, userId)).scriptChanged).toBe(true);
+      expect((await detail(l3, userId)).stage).toBe("done");
+
+      // The unchanged finals stay watchable and downloadable; the whole film waits.
+      const clips = await production.listFinishedClips(projectId, userId);
+      expect(clips?.items.map((c) => c.lineageId)).toEqual([l1, l3]);
+      expect(clips?.items[0]?.downloadName).toBe("script-it_B001_the-climb.mp4");
+      expect(await production.getClipDownloadUrl({ lineageId: l1, userId })).toContain("http");
+      await expect(production.requestExport({ projectId, userId })).rejects.toThrow(
+        /1 shot is not final yet/,
+      );
+      expect(await production.getProductionOverview(projectId, userId)).toMatchObject({
+        projectStage: "production",
+        phase: "preparing",
+      });
+
+      // Entering Production prepares the changed shot; it is made again and the film finishes.
+      await production.ensurePrepared(projectId, userId);
+      await drain(projectId);
+      expect((await detail(l2, userId)).stage).toBe("block_review");
+      expect((await detail(l2, userId)).scriptChanged).toBe(true);
+      expect(await production.approveAllBlocks({ projectId, userId })).toBe(1);
+      expect((await detail(l2, userId)).scriptChanged).toBe(false);
+      expect(await startAllDrafts(projectId, userId)).toEqual({ started: 1 });
+      await acceptEverything(projectId, userId);
+      expect(await latestTakeId(l1, userId)).toBe(finalOf1);
+      expect(await production.completeProduction({ projectId, userId })).toBe(true);
+      expect(await projectStage(projectId)).toBe("done");
+      expect((await production.listFinishedClips(projectId, userId))?.items).toHaveLength(3);
+    });
+
+    it("heals a finished film stranded with shots that are not final", async () => {
+      const { userId, projectId, scriptVersionId } = await setup(2000);
+      const [l1, l2] = await lineages(projectId);
+      if (!l1 || !l2) throw new Error("blocks missing");
+      await prepareAndApprove(projectId, userId);
+      await startAllDrafts(projectId, userId);
+      // The second shot's first draft is rejected, so its lineage keeps a rejected take.
+      await production.submitTakeReview({
+        takeId: await latestTakeId(l2, userId),
+        userId,
+        decision: "rejected",
+        issueCodes: ["wrong_action"],
+      });
+      await acceptEverything(projectId, userId);
+      expect(await production.completeProduction({ projectId, userId })).toBe(true);
+
+      // An edit handled before the fix: the shots were cut again, but the film stayed done.
+      await blocks.markBlocksStale({ projectId, reason: "The script changed (version 2)." });
+      await fixtures.setBlocks(projectId, scriptVersionId, [
+        SHOTS[0] as (typeof SHOTS)[number],
+        EDITED_LAMP,
+        SHOTS[2] as (typeof SHOTS)[number],
+      ]);
+      expect(await projectStage(projectId)).toBe("done");
+      expect(await production.getProductionOverview(projectId, userId)).toMatchObject({
+        projectStage: "done",
+        phase: "preparing",
+      });
+
+      // Entering Production reopens it (once) and prepares the reset shot.
+      expect(await production.ensurePrepared(projectId, userId)).toEqual({ reopened: true });
+      expect(await production.ensurePrepared(projectId, userId)).toEqual({ reopened: false });
+      expect(await projectStage(projectId)).toBe("production");
+      await drain(projectId);
+      // The old rejected draft belongs to the old version: the shot is back in shot review.
+      expect((await detail(l2, userId)).stage).toBe("block_review");
+      expect((await detail(l1, userId)).stage).toBe("done");
+      await production.approveAllBlocks({ projectId, userId });
+      await startAllDrafts(projectId, userId);
+      await acceptEverything(projectId, userId);
+      expect(await production.completeProduction({ projectId, userId })).toBe(true);
     });
   },
 );

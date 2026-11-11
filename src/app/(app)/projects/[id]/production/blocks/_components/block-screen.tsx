@@ -16,7 +16,9 @@ import {
   reviewBlockAction,
   setAssetsAction,
 } from "../actions";
+import { focusIsFree, markArrival, takeArrival } from "../_lib/arrival";
 import { blockKey } from "../_lib/block-key";
+import { scriptChangeNotice } from "../_lib/block-state";
 import { AssetPickerSheet } from "./asset-picker-sheet";
 import { BlockStateLabel } from "./block-state-label";
 import { PromptView } from "./prompt-view";
@@ -39,7 +41,8 @@ function useBlockSync(lineageId: string, block: BlockView) {
   const key = blockKey(block);
   const keyRef = useRef(key);
   const alive = useRef(true);
-  const timers = useRef<number[]>([]);
+  // One set for the component's life, so the unmount cleanup clears the timers set last.
+  const timers = useRef(new Set<number>());
   useEffect(() => {
     keyRef.current = key;
   });
@@ -49,11 +52,14 @@ function useBlockSync(lineageId: string, block: BlockView) {
     return () => {
       alive.current = false;
       pending.forEach(clearTimeout);
+      pending.clear();
     };
   }, []);
 
   const check = useCallback(
     async (isActive: () => boolean) => {
+      // Never after the page was left: the action would be posted from another page.
+      if (!isActive() || !alive.current) return;
       const next = await pollBlockAction(lineageId);
       if (isActive() && alive.current && next !== keyRef.current) router.refresh();
     },
@@ -66,10 +72,16 @@ function useBlockSync(lineageId: string, block: BlockView) {
   return useCallback(() => {
     if (!alive.current) return;
     router.refresh();
-    timers.current.forEach(clearTimeout);
-    timers.current = RECHECK_MS.map((ms) =>
-      window.setTimeout(() => void check(() => alive.current).catch(() => {}), ms),
-    );
+    const pending = timers.current;
+    pending.forEach(clearTimeout);
+    pending.clear();
+    for (const ms of RECHECK_MS) {
+      const timer = window.setTimeout(() => {
+        pending.delete(timer);
+        void check(() => alive.current).catch(() => {});
+      }, ms);
+      pending.add(timer);
+    }
   }, [check, router]);
 }
 
@@ -84,16 +96,24 @@ function Section({
   title,
   children,
   action,
+  headingRef,
 }: {
   title: string;
   children: React.ReactNode;
   action?: React.ReactNode;
+  /** Makes the heading a focus target (it then takes focus after a change in its section). */
+  headingRef?: React.Ref<HTMLHeadingElement>;
 }) {
   const heading = title.toLowerCase().replaceAll(" ", "-");
   return (
     <section aria-labelledby={`block-${heading}`} className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-4">
-        <h3 id={`block-${heading}`} className="text-title-2">
+        <h3
+          ref={headingRef}
+          id={`block-${heading}`}
+          tabIndex={headingRef ? -1 : undefined}
+          className="scroll-mt-[calc(var(--toolbar-h)+1rem)] text-title-2 outline-none"
+        >
           {title}
         </h3>
         {action}
@@ -134,30 +154,56 @@ export function BlockScreen({
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pending, startPending] = useTransition();
+  // An asset change makes a new version that is prepared again: from the click until that version
+  // arrives, the shot shows (and says) Preparing, as after Request Changes.
+  const [rePreparing, setRePreparing] = useState<string | null>(null);
+  const stage = rePreparing === block.id ? "preparing" : block.stage;
   const [announcement, setAnnouncement] = useState("");
-  const [announcedStage, setAnnouncedStage] = useState(block.stage);
-  const waitingRef = useRef<HTMLDivElement>(null);
-  if (announcedStage !== block.stage) {
-    setAnnouncedStage(block.stage);
-    setAnnouncement(ANNOUNCEMENTS[block.stage] ?? "");
+  const [announced, setAnnounced] = useState(`${block.lineageId}:${stage}`);
+  if (announced !== `${block.lineageId}:${stage}`) {
+    setAnnounced(`${block.lineageId}:${stage}`);
+    setAnnouncement(ANNOUNCEMENTS[stage] ?? "");
   }
+  const waitingRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const assetsRef = useRef<HTMLHeadingElement>(null);
+  const lastAction = useRef<"assets" | null>(null);
 
-  const preparing = block.stage === "preparing";
-  const failed = block.stage === "prepare_failed";
-  const approved = block.stage === "approved";
-  const reviewable = block.stage === "block_review";
+  const preparing = stage === "preparing";
+  const failed = stage === "prepare_failed";
+  const approved = stage === "approved";
+  const reviewable = stage === "block_review";
   const locked = preparing || block.busy;
   const attachedIds = block.assets.map((a) => a.assetId);
   const room = Math.max(0, maxAssets - attachedIds.length);
   const number = position;
   const title = block.title ?? `Shot ${number}`;
+  const changeNotice = scriptChangeNotice(block);
 
-  // The waiting state takes focus, so the change is not silent for keyboard and screen reader users.
-  const wasPreparing = useRef(preparing);
+  // Arriving from Approve on the previous shot: focus starts at this shot's heading.
   useEffect(() => {
-    if (preparing && !wasPreparing.current) waitingRef.current?.focus();
+    if (takeArrival()) titleRef.current?.focus({ preventScroll: true });
+  }, [block.lineageId]);
+
+  // The waiting state takes focus, so the change is not silent for keyboard and screen reader
+  // users. When the control that had focus went away (a removed asset, a button disabled while the
+  // shot is prepared again), focus moves to where the change is instead of the page's body.
+  const wasPreparing = useRef(preparing);
+  const lastState = useRef(`${block.id}:${stage}`);
+  useEffect(() => {
+    // Only after a change, not when the page is first shown.
+    if (lastState.current === `${block.id}:${stage}`) return;
+    lastState.current = `${block.id}:${stage}`;
+    const started = preparing && !wasPreparing.current;
     wasPreparing.current = preparing;
-  }, [preparing]);
+    if (started) {
+      waitingRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (!focusIsFree()) return;
+    const target = lastAction.current === "assets" ? assetsRef.current : titleRef.current;
+    target?.focus({ preventScroll: true });
+  }, [preparing, block.id, stage]);
 
   function approve() {
     setActionError(null);
@@ -167,6 +213,7 @@ export function BlockScreen({
         setActionError(result.error);
         return;
       }
+      markArrival();
       router.push(result.data.nextHref);
     });
   }
@@ -190,6 +237,10 @@ export function BlockScreen({
   function setAssets(assetIds: string[], from: "picker" | "tile") {
     setActionError(null);
     setPickerError(null);
+    lastAction.current = "assets";
+    const version = block.id;
+    // The removed tile's button goes away: keep focus in the assets section.
+    if (from === "tile") assetsRef.current?.focus({ preventScroll: true });
     startPending(async () => {
       const result = await setAssetsAction(projectId, block.lineageId, assetIds);
       if (!result.ok) {
@@ -197,6 +248,7 @@ export function BlockScreen({
         else setActionError(result.error);
         return;
       }
+      setRePreparing(version);
       setPickerOpen(false);
       refresh();
     });
@@ -241,12 +293,18 @@ export function BlockScreen({
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
           <div className="flex min-w-0 flex-col gap-2">
             <p className="text-callout text-label-2 tabular-nums">Shot {number}</p>
-            <h2 className="text-large-title text-balance">{title}</h2>
+            <h2
+              ref={titleRef}
+              tabIndex={-1}
+              className="scroll-mt-[calc(var(--toolbar-h)+1rem)] text-large-title text-balance outline-none"
+            >
+              {title}
+            </h2>
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-callout text-label-2 tabular-nums">
               {block.durationSeconds ? (
                 <span>{formatDurationLong(block.durationSeconds)}</span>
               ) : null}
-              <BlockStateLabel stage={block.stage} />
+              <BlockStateLabel stage={stage} />
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -275,6 +333,9 @@ export function BlockScreen({
             ) : null}
           </div>
         </div>
+        {changeNotice ? (
+          <p className="max-w-(--measure) text-reading text-orange">{changeNotice}</p>
+        ) : null}
         {actionError ? (
           <p role="alert" className="max-w-(--measure) text-callout text-red">
             {actionError}
@@ -300,6 +361,7 @@ export function BlockScreen({
 
       <Section
         title="Assets"
+        headingRef={assetsRef}
         action={
           <Button
             leadingIcon={<Plus aria-hidden />}

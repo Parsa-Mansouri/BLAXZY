@@ -9,25 +9,29 @@ import { NotFoundView } from "@/app/_components/not-found-view";
 export default function ProjectNotFound() {
   const projectId = usePathname().split("/")[2];
   return (
-    <NotFoundView
-      heading="h2"
-      message="This part of the project does not exist."
-      actions={
-        <>
-          {projectId ? (
-            <Button
-              variant="prominent"
-              size="large"
-              render={<Link href={`/projects/${projectId}`} />}
-            >
-              Back to Project
+    <>
+      {/* A client not-found cannot export metadata; React places the title in the head. */}
+      <title>Page Not Found · BLAXZY</title>
+      <NotFoundView
+        heading="h2"
+        message="This part of the project does not exist."
+        actions={
+          <>
+            {projectId ? (
+              <Button
+                variant="prominent"
+                size="large"
+                render={<Link href={`/projects/${projectId}`} />}
+              >
+                Back to Project
+              </Button>
+            ) : null}
+            <Button variant="standard" size="large" render={<Link href="/projects" />}>
+              Projects
             </Button>
-          ) : null}
-          <Button variant="standard" size="large" render={<Link href="/projects" />}>
-            Projects
-          </Button>
-        </>
-      }
-    />
+          </>
+        }
+      />
+    </>
   );
 }

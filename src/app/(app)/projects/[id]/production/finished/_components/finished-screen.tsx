@@ -1,9 +1,12 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { Download, Play } from "lucide-react";
+import type { ProductionPhase } from "@/server/production";
 import { fileSrc } from "@/lib/file-src";
 import { Button, ProgressBar, formatDurationLong, cn } from "@/ui";
+import { phaseHref } from "../../../_lib/production-routes";
 import { usePolling } from "../../../_lib/use-polling";
 import {
   clipDownloadAction,
@@ -155,17 +158,28 @@ function Poster({
   );
 }
 
-/** The finished film as a shelf: every final clip in story order, each playable and downloadable. */
+/**
+ * The finished film as a shelf: every final clip in story order, each playable and downloadable.
+ * While some shots are made again (a script edit reopened the film), the final ones stay here and
+ * Download All waits until every shot is final.
+ */
 export function FinishedScreen({
   projectId,
   initial,
   initialCursor,
   portrait,
+  complete,
+  projectStage,
+  phase,
 }: {
   projectId: string;
   initial: FinishedClip[];
   initialCursor: string | null;
   portrait: boolean;
+  /** Every shot is final. */
+  complete: boolean;
+  projectStage: "production" | "done";
+  phase: ProductionPhase;
 }) {
   const [clips, setClips] = useState(initial);
   const [cursor, setCursor] = useState(initialCursor);
@@ -210,20 +224,39 @@ export function FinishedScreen({
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div className="flex min-w-0 flex-col gap-1.5">
           <h2 className="text-large-title">Finished</h2>
-          <p className="max-w-(--measure) text-reading text-label-2">
-            Every shot of this film, ready for your editor. The script, assets and takes remain
-            available in the earlier stages.
-          </p>
+          {complete ? (
+            <p className="max-w-(--measure) text-reading text-label-2">
+              Every shot of this film, ready for your editor. The script, assets and takes remain
+              available in the earlier stages.
+            </p>
+          ) : (
+            <p className="max-w-(--measure) text-reading text-label-2">
+              Some shots are not final yet. The final clips below can be watched and downloaded now.
+              Download All is available once every shot is final.
+            </p>
+          )}
         </div>
-        <Button
-          variant="prominent"
-          size="large"
-          leadingIcon={<Download aria-hidden />}
-          loading={exporting.starting || working}
-          onClick={exporting.start}
-        >
-          Download All
-        </Button>
+        {complete ? (
+          <Button
+            variant="prominent"
+            size="large"
+            leadingIcon={<Download aria-hidden />}
+            loading={exporting.starting || working}
+            onClick={exporting.start}
+          >
+            Download All
+          </Button>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="prominent"
+              size="large"
+              render={<Link href={phaseHref(projectId, phase, projectStage)} />}
+            >
+              {phase === "preparing" || phase === "block_review" ? "Review Shots" : "Open Clips"}
+            </Button>
+          </div>
+        )}
       </header>
 
       <div aria-live="polite" className="flex flex-col gap-2.5 empty:hidden">

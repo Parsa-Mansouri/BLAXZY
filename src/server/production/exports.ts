@@ -21,6 +21,7 @@ import {
 import { isUuid, openLineage, openProject, parse, userIdSchema, type ProjectRow } from "./access";
 import { ProductionInputError } from "./errors";
 import { clipDownloadName, exportDownloadName, shotsCsv } from "./names";
+import { notFinalMessage } from "./service";
 import { deriveBlockStage } from "./stage";
 import { latestLiveTake, latestLiveTakes, logEvent, type TakeRow } from "./takes";
 import { assertZipFits, crc32Of, storedZipStream, ZipLimitError, type StoredEntry } from "./zip";
@@ -32,7 +33,7 @@ export type FinishedClip = {
   durationSeconds: number | null;
   fileId: string;
   posterFileId: string | null;
-  /** `<project-slug>_E01_B012_<title-slug>.mp4` */
+  /** `<project-slug>_B012_<title-slug>.mp4` (a series: `<project-slug>_E01_B012_…`) */
   downloadName: string;
 };
 
@@ -84,6 +85,16 @@ async function episodeNumbers(projectId: string, ownerId: string): Promise<Map<s
   return new Map(episodes.map((e) => [e.id, e.number]));
 }
 
+/** The block's episode number in a series; null in a movie (its names carry no episode). */
+function episodeOf(
+  row: Pick<ProjectRow, "style">,
+  episodes: ReadonlyMap<string, number>,
+  block: Pick<PromptBlock, "episodeId">,
+): number | null {
+  if (row.style?.format !== "series") return null;
+  return block.episodeId ? (episodes.get(block.episodeId) ?? 1) : 1;
+}
+
 function toClip(
   row: ProjectRow,
   episodes: ReadonlyMap<string, number>,
@@ -99,7 +110,7 @@ function toClip(
     posterFileId: final.posterFileId,
     downloadName: clipDownloadName({
       projectTitle: row.title,
-      episodeNumber: block.episodeId ? (episodes.get(block.episodeId) ?? 1) : 1,
+      episodeNumber: episodeOf(row, episodes, block),
       orderIndex: block.orderIndex,
       title: block.title,
     }),
@@ -172,7 +183,7 @@ export async function getClipDownloadUrl(input: {
 /* The whole film                                                                              */
 /* ------------------------------------------------------------------------------------------ */
 
-type FilmClip = FinishedClip & { block: PromptBlock; takeId: string; episodeNumber: number };
+type FilmClip = FinishedClip & { block: PromptBlock; takeId: string; episodeNumber: number | null };
 
 /** Every current block in story order with its final (if done), and the film's content key. */
 async function loadFilm(
@@ -194,7 +205,7 @@ async function loadFilm(
           ...toClip(row, episodes, block, final),
           block,
           takeId: final.id,
-          episodeNumber: block.episodeId ? (episodes.get(block.episodeId) ?? 1) : 1,
+          episodeNumber: episodeOf(row, episodes, block),
         });
       }
     }
@@ -254,9 +265,7 @@ export async function requestExport(input: {
     const film = await loadFilm(tx, owned);
     if (film.total === 0) throw new ProductionInputError("There are no shots yet.");
     if (film.clips.length !== film.total) {
-      throw new ProductionInputError(
-        `Finish every shot first: ${film.clips.length} of ${film.total} are done.`,
-      );
+      throw new ProductionInputError(notFinalMessage(film.total - film.clips.length));
     }
     const [existing] = await tx
       .select()

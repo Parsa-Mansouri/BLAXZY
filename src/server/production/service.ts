@@ -26,11 +26,11 @@ import {
   type PromptBlock,
 } from "@/server/blocks";
 import { BLOCK_ISSUE_CODES, MAX_REFERENCE_IMAGES, TAKE_ISSUE_CODES } from "@/server/damis";
-import { getDb, type DbExecutor } from "@/server/db/client";
-import { blockTake, review, type ProjectStyle } from "@/server/db/schema";
+import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
+import { blockTake, project, review, type ProjectStyle } from "@/server/db/schema";
 import { MAX_REFERENCES, quoteGeneration } from "@/server/generation";
 import { blockRevise, enqueue, productionPrepare, takeFix, takeGenerate } from "@/server/jobs";
-import { advanceStage } from "@/server/projects";
+import { advanceStage, reopenProduction } from "@/server/projects";
 import {
   isUuid,
   lockLineage,
@@ -63,6 +63,8 @@ import {
 import { busyOf, projectStages, stageOf, toProductionBlocks, type ProductionBlock } from "./views";
 
 export type ProductionOverview = {
+  /** The project's stage when read: Production is open in `production` and `done`. */
+  projectStage: "production" | "done";
   phase: ProductionPhase;
   counts: Record<BlockProductionStage, number>;
   blockCount: number;
@@ -96,6 +98,13 @@ const NEEDS_REASON = "Tell us what is wrong: pick an issue or write a note.";
 const NOT_IN_REVIEW = "This is no longer waiting for review. Reload the page.";
 const BUSY_MESSAGE = "This shot is still being worked on. Wait for it to finish, then try again.";
 const PRICE_CHANGED = "The price changed. Check the new total, then confirm again.";
+
+/** Why the film cannot be finished or downloaded whole yet (no "x of y" totals). */
+export function notFinalMessage(notFinal: number): string {
+  return notFinal === 1
+    ? "Finish every shot first. 1 shot is not final yet."
+    : `Finish every shot first. ${notFinal} shots are not final yet.`;
+}
 
 /* ------------------------------------------------------------------------------------------ */
 /* Input schemas                                                                               */
@@ -254,16 +263,66 @@ function reviewReason(
 /* ------------------------------------------------------------------------------------------ */
 
 /**
- * Starts preparing every current block that was never prepared (`production.prepare`), called
- * when the stage is opened. A block that changed since its takes were made (a script edit, an
- * asset merge) is such a block: its lineage's live takes are superseded first. Unfinished takes
- * of blocks the script dropped are superseded too. No-op when everything is prepared or pending,
- * when the project is not the user's, or while blocks are stale (they wait for new blocks).
+ * A finished film whose shots are not all final any more (a script edit sent some back through
+ * preparation) returns to production. Runs inside the caller's transaction with the project row
+ * locked. Waits while blocks are stale: the shots are being cut again, and an edit that changes no
+ * shot leaves the film finished. True when this call reopened it.
  */
-export async function ensurePrepared(projectId: string, userId: string): Promise<void> {
-  const claimed = await getDb().transaction(async (tx) => {
+async function reopenIfUnfinished(
+  tx: DbTx,
+  row: Pick<ProjectRow, "id" | "stage">,
+  userId: string | null,
+  reason: string,
+): Promise<boolean> {
+  if (row.stage !== "done") return false;
+  const states = await listCurrentBlockStates(row.id, tx);
+  if (states.length === 0 || states.some((b) => b.stale)) return false;
+  const { blocks, counts } = await projectStages(tx, row.id);
+  if (counts.done === blocks.length) return false;
+  const reopened = await reopenProduction({ projectId: row.id, reason, userId }, tx);
+  if (reopened) {
+    await logEvent(tx, row.id, userId, "production.reopened", {
+      reason,
+      notFinal: blocks.length - counts.done,
+    });
+  }
+  return reopened;
+}
+
+/**
+ * Called after the script's shots were cut again (worker): a finished film whose shots changed is
+ * in production again. Idempotent. True when this call reopened it.
+ */
+export async function reopenProductionAfterScriptEdit(projectId: string): Promise<boolean> {
+  if (!isUuid(projectId)) return false;
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .select({ id: project.id, stage: project.stage })
+      .from(project)
+      .where(eq(project.id, projectId))
+      .for("update");
+    if (!row) return false;
+    return reopenIfUnfinished(tx, row, null, "script_changed");
+  });
+}
+
+/**
+ * Starts preparing every current block that was never prepared (`production.prepare`), called
+ * whenever Production is entered, whatever the stage. A block that changed since its takes were
+ * made (a script edit, an asset merge) is such a block: its lineage's live takes are superseded
+ * first. Unfinished takes of blocks the script dropped are superseded too. A finished project
+ * whose shots are not all final any more is reopened (it heals a film stranded by an earlier
+ * edit). No-op when everything is prepared or pending, when the project is not the user's, or
+ * while blocks are stale (they wait for new blocks). `reopened` is true when this call moved the
+ * project from done back to production.
+ */
+export async function ensurePrepared(
+  projectId: string,
+  userId: string,
+): Promise<{ reopened: boolean }> {
+  const outcome = await getDb().transaction(async (tx) => {
     const owned = await openProject(tx, projectId, userId, true);
-    if (!owned) return [];
+    if (!owned) return { blocks: [], reopened: false };
     assertWritable(owned);
     const blocks = await claimBlocksForPreparation(projectId, tx);
     const superseded = await supersedeLineageTakes(
@@ -283,9 +342,11 @@ export async function ensurePrepared(projectId: string, userId: string): Promise
         takesSuperseded: superseded + dropped,
       });
     }
-    return blocks;
+    const reopened = await reopenIfUnfinished(tx, owned, userId, "shots_not_final");
+    return { blocks, reopened };
   });
-  for (const block of claimed) await enqueuePreparation(block, false);
+  for (const block of outcome.blocks) await enqueuePreparation(block, false);
+  return { reopened: outcome.reopened };
 }
 
 /** Runs a failed preparation (or revision) of the lineage's current block again. */
@@ -327,6 +388,7 @@ export async function getProductionOverview(
   if (!owned) return null;
   const { blocks, counts } = await projectStages(db, projectId);
   return {
+    projectStage: owned.stage === "done" ? "done" : "production",
     phase: derivePhase(counts),
     counts,
     blockCount: blocks.length,
@@ -804,9 +866,7 @@ export async function completeProduction(input: {
     const { blocks, counts } = await projectStages(tx, projectId);
     if (blocks.length === 0) throw new ProductionInputError("There are no shots yet.");
     if (counts.done !== blocks.length) {
-      throw new ProductionInputError(
-        `Finish every shot first: ${counts.done} of ${blocks.length} are done.`,
-      );
+      throw new ProductionInputError(notFinalMessage(blocks.length - counts.done));
     }
     const advanced = await advanceStage({ projectId, from: "production", to: "done" }, tx);
     if (advanced) {

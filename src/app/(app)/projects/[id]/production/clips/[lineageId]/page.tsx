@@ -7,7 +7,8 @@ import { TAKE_ISSUE_LIST } from "@/server/damis";
 import { quoteGeneration } from "@/server/generation";
 import { getBlockDetail, MAX_REVIEW_NOTE_LENGTH, quoteProduction } from "@/server/production";
 import { loadProject } from "../../../_lib/load-project";
-import { loadProjectForStage } from "../../../_lib/load-stage";
+import { loadProduction } from "../../../_lib/load-production";
+import { clipHref } from "../../../_lib/production-routes";
 import { findNeighbours } from "../_lib/clip-data";
 import { shotTitle } from "../_lib/clip-view";
 import { ClipScreen } from "./_components/clip-screen";
@@ -35,8 +36,10 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
 export default async function ClipPage({ params }: { params: Params }) {
   const { id, lineageId } = await params;
-  const project = await loadProjectForStage(id, "production");
-  const user = await requireUser();
+  const { project, user } = await loadProduction(id, {
+    screen: null,
+    href: (projectId) => clipHref(projectId, lineageId),
+  });
   const shot = await loadShot(project.id, lineageId);
   if (!shot) notFound();
   const { detail, neighbours } = shot;

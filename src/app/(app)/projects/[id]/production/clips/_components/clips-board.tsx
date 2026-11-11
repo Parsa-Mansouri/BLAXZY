@@ -7,10 +7,11 @@ import { Button } from "@/ui";
 import { usePolling } from "../../../_lib/use-polling";
 import { finishProductionAction, loadBoardAction, refreshBoardAction } from "../actions";
 import type { BoardPage } from "../_lib/clip-data";
-import { isUnsettled, statusLine, type Orientation } from "../_lib/clip-view";
-import { clipHref, finishedHref } from "../_lib/routes";
+import { isUnsettled, shotsHint, statusLine, type Orientation } from "../_lib/clip-view";
+import { blocksHref, clipHref, finishedHref } from "../_lib/routes";
 import { ClipTile, BoardGrid } from "./clip-tile";
 import { useClips, useShown, StateHeading } from "./clips-context";
+import { useCreditWatch } from "../../../../../_lib/credits";
 
 const FAST_POLL_MS = 2000;
 const SETTLED_POLL_MS = 10000;
@@ -43,6 +44,8 @@ export function ClipsBoard({
   const { tiles, nextCursor, summary } = board;
   const line = statusLine(summary.counts);
   const rendering = tiles.some((t) => isUnsettled(t.stage));
+  // Drafts and finals reserve their credits as their jobs start, and refund them if they fail.
+  useCreditWatch(rendering);
 
   // Read the new status line out when it changes (not the one the page opened with).
   const lastLine = useRef(line);
@@ -109,7 +112,7 @@ export function ClipsBoard({
     if (summary.allFinal) {
       return (
         <Button variant="prominent" size="large" render={<Link href={finishedHref(projectId)} />}>
-          Continue
+          {summary.finished ? "View Finished Film" : "Continue"}
         </Button>
       );
     }
@@ -130,6 +133,9 @@ export function ClipsBoard({
   const anyRendering =
     summary.counts.draft_generating + summary.counts.final_generating + summary.counts.preparing >
     0;
+  const hint = shotsHint(summary.counts);
+  // Some clips are final while others are still made (a reopened film, or on the way).
+  const someFinal = summary.counts.done > 0 && !summary.allFinal;
 
   return (
     <div className="flex flex-col gap-10">
@@ -139,6 +145,17 @@ export function ClipsBoard({
             Clips
           </StateHeading>
           <p className="text-reading text-label tabular-nums">{line}</p>
+          {hint ? (
+            <p className="max-w-(--measure) text-reading text-pretty text-label-2">
+              {hint}{" "}
+              <Link
+                href={blocksHref(projectId)}
+                className="rounded-control text-label underline underline-offset-2 focus-ring"
+              >
+                Open Shots
+              </Link>
+            </p>
+          ) : null}
           {anyRendering ? (
             <p className="max-w-(--measure) text-reading text-pretty text-label-2">
               Clips appear here as they finish. You can leave this page.
@@ -150,7 +167,12 @@ export function ClipsBoard({
           ) : null}
         </div>
         <div className="flex flex-col items-start gap-2">
-          {nextStep()}
+          <div className="flex flex-wrap items-center gap-2">
+            {someFinal ? (
+              <Button render={<Link href={finishedHref(projectId)} />}>Final Clips</Button>
+            ) : null}
+            {nextStep()}
+          </div>
           {finishError ? (
             <p role="alert" className="max-w-80 text-callout text-red">
               {finishError}

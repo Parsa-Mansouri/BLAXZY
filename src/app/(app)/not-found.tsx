@@ -9,6 +9,8 @@ export const metadata: Metadata = { title: "Page Not Found · BLAXZY" };
 export default function AppNotFound() {
   return (
     <>
+      {/* Also when a layout's metadata stopped at notFound(), as for a project that is not there. */}
+      <title>Page Not Found · BLAXZY</title>
       <Toolbar title="Not Found" />
       <div className="px-(--content-x) pt-4 pb-16 shell:pt-8">
         <NotFoundView

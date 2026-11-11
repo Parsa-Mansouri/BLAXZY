@@ -30,13 +30,16 @@ function failure(error: unknown): { ok: false; error: string } {
   return { ok: false, error: SERVER_PROBLEM };
 }
 
-/** The sidebar shows the credit balance, so a change refreshes the whole project. */
-function refreshProject(projectId: string) {
-  revalidatePath(`/projects/${projectId}`, "layout");
+/**
+ * An asset change shows in Pre-production's screens (this asset, its category, the overview); the
+ * stage does not change and the sidebar's balance refreshes itself.
+ */
+function refreshPreProduction(projectId: string) {
+  revalidatePath(`/projects/${projectId}/pre-production`, "layout");
 }
 
 const done = (projectId: string): ActionResult => {
-  refreshProject(projectId);
+  refreshPreProduction(projectId);
   return { ok: true, data: null };
 };
 

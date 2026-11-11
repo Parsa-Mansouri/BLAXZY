@@ -15,6 +15,10 @@ export default defineConfig({
       GENERATION_PROVIDER: "sample",
       GENERATION_SAMPLE_DELAY_MS: "0",
     },
+    // Integration tests hit Postgres and the object store; on a busy machine the 5 s default
+    // produces false failures.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     include: ["src/**/*.test.ts", "worker/**/*.test.ts"],
   },
 });

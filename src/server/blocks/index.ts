@@ -14,6 +14,7 @@ export {
   normalizeExcerpt,
   readSectioningRecord,
   replaceBlocks,
+  retrySectioning,
   SECTIONING_STATES,
   setSectioningState,
   type PromptBlock,

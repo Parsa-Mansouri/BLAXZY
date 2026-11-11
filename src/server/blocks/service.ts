@@ -1,8 +1,9 @@
-import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { SectionedBlock } from "@/server/damis";
 import { getDb, type DbExecutor } from "@/server/db/client";
-import { project, promptBlock } from "@/server/db/schema";
+import { project, projectEvent, promptBlock, scriptVersion } from "@/server/db/schema";
+import { enqueue, scriptDetectAssets } from "@/server/jobs";
 
 export type PromptBlock = typeof promptBlock.$inferSelect;
 
@@ -311,4 +312,74 @@ export async function setSectioningState(
     )
     .returning({ id: project.id });
   return updated.length > 0;
+}
+
+const RETRY_ENQUEUE_FAILURE = "This step could not be started. Try again in a moment.";
+
+/**
+ * Runs asset detection and sectioning again after a failed run: only while the project's
+ * sectioning state is `failed`. Sets it to `running` for the accepted script version and enqueues
+ * `script.detect-assets` (which queues sectioning in turn). Returns the new status, or null when
+ * the project is missing, archived or not the user's.
+ */
+export async function retrySectioning(input: {
+  projectId: string;
+  userId: string;
+}): Promise<SectioningStatus | null> {
+  const { projectId, userId } = parse(
+    z.object({ projectId: z.string(), userId: z.string().min(1) }),
+    input,
+  );
+  if (!uuid.safeParse(projectId).success) return null;
+  const versionId = await getDb().transaction(async (tx) => {
+    const [owned] = await tx
+      .select({ id: project.id, stageState: project.stageState })
+      .from(project)
+      .where(
+        and(eq(project.id, projectId), eq(project.ownerId, userId), isNull(project.archivedAt)),
+      )
+      .for("update");
+    if (!owned) return null;
+    if (readSectioningRecord(owned.stageState)?.state !== "failed") {
+      throw new BlocksInputError("Only a run that failed can be tried again.");
+    }
+    const [accepted] = await tx
+      .select({ id: scriptVersion.id })
+      .from(scriptVersion)
+      .where(
+        and(
+          eq(scriptVersion.projectId, projectId),
+          isNull(scriptVersion.episodeId),
+          eq(scriptVersion.status, "accepted"),
+        ),
+      )
+      .orderBy(desc(scriptVersion.versionNumber))
+      .limit(1);
+    if (!accepted) throw new BlocksInputError("There is no accepted script to prepare.");
+    await setSectioningState(
+      { projectId, state: "running", scriptVersionId: accepted.id, failure: null },
+      tx,
+    );
+    await tx.insert(projectEvent).values({
+      projectId,
+      userId,
+      type: "sectioning.retried",
+      payload: { versionId: accepted.id },
+    });
+    return accepted.id;
+  });
+  if (!versionId) return null;
+  try {
+    await enqueue(scriptDetectAssets, { scriptVersionId: versionId });
+  } catch (error) {
+    console.error(`[blocks] could not enqueue asset detection for ${versionId}:`, error);
+    await setSectioningState({
+      projectId,
+      state: "failed",
+      scriptVersionId: versionId,
+      failure: RETRY_ENQUEUE_FAILURE,
+      onlyFor: versionId,
+    });
+  }
+  return getSectioningStatus(projectId, userId);
 }

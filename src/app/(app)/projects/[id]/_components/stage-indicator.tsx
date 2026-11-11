@@ -13,7 +13,7 @@ export function StageIndicator({ step, stages }: { step: string; stages: StageLi
   const items = useActiveStages(stages);
   const current = stages.find((s) => s.status === "current");
   return (
-    <div className="shell:group-data-[sidebar=expanded]/shell:hidden">
+    <div className="min-w-0 shell:group-data-[sidebar=expanded]/shell:hidden">
       <Popover
         align="start"
         aria-label="Stages"

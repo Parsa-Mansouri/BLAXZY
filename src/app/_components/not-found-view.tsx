@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
+import { PageHeader } from "@/ui";
 
-/** A short title, one sentence and the way out. Shared by every not-found page. */
+/** The page header, one sentence and the way out. Shared by every not-found page. */
 export function NotFoundView({
-  heading: Heading,
+  heading,
   title = "Page Not Found",
   message,
   actions,
@@ -13,12 +14,9 @@ export function NotFoundView({
   actions: ReactNode;
 }) {
   return (
-    <section className="flex max-w-(--measure) flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <Heading className="text-large-title text-balance">{title}</Heading>
-        <p className="text-reading text-pretty text-label-2">{message}</p>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">{actions}</div>
+    <section className="flex flex-col">
+      <PageHeader as={heading} title={title} description={message} />
+      <div className="flex in-2 flex-wrap items-center gap-3">{actions}</div>
     </section>
   );
 }

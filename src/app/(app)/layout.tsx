@@ -4,8 +4,9 @@ import { AppShell } from "./_components/app-shell";
 import { SIDEBAR_COOKIE } from "./_lib/sidebar-cookie";
 
 /**
- * The signed-in window. The `sidebar` slot shows the library everywhere except inside a project,
- * where it becomes that project's stage list.
+ * The signed-in window: the floating library sidebar and the content. The `sidebar` slot shows
+ * the library everywhere; inside a project it selects that project's row, and the project's
+ * stages appear as a strip in the project toolbar instead.
  */
 export default async function AppLayout({
   children,

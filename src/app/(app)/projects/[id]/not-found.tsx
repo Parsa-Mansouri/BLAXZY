@@ -10,20 +10,20 @@ export default function ProjectNotFound() {
   const projectId = usePathname().split("/")[2];
   return (
     <NotFoundView
-      heading="h2"
+      heading="h1"
       message="This part of the project does not exist."
       actions={
         <>
           {projectId ? (
             <Button
-              variant="prominent"
+              variant="primary"
               size="large"
               render={<Link href={`/projects/${projectId}`} />}
             >
               Back to Project
             </Button>
           ) : null}
-          <Button variant="standard" size="large" render={<Link href="/projects" />}>
+          <Button variant="outlined" size="large" render={<Link href="/projects" />}>
             Projects
           </Button>
         </>

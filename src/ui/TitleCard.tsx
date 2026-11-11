@@ -2,50 +2,48 @@ import type { ReactNode } from "react";
 import { cn } from "./cn";
 
 export interface TitleCardProps {
-  /** The film's title, set large in the display weight. */
+  /** The film's title, set large on the frame. */
   title: string;
-  /** Small line under the title (hero only), e.g. "Script · Step 2 of 4". */
+  /** Small line under the title (hero only). */
   line?: ReactNode;
-  /** `tile`: a 16:9 shelf frame. `hero`: a letterboxed Up Next frame, 240-280px tall on wide screens. */
+  /** `tile`: a 16:9 frame. `hero`: a taller frame for a featured film. */
   size?: "tile" | "hero";
-  /** Content under the title block, e.g. the hero's Continue button. */
+  /** Content under the title block, e.g. a Continue button. */
   action?: ReactNode;
   className?: string;
 }
 
 /**
- * Artwork for a project that has no imagery yet: a film's title frame. The title sits in the
- * bottom-left of a grey frame and is sized from the frame's width, so a shelf of these reads
- * like a shelf of films. It is never a stand-in for a generated still.
+ * Artwork for a project that has no imagery yet: the film's title on a flat dark frame,
+ * bottom-left. It is never a stand-in for a generated still. For tiles with hover actions use
+ * PictureTile with `overlay={title}` instead.
  */
 export function TitleCard({ title, line, size = "tile", action, className }: TitleCardProps) {
   const hero = size === "hero";
   return (
     <div
       className={cn(
-        "@container relative w-full overflow-hidden rounded-artwork bg-elevated",
-        hero
-          ? "aspect-video shell:aspect-auto shell:h-[clamp(15rem,18vw,17.5rem)]"
-          : "aspect-video",
+        "relative w-full overflow-hidden rounded-card bg-elevated",
+        hero ? "min-h-80 rounded-block" : "aspect-video",
         className,
       )}
     >
       <div
         className={cn(
-          "absolute inset-0 flex flex-col justify-end",
-          hero ? "p-6 shell:px-8 shell:py-7" : "artwork-pad",
+          "flex flex-col justify-end",
+          hero ? "min-h-80 gap-5 p-10" : "absolute inset-0 p-5",
         )}
       >
         <p
           className={cn(
             "line-clamp-3 break-words text-label",
-            hero ? "max-w-[70%] artwork-title-hero" : "max-w-[88%] artwork-title",
+            hero ? "max-w-[80%] text-display" : "max-w-[92%] text-heading-sm",
           )}
         >
           {title}
         </p>
-        {line ? <p className="mt-1.5 text-callout text-label-2">{line}</p> : null}
-        {action ? <div className="mt-4">{action}</div> : null}
+        {line ? <div className="text-meta text-label-2">{line}</div> : null}
+        {action ? <div className="mt-2">{action}</div> : null}
       </div>
     </div>
   );

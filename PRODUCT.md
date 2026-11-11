@@ -48,8 +48,10 @@ user.
 - Name and wordmark: BLAXZY, set as wide-tracked capitals. The owner approved the wordmark as it
   stands.
 - The interface is black. The owner approved black as the ground.
-- The interface follows Apple's design language (Human Interface Guidelines), closest to Apple's
-  media apps (TV, Photos, Music), with a classic solid sidebar that collapses. Not Liquid Glass.
+- The interface follows the owner-approved mockups (November 2026): calm and Apple-like, a
+  floating rounded library sidebar, 48px capital page titles that rise in with a white rule,
+  Geist type (Geist Mono for status lines, Courier Prime on paper for screenplay text), exactly
+  three levels of hierarchy per screen, and one motion curve. Not Liquid Glass.
 - No colour accent until the owner's brand identity arrives: white is the accent, and one accent
   token is reserved for the brand colour.
 - Rejected by the owner as "AI-looking": blue or indigo accents, bordered rounded boxes around

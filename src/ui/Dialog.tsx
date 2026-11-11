@@ -19,7 +19,7 @@ export interface SheetProps {
   className?: string;
 }
 
-const widths = { sm: "max-w-sm", md: "max-w-md", lg: "max-w-xl" } as const;
+const widths = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-2xl" } as const;
 
 /** A sheet: a centred, focused task over a dimmed window. Escape and Cancel dismiss it. */
 export function Sheet({
@@ -39,22 +39,22 @@ export function Sheet({
         <BaseDialog.Viewport className="fixed inset-0 z-(--z-modal) flex items-center justify-center p-4">
           <BaseDialog.Popup
             className={cn(
-              "flex max-h-[calc(100dvh-2rem)] w-full popup-motion flex-col gap-4 overflow-y-auto rounded-sheet bg-elevated-2 p-5 text-label shadow-float outline-none",
+              "flex max-h-[calc(100dvh-2rem)] w-full popup-motion flex-col gap-6 overflow-y-auto rounded-block bg-elevated-2 p-6 text-label shadow-float outline-none sm:p-8",
               widths[size],
               className,
             )}
           >
-            <div className="flex flex-col gap-1">
-              <BaseDialog.Title className="text-title-3">{title}</BaseDialog.Title>
+            <div className="flex flex-col gap-2">
+              <BaseDialog.Title className="text-heading-sm text-balance">{title}</BaseDialog.Title>
               {description ? (
-                <BaseDialog.Description className="text-body text-label-2">
+                <BaseDialog.Description className="text-body text-pretty text-label-2">
                   {description}
                 </BaseDialog.Description>
               ) : null}
             </div>
             {children ? <div className="text-body">{children}</div> : null}
             {footer ? (
-              <div className="flex flex-wrap items-center justify-end gap-2 pt-1">{footer}</div>
+              <div className="flex flex-wrap items-center justify-end gap-3">{footer}</div>
             ) : null}
           </BaseDialog.Popup>
         </BaseDialog.Viewport>

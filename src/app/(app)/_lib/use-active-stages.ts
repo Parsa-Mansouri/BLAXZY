@@ -1,10 +1,19 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import type { StageListItem } from "@/ui";
 
-/** Marks the stage whose route is being shown, so the list highlights where the user is. */
-export function useActiveStages(stages: StageListItem[]): StageListItem[] {
+/**
+ * Marks the stage whose screen is being shown: its own route or any page below it, so
+ * `/projects/x/pre-production/characters` still marks Pre-production.
+ */
+export function useActiveStages<T extends { href?: string }>(
+  stages: T[],
+): (T & { active: boolean })[] {
   const pathname = usePathname();
-  return stages.map((stage) => ({ ...stage, active: stage.href === pathname }));
+  return stages.map((stage) => ({
+    ...stage,
+    active: Boolean(
+      stage.href && (pathname === stage.href || pathname.startsWith(`${stage.href}/`)),
+    ),
+  }));
 }

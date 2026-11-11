@@ -1,15 +1,30 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Courier_Prime, Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "./_components/providers";
 import "./globals.css";
 
-// Inter only stands in where San Francisco is not installed (the system stack comes first).
-// The optical-size axis gives it SF's Text/Display split: tighter, finer letters at large sizes.
-const inter = Inter({
-  variable: "--font-inter",
+// Geist for the whole interface.
+const geist = Geist({
+  variable: "--font-geist",
   subsets: ["latin"],
-  axes: ["opsz"],
   display: "swap",
+});
+
+// Geist Mono for real status lines only (a dot plus a few words).
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
+});
+
+// Courier Prime for screenplay text on the paper sheet. Not preloaded: only script pages use it.
+const courierPrime = Courier_Prime({
+  variable: "--font-courier-prime",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -24,7 +39,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${geist.variable} ${geistMono.variable} ${courierPrime.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

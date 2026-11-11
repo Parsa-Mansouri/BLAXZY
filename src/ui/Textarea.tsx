@@ -18,7 +18,7 @@ export interface TextareaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaE
   minRows?: number;
   /** Stops growing after this many rows and scrolls. */
   maxRows?: number;
-  /** `script` sets the larger 15/22 script text style. */
+  /** `reading` 15/22 (default). `script` sets the larger 17/24 text for long free answers. */
   textStyle?: "reading" | "script";
 }
 
@@ -63,7 +63,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   }, [resize]);
 
   return (
-    <div className={cn(fieldSurface, "items-stretch rounded-field px-3", className)}>
+    <div className={cn(fieldSurface, "items-stretch rounded-field px-3.5", className)}>
       <textarea
         ref={mergeRefs(ref, inner)}
         {...control}
@@ -75,8 +75,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
           resize();
         }}
         className={cn(
-          "min-w-0 flex-1 resize-none bg-transparent py-2 text-label outline-none disabled:cursor-not-allowed",
-          textStyle === "script" ? "text-script" : "text-reading",
+          "min-w-0 flex-1 resize-none bg-transparent py-2.5 text-label outline-none disabled:cursor-not-allowed",
+          textStyle === "script" ? "text-row leading-6 font-regular" : "text-body",
         )}
       />
     </div>

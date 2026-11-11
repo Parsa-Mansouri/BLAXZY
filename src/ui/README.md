@@ -1,56 +1,63 @@
 # UI kit
 
-Presentational components in Apple's design language (dark, macOS media-app proportions), built
-on Base UI primitives. They never import from `@/server/**`. Import everything from `@/ui`. Review
-the whole kit at `/dev/ui` (development only).
+Presentational components for BLAXZY's pinned design language: a true black ground, white as the
+only accent, colour only for status, Geist type, one motion curve. Built on Base UI primitives;
+never imports from `@/server/**`. Import everything from `@/ui`. Review the whole kit at
+`/dev/ui` (development only). The approved mockups are the source of truth for sizes and motion.
 
 ## Tokens
 
-Every visual decision lives in `src/app/globals.css`. Tailwind's default palette, type scale,
-radii and shadows are cleared, so only these names exist. There is one theme: dark.
+Every visual decision lives in `src/app/globals.css`. Tailwind's default palette, type scale and
+radii are cleared, so only these names exist. Names marked legacy still work for older screens;
+new code uses the canonical names.
 
-| Group       | Tailwind names                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Backgrounds | `bg-ground` (#000, content), `bg-elevated` (#1C1C1E, sidebar, grouped lists, artwork), `bg-elevated-2` (#2C2C2E, menus, popovers, sheets), `bg-elevated-3`, `bg-scrim`                                                                                                                                                                                                                                                    |
-| Labels      | `text-label` (primary), `text-label-2` (secondary, AA on every ground), `text-label-3` / `text-label-4` (decoration and disabled only)                                                                                                                                                                                                                                                                                    |
-| Separators  | `bg-separator`, `bg-separator-opaque`; utilities `hairline-t`, `hairline-b`, `hairline-r` (1px, 0.5px on 2x screens)                                                                                                                                                                                                                                                                                                      |
-| Fills       | `bg-fill`, `bg-fill-2`, `bg-fill-3`, `bg-fill-4` (control backgrounds), `bg-segment-selected`                                                                                                                                                                                                                                                                                                                             |
-| Accent      | `bg-accent` / `text-on-accent`: the one pair reserved for the brand colour (white and black today). `bg-selection` is the white-tint selection.                                                                                                                                                                                                                                                                           |
-| Status      | `red`, `green`, `orange`, `yellow` (status only), `text-on-red`                                                                                                                                                                                                                                                                                                                                                           |
-| Type        | `text-large-title` 26/32, `text-title-1` 22/26, `text-title-2` 17/22, `text-title-3` 15/20, `text-headline` 13/16, `text-body` 13/16, `text-reading` 14/20, `text-script` 15/22, `text-callout` 12/15, `text-subheadline` 11/14, `text-footnote` 10/13, `text-wordmark`. Each carries its line height, tracking and weight. On touch screens and below 640px the iOS scale replaces them (Body 17/22, Large Title 34/41). |
-| Radii       | `rounded-control` 6, `rounded-control-inner` 4, `rounded-field` 10, `rounded-group` 10, `rounded-artwork` 12, `rounded-popover` 12, `rounded-sheet` 14, `rounded-capsule`                                                                                                                                                                                                                                                 |
-| Depth       | `shadow-float`: floating surfaces only (menus, popovers, sheets, toasts)                                                                                                                                                                                                                                                                                                                                                  |
-| Sizes       | `h-(--control-h)` 28, `h-(--control-h-lg)` 32, `--row-h` 36, `--row-h-lg` 40, `--sidebar-row-h` 28, `--menu-row-h` 24 (all 44 on touch), `--icon` 16, `--sidebar-w` 240, `--toolbar-h` 52, `px-(--content-x)` 28 / 16 on phones, `max-w-(--measure)`, `--form-w`, `--settings-w`                                                                                                                                          |
-| Motion      | `duration-(--dur-fast\|dur-base\|dur-slide-motion)`, `ease-out`, `ease-spring`; utilities `popup-motion` and `fade-motion`. Reduced motion keeps fades and removes movement.                                                                                                                                                                                                                                              |
-| Layers      | `z-(--z-toolbar)`, `z-(--z-drawer)`, `z-(--z-overlay)`, `z-(--z-modal)`, `z-(--z-popover)`, `z-(--z-toast)`, `z-(--z-tooltip)`                                                                                                                                                                                                                                                                                            |
-| Focus       | `focus-ring` (keyboard focus: 2px white at 70%, 2px offset), `focus-ring-within` for wrappers                                                                                                                                                                                                                                                                                                                             |
+| Group   | Tailwind names                                                                                                                                                                                                                                                                             |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Grounds | `bg-ground` #000, `bg-sidebar` #0f0f11, `bg-hero` #0a0a0b, `bg-elevated` #141416 (tiles, fields), `bg-elevated-2` #1c1c1e (cover panels, menus, sheets), `bg-selected` #1f1f22, `bg-scrim`, `bg-paper` / `text-ink`                                                                        |
+| Labels  | `text-label` #f2f2f3, `text-label-2` #c9c9ce (secondary, descriptions, inactive nav), `text-label-3` #9a9aa0 (placeholders in empty tiles, disabled), `text-label-4` (decoration only)                                                                                                     |
+| Lines   | `border-separator` #1f1f21 (hairlines), `border-separator-opaque` #3a3a3c (fields, dashed tiles), `border-outline` #48484a (outlined buttons), `border-outline-quiet` #2e2e31, `border-outline-hero`                                                                                       |
+| Fills   | `bg-fill` #343437 (dark button), `bg-fill-2`, `bg-fill-3`, `bg-fill-4` (hover)                                                                                                                                                                                                             |
+| Accent  | `bg-accent` / `text-on-accent` (white / black), `text-on-accent-2` (secondary text on white)                                                                                                                                                                                               |
+| Status  | `done` #30d158, `waiting` #ff9f0a, `working` #8e8e93, `failed` #ff453a (also `green`, `orange`, `grey`, `red`); stage strip `stage-done`, `stage-todo`                                                                                                                                     |
+| Type    | `text-display` 48, `text-heading` 34, `text-heading-sm` 28, `text-section` 18, `text-row` 17, `text-body` 15/22, `text-secondary` 14/21, `text-meta` 13/18, `text-script` 16/24, `text-hero-title`, `text-wordmark`; `caps-label` (13px capitals); `font-sans`, `font-mono`, `font-script` |
+| Radii   | `rounded-row` 10, `rounded-tile` 12, `rounded-card` 14, `rounded-panel` 16, `rounded-block` 20, `rounded-paper` 6, `rounded-capsule`                                                                                                                                                       |
+| Sizes   | `h-(--btn-sm)` 36, `h-(--btn)` 40, `h-(--btn-lg)` 48, `--toolbar-h` 64, `px-(--content-x)` 40 / 16 on phones, `--sidebar-w`, `max-w-(--measure)`                                                                                                                                           |
+| Motion  | curve `ease-out` (= cubic-bezier(.32,.72,0,1)); `--dur-press` 150, `--dur-swap` 250, `--dur-tab` 300, `--dur-cover` 360, `--dur-enter` 400, `--dur-wipe` 500, `--dur-rise` 650                                                                                                             |
+| Legacy  | type `large-title`, `title-1..3`, `headline`, `reading`, `callout`, `subheadline`, `footnote`; radii `control`, `field`, `group`, `artwork`, `popover`, `sheet`; `bg-selection`                                                                                                            |
 
-Never hard-code a colour or size in a component. `cn()` knows the token names above, so
-`cn("text-body", "text-label")` keeps both.
+## Motion classes
+
+`rise-mask` + `rise` (title out of its mask), `rule-in` (the 48x3 rule), `in-1` / `in-2` / `in-3`
+(260 / 340 / 420ms entrances), `enter` with `stagger(i)` (repeated items, 40ms steps),
+`swap-in` / `SwapFade` (250ms after a state swap), `press` (scale .98), `row-wipe` (selected fill
+wipes in; mark the row with `aria-current` or `data-active`), `cover-host` / `cover-panel`
+(action panel over a picture), `glow-a` / `glow-b` (Home hero only). Under reduced motion every
+animation and transition finishes at once.
 
 ## Rules of the language
 
-- No boxes. Content sits on the black ground, separated by space and hairlines. The only
-  containers are `GroupedList`, artwork (`TitleCard`) and floating surfaces.
-- One `prominent` button (white capsule) per screen at most. Everything else is `standard`,
-  `plain` or `destructive`. `destructive-confirm` (red fill) only inside an `Alert`.
-- Title Case for buttons, menu items and titles; sentence case with a full stop for help text.
+- Exactly three levels per screen. The main option is bigger and different (`FeatureBlock`, the
+  one `primary` button); alternatives stay present but quieter (`QuietTile`, outlined buttons).
+- One white button per screen. Buttons are Title Case capsules.
+- Nothing under 13px. Secondary text is `text-label-2`. Geist Mono only in `StatusLine`.
+- Fixed words in titles, nav, stages and tabs are capitals; user-written names keep their case
+  (`PageHeader keepCase`).
+- Never "x of y" totals for assets, shots or sheets. Never fake a generated image: use
+  `PicturePlaceholder` or the "Example image" in `OptionTile`.
 
 ## Components
 
-- Window: `SplitView` (sidebar + content, collapse with Ctrl/Cmd+\, cookie-persisted, drawer
-  below 960px), `SidebarToggle`, `SidebarHeader` / `SidebarBody` / `SidebarSection` /
-  `SidebarItem` / `SidebarFooter`, `Toolbar`, `StageList`, `TitleCard`.
-- Controls: `Button`, `IconButton`, `Field`, `Input`, `Textarea`, `Select` (pop-up button),
-  `Menu` / `MenuItem` / `MenuSeparator` / `MenuLabel`, `SegmentedControl`, `ChoiceCards` (option
-  thumbnails), `DatePicker`, `Calendar`, `DurationInput`.
-- Lists: `GroupedList`, `GroupedListRow`, `GroupedListField` (form row with a bare input),
-  `GroupedListButton`.
-- Overlays: `Sheet` (also exported as `Dialog`), `Alert`, `Popover`, `Tooltip`, toasts.
-- Status: `Badge`, `Spinner`, `ProgressBar`, `Skeleton`.
-
-## Hints
-
-Three levels, quiet to loud: `Hint` (footnote text), `HelpTip` (the round "?" button that opens a
-popover), `Tip` (a first-run, TipKit-style arrowed popover; show one at a time). `useDismissed(key)`
-persists a dismissal in `localStorage` (SSR-safe; `dismissed` is `true` until the client knows).
+- Window: `SplitView`, `SidebarToggle`, `SidebarHeader` / `SidebarAction` / `SidebarBody` /
+  `SidebarSection` / `SidebarItem` / `SidebarFooter`, `Toolbar`, `StageStrip`, `BackControl`.
+- Page: `PageHeader`, `FocusLayout`, `SelectRow`, `Tabs`, `SwapFade`, `stagger`.
+- Pictures and options: `PictureTile`, `PicturePlaceholder`, `TitleCard`, `OptionTile`,
+  `OptionRow`, `FeatureBlock`, `QuietTile`.
+- Text: `PaperSheet`, `ScreenplayAction`, `ScreenplayDialogue`.
+- Controls: `Button` (`primary`, `outlined`, `dark`, `plain`, `destructive`; `small`, `regular`,
+  `large`), `IconButton`, `Field`, `Input` (`form`, `toolbar`, `line`), `Textarea`, `Select`,
+  `Menu`, `SegmentedControl`, `ChoiceCards`, `DatePicker`, `Calendar`, `DurationInput`.
+- Lists: `GroupedList`, `GroupedListRow`, `GroupedListField`, `GroupedListButton`.
+- Overlays: `Sheet` (also `Dialog`), `Alert`, `Popover`, `Tooltip`, toasts.
+- Status: `StatusLine`, `StatusDot`, `Badge`, `Spinner`, `ProgressBar`, `Skeleton`, `StageList`
+  (legacy vertical list).
+- Help: `Hint`, `HelpTip`, `Tip`, `useDismissed`.

@@ -8,41 +8,63 @@ import { Spinner } from "./Spinner";
 import { Tooltip } from "./Tooltip";
 
 /**
- * - `prominent`: white capsule with black text. At most one per screen: the next step.
- * - `standard`: grey fill. Everything else that is a button.
- * - `plain`: text only, for quiet secondary actions.
- * - `destructive`: red text on the standard fill.
+ * Every button is a capsule that presses to 98%.
+ *
+ * - `primary` (also `prominent`): white with black text. ONE per screen: the main step.
+ * - `outlined` (also `standard`): 1px grey outline. The usual secondary action.
+ * - `dark`: filled #343437. A secondary action on a raised surface (cover panels, the hero).
+ * - `plain`: text only in the secondary colour, for quiet actions such as Back or Cancel.
+ * - `destructive`: outlined with red text.
  * - `destructive-confirm`: red fill. Only inside an Alert that confirms a destructive action.
  */
 export type ButtonVariant =
-  "prominent" | "standard" | "plain" | "destructive" | "destructive-confirm";
-export type ButtonSize = "regular" | "large";
+  | "primary"
+  | "prominent"
+  | "outlined"
+  | "standard"
+  | "dark"
+  | "plain"
+  | "destructive"
+  | "destructive-confirm";
+
+/** `small` 36px, `regular` 40px (page header actions), `large` 48px (hero, finish steps). */
+export type ButtonSize = "small" | "regular" | "large";
+
+const primary = "bg-accent text-on-accent font-semibold hover:bg-accent/90";
+const outlined = "border border-outline text-label hover:bg-fill-4";
 
 const variants: Record<ButtonVariant, string> = {
-  prominent:
-    "rounded-capsule bg-accent text-on-accent font-semibold hover:bg-accent/90 active:bg-accent/75",
-  standard: "rounded-control bg-fill-2 text-label hover:bg-fill active:bg-fill",
-  plain: "rounded-control text-label hover:bg-fill-4 active:bg-fill-3",
-  destructive: "rounded-control bg-fill-2 text-red hover:bg-fill active:bg-fill",
-  "destructive-confirm":
-    "rounded-control bg-red text-on-red font-semibold hover:bg-red/90 active:bg-red/75",
+  primary,
+  prominent: primary,
+  outlined,
+  standard: outlined,
+  dark: "bg-fill text-label hover:bg-elevated-3",
+  plain: "text-label-2 hover:text-label",
+  destructive: "border border-outline text-red hover:bg-fill-4",
+  "destructive-confirm": "bg-red text-on-red font-semibold hover:bg-red/90",
 };
 
 const sizes: Record<ButtonSize, string> = {
-  regular: "h-(--control-h) gap-1.5 px-3",
-  large: "h-(--control-h-lg) gap-2 px-4",
+  small: "h-(--btn-sm) gap-1.5 px-4 text-secondary",
+  regular: "h-(--btn) gap-2 px-5 text-body",
+  large: "h-(--btn-lg) gap-2 px-7 text-[16px] leading-[22px]",
 };
 
-const capsulePadding: Record<ButtonSize, string> = { regular: "px-4", large: "px-5" };
+/** Plain buttons keep a small inset so their text lines up with the content edge. */
+const plainSizes: Record<ButtonSize, string> = {
+  small: "px-1",
+  regular: "px-1",
+  large: "px-2",
+};
 
 const iconSizes: Record<ButtonSize, string> = {
-  regular: "size-(--control-h)",
-  large: "size-(--control-h-lg)",
+  small: "size-8",
+  regular: "size-(--btn-sm)",
+  large: "size-11",
 };
 
 const base =
-  "focus-ring relative inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap text-body font-medium " +
-  "transition-colors duration-(--dur-fast) " +
+  "press focus-ring relative inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap rounded-capsule font-medium " +
   "aria-disabled:pointer-events-none aria-disabled:opacity-40 " +
   "[&_svg]:size-(--icon) [&_svg]:shrink-0";
 
@@ -66,7 +88,7 @@ interface InnerProps extends ButtonProps {
 
 function useButton(
   {
-    variant = "standard",
+    variant = "outlined",
     size = "regular",
     loading = false,
     leadingIcon,
@@ -93,7 +115,8 @@ function useButton(
         base,
         variants[variant],
         iconOnly ? iconSizes[size] : sizes[size],
-        !iconOnly && variant === "prominent" && capsulePadding[size],
+        !iconOnly && variant === "plain" && plainSizes[size],
+        iconOnly && variant === "plain" && "hover:bg-fill-4",
         className,
       ),
       "aria-disabled": inactive || undefined,
@@ -150,7 +173,7 @@ export interface IconButtonProps extends Omit<
   tooltipSide?: "top" | "bottom" | "left" | "right";
 }
 
-/** A square, icon-only button. Plain by default. */
+/** A round, icon-only button. Plain by default; `dark` gives the filled round button. */
 export const IconButton = forwardRef<HTMLElement, IconButtonProps>(function IconButton(
   { label, icon, tooltip = true, shortcut, tooltipSide, variant = "plain", ...rest },
   ref,

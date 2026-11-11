@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { stageLabel, stageStep, stageViews } from "@/lib/stages";
-import { Toolbar } from "@/ui";
+import { stageLabel, stageViews } from "@/lib/stages";
 import { loadProject } from "./_lib/load-project";
 import { LockedNotice } from "./_components/locked-notice";
-import { StageIndicator } from "./_components/stage-indicator";
+import { ProjectChrome } from "./_components/project-chrome";
 
 export async function generateMetadata({
   params,
@@ -15,6 +14,10 @@ export async function generateMetadata({
   return { title: `${project.title} · BLAXZY` };
 }
 
+/**
+ * Inside a project: the toolbar (project name or back control, and the four-stage strip), then
+ * the page. Pages start with a PageHeader, which holds the h1.
+ */
 export default async function ProjectLayout({
   children,
   params,
@@ -30,16 +33,13 @@ export default async function ProjectLayout({
     status: stage.status,
     href: stage.href,
     lockedHint: stage.lockedHint,
+    grow: stage.key === "pre_production" ? 1.5 : 1,
   }));
 
   return (
-    <>
-      <Toolbar
-        title={project.title}
-        leading={<StageIndicator step={stageStep(project.stage)} stages={stages} />}
-      />
+    <ProjectChrome projectId={project.id} title={project.title} stages={stages}>
       <LockedNotice stageLabel={stageLabel(project.stage)} />
-      <div className="px-(--content-x) pt-4 pb-16 shell:pt-8">{children}</div>
-    </>
+      <div className="px-(--content-x) pt-8 pb-18">{children}</div>
+    </ProjectChrome>
   );
 }

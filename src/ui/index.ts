@@ -3,14 +3,47 @@ export { cn } from "./cn";
 // Window structure
 export { SplitView, SidebarToggle, useSplitView } from "./SplitView";
 export type { SplitViewProps } from "./SplitView";
-export { SidebarHeader, SidebarBody, SidebarFooter, SidebarSection, SidebarItem } from "./Sidebar";
-export type { SidebarItemProps, SidebarSectionProps } from "./Sidebar";
+export {
+  SidebarHeader,
+  SidebarBody,
+  SidebarFooter,
+  SidebarSection,
+  SidebarItem,
+  SidebarAction,
+} from "./Sidebar";
+export type { SidebarActionProps, SidebarItemProps, SidebarSectionProps } from "./Sidebar";
 export { Toolbar, useScrolled } from "./Toolbar";
 export type { ToolbarProps } from "./Toolbar";
 export { StageList } from "./StageList";
 export type { StageListItem, StageListProps, StageStatus } from "./StageList";
+export { StageStrip } from "./StageStrip";
+export type { StageStripItem, StageStripProps } from "./StageStrip";
+export { BackControl } from "./BackControl";
+export type { BackControlProps } from "./BackControl";
 export { TitleCard } from "./TitleCard";
 export type { TitleCardProps } from "./TitleCard";
+
+// Page structure and motion
+export { PageHeader } from "./PageHeader";
+export type { PageHeaderProps } from "./PageHeader";
+export { FocusLayout } from "./FocusLayout";
+export type { FocusLayoutProps } from "./FocusLayout";
+export { Tabs } from "./Tabs";
+export type { TabItem, TabsProps } from "./Tabs";
+export { stagger, SwapFade } from "./motion";
+export type { SwapFadeProps } from "./motion";
+
+// Pictures, options and blocks
+export { PictureTile, PicturePlaceholder } from "./PictureTile";
+export type { PictureAspect, PictureTileProps, PicturePlaceholderProps } from "./PictureTile";
+export { OptionTile, OptionRow } from "./OptionTile";
+export type { OptionRowProps, OptionTileProps } from "./OptionTile";
+export { FeatureBlock, QuietTile } from "./FeatureBlock";
+export type { FeatureBlockProps, QuietTileProps } from "./FeatureBlock";
+export { SelectRow } from "./SelectRow";
+export type { SelectRowProps } from "./SelectRow";
+export { PaperSheet, ScreenplayAction, ScreenplayDialogue } from "./PaperSheet";
+export type { PaperSheetProps } from "./PaperSheet";
 
 // Controls
 export { Button, IconButton } from "./Button";
@@ -59,6 +92,8 @@ export { ToastProvider, useToast } from "./Toast";
 export type { ToastApi, ToastKind, ToastOptions } from "./Toast";
 
 // Status
+export { StatusLine, StatusDot } from "./StatusLine";
+export type { StatusLineProps, StatusTone } from "./StatusLine";
 export { Badge } from "./Badge";
 export type { BadgeProps, BadgeTone } from "./Badge";
 export { Spinner } from "./Spinner";

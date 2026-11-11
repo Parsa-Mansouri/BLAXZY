@@ -89,9 +89,9 @@ export function Field({
         inline: false,
       }}
     >
-      <div className={cn("flex min-w-0 flex-col gap-1.5", className)}>
+      <div className={cn("flex min-w-0 flex-col gap-2", className)}>
         <div className="flex items-center gap-1.5">
-          <label htmlFor={id} className="text-body text-label">
+          <label htmlFor={id} className="text-secondary text-label-2">
             {label}
             {optional && !required ? <span className="ml-1.5 text-label-2">Optional</span> : null}
           </label>
@@ -99,12 +99,12 @@ export function Field({
         </div>
         {children}
         {error ? (
-          <p id={errorId} role="alert" className="text-callout text-red">
+          <p id={errorId} role="alert" className="text-secondary text-red">
             {error}
           </p>
         ) : null}
         {hint ? (
-          <p id={hintId} className="text-callout text-label-2">
+          <p id={hintId} className="text-secondary text-label-2">
             {hint}
           </p>
         ) : null}

@@ -74,7 +74,7 @@ export interface SplitViewProps {
 const ONE_YEAR = 60 * 60 * 24 * 365;
 
 /**
- * The two-pane window: a solid sidebar and the content. On wide screens the sidebar collapses
+ * The two-pane window: a floating rounded sidebar and the content. On wide screens the sidebar collapses
  * with one slide while the content reflows; below 960px it opens as a drawer over dimmed content.
  * Ctrl/Cmd + \ toggles it.
  */
@@ -179,7 +179,7 @@ export function SplitView({
             // Narrow: an overlay drawer.
             "fixed inset-y-0 left-0 z-(--z-drawer) w-(--sidebar-w) -translate-x-full",
             "transition-transform duration-(--dur-slide-motion) ease-spring",
-            "group-data-[drawer=open]/shell:translate-x-0 group-data-[drawer=open]/shell:shadow-float",
+            "group-data-[drawer=open]/shell:translate-x-0",
             // Wide: in the flow, collapsing to zero width while the content reflows.
             "shell:sticky shell:top-0 shell:z-auto shell:h-dvh shell:shrink-0 shell:translate-x-0 shell:overflow-hidden",
             "shell:transition-[width] shell:group-data-[sidebar=collapsed]/shell:w-0",
@@ -191,12 +191,15 @@ export function SplitView({
             aria-label={sidebarLabel}
             inert={!sidebarVisible}
             className={cn(
-              "flex h-full w-(--sidebar-w) flex-col bg-elevated hairline-r",
+              // A floating rounded panel: 12px gutter on every side but the content side.
+              "flex h-full w-(--sidebar-w) flex-col p-3 shell:pr-0",
               "transition-transform duration-(--dur-slide-motion) ease-spring",
               "shell:group-data-[sidebar=collapsed]/shell:-translate-x-full",
             )}
           >
-            {sidebar}
+            <div className="flex min-h-0 flex-1 flex-col gap-6 rounded-panel bg-sidebar px-2.5 pt-5 pb-3">
+              {sidebar}
+            </div>
           </aside>
         </div>
         <div className="flex min-w-0 flex-1 flex-col" inert={!wide && drawerOpen}>

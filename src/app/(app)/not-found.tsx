@@ -9,13 +9,13 @@ export const metadata: Metadata = { title: "Page Not Found · BLAXZY" };
 export default function AppNotFound() {
   return (
     <>
-      <Toolbar title="Not Found" />
-      <div className="px-(--content-x) pt-4 pb-16 shell:pt-8">
+      <Toolbar />
+      <div className="px-(--content-x) pt-8 pb-18">
         <NotFoundView
-          heading="h2"
+          heading="h1"
           message="This page does not exist, or it is not in your account."
           actions={
-            <Button variant="prominent" size="large" render={<Link href="/projects" />}>
+            <Button variant="primary" size="large" render={<Link href="/projects" />}>
               Projects
             </Button>
           }

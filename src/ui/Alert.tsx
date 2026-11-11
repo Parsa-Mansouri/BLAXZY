@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { AlertDialog } from "@base-ui/react/alert-dialog";
 import { Button } from "./Button";
-import { cn } from "./cn";
 
 export interface AlertProps {
   open: boolean;
@@ -47,36 +46,28 @@ export function Alert({
       <AlertDialog.Portal>
         <AlertDialog.Backdrop className="fixed inset-0 z-(--z-overlay) bg-scrim fade-motion" />
         <AlertDialog.Viewport className="fixed inset-0 z-(--z-modal) flex items-center justify-center p-4">
-          <AlertDialog.Popup
-            className={cn(
-              "flex w-full max-w-72 popup-motion flex-col gap-4 rounded-sheet bg-elevated-2 p-4 text-center text-label shadow-float outline-none",
-            )}
-          >
-            <div className="flex flex-col gap-1.5 px-1 pt-1">
-              <AlertDialog.Title className="text-headline">{title}</AlertDialog.Title>
+          <AlertDialog.Popup className="flex w-full max-w-sm popup-motion flex-col gap-6 rounded-block bg-elevated-2 p-6 text-label shadow-float outline-none">
+            <div className="flex flex-col gap-2">
+              <AlertDialog.Title className="text-section text-balance">{title}</AlertDialog.Title>
               {message ? (
-                <AlertDialog.Description className="text-callout text-label-2">
+                <AlertDialog.Description className="text-body text-pretty text-label-2">
                   {message}
                 </AlertDialog.Description>
               ) : null}
               {error ? (
-                <p role="alert" className="text-callout text-red">
+                <p role="alert" className="text-secondary text-red">
                   {error}
                 </p>
               ) : null}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <AlertDialog.Close
-                render={<Button variant="standard" disabled={loading} />}
-                className="w-full"
-              >
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <AlertDialog.Close render={<Button variant="plain" disabled={loading} />}>
                 {cancelLabel}
               </AlertDialog.Close>
               <Button
-                variant={destructive ? "destructive-confirm" : "prominent"}
+                variant={destructive ? "destructive-confirm" : "primary"}
                 onClick={onConfirm}
                 loading={loading}
-                className="w-full rounded-control"
               >
                 {confirmLabel}
               </Button>

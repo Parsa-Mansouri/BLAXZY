@@ -3,127 +3,125 @@
 /*
   BLAXZY design tokens.
 
-  One dark world, modelled on Apple's dark semantic colours and macOS text styles. This is the
-  single file to edit when the brand identity arrives: replace --accent / --on-accent and every
-  prominent control, selection ring and focus ring follows.
+  True black ground, white as the only accent, colour only for status. Geist for the interface,
+  Geist Mono for real status lines only, Courier Prime for screenplay text on a paper sheet.
+  One curve for every movement: cubic-bezier(.32,.72,0,1).
 
   Components only use the Tailwind names mapped in the @theme block below. Tailwind's default
   palette, type scale and radii are cleared, so a raw colour or size cannot sneak in.
+  Names marked "legacy" still work for older screens; new code uses the canonical names.
 */
 
 :root {
   color-scheme: dark;
 
-  /* ---------- Backgrounds ---------- */
+  /* ---------- Grounds and surfaces ---------- */
   --ground: #000000; /* content */
-  --elevated: #1c1c1e; /* sidebar, grouped lists, artwork */
-  --elevated-2: #2c2c2e; /* popovers, sheets, menus */
-  --elevated-3: #3a3a3c; /* raised inside a floating surface */
-  --scrim: rgb(0 0 0 / 0.5); /* behind sheets and the sidebar drawer */
+  --sidebar: #0f0f11; /* the floating sidebar panel */
+  --hero: #0a0a0b; /* the Home hero block */
+  --elevated: #141416; /* tiles, quiet blocks, fields, grouped lists */
+  --elevated-2: #1c1c1e; /* raised: cover panels, menus, popovers, sheets */
+  --elevated-3: #2c2c2e; /* raised inside a floating surface */
+  --selected: #1f1f22; /* the selected row fill, round icon buttons */
+  --scrim: rgb(0 0 0 / 0.6); /* behind sheets and the sidebar drawer */
+
+  /* ---------- Paper: screenplay text only ---------- */
+  --paper: #efe7d3;
+  --ink: #1b1a17;
 
   /* ---------- Labels ---------- */
-  --label: #ffffff;
-  --label-2: rgb(235 235 245 / 0.6); /* secondary: still meets AA on every ground */
-  --label-3: rgb(235 235 245 / 0.3); /* tertiary: decoration and disabled only */
-  --label-4: rgb(235 235 245 / 0.18); /* quaternary: decoration only */
+  --label: #f2f2f3; /* primary text */
+  --label-2: #c9c9ce; /* secondary text, inactive nav, descriptions */
+  --label-3: #9a9aa0; /* placeholder labels in empty tiles, disabled controls, placeholders */
+  --label-4: #6e6e73; /* decoration only (done stage bar) */
 
-  /* ---------- Separators ---------- */
-  --separator: rgb(84 84 88 / 0.65);
-  --separator-opaque: #38383a;
+  /* ---------- Lines ---------- */
+  --separator: #1f1f21; /* hairlines between rows and under tab strips */
+  --separator-opaque: #3a3a3c; /* field borders, dashed empty tiles */
+  --outline: #48484a; /* outlined buttons */
+  --outline-quiet: #2e2e31; /* the sidebar's New Project button, quiet field borders */
+  --outline-hero: rgb(255 255 255 / 0.28); /* outlined button on the hero */
   --hairline: 1px;
 
   /* ---------- Fills (control backgrounds) ---------- */
-  --fill: rgb(120 120 128 / 0.36);
-  --fill-2: rgb(120 120 128 / 0.32);
-  --fill-3: rgb(120 120 128 / 0.24);
-  --fill-4: rgb(120 120 128 / 0.18);
-  --segment-selected: #636366; /* the lifted segment in a segmented control */
+  --fill: #343437; /* the dark button */
+  --fill-2: #2a2a2d; /* avatar, pressed dark button */
+  --fill-3: #1f1f22; /* round icon buttons, selected rows */
+  --fill-4: #1a1a1c; /* hover on quiet rows, the back control */
+  --segment-selected: #3a3a3c;
 
   /* ---------- Accent: the one token pair reserved for the brand colour ---------- */
   --accent: #ffffff;
   --on-accent: #000000;
-  --selection: rgb(255 255 255 / 0.12); /* selected rows, highlighted menu items */
-  --text-highlight: rgb(235 235 245 / 0.3); /* selected text */
+  --on-accent-2: #3a3a3c; /* secondary text on a white block */
+  --selection: #1f1f22; /* legacy name for the selected-row fill */
+  --text-highlight: rgb(255 255 255 / 0.24); /* selected text */
   --focus: rgb(255 255 255 / 0.7);
 
   /* ---------- Status only ---------- */
+  --done: #30d158;
+  --waiting: #ff9f0a;
+  --working: #8e8e93;
+  --failed: #ff453a;
   --red: #ff453a;
   --green: #30d158;
   --orange: #ff9f0a;
   --yellow: #ffd60a;
+  --grey: #8e8e93;
   --on-red: #ffffff;
 
-  /* ---------- Depth: only floating surfaces carry a shadow ---------- */
+  /* ---------- Stage strip ---------- */
+  --stage-done: #6e6e73;
+  --stage-todo: #2a2a2c;
+
+  /* ---------- Depth: only floating surfaces and the paper sheet carry a shadow ---------- */
   --float-shadow:
-    0 0 0 0.5px rgb(255 255 255 / 0.1), 0 12px 36px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.35);
+    0 0 0 1px rgb(255 255 255 / 0.06), 0 16px 48px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.4);
+  --paper-shadow: 0 24px 60px rgb(0 0 0 / 0.5);
 
   /* ---------- Type ---------- */
-  --font-stack:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", var(--font-inter),
-    "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-
-  /* macOS text styles: size / line height / tracking. Weights live in the @theme block. */
-  --ts-large-title: 26px;
-  --ts-large-title-lh: 32px;
-  --ts-large-title-tr: 0px;
-  --ts-title-1: 22px;
-  --ts-title-1-lh: 26px;
-  --ts-title-1-tr: -0.3px;
-  --ts-title-2: 17px;
-  --ts-title-2-lh: 22px;
-  --ts-title-2-tr: -0.4px;
-  --ts-title-3: 15px;
-  --ts-title-3-lh: 20px;
-  --ts-title-3-tr: -0.2px;
-  --ts-headline: 13px;
-  --ts-headline-lh: 16px;
-  --ts-headline-tr: -0.08px;
-  --ts-body: 13px;
-  --ts-body-lh: 16px;
-  --ts-body-tr: -0.08px;
-  --ts-reading: 14px; /* multi-line reading text */
-  --ts-reading-lh: 20px;
-  --ts-reading-tr: -0.15px;
-  --ts-script: 15px; /* script text */
-  --ts-script-lh: 22px;
-  --ts-script-tr: -0.2px;
-  --ts-callout: 12px;
-  --ts-callout-lh: 15px;
-  --ts-callout-tr: 0px;
-  --ts-subheadline: 11px;
-  --ts-subheadline-lh: 14px;
-  --ts-subheadline-tr: 0.06px;
-  --ts-footnote: 10px;
-  --ts-footnote-lh: 13px;
-  --ts-footnote-tr: 0.12px;
-  --ts-wordmark: 18px;
-  --ts-wordmark-lh: 24px;
+  --font-stack: var(--font-geist), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono-stack: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-script-stack: var(--font-courier-prime), "Courier New", Courier, monospace;
 
   /* ---------- Sizes ---------- */
-  --control-h: 28px; /* regular control */
-  --control-h-lg: 32px; /* large control */
-  --row-h: 36px; /* grouped list row */
-  --row-h-lg: 40px; /* grouped form row on sign-in pages */
-  --sidebar-row-h: 28px;
-  --menu-row-h: 24px;
+  --btn-sm: 36px;
+  --btn: 40px;
+  --btn-lg: 48px;
+  --control-h: 36px; /* small controls (legacy name) */
+  --control-h-lg: 44px; /* form fields (legacy name) */
+  --row-h: 44px;
+  --row-h-lg: 48px;
+  --sidebar-row-h: 40px;
+  --menu-row-h: 36px;
   --icon: 16px;
   --icon-sm: 14px;
-  --avatar: 22px;
-  --thumb-w: 160px; /* option thumbnail width */
-  --sidebar-w: 240px;
-  --toolbar-h: 52px;
-  --content-x: 28px;
+  --avatar: 24px;
+  --thumb-w: 200px; /* option tile width */
+  --sidebar-w: 260px; /* the floating panel plus its 12px gutter */
+  --toolbar-h: 64px;
+  --content-x: 40px;
   --measure: 68ch;
-  --form-w: 360px;
-  --settings-w: 680px;
+  --form-w: 400px;
+  --settings-w: 640px;
 
   /* ---------- Motion ---------- */
-  --dur-fast: 120ms;
-  --dur-base: 200ms;
-  --dur-slide: 250ms;
-  --dur-move: 1; /* multiplier: 0 under reduced motion removes movement, fades remain */
-  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --motion-spring: cubic-bezier(0.32, 0.72, 0, 1); /* close to a critically damped spring */
+  --ease-curve: cubic-bezier(0.32, 0.72, 0, 1); /* the only curve */
+  --dur-press: 150ms; /* button press, colour changes */
+  --dur-swap: 250ms; /* state swaps replay a fade-in */
+  --dur-tab: 300ms; /* the tab underline slide */
+  --dur-cover: 360ms; /* a picture tile's action panel */
+  --dur-enter: 400ms; /* page-in for regions and repeated items */
+  --dur-wipe: 500ms; /* the title rule and selected-row highlight */
+  --dur-rise: 650ms; /* the page title */
+  --stagger-step: 40ms;
+  /* legacy names */
+  --dur-fast: var(--dur-press);
+  --dur-base: var(--dur-swap);
+  --dur-slide: var(--dur-tab);
+  --dur-move: 1;
+  --motion-ease: var(--ease-curve);
+  --motion-spring: var(--ease-curve);
   --dur-slide-motion: calc(var(--dur-slide) * var(--dur-move));
 
   /* ---------- Layers ---------- */
@@ -136,54 +134,14 @@
   --z-tooltip: 500;
 }
 
-/* iOS scale on touch screens and narrow windows: larger text, 44px hit targets. */
-@media (pointer: coarse), (max-width: 40rem) {
+/* Touch screens: 44px hit targets. */
+@media (pointer: coarse) {
   :root {
-    --ts-large-title: 34px;
-    --ts-large-title-lh: 41px;
-    --ts-large-title-tr: 0.4px;
-    --ts-title-1: 28px;
-    --ts-title-1-lh: 34px;
-    --ts-title-1-tr: 0.38px;
-    --ts-title-2: 22px;
-    --ts-title-2-lh: 28px;
-    --ts-title-2-tr: -0.26px;
-    --ts-title-3: 20px;
-    --ts-title-3-lh: 25px;
-    --ts-title-3-tr: -0.45px;
-    --ts-headline: 17px;
-    --ts-headline-lh: 22px;
-    --ts-headline-tr: -0.43px;
-    --ts-body: 17px;
-    --ts-body-lh: 22px;
-    --ts-body-tr: -0.43px;
-    --ts-reading: 17px;
-    --ts-reading-lh: 22px;
-    --ts-reading-tr: -0.43px;
-    --ts-script: 17px;
-    --ts-script-lh: 24px;
-    --ts-script-tr: -0.43px;
-    --ts-callout: 16px;
-    --ts-callout-lh: 21px;
-    --ts-callout-tr: -0.31px;
-    --ts-subheadline: 15px;
-    --ts-subheadline-lh: 20px;
-    --ts-subheadline-tr: -0.23px;
-    --ts-footnote: 13px;
-    --ts-footnote-lh: 18px;
-    --ts-footnote-tr: -0.08px;
-
+    --btn-sm: 44px;
+    --btn: 44px;
     --control-h: 44px;
-    --control-h-lg: 44px;
-    --row-h: 44px;
-    --row-h-lg: 48px;
     --sidebar-row-h: 44px;
     --menu-row-h: 44px;
-    --icon: 20px;
-    --icon-sm: 17px;
-    --avatar: 30px;
-    --thumb-w: 140px;
-    --sidebar-w: 300px;
   }
 }
 
@@ -203,27 +161,28 @@
   }
 }
 
-/* High-density screens get true 0.5px hairlines. */
-@media (min-resolution: 2dppx) {
-  :root {
-    --hairline: 0.5px;
-  }
-}
-
 /* ---------- Tailwind wiring ---------- */
 @theme inline {
   --color-*: initial;
   --color-ground: var(--ground);
+  --color-sidebar: var(--sidebar);
+  --color-hero: var(--hero);
   --color-elevated: var(--elevated);
   --color-elevated-2: var(--elevated-2);
   --color-elevated-3: var(--elevated-3);
+  --color-selected: var(--selected);
   --color-scrim: var(--scrim);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
   --color-label: var(--label);
   --color-label-2: var(--label-2);
   --color-label-3: var(--label-3);
   --color-label-4: var(--label-4);
   --color-separator: var(--separator);
   --color-separator-opaque: var(--separator-opaque);
+  --color-outline: var(--outline);
+  --color-outline-quiet: var(--outline-quiet);
+  --color-outline-hero: var(--outline-hero);
   --color-fill: var(--fill);
   --color-fill-2: var(--fill-2);
   --color-fill-3: var(--fill-3);
@@ -231,60 +190,94 @@
   --color-segment-selected: var(--segment-selected);
   --color-accent: var(--accent);
   --color-on-accent: var(--on-accent);
+  --color-on-accent-2: var(--on-accent-2);
   --color-selection: var(--selection);
   --color-focus: var(--focus);
+  --color-done: var(--done);
+  --color-waiting: var(--waiting);
+  --color-working: var(--working);
+  --color-failed: var(--failed);
   --color-red: var(--red);
   --color-green: var(--green);
   --color-orange: var(--orange);
   --color-yellow: var(--yellow);
+  --color-grey: var(--grey);
   --color-on-red: var(--on-red);
+  --color-stage-done: var(--stage-done);
+  --color-stage-todo: var(--stage-todo);
 
   --font-*: initial;
   --font-sans: var(--font-stack);
+  --font-mono: var(--font-mono-stack);
+  --font-script: var(--font-script-stack);
 
+  /*
+    Type scale: 48 display · 34 / 28 heading (the one task on screen) · 18 section · 17 rows · 15 body
+    · 14 secondary · 13 meta. Nothing smaller than 13px.
+  */
   --text-*: initial;
-  --text-large-title: var(--ts-large-title);
-  --text-large-title--line-height: var(--ts-large-title-lh);
-  --text-large-title--letter-spacing: var(--ts-large-title-tr);
-  --text-large-title--font-weight: 700;
-  --text-title-1: var(--ts-title-1);
-  --text-title-1--line-height: var(--ts-title-1-lh);
-  --text-title-1--letter-spacing: var(--ts-title-1-tr);
-  --text-title-1--font-weight: 700;
-  --text-title-2: var(--ts-title-2);
-  --text-title-2--line-height: var(--ts-title-2-lh);
-  --text-title-2--letter-spacing: var(--ts-title-2-tr);
-  --text-title-2--font-weight: 700;
-  --text-title-3: var(--ts-title-3);
-  --text-title-3--line-height: var(--ts-title-3-lh);
-  --text-title-3--letter-spacing: var(--ts-title-3-tr);
-  --text-title-3--font-weight: 600;
-  --text-headline: var(--ts-headline);
-  --text-headline--line-height: var(--ts-headline-lh);
-  --text-headline--letter-spacing: var(--ts-headline-tr);
-  --text-headline--font-weight: 600;
-  --text-body: var(--ts-body);
-  --text-body--line-height: var(--ts-body-lh);
-  --text-body--letter-spacing: var(--ts-body-tr);
-  --text-reading: var(--ts-reading);
-  --text-reading--line-height: var(--ts-reading-lh);
-  --text-reading--letter-spacing: var(--ts-reading-tr);
-  --text-script: var(--ts-script);
-  --text-script--line-height: var(--ts-script-lh);
-  --text-script--letter-spacing: var(--ts-script-tr);
-  --text-callout: var(--ts-callout);
-  --text-callout--line-height: var(--ts-callout-lh);
-  --text-callout--letter-spacing: var(--ts-callout-tr);
-  --text-subheadline: var(--ts-subheadline);
-  --text-subheadline--line-height: var(--ts-subheadline-lh);
-  --text-subheadline--letter-spacing: var(--ts-subheadline-tr);
-  --text-footnote: var(--ts-footnote);
-  --text-footnote--line-height: var(--ts-footnote-lh);
-  --text-footnote--letter-spacing: var(--ts-footnote-tr);
-  --text-wordmark: var(--ts-wordmark);
-  --text-wordmark--line-height: var(--ts-wordmark-lh);
-  --text-wordmark--letter-spacing: 0.18em;
+  --text-hero-title: clamp(44px, 6.6vw, 104px);
+  --text-hero-title--line-height: 0.96;
+  --text-hero-title--letter-spacing: -0.05em;
+  --text-hero-title--font-weight: 600;
+  --text-display: 48px;
+  --text-display--line-height: 1.02;
+  --text-display--letter-spacing: -0.04em;
+  --text-display--font-weight: 600;
+  --text-heading: 34px;
+  --text-heading--line-height: 38px;
+  --text-heading--letter-spacing: -0.03em;
+  --text-heading--font-weight: 600;
+  --text-heading-sm: 28px;
+  --text-heading-sm--line-height: 34px;
+  --text-heading-sm--letter-spacing: -0.03em;
+  --text-heading-sm--font-weight: 600;
+  --text-section: 18px;
+  --text-section--line-height: 24px;
+  --text-section--letter-spacing: -0.01em;
+  --text-section--font-weight: 600;
+  --text-row: 17px;
+  --text-row--line-height: 22px;
+  --text-row--font-weight: 500;
+  --text-body: 15px;
+  --text-body--line-height: 22px;
+  --text-secondary: 14px;
+  --text-secondary--line-height: 21px;
+  --text-meta: 13px;
+  --text-meta--line-height: 18px;
+  --text-script: 16px;
+  --text-script--line-height: 24px;
+  --text-wordmark: 15px;
+  --text-wordmark--line-height: 22px;
+  --text-wordmark--letter-spacing: 0.22em;
   --text-wordmark--font-weight: 600;
+  /* legacy names, mapped onto the scale above */
+  --text-large-title: 34px;
+  --text-large-title--line-height: 38px;
+  --text-large-title--letter-spacing: -0.03em;
+  --text-large-title--font-weight: 600;
+  --text-title-1: 28px;
+  --text-title-1--line-height: 34px;
+  --text-title-1--letter-spacing: -0.03em;
+  --text-title-1--font-weight: 600;
+  --text-title-2: 18px;
+  --text-title-2--line-height: 24px;
+  --text-title-2--letter-spacing: -0.01em;
+  --text-title-2--font-weight: 600;
+  --text-title-3: 17px;
+  --text-title-3--line-height: 22px;
+  --text-title-3--font-weight: 600;
+  --text-headline: 15px;
+  --text-headline--line-height: 22px;
+  --text-headline--font-weight: 600;
+  --text-reading: 15px;
+  --text-reading--line-height: 22px;
+  --text-callout: 14px;
+  --text-callout--line-height: 21px;
+  --text-subheadline: 13px;
+  --text-subheadline--line-height: 18px;
+  --text-footnote: 13px;
+  --text-footnote--line-height: 18px;
 
   --font-weight-*: initial;
   --font-weight-regular: 400;
@@ -293,26 +286,35 @@
   --font-weight-bold: 700;
 
   --tracking-*: initial;
+  --tracking-caps: 0.06em;
   --leading-*: initial;
 
   --radius-*: initial;
-  --radius-control: 6px;
-  --radius-control-inner: 4px; /* concentric: a 6px control minus its 2px inset */
-  --radius-field: 10px;
-  --radius-group: 10px;
-  --radius-artwork: 12px;
-  --radius-popover: 12px;
-  --radius-sheet: 14px;
+  --radius-row: 10px; /* list rows, sidebar rows */
+  --radius-tile: 12px; /* picture tiles, option tiles, fields */
+  --radius-card: 14px; /* film tiles */
+  --radius-panel: 16px; /* the sidebar panel */
+  --radius-block: 20px; /* big blocks: hero, feature block, locked panel, sheets */
+  --radius-paper: 6px;
   --radius-capsule: 9999px;
+  /* legacy names */
+  --radius-control: 10px;
+  --radius-control-inner: 6px;
+  --radius-field: 12px;
+  --radius-group: 14px;
+  --radius-artwork: 14px;
+  --radius-popover: 14px;
+  --radius-sheet: 20px;
 
   --shadow-*: initial;
   --shadow-float: var(--float-shadow);
+  --shadow-paper: var(--paper-shadow);
 
   --breakpoint-shell: 60rem;
 
   --ease-*: initial;
-  --ease-out: var(--motion-ease);
-  --ease-spring: var(--motion-spring);
+  --ease-out: var(--ease-curve);
+  --ease-spring: var(--ease-curve);
 
   --animate-spin: spin 0.8s steps(8) infinite;
   --animate-pulse: pulse 1.6s ease-in-out infinite;
@@ -328,7 +330,7 @@
     }
   }
 
-  --animate-indeterminate: indeterminate 1.4s var(--motion-ease) infinite;
+  --animate-indeterminate: indeterminate 1.4s var(--ease-curve) infinite;
   @keyframes indeterminate {
     from {
       translate: -100% 0;
@@ -339,9 +341,152 @@
   }
 }
 
+/* ---------- Keyframes (from the approved mockups) ---------- */
+@keyframes line-rise {
+  from {
+    transform: translateY(140%) rotate(10deg);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes wipe-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes drift-a {
+  from {
+    transform: translate(-12%, -8%) scale(1);
+  }
+  to {
+    transform: translate(18%, 10%) scale(1.25);
+  }
+}
+@keyframes drift-b {
+  from {
+    transform: translate(10%, 12%) scale(1.2);
+  }
+  to {
+    transform: translate(-16%, -6%) scale(1);
+  }
+}
+
+/* ---------- Motion utilities ---------- */
+
+/* The mask a rising title sits in. */
+@utility rise-mask {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.12em;
+}
+/* A page title rising out of its mask (650ms). */
+@utility rise {
+  display: block;
+  transform-origin: bottom;
+  animation: line-rise var(--dur-rise) var(--ease-curve) both;
+}
+/* The 48x3 white rule under a page title wipes in from the left (500ms, 180ms delay). */
+@utility rule-in {
+  transform-origin: left;
+  animation: wipe-x var(--dur-wipe) var(--ease-curve) 180ms both;
+}
+/* Entrance tiers: description and actions, main region, secondary region. */
+@utility in-1 {
+  animation: page-in var(--dur-enter) var(--ease-curve) 260ms backwards;
+}
+@utility in-2 {
+  animation: page-in var(--dur-enter) var(--ease-curve) 340ms backwards;
+}
+@utility in-3 {
+  animation: page-in var(--dur-enter) var(--ease-curve) 420ms backwards;
+}
+/* A repeated item's entrance. Set its delay with stagger(i) from @/ui. */
+@utility enter {
+  animation: page-in var(--dur-enter) var(--ease-curve) backwards;
+}
+/* Content that replaced other content (next question, another scene, another tab). */
+@utility swap-in {
+  animation: page-in var(--dur-swap) var(--ease-curve) backwards;
+}
+/* Buttons and pressable tiles press to 98%. */
+@utility press {
+  transition-property: transform, background-color, border-color, color, box-shadow;
+  transition-duration: var(--dur-press);
+  transition-timing-function: var(--ease-curve);
+  &:active:not([aria-disabled="true"]):not(:disabled) {
+    transform: scale(0.98);
+  }
+}
+/*
+  A row whose selected fill wipes in from the left. Mark the selected row with `aria-current`
+  (page, step, true) or `data-active`. The fill sits behind the row's content.
+*/
+@utility row-wipe {
+  position: relative;
+  isolation: isolate;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: var(--selected);
+    transform-origin: left;
+    transform: scaleX(0);
+  }
+  &[data-active]::before,
+  &[aria-current]:not([aria-current="false"])::before {
+    transform: none;
+    animation: wipe-x var(--dur-wipe) var(--ease-curve) both;
+  }
+}
+/* A picture tile's action panel: slides up over the whole picture on hover and focus. */
+@utility cover-host {
+  position: relative;
+  &:hover .cover-panel,
+  &:focus-within .cover-panel,
+  &:focus .cover-panel {
+    transform: none;
+  }
+}
+@utility cover-panel {
+  transform: translateY(101%);
+  transition: transform var(--dur-cover) var(--ease-curve);
+}
+/* The Home hero's two slow lights (the only decorative loop). */
+@utility glow-a {
+  animation: drift-a 16s ease-in-out infinite alternate;
+}
+@utility glow-b {
+  animation: drift-b 21s ease-in-out infinite alternate;
+}
+
+/* Fixed words in nav, stage and tab labels: 13px capitals. */
+@utility caps-label {
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 /* ---------- Shared utilities ---------- */
 
-/* Keyboard focus only: a white ring with a gap in the ground colour. */
+/* Keyboard focus only: a white ring with a gap. */
 @utility focus-ring {
   &:focus-visible {
     outline: 2px solid var(--focus);
@@ -368,46 +513,38 @@
   box-shadow: inset calc(var(--hairline) * -1) 0 0 var(--separator);
 }
 
-/* Enter and exit for Base UI popups. Under reduced motion only the fade remains. */
+/* Enter and exit for Base UI popups. */
 @utility popup-motion {
   transform-origin: var(--transform-origin, center);
   transition:
-    opacity var(--dur-fast) var(--motion-ease),
-    scale calc(var(--dur-fast) * var(--dur-move)) var(--motion-ease);
+    opacity var(--dur-press) var(--ease-curve),
+    scale var(--dur-press) var(--ease-curve);
   &[data-starting-style],
   &[data-ending-style] {
     opacity: 0;
-    scale: calc(1 - 0.04 * var(--dur-move));
+    scale: 0.96;
   }
 }
 
-/*
-  Title-card artwork. Type is sized from the card's own width (container query units), so a
-  shelf tile and the Up Next hero share one composition at any size.
-*/
-@utility artwork-pad {
-  padding: 6cqi 6.5cqi;
-}
-@utility artwork-title {
-  font-size: clamp(var(--ts-title-3), 6.6cqi, 76px);
-  line-height: 1.04;
-  letter-spacing: -0.022em;
-  font-weight: 700;
-  text-wrap: balance;
-}
-@utility artwork-title-hero {
-  font-size: clamp(var(--ts-title-1), 3.6cqi, 44px);
-  line-height: 1.02;
-  letter-spacing: -0.026em;
-  font-weight: 700;
-  text-wrap: balance;
-}
-
 @utility fade-motion {
-  transition: opacity var(--dur-base) var(--motion-ease);
+  transition: opacity var(--dur-swap) var(--ease-curve);
   &[data-starting-style],
   &[data-ending-style] {
     opacity: 0;
+  }
+}
+
+/* Paper sheet: its own focus ring and text selection colour. */
+@utility paper {
+  background: var(--paper);
+  color: var(--ink);
+  & ::selection,
+  &::selection {
+    background: rgb(27 26 23 / 0.22);
+    color: var(--ink);
+  }
+  & :focus-visible {
+    outline-color: var(--ink);
   }
 }
 
@@ -416,13 +553,11 @@ html {
   background: var(--ground);
   color: var(--label);
   font-family: var(--font-stack);
-  font-size: var(--ts-body);
-  line-height: var(--ts-body-lh);
-  letter-spacing: var(--ts-body-tr);
+  font-size: 15px;
+  line-height: 22px;
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-optical-sizing: auto;
   /* The page never shifts sideways when its scrollbar comes and goes. */
   scrollbar-gutter: stable;
 }
@@ -434,7 +569,7 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--label-4) transparent;
+  scrollbar-color: var(--fill) transparent;
 }
 
 ::selection {
@@ -448,13 +583,25 @@ textarea {
 }
 
 ::placeholder {
-  color: var(--label-2);
+  color: var(--label-3);
   opacity: 1;
 }
 
 a {
   text-underline-offset: 0.18em;
   text-decoration-thickness: 1px;
+}
+
+/* Reduced motion: nothing moves. Animations and transitions finish at once. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Toast stacking (Base UI exposes the --toast-* variables). */

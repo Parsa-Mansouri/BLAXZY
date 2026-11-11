@@ -45,7 +45,7 @@ export function Tooltip({
         >
           <BaseTooltip.Popup
             className={cn(
-              "flex max-w-64 items-baseline gap-2 rounded-control bg-elevated-2 px-2 py-1 text-callout text-label shadow-float",
+              "flex max-w-64 items-baseline gap-2 rounded-row bg-elevated-2 px-2.5 py-1.5 text-meta text-label shadow-float",
               "fade-motion data-[instant]:transition-none",
               className,
             )}

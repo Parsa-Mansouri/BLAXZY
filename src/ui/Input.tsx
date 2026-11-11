@@ -6,7 +6,10 @@ import { useFieldControl, useFieldInline } from "./Field";
 import { fieldShape, fieldSurface, type FieldVariant } from "./styles";
 
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
-  /** `form` (default): 10px corners, large height. `toolbar`: 6px corners, regular height. */
+  /**
+   * `form` (default): 44px, 12px corners. `toolbar`: 36px capsule. `line`: no box, one underline,
+   * 28px text; for the big "working title" field.
+   */
   variant?: FieldVariant;
   /** Content before the text, e.g. an icon. */
   leading?: ReactNode;
@@ -17,19 +20,21 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   inputClassName?: string;
 }
 
-/** A text field. Inside a GroupedListField it drops its fill and fills the row. */
+/** A text field. Inside a GroupedListField it drops its box and fills the row. */
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   { variant = "form", leading, trailing, className, inputClassName, id, disabled, ...rest },
   ref,
 ) {
   const control = useFieldControl({ id, disabled });
   const inline = useFieldInline();
+  const line = variant === "line";
   return (
     <div
       className={cn(
         inline
           ? "flex w-full min-w-0 items-center gap-2 has-[:disabled]:opacity-60"
           : [fieldSurface, fieldShape[variant]],
+        line && "gap-4",
         className,
       )}
     >
@@ -42,6 +47,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         {...rest}
         className={cn(
           "min-w-0 flex-1 bg-transparent py-1 text-body text-label outline-none disabled:cursor-not-allowed",
+          line && "py-0 text-heading-sm font-medium tracking-[-0.02em]",
           inputClassName,
         )}
       />

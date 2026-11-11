@@ -6,7 +6,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { cn } from "./cn";
 import { Tooltip } from "./Tooltip";
 
-/** Top of the sidebar, as tall as the toolbar so the two line up. Holds the wordmark. */
+/** Top of the sidebar panel. Holds the wordmark. */
 export function SidebarHeader({
   children,
   className,
@@ -14,14 +14,10 @@ export function SidebarHeader({
   children: ReactNode;
   className?: string;
 }) {
-  return (
-    <div className={cn("flex h-(--toolbar-h) shrink-0 items-center px-4", className)}>
-      {children}
-    </div>
-  );
+  return <div className={cn("flex shrink-0 items-center px-2.5", className)}>{children}</div>;
 }
 
-/** The scrolling middle of the sidebar. Scrolls on its own when the lists are long. */
+/** The scrolling middle of the sidebar: New Project, the nav rows and the recent films. */
 export function SidebarBody({
   children,
   className,
@@ -35,7 +31,7 @@ export function SidebarBody({
     <nav
       aria-label={ariaLabel}
       className={cn(
-        "flex min-h-0 flex-1 [scrollbar-gutter:stable] flex-col gap-4 overflow-y-auto overscroll-contain px-2.5 pt-1 pb-4",
+        "-mx-1 flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overscroll-contain px-1 py-0.5",
         className,
       )}
     >
@@ -44,7 +40,7 @@ export function SidebarBody({
   );
 }
 
-/** The bottom of the sidebar: account and credits. */
+/** The bottom of the sidebar: the account row. */
 export function SidebarFooter({
   children,
   className,
@@ -52,36 +48,43 @@ export function SidebarFooter({
   children: ReactNode;
   className?: string;
 }) {
-  return (
-    <div className={cn("flex shrink-0 flex-col gap-1 px-2.5 pt-2 pb-3 hairline-t", className)}>
-      {children}
-    </div>
-  );
+  return <div className={cn("flex shrink-0 flex-col gap-0.5", className)}>{children}</div>;
 }
 
 export interface SidebarSectionProps {
-  /** Small header in the secondary label colour. Omit for an untitled first section. */
+  /** Accessible name of the group. Not shown: the sidebar has no section captions. */
   title?: string;
+  /** Draws a hairline above the group (the recent films). */
+  divided?: boolean;
   children: ReactNode;
   className?: string;
 }
 
-export function SidebarSection({ title, children, className }: SidebarSectionProps) {
+/** A group of sidebar rows. */
+export function SidebarSection({
+  title,
+  divided = false,
+  children,
+  className,
+}: SidebarSectionProps) {
   return (
-    <div className={cn("flex flex-col gap-0.5", className)}>
-      {title ? (
-        <h2 className="px-2 pb-0.5 text-subheadline font-semibold text-label-2">{title}</h2>
-      ) : null}
-      <ul className="flex flex-col gap-px">{children}</ul>
+    <div className={cn("flex flex-col", divided && "border-t border-separator pt-5", className)}>
+      {title ? <h2 className="sr-only">{title}</h2> : null}
+      <ul className="flex flex-col gap-0.5">{children}</ul>
     </div>
   );
 }
 
 export interface SidebarItemProps extends Omit<React.ComponentPropsWithoutRef<"a">, "children"> {
   children: ReactNode;
-  /** 16px line icon in the secondary label colour. */
+  /**
+   * `nav` (HOME, PROJECTS): 13px capitals with an icon. `row` (default): a film title or the
+   * account row, 15px.
+   */
+  variant?: "nav" | "row";
+  /** 16px line icon. */
   icon?: ReactNode;
-  /** The row for the current page: white-tint fill, primary label. */
+  /** The row for the current page: its fill wipes in from the left, the label turns white. */
   selected?: boolean;
   /** Trailing content, e.g. a count. */
   accessory?: ReactNode;
@@ -93,29 +96,31 @@ export interface SidebarItemProps extends Omit<React.ComponentPropsWithoutRef<"a
 
 /** A sidebar row. Renders a link by default; pass `render` for a Next Link or a button. */
 export const SidebarItem = forwardRef<HTMLElement, SidebarItemProps>(function SidebarItem(
-  { children, icon, selected = false, accessory, render, tooltip, className, ...rest },
+  {
+    children,
+    variant = "row",
+    icon,
+    selected = false,
+    accessory,
+    render,
+    tooltip,
+    className,
+    ...rest
+  },
   ref,
 ) {
   const props = mergeProps<"a">(
     {
       "aria-current": selected ? "page" : undefined,
       className: cn(
-        "flex min-h-(--sidebar-row-h) w-full items-center gap-2 rounded-control px-2 text-left text-body focus-ring",
-        selected ? "bg-selection text-label" : "text-label hover:bg-fill-4",
+        "row-wipe press flex min-h-(--sidebar-row-h) w-full items-center gap-2.5 rounded-row px-3 text-left font-medium focus-ring",
+        variant === "nav" ? "caps-label" : "text-body font-medium",
+        selected ? "text-label" : "text-label-2 hover:bg-fill-4 hover:text-label",
         className,
       ),
       children: (
         <>
-          {icon ? (
-            <span
-              className={cn(
-                "flex shrink-0 [&_svg]:size-(--icon)",
-                selected ? "text-label" : "text-label-2",
-              )}
-            >
-              {icon}
-            </span>
-          ) : null}
+          {icon ? <span className="flex shrink-0 [&_svg]:size-(--icon)">{icon}</span> : null}
           <span className="min-w-0 flex-1 truncate">{children}</span>
           {accessory ? <span className="shrink-0 text-label-2">{accessory}</span> : null}
         </>
@@ -135,4 +140,38 @@ export const SidebarItem = forwardRef<HTMLElement, SidebarItemProps>(function Si
       )}
     </li>
   );
+});
+
+export interface SidebarActionProps extends Omit<
+  React.ComponentPropsWithoutRef<"button">,
+  "children"
+> {
+  children: ReactNode;
+  icon?: ReactNode;
+  /** Render as another element, e.g. `render={<Link href="/projects/new" />}`. */
+  render?: ReactElement;
+}
+
+/** The outlined action at the top of the sidebar ("New Project"). */
+export const SidebarAction = forwardRef<HTMLElement, SidebarActionProps>(function SidebarAction(
+  { children, icon, render, className, type, ...rest },
+  ref,
+) {
+  const props = mergeProps<"button">(
+    {
+      type: render ? undefined : (type ?? "button"),
+      className: cn(
+        "press flex min-h-(--sidebar-row-h) w-full shrink-0 items-center gap-2.5 rounded-row border border-outline-quiet px-3 text-left text-secondary font-medium text-label focus-ring hover:bg-fill-4",
+        className,
+      ),
+      children: (
+        <>
+          {icon ? <span className="flex shrink-0 [&_svg]:size-(--icon)">{icon}</span> : null}
+          <span className="min-w-0 flex-1 truncate">{children}</span>
+        </>
+      ),
+    },
+    rest,
+  );
+  return useRender({ defaultTagName: "button", render: render ?? <button />, ref, props });
 });

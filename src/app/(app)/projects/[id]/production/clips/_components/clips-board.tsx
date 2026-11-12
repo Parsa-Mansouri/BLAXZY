@@ -16,7 +16,8 @@ import {
 } from "../_lib/clip-view";
 import { blocksHref, clipHref, finishedHref } from "../_lib/routes";
 import { useCreditWatch } from "../../../../../_lib/credits";
-import { ClipTile, BoardGrid, FEW_POSTERS } from "./clip-tile";
+import { ClipTile, BoardGrid, FEW_POSTERS, PendingTile } from "./clip-tile";
+import { useChangedKeys } from "../../_components/feedback";
 import { FillPage } from "../../_components/fill-page";
 import { useClips } from "./clips-context";
 
@@ -54,6 +55,7 @@ export function ClipsBoard({
 
   const { tiles, nextCursor, summary } = board;
   const line = statusLine(summary.counts);
+  const changed = useChangedKeys(tiles.map((t) => [t.lineageId, t.stage] as const));
   const rendering = tiles.some((t) => isUnsettled(t.stage));
   // Drafts and finals reserve their credits as their jobs start, and refund them if they fail.
   useCreditWatch(rendering);
@@ -159,14 +161,14 @@ export function ClipsBoard({
                 {hint}{" "}
                 <Link
                   href={blocksHref(projectId)}
-                  className="rounded-row text-label underline underline-offset-2 focus-ring"
+                  className="rounded-row text-brand underline underline-offset-2 focus-ring"
                 >
                   Open Shots
                 </Link>
               </p>
             ) : null}
             {anyRendering ? (
-              <p className="max-w-(--measure) text-body text-label-2">
+              <p className="max-w-(--measure) text-body text-pretty text-label-2">
                 Clips appear here as they finish. You can leave this page.
               </p>
             ) : null}
@@ -213,10 +215,17 @@ export function ClipsBoard({
               projectId={projectId}
               tile={tile}
               orientation={orientation}
+              settle={changed.has(tile.lineageId)}
               className="enter"
               style={stagger(Math.min(i, 12))}
             />
           ))}
+          {loading ? (
+            <>
+              <PendingTile orientation={orientation} />
+              <PendingTile orientation={orientation} />
+            </>
+          ) : null}
         </BoardGrid>
 
         {nextCursor ? (

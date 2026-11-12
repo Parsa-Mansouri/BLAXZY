@@ -3,8 +3,8 @@
 import { forwardRef, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { useRender } from "@base-ui/react/use-render";
 import { mergeProps } from "@base-ui/react/merge-props";
-import { Check } from "lucide-react";
 import { cn } from "./cn";
+import { Tick } from "./Feedback";
 
 export interface SelectRowProps extends Omit<
   React.ComponentPropsWithoutRef<"button">,
@@ -19,7 +19,7 @@ export interface SelectRowProps extends Omit<
   value?: ReactNode;
   /** The row being shown in the focus area: its fill wipes in from the left. */
   active?: boolean;
-  /** A tick at the trailing end: this row is done. */
+  /** A brand tick at the trailing end that draws in when the row becomes done. */
   done?: boolean;
   /** Trailing content instead of the tick, e.g. a comment count or a StatusDot. */
   trailing?: ReactNode;
@@ -81,14 +81,11 @@ export const SelectRow = forwardRef<HTMLElement, SelectRowProps>(function Select
             )}
           </span>
           {trailing !== undefined ? (
-            <span className="shrink-0 text-meta text-label-2">{trailing}</span>
+            <span className="shrink-0 text-meta text-label-2 tabular-nums">{trailing}</span>
           ) : done ? (
             <>
-              <Check
-                aria-hidden="true"
-                className="size-(--icon) shrink-0 text-label"
-                strokeWidth={1.75}
-              />
+              {/* Mounted when the row becomes done, so the brand tick draws in then. */}
+              <Tick />
               <span className="sr-only">, done</span>
             </>
           ) : null}

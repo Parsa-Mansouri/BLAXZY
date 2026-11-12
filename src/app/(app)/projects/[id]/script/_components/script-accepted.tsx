@@ -4,12 +4,12 @@ import { useMemo, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { stageHref } from "@/lib/stages";
-import { Button, PageHeader, StatusLine, SwapFade, cn } from "@/ui";
+import { Button, PageHeader, StatusLine, SwapFade, cn, useToast } from "@/ui";
 import type { BackgroundStatus } from "../../_lib/background-status";
 import { splitScenes } from "../_lib/scenes";
 import { editAcceptedAction } from "../actions";
 import { BackgroundFailure, EditChangedNotice, useBackgroundStatus } from "./background-status";
-import { ON_PAPER, PaperLayers, ReadingSheet, SHEET_X, TitlePage } from "./screenplay-sheet";
+import { ReadingSheet, SHEET_X, TitlePage } from "./screenplay-sheet";
 import {
   SAMPLE_LINE,
   SceneList,
@@ -86,6 +86,7 @@ export function ScriptAccepted({
   sample: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const viewer = useVersionViewer(projectId, version.id);
   const [status, setStatus] = useBackgroundStatus(projectId, version.id, background);
   const [editing, setEditing] = useState(false);
@@ -116,6 +117,7 @@ export function ScriptAccepted({
         return;
       }
       setEditing(false);
+      toast.success("Script saved.");
       router.refresh();
     });
   }
@@ -123,8 +125,14 @@ export function ScriptAccepted({
   const unchanged = draft.replace(/\r\n?/g, "\n").trim() === (version.content ?? "").trim();
 
   const side = (
-    <div className="flex flex-col gap-4 px-3.5 pb-6 hairline-b">
-      <StatusLine tone={shown.status === "accepted" ? "done" : "none"} srPrefix="Status">
+    <div className="flex flex-col gap-4 px-3.5 pb-4">
+      <StatusLine
+        // Keyed by version, so the line settles in again when another version is opened.
+        key={shown.id}
+        className="swap-in"
+        tone={shown.status === "accepted" ? "done" : "none"}
+        srPrefix="Status"
+      >
         {statusLabel(shown.status)}
       </StatusLine>
       {!readOnly && status?.state === "failed" ? (
@@ -153,20 +161,32 @@ export function ScriptAccepted({
         actions={
           editing ? (
             <>
-              <Button variant="plain" onClick={() => setEditing(false)} disabled={saving}>
+              <Button
+                variant="plain"
+                size="large"
+                onClick={() => setEditing(false)}
+                disabled={saving}
+              >
                 Cancel
               </Button>
-              <Button variant="primary" onClick={save} loading={saving} disabled={unchanged}>
+              <Button
+                variant="primary"
+                size="large"
+                onClick={save}
+                loading={saving}
+                disabled={unchanged}
+              >
                 Save Changes
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outlined" onClick={startEditing}>
+              <Button variant="outlined" size="large" onClick={startEditing}>
                 Edit Script
               </Button>
               <Button
                 variant="primary"
+                size="large"
                 render={<Link href={stageHref(projectId, "pre_production")} />}
               >
                 Continue to Pre-production
@@ -181,27 +201,25 @@ export function ScriptAccepted({
 
       {editing ? (
         <div className="mx-auto flex w-full max-w-205 flex-1 swap-in flex-col gap-3">
-          <div className="relative isolate">
-            <PaperLayers className="right-0" />
-            <textarea
-              aria-label="Script text"
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                if (error) setError(null);
-              }}
-              autoFocus
-              spellCheck
-              className={cn(
-                "block field-sizing-content min-h-[60dvh] w-full resize-none rounded-paper bg-transparent py-11 font-script text-script text-ink outline-none",
-                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--focus)",
-                SHEET_X,
-                ON_PAPER,
-              )}
-            />
-          </div>
+          <textarea
+            aria-label="Script text"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              if (error) setError(null);
+            }}
+            autoFocus
+            spellCheck
+            className={cn(
+              // The kit's `paper` surface, the same sheet the script is read on, with an ink
+              // caret (the global caret is white). Focus: the sheet's own 2px ink edge inside it.
+              "block field-sizing-content min-h-[60dvh] w-full resize-none rounded-paper py-11 font-script text-script paper caret-ink outline-none",
+              "transition-shadow duration-(--dur-press) focus:shadow-[inset_0_0_0_2px_var(--color-ink)]",
+              SHEET_X,
+            )}
+          />
           {error ? (
-            <p role="alert" className="text-secondary text-red">
+            <p role="alert" className="swap-in text-secondary text-red">
               {error}
             </p>
           ) : null}

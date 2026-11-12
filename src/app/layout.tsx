@@ -10,7 +10,8 @@ const geist = Geist({
   display: "swap",
 });
 
-// Geist Mono for real status lines only (a dot plus a few words).
+// Geist Mono only for technical values: timecodes, durations, credits, shortcuts, file names
+// (the kit's <Mono>, <Kbd> and `mono-value`). Status lines are Geist.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],

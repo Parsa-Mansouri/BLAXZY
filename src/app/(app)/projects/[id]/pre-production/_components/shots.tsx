@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-import { Button, ProgressBar, StatusLine, formatDurationLong } from "@/ui";
+import { Button, ProgressBar, Skeleton, StatusLine, formatDurationLong } from "@/ui";
 import { usePolling } from "../../_lib/use-polling";
 import { loadShotsAction, pollPreProductionAction } from "../actions";
 import type { ShotRow } from "./shot-types";
@@ -35,7 +35,7 @@ export function PreProductionPoller({
 
 function Shot({ shot, number }: { shot: ShotRow; number: number }) {
   return (
-    <li className="flex flex-col gap-3 py-5 hairline-b">
+    <li className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="w-7 shrink-0 text-meta text-label-2 tabular-nums">{number}</span>
         <h3 className="min-w-0 flex-1 text-row">{shot.title ?? `Shot ${number}`}</h3>
@@ -58,7 +58,7 @@ function Shot({ shot, number }: { shot: ShotRow; number: number }) {
           <summary className="inline-flex cursor-default list-none items-center gap-1 rounded-row text-secondary text-label focus-ring select-none hover:text-label-2 [&::-webkit-details-marker]:hidden">
             <ChevronRight
               aria-hidden="true"
-              className="size-(--icon-sm) transition-transform duration-(--dur-press) ease-out group-open:rotate-90"
+              className="size-(--icon) transition-transform duration-(--dur-press) ease-out group-open:rotate-90"
             />
             Prompt
           </summary>
@@ -106,14 +106,20 @@ export function ShotList({
 
   return (
     <div className="flex flex-col gap-4">
-      <ol className="flex flex-col">
+      <ol className="flex flex-col gap-10 pt-4">
         {shots.map((shot, i) => (
           <Shot key={shot.id} shot={shot} number={i + 1} />
         ))}
+        {loading ? (
+          <li aria-hidden="true" className="flex flex-col gap-3">
+            <Skeleton className="h-6 w-1/2 max-w-sm" />
+            <Skeleton className="h-16 w-full max-w-(--measure)" />
+          </li>
+        ) : null}
       </ol>
       {cursor ? (
         <div>
-          <Button onClick={more} loading={loading}>
+          <Button onClick={more} loading={loading} variant="outlined">
             Load More
           </Button>
         </div>

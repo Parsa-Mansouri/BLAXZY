@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Textarea } from "@/ui";
+import { Button, Textarea } from "@/ui";
 
 export interface DraftComment {
   id: string;
@@ -139,13 +139,9 @@ export function LineComment({
           Keep the comment under 4,000 characters.
         </p>
       ) : null}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="press rounded-row text-meta text-label-2 underline underline-offset-[3px] focus-ring hover:text-label"
-      >
+      <Button variant="plain" size="small" onClick={onRemove}>
         Remove
-      </button>
+      </Button>
     </div>
   );
 }

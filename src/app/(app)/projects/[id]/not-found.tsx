@@ -14,7 +14,8 @@ export default function ProjectNotFound() {
       <title>Page Not Found · BLAXZY</title>
       <NotFoundView
         heading="h1"
-        message="This part of the project does not exist."
+        title="Not in This Project"
+        message="The page you asked for does not exist in this film. Its stages are in the bar above."
         actions={
           <>
             {projectId ? (

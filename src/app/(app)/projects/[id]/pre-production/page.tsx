@@ -105,7 +105,12 @@ export default async function PreProductionPage({ params }: { params: Promise<{ 
 
       {leading ? (
         <div className="flex flex-1 in-2 flex-col gap-3">
-          <CategoryFeature projectId={project.id} category={leading} className="flex-1" />
+          <CategoryFeature
+            projectId={project.id}
+            category={leading}
+            primary={!moved && !overview.canComplete}
+            className="flex-1"
+          />
           {others.length > 0 ? (
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))] gap-3">
               {others.map((category, i) => (
@@ -120,25 +125,28 @@ export default async function PreProductionPage({ params }: { params: Promise<{ 
           ) : null}
         </div>
       ) : !running ? (
-        <p className="max-w-(--measure) in-2 text-body text-label-2">
-          No characters, places or props were found in the script. Change the script to bring them
-          in.
-        </p>
-      ) : null}
-
-      {!moved && !overview.canComplete && hasAssets ? (
-        <div className="mt-8 flex in-3 flex-wrap items-center gap-x-3 gap-y-2 pt-6 hairline-t">
-          <Lock aria-hidden="true" strokeWidth={1.5} className="size-4 text-label-2" />
-          <span className="text-body font-medium text-label-2">Production</span>
-          <span className="text-secondary text-label-2">Opens when every asset is ready.</span>
+        <div className="flex max-w-(--measure) in-2 flex-col gap-2">
+          <h2 className="text-heading-sm text-balance">
+            The script has no characters, places or props
+          </h2>
+          <p className="text-body text-pretty text-label-2">
+            Change the script to bring them in, and they appear here.
+          </p>
         </div>
       ) : null}
 
-      <section aria-labelledby="shots-title" className="mt-12 flex in-3 flex-col gap-2">
+      {!moved && !overview.canComplete && hasAssets ? (
+        <p className="mt-10 flex in-3 flex-wrap items-center gap-x-3 gap-y-1 text-body text-label-2">
+          <Lock aria-hidden="true" strokeWidth={1.5} className="size-(--icon)" />
+          Production opens when every asset is ready.
+        </p>
+      ) : null}
+
+      <section aria-labelledby="shots-title" className="mt-16 flex in-3 flex-col gap-2">
         <h2 id="shots-title" className="text-section">
           Shots
         </h2>
-        <p className="text-body text-label-2">
+        <p className="max-w-(--measure) text-body text-pretty text-label-2">
           {running
             ? status.blockCount > 0
               ? "The shots below are from the previous script. New ones are being prepared."

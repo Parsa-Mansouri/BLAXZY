@@ -14,23 +14,17 @@ import { ProjectGrid } from "./project-grid";
 import { StartFilm } from "./start-film";
 import { useProjectList } from "./use-project-list";
 
-/** The two slow lights behind the hero (the only decorative loop in the app). */
+/** The two slow lights behind the hero (the one decorative loop the owner asked for). */
 function HeroGlows() {
   return (
     <>
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute top-[-30%] left-[4%] aspect-square w-[62%] glow-a rounded-full blur-[30px]"
-        style={{
-          background: "radial-gradient(closest-side, rgba(255,255,255,.17), rgba(255,255,255,0))",
-        }}
+        className="pointer-events-none absolute top-[-30%] left-[4%] aspect-square w-[62%] glow-a rounded-full bg-radial-[closest-side] from-accent/17 to-accent/0 blur-[30px]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute right-[-8%] bottom-[-55%] aspect-square w-[70%] glow-b rounded-full blur-[40px]"
-        style={{
-          background: "radial-gradient(closest-side, rgba(255,255,255,.11), rgba(255,255,255,0))",
-        }}
+        className="pointer-events-none absolute right-[-8%] bottom-[-55%] aspect-square w-[70%] glow-b rounded-full bg-radial-[closest-side] from-accent/11 to-accent/0 blur-[40px]"
       />
     </>
   );
@@ -43,14 +37,19 @@ function ContinueHero({ film }: { film: ProjectSummary }) {
   return (
     <section
       aria-label="Continue your film"
-      className="relative mx-3 mb-3 flex min-h-[max(520px,56dvh)] flex-col justify-end gap-7 overflow-hidden rounded-block bg-hero p-5 sm:p-10"
+      className="relative mx-3 mb-3 flex min-h-[max(520px,56dvh)] flex-col justify-end gap-10 overflow-hidden rounded-block bg-hero p-5 sm:p-10"
     >
       <HeroGlows />
-      <div className="relative flex flex-col gap-5">
+      <div className="relative flex min-w-0 flex-col gap-5">
         <div className="rise-mask">
-          <h1 className="rise text-hero-title break-words">{film.title}</h1>
+          <h1
+            title={film.title}
+            className="-ml-[0.04em] rise line-clamp-3 max-w-(--measure) text-hero-title text-balance break-words"
+          >
+            {film.title}
+          </h1>
         </div>
-        <div aria-hidden="true" className="h-[3px] w-12 rule-in rounded-capsule bg-accent" />
+        <div aria-hidden="true" className="h-[3px] w-12 rule-in rounded-capsule bg-brand" />
         <StatusLine tone={stageTone(film.stage)} className="in-2">
           {stageLabel(film.stage)} · {stageLine(film)}
         </StatusLine>
@@ -79,21 +78,24 @@ function EmptyHero() {
   return (
     <section
       aria-label="Start your first film"
-      className="relative mx-3 mb-3 flex min-h-[max(520px,56dvh)] flex-1 flex-col justify-end gap-10 overflow-hidden rounded-block bg-hero p-5 sm:p-10"
+      className="relative mx-3 mb-3 flex min-h-[max(520px,56dvh)] flex-1 flex-col justify-end overflow-hidden rounded-block bg-hero p-5 sm:p-10"
     >
       <HeroGlows />
-      <div className="relative flex flex-col gap-5">
-        <div className="rise-mask">
-          <h1 className="rise text-hero-title break-words uppercase">Make a Film</h1>
+      <div className="relative flex min-w-0 flex-col gap-10">
+        <div className="flex flex-col gap-5">
+          <div className="rise-mask">
+            <h1 className="-ml-[0.04em] rise text-hero-title text-balance uppercase">
+              No Films Yet
+            </h1>
+          </div>
+          <div aria-hidden="true" className="h-[3px] w-12 rule-in rounded-capsule bg-brand" />
+          <p className="max-w-(--measure) in-1 text-body text-pretty text-label-2">
+            Give your first film a working title. You choose its style next.
+          </p>
         </div>
-        <div aria-hidden="true" className="h-[3px] w-12 rule-in rounded-capsule bg-accent" />
-        <p className="max-w-(--measure) in-1 text-body text-label-2">
-          From an idea or a script to every clip, one guided stage at a time. You choose the style
-          next.
-        </p>
-      </div>
-      <div className="relative in-3">
-        <StartFilm emphasis />
+        <div className="in-3">
+          <StartFilm emphasis />
+        </div>
       </div>
     </section>
   );

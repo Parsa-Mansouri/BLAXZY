@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Popover } from "@base-ui/react/popover";
+import { CircleHelp } from "lucide-react";
 import { cn } from "./cn";
 import { PopoverArrow } from "./Popover";
 import { popupSurface } from "./styles";
@@ -18,7 +19,7 @@ export interface HelpTipProps {
   className?: string;
 }
 
-/** The round "?" help button. Opens a popover that explains the thing next to it. */
+/** The "?" help button (lucide CircleHelp, 16px beside its label). Opens a popover that explains the thing next to it. */
 export function HelpTip({
   children,
   title,
@@ -32,22 +33,13 @@ export function HelpTip({
       <Popover.Trigger
         aria-label={label}
         className={cn(
-          "relative inline-flex size-(--icon) shrink-0 items-center justify-center rounded-full bg-fill-2 text-subheadline font-semibold text-label-2 focus-ring",
-          "transition-colors duration-(--dur-fast) hover:bg-fill hover:text-label data-[popup-open]:bg-fill data-[popup-open]:text-label",
-          "pointer-coarse:after:absolute pointer-coarse:after:-inset-3 pointer-coarse:after:content-['']",
+          "relative inline-flex size-(--icon) shrink-0 items-center justify-center rounded-full text-label-2 focus-ring",
+          "transition-colors duration-(--dur-press) hover:text-label data-[popup-open]:text-label",
+          "after:absolute after:-inset-2 after:content-[''] pointer-coarse:after:-inset-3",
           className,
         )}
       >
-        <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[62.5%]">
-          <path
-            d="M5.6 5.7a2.4 2.4 0 0 1 4.7.6c0 1.6-2.3 2-2.3 3.4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-          <circle cx="8" cy="12.6" r="1.1" fill="currentColor" />
-        </svg>
+        <CircleHelp aria-hidden="true" className="size-(--icon)" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner

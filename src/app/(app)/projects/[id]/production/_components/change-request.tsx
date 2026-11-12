@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Check } from "lucide-react";
 import { Button, Textarea, cn, stagger } from "@/ui";
+import { shake } from "./feedback";
 import { formatNumber } from "./format";
 
 export interface IssueChoice {
@@ -40,6 +42,7 @@ export function ChangeRequest({
 }) {
   const id = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const inputsRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -59,10 +62,12 @@ export function ChangeRequest({
   function submit() {
     if (!given) {
       setError("Choose what is wrong, or write a note.");
+      shake(inputsRef.current);
       return;
     }
     if (trimmed.length > maxNote) {
       setError(`Keep the note under ${formatNumber(maxNote)} characters.`);
+      shake(inputsRef.current);
       return;
     }
     onSubmit({ issueCodes: selected, note: trimmed });
@@ -76,48 +81,53 @@ export function ChangeRequest({
         ref={headingRef}
         tabIndex={-1}
         id={`${id}-title`}
-        className="text-heading-sm font-semibold tracking-[-0.02em] outline-none"
+        className="text-heading-sm text-balance outline-none"
       >
         What should change?
       </h3>
-      <div role="group" aria-labelledby={`${id}-title`} className="flex flex-wrap gap-2">
-        {issues.map((issue, i) => {
-          const on = selected.includes(issue.code);
-          return (
-            <button
-              key={issue.code}
-              type="button"
-              aria-pressed={on}
-              title={issue.hint}
-              onClick={() => toggle(issue.code)}
-              style={stagger(i, 60)}
-              className={cn(
-                "min-h-(--btn-sm) press enter rounded-capsule border px-3.5 py-1.5 text-secondary font-medium focus-ring",
-                on
-                  ? "border-label bg-selected text-label"
-                  : "border-outline text-label-2 hover:bg-fill-4 hover:text-label",
-              )}
-            >
-              {issue.label}
-            </button>
-          );
-        })}
-      </div>
-      <div className="flex flex-col gap-2">
-        <label htmlFor={`${id}-note`} className="text-secondary text-label-2">
-          Anything else we should know?
-        </label>
-        <Textarea
-          id={`${id}-note`}
-          value={note}
-          onChange={(e) => {
-            setNote(e.target.value);
-            setError(null);
-          }}
-          placeholder={notePlaceholder}
-          minRows={3}
-          maxRows={8}
-        />
+      <div ref={inputsRef} className="flex flex-col gap-6">
+        <div role="group" aria-labelledby={`${id}-title`} className="flex flex-wrap gap-2">
+          {issues.map((issue, i) => {
+            const on = selected.includes(issue.code);
+            return (
+              <button
+                key={issue.code}
+                type="button"
+                aria-pressed={on}
+                title={issue.hint}
+                onClick={() => toggle(issue.code)}
+                style={stagger(i, 60)}
+                className={cn(
+                  "inline-flex min-h-(--btn-sm) press enter items-center gap-1.5 rounded-capsule border py-1.5 pr-3.5 text-secondary font-medium focus-ring",
+                  on
+                    ? "border-brand bg-selected pl-2.5 text-label"
+                    : "border-outline pl-3.5 text-label-2 hover:bg-fill-4 hover:text-label",
+                )}
+              >
+                {on ? (
+                  <Check aria-hidden strokeWidth={1.5} className="size-(--icon) text-brand" />
+                ) : null}
+                {issue.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-col gap-2">
+          <label htmlFor={`${id}-note`} className="text-secondary text-label-2">
+            Anything else we should know?
+          </label>
+          <Textarea
+            id={`${id}-note`}
+            value={note}
+            onChange={(e) => {
+              setNote(e.target.value);
+              setError(null);
+            }}
+            placeholder={notePlaceholder}
+            minRows={3}
+            maxRows={8}
+          />
+        </div>
       </div>
       {cost}
       {shownError ? (

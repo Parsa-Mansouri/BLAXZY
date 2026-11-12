@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, PageHeader, ProgressBar, StatusDot, StatusLine } from "@/ui";
+import { Button, PageHeader, ProgressBar, StatusDot } from "@/ui";
 import { usePolling } from "../../_lib/use-polling";
 import { splitScenes } from "../_lib/scenes";
 import { pollScriptAction, retryVersionAction } from "../actions";
@@ -52,14 +52,13 @@ function useRefreshWhenDone(projectId: string, versionId: string) {
 /** "What you asked for": the description the script is written from. */
 function AskedFor({ brief }: { brief: string }) {
   return (
-    <section
-      aria-labelledby="asked-for"
-      className="mt-auto flex in-3 flex-col gap-3 pt-6 hairline-t"
-    >
-      <h2 id="asked-for" className="text-section">
+    <section aria-labelledby="asked-for" className="mt-auto flex in-3 flex-col gap-3 pt-16">
+      <h2 id="asked-for" className="text-section text-balance">
         What You Asked For
       </h2>
-      <p className="max-w-[70ch] text-body whitespace-pre-wrap text-label-2">{brief}</p>
+      <p className="max-w-(--measure) text-body text-pretty break-words whitespace-pre-wrap text-label-2">
+        {brief}
+      </p>
     </section>
   );
 }
@@ -82,17 +81,13 @@ export function ScriptWorking({
   return (
     <>
       <PageHeader title="Script" description={WORKING_DESCRIPTION[version.source]} />
-      <section aria-labelledby="working" className="mb-16 flex in-2 flex-col gap-6">
-        <h2 id="working" className="text-heading text-balance">
+      {/* The heading says what is happening; the bar shows it moving (no status line repeating it). */}
+      <section aria-labelledby="working" className="flex in-2 flex-col gap-6">
+        <h2 id="working" role="status" className="max-w-[24ch] text-heading text-balance">
           {WORKING_HEADING[version.source]}
         </h2>
-        <div className="flex flex-col gap-3">
-          <ProgressBar value={null} aria-label={status} />
-          <div role="status" aria-live="polite">
-            <StatusLine tone="working">{status}</StatusLine>
-          </div>
-        </div>
-        <p className="max-w-[56ch] text-body text-label-2">
+        <ProgressBar value={null} aria-label={status} className="max-w-(--measure)" />
+        <p className="max-w-(--measure) text-body text-pretty text-label-2">
           You can leave this page. The script will be here when you return.
         </p>
       </section>
@@ -100,11 +95,8 @@ export function ScriptWorking({
       {version.source === "generated" && version.brief ? <AskedFor brief={version.brief} /> : null}
 
       {previous && previousScenes.length > 0 ? (
-        <section
-          aria-labelledby="previous-version"
-          className="mt-16 flex in-3 flex-col gap-6 pt-6 hairline-t"
-        >
-          <h2 id="previous-version" className="text-section">
+        <section aria-labelledby="previous-version" className="mt-16 flex in-3 flex-col gap-6">
+          <h2 id="previous-version" className="text-section text-balance">
             The Version Being Revised
           </h2>
           <ReadingSheet aria-label="Previous version" scenes={previousScenes} />
@@ -145,14 +137,15 @@ export function ScriptFailed({
           fromBrief ? "Nothing was lost; your description is kept below." : "Nothing was lost."
         }
       />
-      <section role="alert" className="mb-16 flex in-2 flex-col gap-8">
+      <section role="alert" className="flex in-2 flex-col gap-8">
         <div className="flex flex-col gap-3">
+          {/* The dot sits on the first line's optical centre; the text below lines up with the words. */}
           <h2 className="flex items-baseline gap-4 text-heading">
             <StatusDot tone="failed" className="size-2.5 -translate-y-1" />
-            <span className="text-balance">{FAILED_HEADING[version.source]}</span>
+            <span className="max-w-[24ch] text-balance">{FAILED_HEADING[version.source]}</span>
           </h2>
-          <p className="max-w-[56ch] pl-6.5 text-body text-label-2">
-            {version.failure ?? "Something went wrong while it was being prepared."}
+          <p className="max-w-(--measure) pl-6.5 text-body text-pretty text-label-2">
+            {version.failure ?? "It stopped before it was finished. Try again in a moment."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 pl-6.5">
@@ -163,7 +156,7 @@ export function ScriptFailed({
             Try Again
           </Button>
         </div>
-        {error ? <p className="pl-6.5 text-secondary text-red">{error}</p> : null}
+        {error ? <p className="swap-in pl-6.5 text-secondary text-red">{error}</p> : null}
       </section>
 
       {fromBrief && version.brief ? <AskedFor brief={version.brief} /> : null}

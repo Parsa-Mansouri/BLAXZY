@@ -1,8 +1,9 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { Check, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { cn } from "./cn";
+import { Tick } from "./Feedback";
 
 export interface OptionTileProps {
   /** The option's name, under the picture. */
@@ -17,7 +18,7 @@ export interface OptionTileProps {
   src?: string;
   /** Alternative text for `src`. Defaults to empty (the label already names the option). */
   alt?: string;
-  /** `example` (default) shows a picture; `other` is the dashed "Other" tile with a plus. */
+  /** `example` (default) shows a picture; `other` is the "Not what you have in mind?" tile with a plus. */
   kind?: "example" | "other";
   /**
    * Picture shape, as a CSS aspect ratio such as "16 / 9" (default) or "9 / 16". With `width`,
@@ -40,7 +41,8 @@ export interface OptionTileProps {
 
 /**
  * A picture option (Style questions): the picture, then the name with a tick when chosen. The
- * chosen tile gets a 2px white ring and a white, heavier name. A toggle button (`aria-pressed`).
+ * chosen tile gets a 2px brand ring, a white heavier name and a brand tick that draws in. A
+ * toggle button (`aria-pressed`).
  */
 export function OptionTile({
   label,
@@ -67,7 +69,7 @@ export function OptionTile({
       className={cn(
         "group/option flex max-w-full min-w-0 press flex-col gap-2.5 rounded-tile text-left focus-ring",
         fill && "h-full",
-        "disabled:pointer-events-none disabled:opacity-40",
+        "disabled:pointer-events-none",
         className,
       )}
     >
@@ -75,16 +77,15 @@ export function OptionTile({
         style={fill ? undefined : { aspectRatio }}
         className={cn(
           fill && "min-h-28 flex-1",
-          "relative flex w-full items-center justify-center overflow-hidden rounded-tile text-meta text-label-3",
-          "transition-[box-shadow,border-color] duration-(--dur-press)",
-          other ? "border border-dashed border-outline" : "bg-elevated",
+          "relative flex w-full items-center justify-center overflow-hidden rounded-tile bg-elevated text-meta text-label-3",
+          "transition-[box-shadow] duration-(--dur-press)",
           selected
-            ? "ring-2 ring-accent"
+            ? "ring-2 ring-brand"
             : "group-hover/option:ring-1 group-hover/option:ring-outline",
         )}
       >
         {other ? (
-          <Plus aria-hidden="true" className="size-6 text-label-2" strokeWidth={1.5} />
+          <Plus aria-hidden="true" className="size-(--icon-lg) text-label-2" />
         ) : src ? (
           // Example pictures are small static files; next/image is not needed here.
           // eslint-disable-next-line @next/next/no-img-element
@@ -95,16 +96,14 @@ export function OptionTile({
       </span>
       <span
         className={cn(
-          "flex items-center gap-2 px-0.5 text-row transition-colors duration-(--dur-press)",
+          "flex items-center gap-2 px-0.5 text-row text-pretty transition-colors duration-(--dur-press)",
           selected ? "font-semibold text-label" : "font-medium text-label-2",
+          disabled && "text-label-3",
         )}
       >
         <span className="min-w-0">{label}</span>
-        <Check
-          aria-hidden="true"
-          className={cn("size-3.5 shrink-0 text-label", !selected && "invisible")}
-          strokeWidth={2}
-        />
+        {/* Rendered only when chosen, so the tick draws in at that moment. */}
+        {selected ? <Tick /> : <span aria-hidden="true" className="size-(--icon) shrink-0" />}
       </span>
     </button>
   );
@@ -119,7 +118,10 @@ export interface OptionRowProps {
   style?: CSSProperties;
 }
 
-/** A text option without a picture (e.g. a length): dark row, white when chosen. */
+/**
+ * A text option without a picture (e.g. a length): a dark row; when chosen, a 2px brand ring,
+ * a heavier white label and a brand tick that draws in at the trailing end.
+ */
 export function OptionRow({
   children,
   selected = false,
@@ -136,13 +138,17 @@ export function OptionRow({
       onClick={onSelect}
       style={style}
       className={cn(
-        "flex min-h-13 w-full press items-center rounded-tile px-5 text-left text-row focus-ring",
-        "disabled:pointer-events-none disabled:opacity-40",
-        selected ? "bg-accent text-on-accent" : "bg-elevated text-label hover:bg-fill-4",
+        "flex min-h-13 w-full press items-center gap-3 rounded-tile bg-elevated px-5 text-left text-row focus-ring",
+        "transition-[box-shadow,background-color] duration-(--dur-press)",
+        "disabled:pointer-events-none disabled:text-label-3",
+        selected
+          ? "font-semibold text-label ring-2 ring-brand ring-inset"
+          : "text-label hover:bg-fill-4",
         className,
       )}
     >
-      {children}
+      <span className="min-w-0 flex-1">{children}</span>
+      {selected ? <Tick /> : null}
     </button>
   );
 }

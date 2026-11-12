@@ -24,7 +24,7 @@ export function FormMessage({
     >
       <Icon
         aria-hidden="true"
-        className={cn("mt-px size-(--icon-sm) shrink-0", tone === "success" && "text-green")}
+        className={cn("mt-0.5 size-(--icon) shrink-0", tone === "success" && "text-green")}
       />
       <span>{children}</span>
     </div>

@@ -20,32 +20,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { fileSrc } from "@/lib/file-src";
-import { IconButton, cn } from "@/ui";
+import { Button, IconButton, cn } from "@/ui";
+import { CONTROLS_BOX, FRAME_BOX, FRAME_HEIGHT } from "../../../../_components/frame";
 import { formatClock, type Orientation } from "../../../_lib/clip-view";
 import { focusIsFree } from "../../../_components/clips-context";
 
 /** Clips are rendered at 24 frames per second; arrow keys step one frame. */
 const FRAME = 1 / 24;
 const SECOND_STEP = 1;
-
-/**
- * The frame: a box of the film's shape, as large as the space allows. Its width is the smaller
- * of the column and what the viewport height allows (the height left under the toolbar, the page
- * header and the shot title, at least 18rem), so the clip and its controls fit on screen.
- */
-const FRAME_BOX: Record<Orientation, string> = {
-  landscape:
-    "mx-auto aspect-video w-[min(100%,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*16/9))]",
-  portrait:
-    "mx-auto aspect-[9/16] w-[min(100%,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*9/16))]",
-};
-
-/** The control bar under the frame: as wide as the frame (an upright frame: at least 22rem). */
-const CONTROLS_BOX: Record<Orientation, string> = {
-  landscape: "mx-auto w-[min(100%,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*16/9))]",
-  portrait:
-    "mx-auto w-full max-w-[max(22rem,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*9/16))]",
-};
 
 type FullscreenVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
 
@@ -65,12 +47,17 @@ function ControlButton({
   pressed,
   shortcut,
   onClick,
+  className,
+  iconClassName,
 }: {
   label: string;
   icon: LucideIcon;
   pressed?: boolean;
   shortcut: string;
   onClick: () => void;
+  className?: string;
+  /** Optical nudges, e.g. the play triangle sits a pixel right of the centre. */
+  iconClassName?: string;
 }) {
   return (
     <IconButton
@@ -81,8 +68,8 @@ function ControlButton({
       aria-pressed={pressed}
       aria-keyshortcuts={shortcut === "Space" ? "Space K" : shortcut}
       onClick={onClick}
-      icon={<Icon aria-hidden strokeWidth={1.75} />}
-      className={cn(pressed === false && "text-label-2", pressed && "bg-fill-3")}
+      icon={<Icon aria-hidden strokeWidth={1.5} className={iconClassName} />}
+      className={cn(pressed === false && "text-label-2", pressed && "bg-fill-3", className)}
     />
   );
 }
@@ -300,6 +287,7 @@ export function VideoPlayer({
       onKeyDown={onKeyDown}
       className={cn(
         "flex flex-col gap-2",
+        FRAME_HEIGHT,
         fullscreen && "h-full justify-center bg-ground p-4 sm:p-6",
       )}
     >
@@ -370,24 +358,25 @@ export function VideoPlayer({
             aria-label={`Play ${label}`}
             className="group/play absolute inset-0 flex items-center justify-center focus-ring focus-visible:-outline-offset-4"
           >
-            <span className="flex size-16 items-center justify-center rounded-full bg-fill/90 text-label shadow-float transition-[background-color,scale] duration-(--dur-press) ease-out group-hover/play:bg-fill group-active/play:scale-95">
-              <Play aria-hidden fill="currentColor" strokeWidth={0} className="ml-1 size-7" />
+            <span className="flex size-14 items-center justify-center rounded-full bg-fill/90 text-label transition-[background-color,scale] duration-(--dur-press) ease-out group-hover/play:bg-fill group-active/play:scale-95">
+              {/* The triangle's weight sits left of its box: nudged right to look centred. */}
+              <Play aria-hidden strokeWidth={1.5} className="size-5 translate-x-px" />
             </span>
           </button>
         ) : null}
         {failed ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-elevated p-6 text-center">
-            <p className="text-body text-label-2">The clip could not be loaded.</p>
-            <button
-              type="button"
+            <p className="text-body text-pretty text-label-2">The clip could not be loaded.</p>
+            <Button
+              variant="dark"
+              size="small"
               onClick={() => {
                 setFailed(false);
                 setAttempt((n) => n + 1);
               }}
-              className="h-(--btn-sm) press rounded-capsule bg-fill px-4 text-secondary font-medium text-label focus-ring hover:bg-elevated-3"
             >
               Load Again
-            </button>
+            </Button>
           </div>
         ) : null}
       </figure>
@@ -403,8 +392,13 @@ export function VideoPlayer({
           icon={playing ? Pause : Play}
           shortcut="Space"
           onClick={toggle}
+          className="-ml-2"
+          iconClassName={playing ? undefined : "translate-x-px"}
         />
-        <span aria-hidden className="min-w-[4.5ch] shrink-0 px-1 text-meta text-label tabular-nums">
+        <span
+          aria-hidden
+          className="min-w-[6ch] shrink-0 px-1 font-mono text-meta text-label tabular-nums"
+        >
           {clock}
         </span>
         <div
@@ -436,19 +430,19 @@ export function VideoPlayer({
         >
           <div ref={trackRef} className="relative h-1 w-full rounded-capsule bg-fill-2">
             <div
-              className="absolute inset-y-0 left-0 rounded-capsule bg-accent"
+              className="absolute inset-y-0 left-0 rounded-capsule bg-brand"
               style={{ width: `${progress}%` }}
             />
             <div
               aria-hidden
-              className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-float transition-[scale] duration-(--dur-press) ease-out group-hover/scrub:scale-125"
+              className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent transition-[scale] duration-(--dur-press) ease-out group-hover/scrub:scale-125"
               style={{ left: `${progress}%` }}
             />
           </div>
         </div>
         <span
           aria-hidden
-          className="min-w-[4.5ch] shrink-0 px-1 text-right text-meta text-label-2 tabular-nums max-sm:mr-auto max-sm:text-left"
+          className="min-w-[6ch] shrink-0 px-1 text-right font-mono text-meta text-label-2 tabular-nums max-sm:mr-auto max-sm:text-left"
         >
           {formatClock(duration)}
         </span>
@@ -470,6 +464,7 @@ export function VideoPlayer({
           icon={fullscreen ? Minimize : Maximize}
           shortcut="F"
           onClick={toggleFullscreen}
+          className="-mr-2"
         />
       </div>
       {caption && !fullscreen ? caption : null}

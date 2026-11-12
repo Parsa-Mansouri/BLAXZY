@@ -198,7 +198,8 @@ export function SplitView({
               "shell:group-data-[sidebar=collapsed]/shell:-translate-x-full",
             )}
           >
-            <div className="relative flex min-h-0 flex-1 flex-col gap-6 rounded-panel bg-sidebar px-2.5 pt-5 pb-3">
+            {/* Rows inside take --nested-radius: 16px panel - 10px padding = 6px corners. */}
+            <div className="relative flex min-h-0 flex-1 flex-col gap-6 rounded-panel bg-sidebar px-2.5 pt-5 pb-3 [--nested-radius:6px]">
               {sidebar}
               <IconButton
                 label="Hide Sidebar"

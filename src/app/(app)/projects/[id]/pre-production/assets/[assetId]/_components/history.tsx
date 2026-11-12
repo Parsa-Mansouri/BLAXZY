@@ -29,10 +29,7 @@ export function HistoryStrip({
   className?: string;
 }) {
   return (
-    <section
-      aria-labelledby="history-title"
-      className={cn("flex in-3 flex-col gap-4 pt-8 hairline-t", className)}
-    >
+    <section aria-labelledby="history-title" className={cn("flex in-3 flex-col gap-4", className)}>
       <h2 id="history-title" className="text-section">
         History
       </h2>
@@ -60,12 +57,16 @@ export function HistoryStrip({
                       "relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-tile transition-[box-shadow] duration-(--dur-press)",
                       fileId && !voice ? "bg-ground" : "bg-elevated",
                       selected
-                        ? "ring-2 ring-accent ring-offset-2 ring-offset-ground"
+                        ? "ring-2 ring-brand ring-offset-2 ring-offset-ground"
                         : "group-hover:ring-1 group-hover:ring-separator-opaque",
                     )}
                   >
                     {voice ? (
-                      <AudioLines aria-hidden="true" className="size-5 text-label-2" />
+                      <AudioLines
+                        aria-hidden="true"
+                        strokeWidth={1.5}
+                        className="size-5 text-label-2"
+                      />
                     ) : fileId ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -77,7 +78,11 @@ export function HistoryStrip({
                         className="absolute inset-0 size-full object-contain"
                       />
                     ) : item.version.status === "failed" ? (
-                      <ImageOff aria-hidden="true" className="size-5 text-label-3" />
+                      <ImageOff
+                        aria-hidden="true"
+                        strokeWidth={1.5}
+                        className="size-5 text-label-3"
+                      />
                     ) : null}
                   </span>
                   <span className="flex flex-col px-0.5">
@@ -126,9 +131,7 @@ export function HistoryViewer({
 
   const bar = (
     <div className="flex in-2 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-tile bg-elevated px-4 py-3">
-      <p className="text-body text-label">
-        {title} · {versionStatusLabel(version.status)}
-      </p>
+      <p className="text-body text-label">Earlier version · {versionStatusLabel(version.status)}</p>
       <Button variant="plain" onClick={onBack}>
         Back to Current
       </Button>

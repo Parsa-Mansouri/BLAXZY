@@ -4,29 +4,33 @@ import { useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth-client";
 import { callAuth } from "@/lib/auth-call";
 import { describeAuthFailure } from "@/lib/auth-errors";
-import { Button, stagger, useToast } from "@/ui";
+import { Button, stagger } from "@/ui";
 import { FormMessage } from "@/app/_components/form-message";
 import { AuthPasswordField } from "@/app/(auth)/_components/auth-fields";
+import { SavedMark } from "./saved-mark";
 
-/** Password row: one Change Password button that opens the two fields in place. */
+/** Password row: one Change button that opens the two fields in place. */
 export function ChangePasswordForm({
   minPasswordLength,
   maxPasswordLength,
+  open,
+  onOpenChange,
 }: {
   minPasswordLength: number;
   maxPasswordLength: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const toast = useToast();
-  const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [currentError, setCurrentError] = useState<string | undefined>();
   const [nextError, setNextError] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [changed, setChanged] = useState(false);
 
   function close() {
-    setOpen(false);
+    onOpenChange(false);
     setCurrent("");
     setNext("");
     setCurrentError(undefined);
@@ -36,6 +40,7 @@ export function ChangePasswordForm({
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    if (pending) return;
     setError(null);
     setCurrentError(current ? undefined : "Enter your current password.");
     let nextProblem: string | undefined;
@@ -56,7 +61,7 @@ export function ChangePasswordForm({
     setPending(false);
     if (result.ok) {
       close();
-      toast.success("Password changed", "Your other devices were signed out.");
+      setChanged(true);
     } else if (result.failure.code === "INVALID_PASSWORD") {
       setCurrentError(describeAuthFailure(result.failure, "change-password"));
     } else {
@@ -65,16 +70,20 @@ export function ChangePasswordForm({
   }
 
   return (
-    <section aria-labelledby="acc-password" className="flex enter flex-col" style={stagger(0, 380)}>
-      <h2 id="acc-password" className="mb-4 text-section">
+    <section
+      aria-labelledby="acc-password"
+      className="flex enter flex-col gap-3"
+      style={stagger(0, 380)}
+    >
+      <h2 id="acc-password" className="text-section">
         Password
       </h2>
-      <div className="border-y border-separator py-4">
+      <div className="py-1">
         {open ? (
           <form
             onSubmit={onSubmit}
             noValidate
-            className="flex max-w-[400px] swap-in flex-col gap-5"
+            className="flex max-w-(--form-w) swap-in flex-col gap-5"
           >
             <AuthPasswordField
               label="Current Password"
@@ -103,9 +112,21 @@ export function ChangePasswordForm({
             </div>
           </form>
         ) : (
-          <Button variant="outlined" onClick={() => setOpen(true)}>
-            Change Password
-          </Button>
+          <div className="flex swap-in flex-wrap items-center gap-x-6 gap-y-3">
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setChanged(false);
+                onOpenChange(true);
+              }}
+              aria-label="Change Password"
+            >
+              Change
+            </Button>
+            {changed ? (
+              <SavedMark>Password changed. Other devices were signed out.</SavedMark>
+            ) : null}
+          </div>
         )}
       </div>
     </section>

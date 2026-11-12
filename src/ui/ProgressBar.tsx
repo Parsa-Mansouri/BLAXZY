@@ -9,14 +9,14 @@ export interface ProgressBarProps {
   label?: ReactNode;
   /** Shows the percentage on the trailing side. */
   showValue?: boolean;
-  /** Status colour for the fill; white otherwise. */
+  /** Status colour for the fill; the brand colour otherwise. */
   tone?: "default" | "success" | "warning" | "danger";
   className?: string;
   "aria-label"?: string;
 }
 
 const fills = {
-  default: "bg-accent",
+  default: "bg-brand",
   success: "bg-green",
   warning: "bg-orange",
   danger: "bg-red",
@@ -45,7 +45,7 @@ export function ProgressBar({
       className={cn("flex flex-col gap-1.5", className)}
     >
       {label || showValue ? (
-        <div className="flex items-baseline justify-between gap-3 text-callout">
+        <div className="flex items-baseline justify-between gap-3 text-callout tabular-nums">
           {label ? (
             <span id={labelId} className="text-label">
               {label}
@@ -62,7 +62,7 @@ export function ProgressBar({
         <div
           style={percent === null ? undefined : { width: `${percent}%` }}
           className={cn(
-            "h-full rounded-capsule transition-[width] duration-(--dur-base) ease-out",
+            "h-full rounded-capsule transition-[width] duration-(--dur-tab) ease-out",
             fills[tone],
             percent === null &&
               "absolute inset-y-0 w-1/3 animate-indeterminate motion-reduce:animate-pulse",

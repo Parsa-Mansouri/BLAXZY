@@ -1,7 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
-import { Button, StatusLine, cn } from "@/ui";
-import { PosterTile } from "../../_components/poster-tile";
+import { Button, Skeleton, StatusLine, cn } from "@/ui";
+import { Settle } from "../../_components/feedback";
+import { POSTER_SHAPES, PosterTile } from "../../_components/poster-tile";
 import {
   CLIP_STATE_LABELS,
   CLIP_STATE_TONES,
@@ -44,17 +45,30 @@ export function BoardGrid({
   );
 }
 
+/** A poster card still loading (Show More Shots): the frame and the name, as grey shapes. */
+export function PendingTile({ orientation }: { orientation: Orientation }) {
+  return (
+    <li aria-hidden className="flex min-w-0 flex-col gap-3">
+      <Skeleton className={cn("w-full rounded-card", POSTER_SHAPES[orientation])} />
+      <Skeleton className="h-5 w-2/3 rounded-paper" />
+    </li>
+  );
+}
+
 /**
  * One shot as a poster card. Hovering or focusing it slides up the panel with its one action:
- * Review for a draft or final waiting for the user (white), Open for the rest.
+ * Review for a draft or final waiting for the user (white), Open for the rest. A render shows a
+ * moving bar on the picture; a state that just changed settles in (`settle`).
  */
 export function ClipTile({
   projectId,
   tile,
   orientation,
+  settle = false,
   className,
   style,
 }: {
+  settle?: boolean;
   projectId: string;
   tile: ClipTileData;
   orientation: Orientation;
@@ -66,7 +80,11 @@ export function ClipTile({
   const title = shotTitle(tile);
   const number = shotNumber(tile.orderIndex);
   const state = CLIP_STATE_LABELS[tile.stage];
-  const line = <StatusLine tone={CLIP_STATE_TONES[tile.stage]}>{state}</StatusLine>;
+  const line = (
+    <Settle settleKey={tile.stage} settle={settle} className="flex-col">
+      <StatusLine tone={CLIP_STATE_TONES[tile.stage]}>{state}</StatusLine>
+    </Settle>
+  );
   const href = clipHref(projectId, tile.lineageId);
   return (
     <li className={cn("min-w-0", className)} style={style}>
@@ -76,8 +94,7 @@ export function ClipTile({
         posterFileId={tile.posterFileId}
         dim={working}
         placeholder={tile.posterFileId ? undefined : working ? "Rendering" : "No clip yet"}
-        coverHeading={title}
-        coverLine={line}
+        progress={working ? `Rendering ${title}` : undefined}
         actions={
           review ? (
             <Button variant="primary" render={<Link href={href} />}>

@@ -45,6 +45,7 @@ export function SignupForm({
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    if (submitting) return;
     const found = validate();
     setErrors(found);
     setFormError(null);

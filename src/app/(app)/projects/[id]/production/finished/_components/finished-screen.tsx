@@ -2,11 +2,23 @@
 
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Download } from "lucide-react";
+import { Download, Play } from "lucide-react";
 import type { ProductionPhase } from "@/server/production";
-import { Button, PageHeader, ProgressBar, StatusLine, cn, formatDurationLong, stagger } from "@/ui";
+import {
+  Button,
+  PageHeader,
+  ProgressBar,
+  Skeleton,
+  StatusLine,
+  cn,
+  formatDurationLong,
+  stagger,
+  useToast,
+} from "@/ui";
+import { DrawnTick } from "../../_components/feedback";
+import { Mono } from "../../_components/values";
 import { FillPage } from "../../_components/fill-page";
-import { PosterTile } from "../../_components/poster-tile";
+import { POSTER_SHAPES, PosterTile } from "../../_components/poster-tile";
 import { phaseHref } from "../../../_lib/production-routes";
 import { usePolling } from "../../../_lib/use-polling";
 import {
@@ -110,6 +122,7 @@ export function FinishedScreen({
   projectStage: "production" | "done";
   phase: ProductionPhase;
 }) {
+  const toast = useToast();
   const [clips, setClips] = useState(initial);
   const [cursor, setCursor] = useState(initialCursor);
   const [error, setError] = useState<string | null>(null);
@@ -138,8 +151,14 @@ export function FinishedScreen({
     setSaving(clip.lineageId);
     try {
       const result = await clipDownloadAction(clip.lineageId);
-      if (result.ok) saveFrom(result.data);
-      else setError(result.error);
+      if (result.ok) {
+        saveFrom(result.data);
+        toast.show({
+          kind: "success",
+          title: "Download started",
+          description: clip.title ?? `Shot ${clip.orderIndex + 1}`,
+        });
+      } else setError(result.error);
     } finally {
       setSaving(null);
     }
@@ -153,7 +172,7 @@ export function FinishedScreen({
   return (
     <FillPage>
       <PageHeader
-        title="Finished"
+        title={complete ? "Finished Film" : "Final Clips"}
         description={
           complete
             ? "Every shot of this film, ready for your editor."
@@ -164,7 +183,8 @@ export function FinishedScreen({
             <Button
               variant="primary"
               size="large"
-              leadingIcon={<Download aria-hidden />}
+              className="pl-6"
+              leadingIcon={<Download aria-hidden strokeWidth={1.5} />}
               loading={exporting.starting || working}
               onClick={exporting.start}
             >
@@ -186,15 +206,21 @@ export function FinishedScreen({
         {working ? (
           <div className="flex max-w-sm flex-col gap-3">
             <StatusLine tone="working">
-              Packing {shotsWords(state.clipCount)} into one ZIP
+              Packing <span className="tabular-nums">{shotsWords(state.clipCount)}</span> into one
+              ZIP
             </StatusLine>
             <ProgressBar value={null} aria-label="Preparing the download" />
-            <p className="text-secondary text-label-2">The download starts when it is ready.</p>
+            <p className="text-secondary text-pretty text-label-2">
+              The download starts when it is ready.
+            </p>
           </div>
         ) : null}
         {state.phase === "ready" ? (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <StatusLine tone="done">The download has started</StatusLine>
+          <div className="flex swap-in flex-wrap items-center gap-x-4 gap-y-2">
+            <p className="flex items-center gap-2 text-secondary text-label">
+              <DrawnTick draw />
+              The download has started
+            </p>
             <Button variant="plain" size="small" onClick={() => saveFrom(state.url)}>
               Download Again
             </Button>
@@ -232,11 +258,11 @@ export function FinishedScreen({
                   shape={portrait ? "portrait" : "landscape"}
                   posterFileId={clip.posterFileId}
                   placeholder={clip.posterFileId ? undefined : "No poster"}
-                  coverHeading={title}
                   coverLine={
                     clip.durationSeconds ? (
-                      <p className="text-secondary text-label-2 tabular-nums">
-                        {formatDurationLong(clip.durationSeconds)}
+                      <p className="text-secondary text-label-2">
+                        <span className="sr-only">Length </span>
+                        <Mono>{formatDurationLong(clip.durationSeconds)}</Mono>
                       </p>
                     ) : null
                   }
@@ -244,6 +270,10 @@ export function FinishedScreen({
                     <>
                       <Button
                         variant="dark"
+                        className="pl-4"
+                        leadingIcon={
+                          <Play aria-hidden strokeWidth={1.5} className="translate-x-px" />
+                        }
                         aria-label={`Play ${title}`}
                         onClick={(e) => {
                           returnFocus.current = e.currentTarget;
@@ -254,6 +284,8 @@ export function FinishedScreen({
                       </Button>
                       <Button
                         variant="dark"
+                        className="pl-4"
+                        leadingIcon={<Download aria-hidden strokeWidth={1.5} />}
                         aria-label={`Download ${title}`}
                         loading={saving === clip.lineageId}
                         onClick={() => void download(clip)}
@@ -272,6 +304,19 @@ export function FinishedScreen({
               </li>
             );
           })}
+          {loading
+            ? Array.from({ length: 2 }, (_, i) => (
+                <li key={`pending-${i}`} aria-hidden className="flex min-w-0 flex-col gap-3">
+                  <Skeleton
+                    className={cn(
+                      "w-full rounded-card",
+                      POSTER_SHAPES[portrait ? "portrait" : "landscape"],
+                    )}
+                  />
+                  <Skeleton className="h-5 w-2/3 rounded-paper" />
+                </li>
+              ))
+            : null}
         </ol>
         {cursor ? (
           <div>

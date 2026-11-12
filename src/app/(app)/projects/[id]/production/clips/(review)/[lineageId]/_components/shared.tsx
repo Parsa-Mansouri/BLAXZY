@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Credits, Mono } from "../../../../_components/values";
 
 export interface IssueChoice {
   code: string;
@@ -24,7 +25,7 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", {
 export function When({ date }: { date: Date }) {
   const value = new Date(date);
   return (
-    <time dateTime={value.toISOString()} suppressHydrationWarning>
+    <time dateTime={value.toISOString()} suppressHydrationWarning className="tabular-nums">
       {dateFormat.format(value)}
     </time>
   );
@@ -50,15 +51,15 @@ export function CreditLine({
   if (price === null) return null;
   if (balance >= price) {
     return (
-      <p className="text-secondary text-label-2 tabular-nums">
-        {action} costs {credits(price)}. You have {formatNumber(balance)}.
+      <p className="text-secondary text-pretty text-label-2">
+        {action} costs <Credits n={price} />. You have <Mono>{formatNumber(balance)}</Mono>.
       </p>
     );
   }
   return (
-    <p role="status" className="text-secondary text-label tabular-nums">
-      You need {credits(price)} and have {formatNumber(balance)}. Add credits to your account to
-      continue.
+    <p role="status" className="text-secondary text-pretty text-label">
+      You need <Credits n={price} /> and have <Mono>{formatNumber(balance)}</Mono>. Add credits to
+      your account to continue.
     </p>
   );
 }

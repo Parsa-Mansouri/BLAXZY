@@ -24,7 +24,8 @@ import {
 } from "../actions";
 import { takeArrival } from "../_lib/arrival";
 import { attentionTone, attentionWords, needsReview } from "../_lib/block-state";
-import { BlockRow } from "./block-row";
+import { BlockRow, PendingBlockRow } from "./block-row";
+import { useChangedKeys } from "../../_components/feedback";
 import { GenerateSheet } from "./generate-sheet";
 import { FillPage } from "../../_components/fill-page";
 
@@ -67,6 +68,7 @@ export function BlocksScreen({
   const busyRef = useRef(false);
 
   const { items, nextCursor, counts } = snapshot;
+  const changed = useChangedKeys(items.map((b) => [b.lineageId, b.stage] as const));
   const preparing = counts.preparing > 0;
   const reviewable = counts.block_review + counts.prepare_failed;
 
@@ -143,12 +145,10 @@ export function BlocksScreen({
           aria-label="Preparing the shots"
           className="flex min-h-75 flex-1 flex-col justify-between gap-10 rounded-block bg-elevated p-6 sm:p-10"
         >
-          <h2 className="max-w-[22ch] text-heading font-semibold tracking-[-0.03em] text-balance">
-            The shots are being prepared.
-          </h2>
+          <h2 className="max-w-[22ch] text-heading text-balance">The shots are being prepared.</h2>
           <div className="flex max-w-sm flex-col gap-3">
             <ProgressBar value={null} aria-label="Preparing the shots" />
-            <p className="text-body text-label-2">
+            <p className="text-body text-pretty text-label-2">
               You can leave this page. The shots are ready to review when you return.
             </p>
           </div>
@@ -157,9 +157,12 @@ export function BlocksScreen({
     }
     if (items.length === 0) {
       return (
-        <p className="max-w-(--measure) text-body text-label-2">
-          There are no shots yet. They appear here once the script has been cut into shots.
-        </p>
+        <div className="flex flex-col gap-2">
+          <h2 className="text-section text-balance">No shots yet</h2>
+          <p className="max-w-(--measure) text-body text-pretty text-label-2">
+            They appear here once the script has been cut into shots.
+          </p>
+        </div>
       );
     }
 
@@ -247,10 +250,12 @@ export function BlocksScreen({
                 key={block.lineageId}
                 projectId={projectId}
                 block={block}
+                settle={changed.has(block.lineageId)}
                 className="enter"
                 style={stagger(Math.min(i, 12))}
               />
             ))}
+            {loading ? <PendingBlockRow /> : null}
           </ol>
           {nextCursor ? (
             <div>

@@ -119,13 +119,13 @@ export function PictureTile({
         ) : null}
         {overlay ? (
           <div className="absolute inset-0 flex items-end p-5 text-heading-sm text-label">
-            <span className="line-clamp-3 break-words">{overlay}</span>
+            <span className="line-clamp-3 text-balance break-words">{overlay}</span>
           </div>
         ) : null}
         <div className="absolute inset-0 flex cover-panel flex-col justify-between gap-3 bg-elevated-2 p-4 sm:p-5">
           <div className="flex min-w-0 flex-col gap-1.5">
             {coverHeading ? (
-              <div className="text-[22px] leading-[26px] font-semibold tracking-[-0.02em] break-words text-label">
+              <div className="text-cover-title text-balance break-words text-label">
                 {coverHeading}
               </div>
             ) : null}
@@ -143,9 +143,7 @@ export function PictureTile({
       </div>
       {caption || status ? (
         <div className="flex min-w-0 flex-col gap-1 px-0.5">
-          {caption ? (
-            <div className="truncate text-row font-semibold tracking-[-0.01em]">{caption}</div>
-          ) : null}
+          {caption ? <div className="truncate text-row font-semibold">{caption}</div> : null}
           {status}
         </div>
       ) : null}

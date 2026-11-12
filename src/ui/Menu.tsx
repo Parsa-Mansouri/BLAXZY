@@ -78,7 +78,7 @@ export function MenuItem({
   const content = (
     <>
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      {shortcut ? <kbd className="font-sans text-label-2">{shortcut}</kbd> : null}
+      {shortcut ? <kbd className="mono-value text-label-2">{shortcut}</kbd> : null}
     </>
   );
   const classes = cn(menuRow, destructive && "text-red", className);
@@ -103,5 +103,5 @@ export function MenuSeparator() {
 
 /** A non-interactive line at the top of a menu, e.g. the signed-in email. */
 export function MenuLabel({ children }: { children: ReactNode }) {
-  return <div className="truncate px-2 pt-1 pb-1.5 text-callout text-label-2">{children}</div>;
+  return <div className="truncate px-3 pt-1 pb-1.5 text-callout text-label-2">{children}</div>;
 }

@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { Button, PageHeader, StatusLine, cn, stagger } from "@/ui";
+import { Button, PageHeader, Skeleton, StatusLine, cn, stagger } from "@/ui";
 import { ASSET_KIND_LABELS, categoryHref, type AssetKindKey } from "../../../_lib/asset-kinds";
 import { usePolling } from "../../../_lib/use-polling";
 import { isWorking } from "../../_components/asset-stage";
@@ -111,7 +111,7 @@ export function CategoryPanel({
       <PageHeader
         title={plural}
         description={
-          <StatusLine tone={words.tone}>
+          <StatusLine tone={words.tone} className="tabular-nums">
             <span aria-live="polite">{words.text}</span>
           </StatusLine>
         }
@@ -123,6 +123,17 @@ export function CategoryPanel({
           ) : undefined
         }
       />
+
+      {items.length === 0 ? (
+        <div className="mb-8 flex max-w-(--measure) in-2 flex-col gap-2">
+          <h2 className="text-heading-sm text-balance">
+            No {kind === "other" ? "other assets" : plural.toLowerCase()} yet
+          </h2>
+          <p className="text-body text-pretty text-label-2">
+            Add the ones the script mentions and detection missed.
+          </p>
+        </div>
+      ) : null}
 
       <ul className={cn("mb-16 grid in-2 gap-x-7 gap-y-10", GRID[aspect])}>
         {items.map((item, i) => (
@@ -148,18 +159,24 @@ export function CategoryPanel({
                 ASPECT_CLASS[aspect],
               )}
             >
-              <Plus aria-hidden="true" strokeWidth={1.4} className="size-6" />
+              <Plus aria-hidden="true" strokeWidth={1.5} className="size-5" />
             </span>
-            <span className="px-0.5 text-row font-semibold tracking-[-0.01em] text-label-2">
-              {addLabel}
-            </span>
+            <span className="px-0.5 text-row font-semibold text-label-2">{addLabel}</span>
           </button>
         </li>
+        {loading
+          ? [0, 1].map((n) => (
+              <li key={`loading-${n}`} aria-hidden="true" className="flex min-w-0 flex-col gap-3">
+                <Skeleton className={cn("rounded-card", ASPECT_CLASS[aspect])} />
+                <Skeleton className="h-5 w-2/3" />
+              </li>
+            ))
+          : null}
       </ul>
 
       {cursor ? (
         <div className="mt-10">
-          <Button onClick={more} loading={loading}>
+          <Button variant="outlined" onClick={more} loading={loading}>
             Load More
           </Button>
         </div>
@@ -173,14 +190,14 @@ export function CategoryPanel({
       {previous || next ? (
         <nav
           aria-label="Categories"
-          className="mt-auto flex in-3 items-center justify-between gap-4 pt-6 hairline-t"
+          className="mt-auto flex in-3 items-center justify-between gap-4 pt-10"
         >
           {previous ? (
             <Link
               href={categoryHref(projectId, previous.kind)}
               className="inline-flex items-center gap-1 rounded-row py-2 text-body font-medium text-label-2 focus-ring hover:text-label"
             >
-              <ChevronLeft aria-hidden="true" className="size-(--icon)" />
+              <ChevronLeft aria-hidden="true" strokeWidth={1.5} className="size-(--icon)" />
               {previous.plural}
             </Link>
           ) : (
@@ -192,7 +209,7 @@ export function CategoryPanel({
               className="inline-flex items-center gap-1 rounded-row py-2 text-body font-medium text-label-2 focus-ring hover:text-label"
             >
               {next.plural}
-              <ChevronRight aria-hidden="true" className="size-(--icon)" />
+              <ChevronRight aria-hidden="true" strokeWidth={1.5} className="size-(--icon)" />
             </Link>
           ) : (
             <span />

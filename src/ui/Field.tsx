@@ -61,7 +61,10 @@ export interface FieldProps {
   children: ReactNode;
 }
 
-/** A stacked form field: label, control, then the error (red) and the help text. */
+/**
+ * A stacked form field: label, control, then the error (red) and the help text. When an error
+ * appears the control shakes once (300ms) and the message fades in.
+ */
 export function Field({
   label,
   hint,
@@ -97,9 +100,10 @@ export function Field({
           </label>
           {labelAccessory}
         </div>
-        {children}
+        {/* The control gives a short shake when it is marked wrong (off under reduced motion). */}
+        <div className={cn("min-w-0", error ? "shake" : null)}>{children}</div>
         {error ? (
-          <p id={errorId} role="alert" className="text-secondary text-red">
+          <p id={errorId} role="alert" className="pop-in text-secondary text-red">
             {error}
           </p>
         ) : null}

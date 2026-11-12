@@ -130,7 +130,7 @@ export const GroupedListButton = forwardRef<HTMLElement, GroupedListButtonProps>
           "flex w-full items-center gap-3 px-3 py-1.5 text-left text-body focus-ring focus-visible:-outline-offset-2",
           "first:rounded-t-group last:rounded-b-group",
           "transition-colors duration-(--dur-fast) hover:bg-fill-4 active:bg-fill-3",
-          "disabled:pointer-events-none disabled:opacity-50",
+          "disabled:pointer-events-none disabled:text-label-3",
           destructive ? "text-red" : "text-label",
           className,
         ),
@@ -141,7 +141,7 @@ export const GroupedListButton = forwardRef<HTMLElement, GroupedListButtonProps>
             ) : null}
             <span className="min-w-0 flex-1">{children}</span>
             {chevron ? (
-              <ChevronRight aria-hidden="true" className="size-(--icon-sm) shrink-0 text-label-2" />
+              <ChevronRight aria-hidden="true" className="size-(--icon) shrink-0 text-label-2" />
             ) : null}
           </>
         ),
@@ -193,7 +193,8 @@ export function GroupedListField({
           rowDivider,
           "grid grid-cols-[minmax(0,--spacing(28))_minmax(0,1fr)] items-center gap-x-3 px-3",
           "first:rounded-t-group last:rounded-b-group",
-          "has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-focus",
+          // A text row shows focus by a white line under it, never a box.
+          "transition-shadow duration-(--dur-press) focus-within:shadow-[inset_0_-1px_0_var(--label)]",
           className,
         )}
       >
@@ -205,7 +206,7 @@ export function GroupedListField({
         </label>
         <div className={cn(rowHeight[size], "flex min-w-0 items-center")}>{children}</div>
         {error ? (
-          <p id={errorId} role="alert" className="col-start-2 pb-2 text-callout text-red">
+          <p id={errorId} role="alert" className="col-start-2 shake pb-2 text-callout text-red">
             {error}
           </p>
         ) : null}

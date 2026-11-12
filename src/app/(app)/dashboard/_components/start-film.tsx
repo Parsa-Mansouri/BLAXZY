@@ -2,7 +2,7 @@
 
 import type { FormEvent } from "react";
 import { ArrowRight } from "lucide-react";
-import { Spinner, cn } from "@/ui";
+import { IconButton, Input } from "@/ui";
 import { useCreateProject } from "./use-create-project";
 
 /**
@@ -19,38 +19,31 @@ export function StartFilm({ emphasis = false }: { emphasis?: boolean }) {
 
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
-      <div className="flex items-center gap-4 border-b border-separator-opaque pb-3 focus-within:border-label-2">
-        <input
-          type="text"
-          value={title}
-          onChange={(event) => {
-            setTitle(event.target.value);
-            setError(undefined);
-          }}
-          aria-label="Name of the new film"
-          aria-invalid={error ? true : undefined}
-          placeholder="Give it a working title"
-          maxLength={200}
-          autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent text-heading-sm font-medium tracking-[-0.02em] text-label outline-none placeholder:text-label-3"
-        />
-        <button
-          type="submit"
-          aria-label="Create the project"
-          aria-disabled={!ready || pending}
-          className={cn(
-            "flex size-11 shrink-0 press items-center justify-center rounded-full focus-ring aria-disabled:cursor-default",
-            emphasis && ready ? "bg-accent text-on-accent" : "bg-selected text-label",
-            !ready && "text-label-2",
-          )}
-        >
-          {pending ? (
-            <Spinner label="Creating" />
-          ) : (
-            <ArrowRight aria-hidden="true" className="size-[18px]" />
-          )}
-        </button>
-      </div>
+      <Input
+        variant="line"
+        value={title}
+        onChange={(event) => {
+          setTitle(event.target.value);
+          setError(undefined);
+        }}
+        aria-label="Name of the new film"
+        aria-invalid={error ? true : undefined}
+        placeholder="Give it a working title"
+        maxLength={200}
+        autoComplete="off"
+        trailing={
+          <IconButton
+            type="submit"
+            label="Create the project"
+            tooltip={false}
+            variant={emphasis ? "primary" : "dark"}
+            size="large"
+            loading={pending}
+            disabled={!ready}
+            icon={<ArrowRight aria-hidden="true" strokeWidth={1.5} />}
+          />
+        }
+      />
       {error ? (
         <p role="alert" className="text-secondary text-red">
           {error}

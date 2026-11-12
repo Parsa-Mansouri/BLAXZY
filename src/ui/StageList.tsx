@@ -52,10 +52,10 @@ const statusText: Record<StageStatus, string> = {
 function Glyph({ status }: { status: StageStatus }) {
   const box = "flex size-(--icon) shrink-0 items-center justify-center";
   if (status === "done") {
-    return <Check aria-hidden="true" className={cn(box, "text-label-2")} strokeWidth={2.25} />;
+    return <Check aria-hidden="true" className={cn(box, "text-label-2")} />;
   }
   if (status === "locked") {
-    return <Lock aria-hidden="true" className={cn(box, "p-px text-label-2")} />;
+    return <Lock aria-hidden="true" className={cn(box, "text-label-2")} />;
   }
   return (
     <span aria-hidden="true" className={box}>

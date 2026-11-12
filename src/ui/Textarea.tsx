@@ -75,7 +75,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
           resize();
         }}
         className={cn(
-          "min-w-0 flex-1 resize-none bg-transparent py-2.5 text-label outline-none disabled:cursor-not-allowed",
+          "min-w-0 flex-1 resize-none bg-transparent py-2.5 text-inherit outline-none disabled:cursor-not-allowed",
           textStyle === "script" ? "text-row leading-6 font-regular" : "text-body",
         )}
       />

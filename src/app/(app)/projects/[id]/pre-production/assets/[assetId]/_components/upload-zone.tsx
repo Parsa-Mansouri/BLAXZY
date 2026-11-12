@@ -149,16 +149,21 @@ export function UploadZone({
         className={cn(
           grow && "flex-1",
           "flex min-h-52 flex-col items-center justify-center gap-3 rounded-block border border-dashed px-5 py-8 text-center transition-colors duration-(--dur-press)",
-          dragging ? "border-label bg-elevated-2" : "border-separator-opaque bg-elevated",
+          dragging ? "border-brand bg-elevated-2" : "border-separator-opaque bg-elevated",
         )}
       >
         {phase.kind === "idle" ? (
           <>
-            <Icon aria-hidden="true" className="size-7 text-label-2" strokeWidth={1.5} />
+            <Icon aria-hidden="true" className="size-5 text-label-2" strokeWidth={1.5} />
             <p className="text-body text-label-2">
               {audio ? "Drop a recording here, or" : "Drop an image here, or"}
             </p>
-            <Button variant="outlined" onClick={() => input.current?.click()} disabled={busy}>
+            <Button
+              variant="primary"
+              size="large"
+              onClick={() => input.current?.click()}
+              disabled={busy}
+            >
               Choose File
             </Button>
             <input
@@ -183,7 +188,7 @@ export function UploadZone({
             className="flex w-full max-w-sm flex-col items-stretch gap-3 text-left"
             aria-live="polite"
           >
-            <p className="truncate text-body text-label">{phase.name}</p>
+            <p className="truncate font-mono text-body text-label">{phase.name}</p>
             <ProgressBar
               value={phase.kind === "uploading" ? phase.progress : null}
               aria-label="Upload progress"

@@ -86,13 +86,16 @@ export function ClipPlayer({
                 <Button
                   variant="dark"
                   size="small"
-                  leadingIcon={<Download aria-hidden />}
+                  className="pl-3.5"
+                  leadingIcon={<Download aria-hidden strokeWidth={1.5} />}
                   onClick={onDownload}
                   loading={downloading}
                 >
                   Download
                 </Button>
-                <BaseDialog.Close render={<IconButton label="Close" icon={<X />} />} />
+                <BaseDialog.Close
+                  render={<IconButton label="Close" icon={<X strokeWidth={1.5} />} />}
+                />
               </div>
             </div>
             <BaseDialog.Description className="sr-only">
@@ -135,15 +138,23 @@ export function ClipPlayer({
             <div className="flex items-center gap-3 px-(--content-x) py-3">
               <IconButton
                 label={playing ? "Pause" : "Play"}
-                icon={playing ? <Pause /> : <Play />}
+                className="-ml-2"
+                icon={
+                  playing ? (
+                    <Pause strokeWidth={1.5} />
+                  ) : (
+                    // The triangle's weight sits left of its box: nudged right to look centred.
+                    <Play strokeWidth={1.5} className="translate-x-px" />
+                  )
+                }
                 onClick={toggle}
               />
-              <span className="w-10 shrink-0 text-meta text-label-2 tabular-nums">
+              <span className="min-w-[5ch] shrink-0 font-mono text-meta text-label-2 tabular-nums">
                 {clock(time)}
               </span>
               <div className="relative flex h-8 min-w-0 flex-1 items-center rounded-row focus-ring-within">
                 <div className="h-1 w-full overflow-hidden rounded-capsule bg-fill-2">
-                  <div className="h-full bg-accent" style={{ width: `${percent}%` }} />
+                  <div className="h-full bg-brand" style={{ width: `${percent}%` }} />
                 </div>
                 <div
                   aria-hidden
@@ -163,7 +174,7 @@ export function ClipPlayer({
                   className="absolute inset-0 size-full cursor-pointer opacity-0 outline-none disabled:cursor-default"
                 />
               </div>
-              <span className="w-10 shrink-0 text-right text-meta text-label-2 tabular-nums">
+              <span className="min-w-[5ch] shrink-0 text-right font-mono text-meta text-label-2 tabular-nums">
                 {clock(duration)}
               </span>
             </div>

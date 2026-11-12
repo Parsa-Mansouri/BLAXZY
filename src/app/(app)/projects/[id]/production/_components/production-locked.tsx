@@ -24,21 +24,23 @@ export function ProductionLocked({
         description="The film is generated here, shot by shot, once Pre-production is done."
       />
       <section
-        aria-label="Production is locked"
+        aria-labelledby="production-locked-title"
         className="flex min-h-110 flex-1 in-2 flex-col justify-between gap-12 rounded-block bg-elevated p-6 sm:p-10"
       >
-        <Lock aria-hidden strokeWidth={1.5} className="size-8 text-label-3" />
+        <Lock aria-hidden strokeWidth={1.5} className="size-5 text-label-2" />
         <div className="flex flex-col gap-8">
           <div className="flex flex-col gap-3">
-            <h2 className="max-w-[20ch] text-heading font-semibold tracking-[-0.03em] text-balance">
+            <h2 id="production-locked-title" className="max-w-[20ch] text-heading text-balance">
               Production opens when every asset is ready.
             </h2>
-            <p className="max-w-[60ch] text-body text-label-2">
+            <p className="max-w-[60ch] text-body text-pretty text-label-2">
               You review each shot, then each generated clip.
             </p>
           </div>
           <div className="flex in-3 flex-wrap items-center gap-x-6 gap-y-4">
-            <Button render={<Link href={currentHref} />}>Go to {currentLabel}</Button>
+            <Button variant="primary" size="large" render={<Link href={currentHref} />}>
+              Go to {currentLabel}
+            </Button>
             {line ? (
               <StatusLine tone={line.tone}>
                 {currentLabel}: {line.text}

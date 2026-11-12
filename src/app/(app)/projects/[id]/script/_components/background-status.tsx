@@ -52,7 +52,9 @@ export function BackgroundFailure({
   return (
     <div role="alert" className="flex flex-col items-start gap-2">
       <StatusLine tone="failed">The shots could not be prepared</StatusLine>
-      {status.failure ? <p className="text-secondary text-label-2">{status.failure}</p> : null}
+      {status.failure ? (
+        <p className="text-secondary text-pretty text-label-2">{status.failure}</p>
+      ) : null}
       <Button
         variant="outlined"
         size="small"
@@ -68,7 +70,7 @@ export function BackgroundFailure({
       >
         Try Again
       </Button>
-      {error ? <p className="text-secondary text-red">{error}</p> : null}
+      {error ? <p className="swap-in text-secondary text-red">{error}</p> : null}
     </div>
   );
 }
@@ -87,7 +89,7 @@ export function EditChangedNotice({
   if (status.state !== "done" || status.resetBlocks <= 0) return null;
   return (
     <div role="status" aria-live="polite" className="flex flex-col items-start gap-2">
-      <p className="text-secondary text-label-2">
+      <p className="text-secondary text-pretty text-label-2 tabular-nums">
         {status.resetBlocks === 1
           ? "The edit changed 1 shot. It is prepared again in Production."
           : `The edit changed ${status.resetBlocks} shots. They are prepared again in Production.`}

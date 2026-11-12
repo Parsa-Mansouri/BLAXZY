@@ -120,8 +120,21 @@ export function Artwork({
 export function MissingImage({ label }: { label: string }) {
   return (
     <>
-      <ImageOff aria-hidden="true" strokeWidth={1.5} className="size-6 text-label-3" />
+      <ImageOff aria-hidden="true" strokeWidth={1.5} className="size-5 text-label-3" />
       <span className="text-meta text-label-3">{label}</span>
+    </>
+  );
+}
+
+/** A number of credits: mono and tabular, so prices line up and do not jump. */
+export function Amount({ n }: { n: number }) {
+  return <span className="font-mono tabular-nums">{formatNumber(n)}</span>;
+}
+
+export function Credits({ n }: { n: number }) {
+  return (
+    <>
+      <Amount n={n} /> {n === 1 ? "credit" : "credits"}
     </>
   );
 }
@@ -142,17 +155,16 @@ export function PriceLine({
   action: keyof typeof PRICE_ACTIONS;
 }) {
   if (price === null) return null;
-  const credits = (n: number) => `${formatNumber(n)} ${n === 1 ? "credit" : "credits"}`;
   if (balance >= price) {
     return (
-      <p className="text-secondary text-label-2 tabular-nums">
-        {PRICE_ACTIONS[action]} costs {credits(price)}. You have {formatNumber(balance)}.
+      <p className="text-secondary text-pretty text-label-2">
+        {PRICE_ACTIONS[action]} costs <Credits n={price} />. You have <Amount n={balance} />.
       </p>
     );
   }
   return (
-    <p role="status" className="text-secondary text-label tabular-nums">
-      You need {credits(price)} and have {formatNumber(balance)}. Add credits to your account to
+    <p role="status" className="text-secondary text-pretty text-label">
+      You need <Credits n={price} /> and have <Amount n={balance} />. Add credits to your account to
       continue.
     </p>
   );
@@ -165,7 +177,7 @@ export const canAfford = (price: number | null, balance: number) =>
 export function ErrorLine({ id, children }: { id?: string; children: ReactNode }) {
   if (!children) return null;
   return (
-    <p id={id} role="alert" className="text-secondary text-red">
+    <p id={id} role="alert" className="swap-in text-secondary text-red">
       {children}
     </p>
   );

@@ -83,13 +83,13 @@ const triggerClass = (size: "regular" | "large", className?: string) =>
     "inline-flex min-w-40 cursor-default items-center justify-between gap-2 rounded-control bg-fill-2 pr-1.5 pl-2.5 text-body text-label outline-none focus-ring",
     "transition-colors duration-(--dur-fast) hover:bg-fill data-[popup-open]:bg-fill",
     "aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-red aria-[invalid=true]:ring-inset",
-    "data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
+    "data-[disabled]:pointer-events-none data-[disabled]:text-label-3",
     size === "large" ? "h-(--control-h-lg)" : "h-(--control-h)",
     className,
   );
 
 const chevron = (
-  <ChevronsUpDown aria-hidden="true" className="size-(--icon-sm) shrink-0 text-label-2" />
+  <ChevronsUpDown aria-hidden="true" className="size-(--icon) shrink-0 text-label-2" />
 );
 
 const checkmark = <Check aria-hidden="true" className="mt-1 size-(--icon) text-label" />;
@@ -154,8 +154,8 @@ export function Select({
                 "w-(--anchor-width) max-w-(--available-width) min-w-60",
               )}
             >
-              <div className="mb-1 flex h-(--control-h) items-center gap-2 rounded-control bg-fill-3 px-2 focus-ring-within">
-                <Search aria-hidden="true" className="size-(--icon-sm) shrink-0 text-label-2" />
+              <div className="mb-1 flex h-(--control-h) items-center gap-2 rounded-item border field-focus border-transparent bg-fill-3 px-2">
+                <Search aria-hidden="true" className="size-(--icon) shrink-0 text-label-2" />
                 <Combobox.Input
                   placeholder={searchPlaceholder}
                   className="min-w-0 flex-1 bg-transparent text-body text-label outline-none"

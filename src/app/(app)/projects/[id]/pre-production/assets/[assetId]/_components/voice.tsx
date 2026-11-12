@@ -40,7 +40,13 @@ export function AudioPlayer({ fileId, label }: { fileId: string; label: string }
           tooltip={false}
           variant="primary"
           size="large"
-          icon={playing ? <Pause /> : <Play />}
+          icon={
+            playing ? (
+              <Pause strokeWidth={1.5} />
+            ) : (
+              <Play strokeWidth={1.5} className="translate-x-px" />
+            )
+          }
           onClick={toggle}
           disabled={failed}
           className="rounded-full"
@@ -66,13 +72,13 @@ export function AudioPlayer({ fileId, label }: { fileId: string; label: string }
           style={{ "--played": `${percent}%` } as CSSProperties}
           className={cn(
             "h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-capsule focus-ring",
-            "bg-[linear-gradient(to_right,var(--label)_var(--played),var(--fill-3)_var(--played))]",
+            "bg-[linear-gradient(to_right,var(--brand)_var(--played),var(--fill-3)_var(--played))]",
             "[&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-label",
             "[&::-moz-range-thumb]:size-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-label",
             "disabled:cursor-default disabled:opacity-40",
           )}
         />
-        <span className="shrink-0 text-meta text-label-2 tabular-nums">
+        <span className="shrink-0 font-mono text-meta text-label-2 tabular-nums">
           {clock(time)} / {clock(duration)}
         </span>
       </div>
@@ -121,7 +127,7 @@ export function VoiceStage({
       <section aria-labelledby="voice-title" className="flex flex-1 in-2 flex-col gap-6">
         <div className="flex flex-col gap-1.5">
           <StageHeading id="voice-title" className="text-heading-sm">
-            Recording
+            {assetName}’s recording
           </StageHeading>
           <p className="text-meta text-label-2">
             Recording {recording.versionNumber} · Uploaded · <When date={recording.createdAt} />
@@ -141,11 +147,10 @@ export function VoiceStage({
     <section aria-labelledby="voice-title" className="flex flex-1 in-2 flex-col gap-6">
       <div className="flex flex-col gap-1.5">
         <StageHeading id="voice-title" className="text-heading-sm">
-          {replacing ? "Replace Recording" : "Add a Recording"}
+          {replacing ? `Replace ${assetName}’s Recording` : `Add ${assetName}’s Voice`}
         </StageHeading>
         <p className="text-body text-label-2">
-          Upload a recording of {assetName}’s voice. It is used as is: there is nothing to generate
-          or review.
+          It is used as is: there is nothing to generate or review.
         </p>
       </div>
       <UploadZone projectId={projectId} assetId={assetId} audio grow />

@@ -2,7 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Button, PageHeader, Toolbar } from "@/ui";
+import { Button, Input, PageHeader, Toolbar } from "@/ui";
 import { useCreateProject } from "../../dashboard/_components/use-create-project";
 
 /** New Project (NewProject.dc.html): a big underlined working title, then Create or Cancel. */
@@ -19,33 +19,32 @@ export function NewProjectForm() {
     <>
       <Toolbar />
       <div className="flex flex-1 flex-col px-(--content-x) pt-8 pb-18">
-        <PageHeader title="New Project" />
+        <PageHeader title="Name Your Film" />
         <form onSubmit={onSubmit} noValidate className="flex flex-1 flex-col">
-          <div className="my-auto flex flex-col py-10">
-            <div className="in-1 border-b border-separator-opaque pb-4 focus-within:border-label-2">
-              <input
-                type="text"
-                value={title}
-                onChange={(event) => {
-                  setTitle(event.target.value);
-                  setError(undefined);
-                }}
-                aria-label="Working title of the new film"
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? "new-project-error" : "new-project-note"}
-                placeholder="Give it a working title"
-                maxLength={200}
-                autoComplete="off"
-                autoFocus
-                className="w-full min-w-0 bg-transparent text-[clamp(36px,5.5vw,88px)] leading-[1.1] font-medium tracking-[-0.03em] text-label outline-none placeholder:text-label-3 max-sm:text-heading-sm"
-              />
-            </div>
+          <div className="my-auto flex flex-col gap-4 py-10">
+            <Input
+              variant="line"
+              value={title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setError(undefined);
+              }}
+              aria-label="Working title of the new film"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "new-project-error" : "new-project-note"}
+              placeholder="Give it a working title"
+              maxLength={200}
+              autoComplete="off"
+              autoFocus
+              className="in-1"
+              inputClassName="-ml-[0.04em] text-hero-title tracking-tight"
+            />
             {error ? (
-              <p id="new-project-error" role="alert" className="mt-4 text-secondary text-red">
+              <p id="new-project-error" role="alert" className="text-secondary text-red">
                 {error}
               </p>
             ) : (
-              <p id="new-project-note" className="mt-4 in-2 text-body text-label-2">
+              <p id="new-project-note" className="in-2 text-body text-label-2">
                 You choose the style next.
               </p>
             )}
@@ -56,8 +55,7 @@ export function NewProjectForm() {
               variant="primary"
               size="large"
               loading={pending}
-              aria-disabled={!ready || undefined}
-              className={!ready ? "bg-selected text-label-3 hover:bg-selected" : undefined}
+              disabled={!ready}
             >
               Create Project
             </Button>

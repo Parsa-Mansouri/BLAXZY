@@ -4,20 +4,13 @@ import { useState, useTransition, type ReactNode, type RefObject } from "react";
 import Link from "next/link";
 import type { BlockProductionStage, TakeView } from "@/server/production";
 import { Button, ProgressBar } from "@/ui";
+import { Credits, Mono } from "../../../../_components/values";
 import { ChangeRequest } from "../../../../_components/change-request";
 import { isCreditsFailure } from "../../../_lib/clip-view";
 import { blocksHref } from "../../../_lib/routes";
 import { retryTakeAction } from "../../../actions";
 import { StateHeading } from "../../../_components/clips-context";
-import {
-  CreditLine,
-  ErrorLine,
-  When,
-  canAfford,
-  creditWords,
-  formatNumber,
-  type IssueChoice,
-} from "./shared";
+import { CreditLine, ErrorLine, When, canAfford, formatNumber, type IssueChoice } from "./shared";
 
 const SAMPLE_CLIP = "Sample clip. A placeholder from the test generator, not a real result.";
 
@@ -147,11 +140,15 @@ export function ReviewPanel({
           acceptPrice !== null && balance < acceptPrice ? (
             <CreditLine price={acceptPrice} balance={balance} action="The final" />
           ) : (
-            <p className="text-secondary text-pretty text-label-2 tabular-nums">
+            <p className="text-secondary text-pretty text-label-2">
               Accepting renders this exact clip in full quality
-              {acceptPrice !== null
-                ? `, for ${creditWords(acceptPrice)}. You have ${formatNumber(balance)}.`
-                : "."}
+              {acceptPrice !== null ? (
+                <>
+                  , for <Credits n={acceptPrice} />. You have <Mono>{formatNumber(balance)}</Mono>.
+                </>
+              ) : (
+                "."
+              )}
             </p>
           )
         ) : (
@@ -220,10 +217,12 @@ export function FailedPanel({
         title={final ? "The final could not be made." : "The draft could not be made."}
       >
         <p className="text-body text-pretty text-label-2">
-          {take.failure ?? "Something went wrong while it was being made."}
+          {take.failure ?? "The render stopped before the clip was finished."}
         </p>
         {isCreditsFailure(take.failure) ? (
-          <p className="text-body text-label tabular-nums">You now have {creditWords(balance)}.</p>
+          <p className="text-body text-label">
+            You now have <Credits n={balance} />.
+          </p>
         ) : null}
       </Intro>
       <div className="flex flex-col gap-3">
@@ -248,7 +247,7 @@ export function FailedPanel({
 /** The shot has an accepted final. */
 export function DonePanel({ shown, take, label }: PanelBase & { take: TakeView; label: string }) {
   return (
-    <Intro shown={shown} title="Final">
+    <Intro shown={shown} title="This Shot Is Final">
       <p className="text-body text-pretty text-label-2">
         This shot is final and ready for your editor.
       </p>
@@ -282,7 +281,9 @@ export function BeforeClipsPanel({
         <p className="text-body text-pretty text-label-2">{words}</p>
       </Intro>
       <div>
-        <Button render={<Link href={blocksHref(projectId)} />}>Open Shots</Button>
+        <Button variant="primary" size="large" render={<Link href={blocksHref(projectId)} />}>
+          Open Shots
+        </Button>
       </div>
     </>
   );

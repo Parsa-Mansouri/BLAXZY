@@ -37,17 +37,17 @@ export const FeatureBlock = forwardRef<HTMLElement, FeatureBlockProps>(function 
       type: render ? undefined : (type ?? "button"),
       className: cn(
         "press flex min-h-75 flex-col justify-between gap-8 rounded-block bg-accent p-8 text-left text-on-accent focus-ring",
-        "hover:bg-accent/95 disabled:pointer-events-none disabled:opacity-40",
+        "hover:bg-accent/95 disabled:pointer-events-none disabled:bg-fill-2 disabled:text-label-3",
         className,
       ),
       children: (
         <>
           <span className="flex flex-col gap-3">
-            <span className="text-[32px] leading-9 font-bold tracking-[-0.025em] text-balance">
-              {title}
-            </span>
+            <span className="text-block-title text-balance">{title}</span>
             {description ? (
-              <span className="max-w-[34ch] text-body text-on-accent-2">{description}</span>
+              <span className="max-w-[34ch] text-body text-pretty text-on-accent-2">
+                {description}
+              </span>
             ) : null}
           </span>
           {cta ? (
@@ -82,21 +82,21 @@ export const QuietTile = forwardRef<HTMLElement, QuietTileProps>(function QuietT
       type: render ? undefined : (type ?? "button"),
       className: cn(
         "press flex min-h-30 flex-col justify-between gap-4 rounded-block bg-elevated p-6 text-left text-label focus-ring",
-        "hover:bg-fill-4 disabled:pointer-events-none disabled:opacity-40",
+        "hover:bg-fill-4 disabled:pointer-events-none disabled:text-label-3",
         !icon && "justify-end",
         className,
       ),
       children: (
         <>
           {icon ? (
-            <span className="flex text-label-2 [&_svg]:size-5" aria-hidden="true">
+            <span className="flex text-label-2 [&_svg]:size-(--icon-lg)" aria-hidden="true">
               {icon}
             </span>
           ) : null}
           <span className="flex flex-col gap-1">
-            <span className="text-row font-semibold">{title}</span>
+            <span className="text-row font-semibold text-balance">{title}</span>
             {description ? (
-              <span className="text-secondary text-label-2">{description}</span>
+              <span className="text-secondary text-pretty text-label-2">{description}</span>
             ) : null}
           </span>
         </>

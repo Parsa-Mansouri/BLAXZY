@@ -26,7 +26,8 @@ export function SidebarAccount({ name, email }: { name: string; email: string })
             aria-hidden="true"
             className="flex size-(--avatar) items-center justify-center rounded-full bg-fill-2 text-meta font-semibold text-label"
           >
-            {initialOf(name, email)}
+            {/* Centred by its cap height, not its line box. */}
+            <span className="optical-center">{initialOf(name, email)}</span>
           </span>
         }
       >

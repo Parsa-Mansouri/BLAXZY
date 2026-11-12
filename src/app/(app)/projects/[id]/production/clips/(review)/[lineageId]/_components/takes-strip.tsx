@@ -68,7 +68,7 @@ export function TakesStrip({
                       orientation === "portrait" ? "aspect-[9/16]" : "aspect-video",
                       take.posterFileId ? "bg-ground" : "bg-elevated",
                       shown
-                        ? "ring-2 ring-accent ring-offset-2 ring-offset-ground"
+                        ? "ring-2 ring-brand ring-offset-2 ring-offset-ground"
                         : playable && "group-hover:ring-1 group-hover:ring-outline",
                     )}
                   >

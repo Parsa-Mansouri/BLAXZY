@@ -11,11 +11,13 @@ import {
   PictureTile,
   ProgressBar,
   StatusLine,
+  cn,
   formatDurationLong,
   stagger,
 } from "@/ui";
 import { fileSrc } from "@/lib/file-src";
 import { ChangeRequest, type IssueChoice } from "../../_components/change-request";
+import { Mono } from "../../_components/values";
 import { useRefreshReviewList } from "../../_components/review-list-context";
 import { usePolling } from "../../../_lib/use-polling";
 import { blocksHref } from "../../../_lib/production-routes";
@@ -105,8 +107,10 @@ function Section({
   children,
   action,
   headingRef,
+  className,
 }: {
   title: string;
+  className?: string;
   children: ReactNode;
   action?: ReactNode;
   /** Makes the heading a focus target (it then takes focus after a change in its section). */
@@ -114,13 +118,13 @@ function Section({
 }) {
   const heading = `block-${title.toLowerCase().replaceAll(" ", "-")}`;
   return (
-    <section aria-labelledby={heading} className="flex flex-col gap-4">
+    <section aria-labelledby={heading} className={cn("flex min-w-0 flex-col gap-4", className)}>
       <div className="flex min-h-(--btn-sm) items-center justify-between gap-4">
         <h3
           ref={headingRef}
           id={heading}
           tabIndex={headingRef ? -1 : undefined}
-          className="scroll-mt-[calc(var(--toolbar-h)+1rem)] text-section outline-none"
+          className="scroll-mt-[calc(var(--toolbar-h)+1rem)] text-section text-balance outline-none"
         >
           {title}
         </h3>
@@ -279,14 +283,6 @@ export function BlockScreen({
     });
   }
 
-  const meta = [
-    `Shot ${position}`,
-    block.durationSeconds ? formatDurationLong(block.durationSeconds) : null,
-    blockStateLabel(stage),
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
   function decision() {
     if (failed) {
       return (
@@ -343,16 +339,26 @@ export function BlockScreen({
               ref={titleRef}
               tabIndex={-1}
               id="shot-title"
-              className="scroll-mt-[calc(var(--toolbar-h)+1rem)] text-heading-sm font-semibold tracking-[-0.02em] text-balance break-words outline-none"
+              className="scroll-mt-[calc(var(--toolbar-h)+1rem)] text-heading-sm text-balance break-words outline-none"
             >
               {title}
             </h2>
-            <StatusLine tone={BLOCK_STATE_TONES[stage]}>{meta}</StatusLine>
+            <StatusLine tone={BLOCK_STATE_TONES[stage]}>
+              Shot <span className="tabular-nums">{position}</span>
+              {block.durationSeconds ? (
+                <>
+                  {" · "}
+                  <Mono>{formatDurationLong(block.durationSeconds)}</Mono>
+                </>
+              ) : null}
+              {" · "}
+              {blockStateLabel(stage)}
+            </StatusLine>
           </div>
           {!asking ? <div className="flex flex-wrap items-center gap-2">{decision()}</div> : null}
         </header>
         {changeNotice ? (
-          <p className="max-w-(--measure) text-body text-label">{changeNotice}</p>
+          <p className="max-w-(--measure) text-body text-pretty text-label">{changeNotice}</p>
         ) : null}
         {actionError ? (
           <p role="alert" className="max-w-(--measure) text-secondary text-failed">
@@ -380,94 +386,98 @@ export function BlockScreen({
           >
             <p className="text-body text-label">The shot is being prepared.</p>
             <ProgressBar value={null} aria-label="Preparing the shot" />
-            <p className="text-secondary text-label-2">
+            <p className="text-secondary text-pretty text-label-2">
               You can leave this page. The shot is ready to review when you return.
             </p>
           </div>
         ) : null}
         {failed ? (
-          <p role="alert" className="max-w-(--measure) text-body text-label">
+          <p role="alert" className="max-w-(--measure) text-body text-pretty text-label">
             This shot could not be prepared. {block.failure}
           </p>
         ) : null}
       </div>
 
-      <Section
-        title="Assets"
-        headingRef={assetsRef}
-        action={
-          <Button
-            size="small"
-            leadingIcon={<Plus aria-hidden />}
-            onClick={() => {
-              setPickerError(null);
-              setPickerOpen(true);
-            }}
-            disabled={locked || room === 0 || pending}
-          >
-            Add Asset
-          </Button>
-        }
-      >
-        {block.assets.length > 0 ? (
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,13rem),1fr))] gap-x-4 gap-y-6">
-            {block.assets.map((asset, i) => (
-              <li key={asset.ref} className="min-w-0 enter" style={stagger(i, 60)}>
-                <PictureTile
-                  label={asset.name}
-                  aspect="video"
-                  picture={
-                    asset.thumbnailFileId ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- stored media behind a redirect
-                      <img
-                        src={fileSrc(asset.thumbnailFileId)}
-                        alt={`${asset.name}, sheet`}
-                        loading="lazy"
-                        decoding="async"
-                        draggable={false}
-                      />
-                    ) : undefined
-                  }
-                  placeholder="No image yet"
-                  dashed
-                  coverHeading={asset.name}
-                  coverLine={<p className="text-secondary text-label-2 capitalize">{asset.kind}</p>}
-                  actions={
-                    <Button
-                      variant="dark"
-                      disabled={locked || pending}
-                      onClick={() =>
-                        setAssets(
-                          attachedIds.filter((id) => id !== asset.assetId),
-                          "tile",
-                        )
-                      }
-                    >
-                      Remove from Shot
-                    </Button>
-                  }
-                  caption={asset.name}
-                />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="max-w-(--measure) text-body text-label-2">
-            No assets are attached. The clip is made from the prompt alone.
-          </p>
-        )}
-        {room === 0 ? (
-          <p className="text-secondary text-label-2">That is as many as this shot can use.</p>
+      <div className="flex flex-wrap items-start gap-x-10 gap-y-12">
+        {block.scriptExcerpt.trim() ? (
+          <Section title="Script" className="flex-[3_1_28rem] sm:max-w-205">
+            <PaperSheet as="div" className="max-w-none">
+              <p className="whitespace-pre-line">{block.scriptExcerpt.trim()}</p>
+            </PaperSheet>
+          </Section>
         ) : null}
-      </Section>
 
-      {block.scriptExcerpt.trim() ? (
-        <Section title="Script">
-          <PaperSheet as="div" className="max-w-205">
-            <p className="whitespace-pre-line">{block.scriptExcerpt.trim()}</p>
-          </PaperSheet>
+        <Section
+          title="In This Shot"
+          className="flex-[2_1_20rem]"
+          headingRef={assetsRef}
+          action={
+            <Button
+              size="small"
+              className="pl-3.5"
+              leadingIcon={<Plus aria-hidden strokeWidth={1.5} />}
+              onClick={() => {
+                setPickerError(null);
+                setPickerOpen(true);
+              }}
+              disabled={locked || room === 0 || pending}
+            >
+              Add Asset
+            </Button>
+          }
+        >
+          {block.assets.length > 0 ? (
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))] gap-x-4 gap-y-6">
+              {block.assets.map((asset, i) => (
+                <li key={asset.ref} className="min-w-0 enter" style={stagger(i, 60)}>
+                  <PictureTile
+                    label={asset.name}
+                    aspect="video"
+                    picture={
+                      asset.thumbnailFileId ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- stored media behind a redirect
+                        <img
+                          src={fileSrc(asset.thumbnailFileId)}
+                          alt={`${asset.name}, sheet`}
+                          loading="lazy"
+                          decoding="async"
+                          draggable={false}
+                        />
+                      ) : undefined
+                    }
+                    placeholder="No image yet"
+                    coverLine={
+                      <p className="text-secondary text-label-2 capitalize">{asset.kind}</p>
+                    }
+                    actions={
+                      <Button
+                        variant="dark"
+                        disabled={locked || pending}
+                        onClick={() =>
+                          setAssets(
+                            attachedIds.filter((id) => id !== asset.assetId),
+                            "tile",
+                          )
+                        }
+                      >
+                        Remove from Shot
+                      </Button>
+                    }
+                    caption={asset.name}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="max-w-(--measure) text-body text-pretty text-label-2">
+              No assets are attached. The clip is made from the prompt alone.
+            </p>
+          )}
+          {room === 0 ? (
+            <p className="text-secondary text-label-2">That is as many as this shot can use.</p>
+          ) : null}
         </Section>
-      ) : null}
+      </div>
 
       {block.prompt ? (
         <Section title="Prompt">

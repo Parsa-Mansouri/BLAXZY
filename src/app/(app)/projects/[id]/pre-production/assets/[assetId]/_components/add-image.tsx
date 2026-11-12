@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState, useTransition, type ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
-import { Button, FeatureBlock, QuietTile, cn } from "@/ui";
+import { Button, FeatureBlock, PicturePlaceholder, QuietTile, Textarea, cn, stagger } from "@/ui";
 import { useGuidedDraft } from "../_lib/guided-draft";
 import { startFromPromptAction } from "../actions";
 import { StageHeading, useAssetScreen, useFocusOnArrival } from "./asset-context";
@@ -59,15 +59,15 @@ const PROMPT_HINTS: Partial<Record<AssetInfo["kind"], string>> = {
 /** The empty frame where the image will stand, in the project's shape. */
 function EmptyFrame({ orientation }: { orientation: Orientation }) {
   return (
-    <div
+    <PicturePlaceholder
+      label="No image yet"
+      aspect="video"
       className={cn(
-        "mx-auto flex w-full items-center justify-center rounded-card border border-dashed border-separator-opaque text-meta text-label-3",
+        "mx-auto rounded-card",
         PICTURE_MAX_H,
         orientation === "portrait" ? "aspect-[9/16]" : "aspect-video",
       )}
-    >
-      No image yet
-    </div>
+    />
   );
 }
 
@@ -103,6 +103,7 @@ export function AddImage(props: AddImageProps) {
         key={asset.id}
         projectId={props.projectId}
         assetId={asset.id}
+        assetName={asset.name}
         questions={questions}
         maxAnswer={props.limits.answer}
         maxPrompt={props.limits.prompt}
@@ -184,7 +185,7 @@ function Chooser({
           <FeatureBlock
             ref={lead}
             className="flex-[2_1_300px] enter"
-            style={{ animationDelay: "300ms" }}
+            style={stagger(0)}
             title={resuming ? "Continue Answering" : "Answer a Few Questions"}
             description={`We ask about ${asset.name}, one thing at a time, and write the prompt for you.`}
             cta={resuming ? "Continue" : "Start"}
@@ -194,7 +195,7 @@ function Chooser({
           <FeatureBlock
             ref={lead}
             className="flex-[2_1_300px] enter"
-            style={{ animationDelay: "300ms" }}
+            style={stagger(0)}
             title="Write a Prompt"
             description={`Describe how ${asset.name} should look, in your own words.`}
             cta="Start"
@@ -205,14 +206,14 @@ function Chooser({
           {hasQuestions ? (
             <QuietTile
               className="flex-1 enter"
-              style={{ animationDelay: "340ms" }}
+              style={stagger(1)}
               title="Write a Prompt"
               onClick={() => onPick("prompt")}
             />
           ) : null}
           <QuietTile
             className="flex-1 enter"
-            style={{ animationDelay: "380ms" }}
+            style={stagger(2)}
             title="Upload an Image"
             onClick={() => onPick("upload")}
           />
@@ -233,7 +234,12 @@ function Chooser({
 function BackToChooser({ onClick }: { onClick: () => void }) {
   return (
     <div>
-      <Button variant="plain" leadingIcon={<ChevronLeft />} onClick={onClick}>
+      <Button
+        variant="plain"
+        leadingIcon={<ChevronLeft strokeWidth={1.5} />}
+        onClick={onClick}
+        className="pl-0"
+      >
         Other Ways to Add an Image
       </Button>
     </div>
@@ -307,7 +313,7 @@ function PromptWriter({
           <label htmlFor={`${id}-prompt`} className="sr-only">
             Description of the image
           </label>
-          <textarea
+          <Textarea
             ref={area}
             id={`${id}-prompt`}
             value={prompt}
@@ -321,20 +327,20 @@ function PromptWriter({
                 generate();
               }
             }}
-            rows={6}
+            minRows={6}
+            maxRows={16}
+            textStyle="script"
             placeholder={PLACEHOLDERS[asset.kind] ?? PLACEHOLDERS.other}
             aria-invalid={error ? true : undefined}
             aria-describedby={`${id}-hint${showCount ? ` ${id}-count` : ""}`}
             disabled={sending}
-            className={cn(
-              "field-sizing-content max-h-[55dvh] min-h-[calc(var(--ts-script-lh)*6+2rem)] w-full resize-none rounded-tile border border-separator-opaque bg-elevated px-4 py-3.5 text-script text-label outline-none placeholder:text-label-3",
-              "focus-visible:border-label-2 disabled:text-label-2",
-            )}
           />
           <div className="flex items-baseline justify-between gap-4">
             {asset.description ? (
-              <button
-                type="button"
+              <Button
+                variant="plain"
+                size="small"
+                className="pl-0"
                 disabled={sending}
                 onClick={() => {
                   setPrompt((current) =>
@@ -344,10 +350,9 @@ function PromptWriter({
                   );
                   area.current?.focus();
                 }}
-                className="rounded-row text-secondary text-label underline-offset-4 focus-ring hover:underline disabled:text-label-3"
               >
                 Start from the Script’s Description
-              </button>
+              </Button>
             ) : (
               <span />
             )}

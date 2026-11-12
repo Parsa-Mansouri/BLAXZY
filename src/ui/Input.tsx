@@ -32,7 +32,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     <div
       className={cn(
         inline
-          ? "flex w-full min-w-0 items-center gap-2 has-[:disabled]:opacity-60"
+          ? "flex w-full min-w-0 items-center gap-2 has-[:disabled]:text-label-3"
           : [fieldSurface, fieldShape[variant]],
         line && "gap-4",
         className,
@@ -46,7 +46,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         {...control}
         {...rest}
         className={cn(
-          "min-w-0 flex-1 bg-transparent py-1 text-body text-label outline-none disabled:cursor-not-allowed",
+          "min-w-0 flex-1 bg-transparent py-1 text-body text-inherit outline-none disabled:cursor-not-allowed",
           line && "py-0 text-heading-sm font-medium tracking-[-0.02em]",
           inputClassName,
         )}

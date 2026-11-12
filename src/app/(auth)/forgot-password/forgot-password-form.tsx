@@ -17,6 +17,7 @@ export function ForgotPasswordForm() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    if (submitting) return;
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
       setError("Enter an email address such as name@example.com.");
       return;

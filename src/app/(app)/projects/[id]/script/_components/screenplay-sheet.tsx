@@ -4,24 +4,28 @@ import type { ScreenplayLine } from "../_lib/screenplay";
 import type { Scene, ScreenplayBlock } from "../_lib/scenes";
 
 /**
- * The paper sheet for screenplay text. A drop shadow cannot be seen on a black ground, so the
- * sheet shows its edge another way: a hairline rim, a slightly darker bottom edge, and the page
- * under it peeking out at the lower right, like the top sheet of a short stack.
+ * The paper behind screenplay text, as a layer under its content (the review sets comments beside
+ * the text, so the paper cannot be the text's own box). The light paper on the black ground shows
+ * its edge by itself: no rim, shadow or stacked pages.
  */
 export function PaperLayers({ className }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={cn("pointer-events-none absolute inset-y-0 left-0 -z-10", className)}
-    >
-      <span className="absolute inset-0 translate-x-[5px] translate-y-[6px] rounded-paper bg-[color-mix(in_srgb,var(--paper)_46%,var(--ground))]" />
-      <span className="absolute inset-0 rounded-paper bg-paper shadow-[inset_0_0_0_1px_rgb(27_26_23/0.12),inset_0_-3px_0_rgb(27_26_23/0.07)]" />
-    </span>
+      className={cn(
+        "pointer-events-none absolute inset-y-0 left-0 -z-10 rounded-paper bg-paper",
+        className,
+      )}
+    />
   );
 }
 
-/** Horizontal padding of text on the sheet. */
-export const SHEET_X = "px-[clamp(20px,4vw,48px)]";
+/** Horizontal padding of text on the sheet (the kit PaperSheet's inset). */
+export const SHEET_X = "px-[clamp(20px,4vw,52px)]";
+/** The same inset as a margin, for a dark card set under a line on the sheet. */
+export const SHEET_MX = "mx-[clamp(20px,4vw,52px)]";
+/** The same inset from the right, for the narrow comment button under a line. */
+export const SHEET_RIGHT = "right-[clamp(20px,4vw,52px)]";
 
 /** Ink-coloured text selection and focus rings for anything set on the paper. */
 export const ON_PAPER = "selection:bg-ink/20 selection:text-ink [&_:focus-visible]:outline-ink";
@@ -92,8 +96,8 @@ export function BlockText({ block, id }: { block: ScreenplayBlock; id?: string }
 export function TitlePage({ title, logline }: { title: string; logline: string | null }) {
   return (
     <div className="flex flex-col items-center gap-3 pb-6 text-center">
-      <p className="font-bold uppercase">{title}</p>
-      {logline ? <p className="max-w-[48ch] text-pretty">{logline}</p> : null}
+      <p className="max-w-[36ch] font-bold text-balance break-words uppercase">{title}</p>
+      {logline ? <p className="max-w-[48ch] text-pretty break-words">{logline}</p> : null}
     </div>
   );
 }
@@ -115,13 +119,12 @@ export function ReadingSheet({
     <article
       aria-label={ariaLabel}
       className={cn(
-        "relative isolate flex w-full max-w-205 flex-col gap-6 py-11 font-script text-script text-ink",
-        ON_PAPER,
+        // The kit's `paper` surface (paper, ink, its own selection and focus colours).
+        "flex w-full max-w-205 flex-col gap-6 rounded-paper py-11 font-script text-script paper",
         SHEET_X,
         className,
       )}
     >
-      <PaperLayers className="right-0" />
       {top}
       {scenes.length === 0 ? <p>This version has no text.</p> : null}
       {scenes.flatMap((scene) =>

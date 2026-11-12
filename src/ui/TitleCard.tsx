@@ -36,7 +36,7 @@ export function TitleCard({ title, line, size = "tile", action, className }: Tit
       >
         <p
           className={cn(
-            "line-clamp-3 break-words text-label",
+            "line-clamp-3 text-balance break-words text-label",
             hero ? "max-w-[80%] text-display" : "max-w-[92%] text-heading-sm",
           )}
         >

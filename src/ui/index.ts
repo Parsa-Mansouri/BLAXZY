@@ -46,8 +46,16 @@ export { PaperSheet, ScreenplayAction, ScreenplayDialogue } from "./PaperSheet";
 export type { PaperSheetProps } from "./PaperSheet";
 
 // Controls
-export { Button, IconButton } from "./Button";
-export type { ButtonProps, ButtonSize, ButtonVariant, IconButtonProps } from "./Button";
+export { Button, IconButton, SubmitButton } from "./Button";
+export type {
+  ButtonProps,
+  ButtonSize,
+  ButtonVariant,
+  IconButtonProps,
+  SubmitButtonProps,
+} from "./Button";
+export { Mono, Kbd, TextLink } from "./Mono";
+export type { MonoProps, TextLinkProps } from "./Mono";
 export { Field, useFieldControl } from "./Field";
 export type { FieldProps } from "./Field";
 export { Input } from "./Input";
@@ -98,7 +106,19 @@ export { Badge } from "./Badge";
 export type { BadgeProps, BadgeTone } from "./Badge";
 export { Spinner } from "./Spinner";
 export type { SpinnerProps } from "./Spinner";
-export { Skeleton } from "./Skeleton";
+export {
+  Skeleton,
+  SkeletonButton,
+  SkeletonHeader,
+  SkeletonRegion,
+  SkeletonRows,
+  SkeletonText,
+  SkeletonTile,
+} from "./Skeleton";
+
+// Feedback motion
+export { Tick, Confirmation, useFlash } from "./Feedback";
+export type { TickProps, ConfirmationProps } from "./Feedback";
 export { ProgressBar } from "./ProgressBar";
 export type { ProgressBarProps } from "./ProgressBar";
 

@@ -160,7 +160,7 @@ export function Calendar({
                       disabled && "cursor-not-allowed text-label-3",
                     )}
                   >
-                    {day.day}
+                    <span className="optical-center">{day.day}</span>
                     {isToday ? (
                       <span
                         aria-hidden="true"

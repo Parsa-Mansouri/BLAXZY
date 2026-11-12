@@ -102,9 +102,12 @@ export function AssetPickerSheet({
     >
       <div className="flex flex-col gap-4">
         {items === null ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-hidden>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-3" aria-hidden>
             {Array.from({ length: 6 }, (_, i) => (
-              <Skeleton key={i} className="aspect-video" />
+              <div key={i} className="flex flex-col gap-1.5">
+                <Skeleton className="aspect-video" />
+                <Skeleton className="h-4 w-2/3 rounded-paper" />
+              </div>
             ))}
           </div>
         ) : available.length === 0 && !cursor ? (
@@ -133,28 +136,35 @@ export function AssetPickerSheet({
                       blocked && "opacity-40",
                     )}
                   >
-                    <span className="relative block">
-                      <AssetThumb
-                        fileId={item.thumbnailFileId}
-                        className={cn(
-                          "w-full rounded-tile",
-                          checked && "outline-2 -outline-offset-2 outline-accent",
-                        )}
-                      />
+                    <AssetThumb
+                      fileId={item.thumbnailFileId}
+                      className={cn(
+                        "w-full rounded-tile",
+                        checked && "outline-2 -outline-offset-2 outline-brand",
+                      )}
+                    />
+                    <span className="flex min-w-0 items-center gap-1.5 px-0.5 text-secondary text-label">
                       {checked ? (
-                        <span
+                        <Check
                           aria-hidden
-                          className="absolute top-1.5 right-1.5 flex size-5 items-center justify-center rounded-full bg-accent text-on-accent"
-                        >
-                          <Check className="size-3" strokeWidth={3} />
-                        </span>
+                          strokeWidth={1.5}
+                          className="size-(--icon) shrink-0 text-brand"
+                        />
                       ) : null}
+                      <span className="truncate">{item.name}</span>
                     </span>
-                    <span className="truncate px-0.5 text-secondary text-label">{item.name}</span>
                   </button>
                 </li>
               );
             })}
+            {loading
+              ? Array.from({ length: 3 }, (_, i) => (
+                  <li key={`pending-${i}`} aria-hidden className="flex flex-col gap-1.5">
+                    <Skeleton className="aspect-video" />
+                    <Skeleton className="h-4 w-2/3 rounded-paper" />
+                  </li>
+                ))
+              : null}
           </ul>
         )}
         {cursor ? (

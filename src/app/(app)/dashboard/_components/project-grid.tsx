@@ -1,8 +1,18 @@
 "use client";
 
-import { Button } from "@/ui";
+import { Button, Skeleton } from "@/ui";
 import type { ProjectSummary } from "../_lib/summary";
 import { ProjectTile } from "./project-tile";
+
+/** A tile-shaped stand-in for a film that is still loading. */
+function PendingTile() {
+  return (
+    <li aria-hidden="true" className="flex min-w-0 flex-col gap-3">
+      <Skeleton className="aspect-video rounded-card" />
+      <Skeleton className="h-5 w-2/3 rounded-row" />
+    </li>
+  );
+}
 
 /** The shelf: a grid of film tiles that fills the width, with Load More under it. */
 export function ProjectGrid({
@@ -29,7 +39,10 @@ export function ProjectGrid({
   return (
     <div className="flex flex-col gap-10">
       {items.length > 0 ? (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-x-6 gap-y-9">
+        <ul
+          aria-busy={loadingMore || undefined}
+          className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-x-6 gap-y-9"
+        >
           {items.map((project, index) => (
             <ProjectTile
               key={project.id}
@@ -40,6 +53,13 @@ export function ProjectGrid({
               onArchived={onArchived}
             />
           ))}
+          {loadingMore ? (
+            <>
+              <PendingTile />
+              <PendingTile />
+              <PendingTile />
+            </>
+          ) : null}
         </ul>
       ) : null}
       {hasMore ? (

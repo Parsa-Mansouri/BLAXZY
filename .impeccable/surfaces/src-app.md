@@ -13,7 +13,8 @@ Audience and job: a film director at a desk in a dim room, moving a project thro
 Success: they always know where they are, what the one next step is, and their own titles and
 images are the most prominent thing on screen. Must stay untouched: the black ground, the BLAXZY
 wordmark, all behaviour, routes and server code. A polished result would still feel wrong if it
-looked like a web dashboard: boxes, a coloured accent, a narrow centred column, marketing copy.
+looked like a web dashboard: boxes, coloured fills or buttons, a narrow centred column, marketing
+copy.
 
 ## Direction contract
 
@@ -22,12 +23,14 @@ left, one clear task per screen on the right. Source of truth: the owner-approve
 (November 2026). It refuses the web-dashboard arrangement of top bar, centred column and boxes.
 
 OWN-WORLD: true black ground; a floating rounded sidebar (#0f0f11); dark tiles (#141416); white
-as the only accent (one white capsule per screen); colour only for status (done green, waiting
-amber, working grey, failed red). Geist for everything, Geist Mono only for status lines,
+for the one primary capsule per screen; one brand accent colour (#5b84ff) for small marks only
+(title rule, selected ring and tick, active stage line, tab underline, links, selection,
+progress fill); other colour only for status (done green, waiting amber, working grey, failed
+red). Geist for everything, status lines included; Geist Mono only for technical values,
 Courier Prime on a paper sheet for screenplay text. Type scale 48 / 34-28 / 18 / 17 / 15 / 14 /
 13, nothing smaller. Fixed words in capitals; user-written names keep their case.
 
-STORY: every signed-in page opens with a 48px capital title rising out of a mask, a 48x3 white
+STORY: every signed-in page opens with a 48px capital title rising out of a mask, a 48x3 brand
 rule wiping in, and one sentence; then the one thing the user is here to do, largest and
 brightest, with alternatives present but quieter. Lists on the left choose what the focus area
 on the right shows; review is non-linear.

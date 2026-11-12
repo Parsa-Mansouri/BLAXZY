@@ -7,7 +7,7 @@ export function Wordmark({ href = "/", className }: { href?: string; className?:
     <Link
       href={href}
       aria-label="BLAXZY, home"
-      className={cn("rounded-control text-wordmark text-label focus-ring", className)}
+      className={cn("rounded-nested text-wordmark text-label focus-ring", className)}
     >
       BLAXZY
     </Link>

@@ -178,7 +178,7 @@ export function AssetScreen(props: AssetScreenProps) {
   function stageView() {
     if (asset.removed) {
       return (
-        <p className="max-w-(--measure) in-2 text-body text-label-2">
+        <p className="max-w-(--measure) in-2 text-body text-pretty text-label-2">
           This asset was removed from the project. Its images and sheets are kept below.
         </p>
       );
@@ -312,7 +312,6 @@ export function AssetScreen(props: AssetScreenProps) {
             asset={asset}
             kindName={props.kindName}
             category={props.category}
-            stage={stage}
             busy={versions.busy}
             limits={props.limits}
           />
@@ -332,7 +331,7 @@ export function AssetScreen(props: AssetScreenProps) {
           </div>
         </div>
         <HistoryStrip
-          className="mt-16"
+          className="mt-24"
           items={items}
           voice={voice}
           selectedKey={viewing?.key ?? null}

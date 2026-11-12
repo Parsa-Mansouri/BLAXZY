@@ -36,8 +36,9 @@ export function StatusDot({ tone, className }: { tone: StatusTone; className?: s
 }
 
 /**
- * A real status line: Geist Mono 13/18 in the secondary colour, after a 6px status dot. The only
- * place the mono face is used.
+ * A real status line: Geist 13/18 in the secondary colour, after a 6px status dot. Counts use
+ * aligned figures (tabular-nums) so "1 to review" and "12 to review" do not jitter. Put a
+ * technical value inside it in `<Mono>` (a duration, a price in credits).
  */
 export function StatusLine({
   tone = "none",
@@ -49,7 +50,7 @@ export function StatusLine({
   return (
     <Tag
       className={cn(
-        "flex flex-wrap items-center gap-x-2 font-mono text-meta text-label-2",
+        "flex flex-wrap items-center gap-x-2 font-sans text-meta text-label-2 tabular-nums",
         className,
       )}
     >

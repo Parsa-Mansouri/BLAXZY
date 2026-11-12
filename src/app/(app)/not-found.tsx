@@ -15,7 +15,8 @@ export default function AppNotFound() {
       <div className="px-(--content-x) pt-8 pb-18">
         <NotFoundView
           heading="h1"
-          message="This page does not exist, or it is not in your account."
+          title="This Page Is Not in Your Account"
+          message="It does not exist, or it belongs to someone else. Your films are in Projects."
           actions={
             <Button variant="primary" size="large" render={<Link href="/projects" />}>
               Projects

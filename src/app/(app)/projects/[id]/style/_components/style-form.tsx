@@ -134,13 +134,13 @@ function Question({
 }) {
   const id = useId();
   return (
-    <div role="group" aria-labelledby={id} className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
-      <h2 id={id} className="mb-2 text-heading text-balance">
+    <div role="group" aria-labelledby={id} className="flex min-h-0 min-w-0 flex-1 flex-col gap-6">
+      <h2 id={id} className="max-w-[24ch] text-heading text-balance">
         {heading}
       </h2>
       {children}
       {error ? (
-        <p role="alert" className="text-secondary text-red">
+        <p role="alert" className="-mt-2 swap-in text-secondary text-pretty text-red">
           {error}
         </p>
       ) : null}
@@ -486,7 +486,7 @@ export function StyleForm({
                   key={p.seconds}
                   selected={!customLength && lengthValue === p.seconds}
                   onSelect={() => pickLength(p.seconds)}
-                  className="min-h-32 enter items-end pb-5 text-heading-sm font-semibold"
+                  className="min-h-32 enter items-end pb-5 text-heading-sm font-semibold tabular-nums"
                   style={stagger(i, base)}
                 >
                   {lengthLabel(p.seconds)}
@@ -495,7 +495,7 @@ export function StyleForm({
               <OptionRow
                 selected={customLength}
                 onSelect={() => setCustomOpen(true)}
-                className="min-h-32 enter items-end pb-5 text-heading-sm font-semibold"
+                className="min-h-32 enter items-end pb-5 text-heading-sm font-semibold text-balance"
                 style={stagger(DURATION_PRESETS.length, base)}
               >
                 Other Length
@@ -514,29 +514,33 @@ export function StyleForm({
               {isSeries ? (
                 <div className="flex swap-in flex-wrap items-center gap-x-6 gap-y-3">
                   <span id="episodes-label" className="text-row">
-                    Number of Episodes
+                    Episodes
                   </span>
+                  {/* Capsules in a capsule: the corners stay concentric at any padding. */}
                   <div
                     role="group"
                     aria-labelledby="episodes-label"
-                    className="flex items-center gap-1 rounded-capsule border border-separator-opaque p-[3px]"
+                    className="flex items-center gap-1 rounded-capsule border border-separator-opaque p-1"
                   >
                     <IconButton
                       label="One Episode Fewer"
                       tooltip={false}
                       className="bg-selected"
-                      icon={<Minus aria-hidden="true" />}
+                      icon={<Minus aria-hidden="true" strokeWidth={1.5} />}
                       onClick={() => setEpisodes(Math.max(MIN_EPISODES, shownCount - 1))}
                       disabled={shownCount <= MIN_EPISODES}
                     />
+                    {/* Keyed by the count: each change settles in. */}
                     <span aria-live="polite" className="min-w-10 text-center text-row tabular-nums">
-                      {shownCount}
+                      <span key={shownCount} className="inline-block swap-in">
+                        {shownCount}
+                      </span>
                     </span>
                     <IconButton
                       label="One More Episode"
                       tooltip={false}
                       className="bg-selected"
-                      icon={<Plus aria-hidden="true" />}
+                      icon={<Plus aria-hidden="true" strokeWidth={1.5} />}
                       onClick={() => setEpisodes(Math.min(maxEpisodes, shownCount + 1))}
                       disabled={shownCount >= maxEpisodes}
                     />
@@ -585,12 +589,13 @@ export function StyleForm({
             done={values[q.key] !== "" && !errors[q.key]}
             active={i === step}
             onClick={() => go(i)}
-            className="enter"
+            // The tick settles in when an answer is saved; the value is set in tabular figures.
+            className="enter tabular-nums [&>svg]:swap-in"
             style={stagger(i)}
           />
         ))}
       >
-        <SwapFade swapKey={step} className="flex min-h-0 flex-1 flex-col gap-8">
+        <SwapFade swapKey={step} className="flex min-h-0 flex-1 flex-col gap-12">
           {current ? (
             <>
               {questionBody(current.key)}
@@ -608,8 +613,14 @@ export function StyleForm({
           ) : (
             <>
               <div className="flex flex-col gap-3">
-                <h2 className="text-heading text-balance">That is the style.</h2>
-                <p className="max-w-[44ch] text-body text-label-2">
+                <h2 className="max-w-[24ch] text-heading text-balance">
+                  {first
+                    ? "Is this the film you want to make?"
+                    : dirty
+                      ? "Save the new style?"
+                      : "This is the style of your film."}
+                </h2>
+                <p className="max-w-(--measure) text-body text-pretty text-label-2">
                   {first
                     ? "Press any choice to change it before the script is written."
                     : dirty && pastStyleStage
@@ -623,15 +634,22 @@ export function StyleForm({
               >
                 {QUESTIONS.map((q, i) => (
                   <li key={q.key} className="enter" style={stagger(i, base)}>
+                    {/*
+                      An answer that opens its question again. The kit QuietTile has no small
+                      label above a large value, so this tile is drawn here on the same tokens.
+                    */}
                     <button
                       type="button"
                       onClick={() => go(i)}
-                      className={cn(
-                        "flex size-full min-h-40 press flex-col justify-between gap-6 rounded-card bg-elevated p-5 text-left focus-ring hover:bg-fill-4",
-                      )}
+                      className="flex size-full min-h-40 press flex-col justify-between gap-6 rounded-card bg-elevated p-5 text-left focus-ring hover:bg-fill-4"
                     >
                       <span className="text-secondary text-label-2">{q.label}</span>
-                      <span className="text-heading-sm break-words text-label">
+                      <span
+                        className={cn(
+                          "text-heading-sm text-balance break-words tabular-nums",
+                          values[q.key] ? "text-label" : "text-label-3",
+                        )}
+                      >
                         {values[q.key] || "Not answered"}
                       </span>
                     </button>
@@ -640,7 +658,7 @@ export function StyleForm({
               </ul>
               <div className="mt-auto flex flex-col gap-3">
                 {serverError ? (
-                  <p role="alert" className="text-secondary text-red">
+                  <p role="alert" className="swap-in text-secondary text-pretty text-red">
                     {serverError}
                   </p>
                 ) : null}

@@ -32,7 +32,7 @@ export interface TabsProps {
 }
 
 /**
- * A tab strip with ONE white underline that slides to the selected tab (300ms). Tabs are 13px
+ * A tab strip with ONE brand underline that slides to the selected tab (300ms). Tabs are 13px
  * capitals; arrow keys move between them.
  */
 export function Tabs({
@@ -66,7 +66,7 @@ export function Tabs({
               value={tab.value}
               disabled={tab.disabled}
               className={cn(
-                "min-w-[132px] shrink-0 px-3 py-2.5 text-left caps-label text-label-2 focus-ring focus-visible:-outline-offset-2",
+                "min-w-33 shrink-0 px-3 py-2.5 text-left caps-label text-label-2 focus-ring focus-visible:-outline-offset-2",
                 "transition-colors duration-(--dur-press) hover:text-label",
                 "data-[active]:text-label data-[disabled]:pointer-events-none data-[disabled]:text-label-3",
               )}
@@ -77,7 +77,7 @@ export function Tabs({
           <BaseTabs.Indicator
             renderBeforeHydration
             className={cn(
-              "absolute bottom-0 left-0 h-0.5 w-(--active-tab-width) translate-x-(--active-tab-left) rounded-capsule bg-accent",
+              "absolute bottom-0 left-0 h-0.5 w-(--active-tab-width) translate-x-(--active-tab-left) rounded-capsule bg-brand",
               "transition-[translate,width] duration-(--dur-tab) ease-out",
             )}
           />

@@ -42,9 +42,9 @@ export function ShotDetails({
               <li key={asset.ref}>
                 <Link
                   href={assetHref(projectId, asset.assetId)}
-                  className="flex press items-center gap-3 rounded-row p-2 focus-ring hover:bg-fill-4"
+                  className="flex press items-center gap-3 rounded-tile p-1.5 pr-3 focus-ring hover:bg-fill-4"
                 >
-                  <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-elevated">
+                  <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-paper bg-elevated">
                     {asset.thumbnailFileId ? (
                       // eslint-disable-next-line @next/next/no-img-element -- a redirect to a presigned URL
                       <img
@@ -93,6 +93,7 @@ export function ShotDetails({
             >
               <ChevronRight
                 aria-hidden
+                strokeWidth={1.5}
                 className={cn(
                   "size-(--icon) transition-transform duration-(--dur-press) ease-out",
                   open && "rotate-90",

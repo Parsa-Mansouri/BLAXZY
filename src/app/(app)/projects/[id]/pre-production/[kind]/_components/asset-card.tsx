@@ -1,23 +1,24 @@
 "use client";
 
-import { useTransition, type CSSProperties, type ReactNode } from "react";
+import { useState, useTransition, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fileSrc } from "@/lib/file-src";
-import { Button, PictureTile, useToast } from "@/ui";
+import { Button, PictureTile, StatusLine, useToast } from "@/ui";
 import { ASSET_STATUS_LABELS } from "../../../_lib/asset-status";
+import { DrawnTick } from "../../_components/drawn-tick";
 import { StageStatus, isWorking } from "../../_components/asset-stage";
 import { KIND_ASPECTS, type GalleryItem } from "../../_components/gallery-item";
 import { assetIntentHref, type AssetIntent } from "../../assets/[assetId]/_lib/intent";
 import { acceptSheetAction } from "../actions";
 
 /** What the picture area shows when there is no image: never a fake one. */
-function placeholderFor(item: GalleryItem): { label: string; dashed: boolean } {
-  if (item.stage === "needs_image") return { label: "No image yet", dashed: true };
-  if (item.stage === "needs_recording") return { label: "No recording yet", dashed: true };
-  if (item.kind === "voice") return { label: "Recording", dashed: false };
-  if (isWorking(item.stage)) return { label: ASSET_STATUS_LABELS[item.stage], dashed: false };
-  return { label: "No image", dashed: false };
+function placeholderFor(item: GalleryItem): string {
+  if (item.stage === "needs_image") return "No image yet";
+  if (item.stage === "needs_recording") return "No recording yet";
+  if (item.kind === "voice") return "Recording";
+  if (isWorking(item.stage)) return ASSET_STATUS_LABELS[item.stage];
+  return "No image";
 }
 
 /**
@@ -39,6 +40,7 @@ export function AssetCard({
   const router = useRouter();
   const toast = useToast();
   const [accepting, startAccepting] = useTransition();
+  const [accepted, setAccepted] = useState(false);
   const voice = item.kind === "voice";
 
   const link = (label: string, intent?: AssetIntent, primary = false) => (
@@ -58,7 +60,7 @@ export function AssetCard({
         toast.danger(result.error);
         return;
       }
-      toast.success(`${item.name} is ready.`);
+      setAccepted(true);
       router.refresh();
     });
   }
@@ -131,12 +133,21 @@ export function AssetCard({
           />
         ) : undefined
       }
-      placeholder={placeholder.label}
-      dashed={placeholder.dashed}
-      coverHeading={item.name}
+      placeholder={placeholder}
       actions={actions}
       caption={item.name}
-      status={<StageStatus stage={item.stage} />}
+      status={
+        accepted && (item.stage === "sheet_review" || item.stage === "ready") ? (
+          <StatusLine tone="none" className="text-done">
+            <span className="inline-flex items-center gap-1.5">
+              <DrawnTick />
+              Accepted
+            </span>
+          </StatusLine>
+        ) : item.stage === "ready" ? undefined : (
+          <StageStatus stage={item.stage} />
+        )
+      }
       className={className}
       style={style}
     />

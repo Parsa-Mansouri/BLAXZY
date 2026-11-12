@@ -20,6 +20,9 @@ const twMerge = extendTailwindMerge({
         "meta",
         "script",
         "wordmark",
+        "block-title",
+        "cover-title",
+        "control-lg",
         // legacy names
         "large-title",
         "title-1",
@@ -38,6 +41,10 @@ const twMerge = extendTailwindMerge({
         "panel",
         "block",
         "paper",
+        "mark",
+        "item",
+        "inset",
+        "nested",
         "capsule",
         // legacy names
         "control",

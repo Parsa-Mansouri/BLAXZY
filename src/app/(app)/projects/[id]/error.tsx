@@ -12,6 +12,8 @@ export default function ProjectError({ error, retry }: { error: unknown; retry: 
     <RouteError
       error={error}
       retry={retry}
+      title="This Part of the Project Could Not Be Shown"
+      message="Try again. If it keeps failing, go back to the project."
       way={
         <Button
           variant="outlined"

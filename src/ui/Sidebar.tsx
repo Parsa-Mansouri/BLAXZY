@@ -54,7 +54,10 @@ export function SidebarFooter({
 export interface SidebarSectionProps {
   /** Accessible name of the group. Not shown: the sidebar has no section captions. */
   title?: string;
-  /** Draws a hairline above the group (the recent films). */
+  /**
+   * A separate group (the recent films). Set apart by space only: the hairline it used to draw
+   * is gone (group with spacing, not rules).
+   */
   divided?: boolean;
   children: ReactNode;
   className?: string;
@@ -68,7 +71,7 @@ export function SidebarSection({
   className,
 }: SidebarSectionProps) {
   return (
-    <div className={cn("flex flex-col", divided && "border-t border-separator pt-5", className)}>
+    <div className={cn("flex flex-col", divided && "pt-3", className)}>
       {title ? <h2 className="sr-only">{title}</h2> : null}
       <ul className="flex flex-col gap-0.5">{children}</ul>
     </div>
@@ -113,7 +116,7 @@ export const SidebarItem = forwardRef<HTMLElement, SidebarItemProps>(function Si
     {
       "aria-current": selected ? "page" : undefined,
       className: cn(
-        "row-wipe press flex min-h-(--sidebar-row-h) w-full items-center gap-2.5 rounded-row px-3 text-left font-medium focus-ring",
+        "row-wipe press flex min-h-(--sidebar-row-h) w-full items-center gap-2.5 rounded-nested px-3 text-left font-medium focus-ring",
         variant === "nav" ? "caps-label" : "text-body font-medium",
         selected ? "text-label" : "text-label-2 hover:bg-fill-4 hover:text-label",
         className,
@@ -122,7 +125,9 @@ export const SidebarItem = forwardRef<HTMLElement, SidebarItemProps>(function Si
         <>
           {icon ? <span className="flex shrink-0 [&_svg]:size-(--icon)">{icon}</span> : null}
           <span className="min-w-0 flex-1 truncate">{children}</span>
-          {accessory ? <span className="shrink-0 text-label-2">{accessory}</span> : null}
+          {accessory ? (
+            <span className="shrink-0 text-label-2 tabular-nums">{accessory}</span>
+          ) : null}
         </>
       ),
     },
@@ -161,7 +166,7 @@ export const SidebarAction = forwardRef<HTMLElement, SidebarActionProps>(functio
     {
       type: render ? undefined : (type ?? "button"),
       className: cn(
-        "press flex min-h-(--sidebar-row-h) w-full shrink-0 items-center gap-2.5 rounded-row border border-outline-quiet px-3 text-left text-secondary font-medium text-label focus-ring hover:bg-fill-4",
+        "press flex min-h-(--sidebar-row-h) w-full shrink-0 items-center gap-2.5 rounded-nested border border-outline-quiet px-3 text-left text-secondary font-medium text-label focus-ring hover:bg-fill-4",
         className,
       ),
       children: (

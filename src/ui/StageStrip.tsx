@@ -53,14 +53,14 @@ const statusText: Record<StageStatus, string> = {
 
 const bars: Record<StageStatus, string> = {
   done: "bg-stage-done",
-  current: "bg-accent",
+  current: "bg-brand",
   upcoming: "bg-stage-todo",
   locked: "bg-stage-todo",
 };
 
 /**
  * The project's four stages as a slim strip in the toolbar: a 2px bar over each 13px capital
- * label. Done stages have a grey bar, the current stage a white one, later stages a dark one.
+ * label. Done stages have a grey bar, the current stage a brand one, later stages a dark one.
  * The stage being viewed has a white label. Done and current stages are links; locked ones
  * explain themselves in a tooltip.
  */
@@ -100,7 +100,7 @@ export function StageStrip({
             <span className="sr-only">, {statusText[stage.status]}</span>
           </>
         );
-        const cellClass = "group/stage flex min-w-0 flex-col gap-2 rounded-[2px] pb-0.5 focus-ring";
+        const cellClass = "group/stage flex min-w-0 flex-col gap-2 rounded-mark pb-0.5 focus-ring";
         return (
           <li
             key={stage.id}

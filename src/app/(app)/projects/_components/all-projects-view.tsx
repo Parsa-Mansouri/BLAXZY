@@ -16,10 +16,10 @@ const FILTERS: { value: Filter; label: string }[] = [
 ];
 
 const EMPTY: Record<Filter, { title: string; text: string }> = {
-  all: { title: "No projects yet.", text: "A project holds one film." },
-  progress: { title: "Nothing in progress.", text: "Every film you started is finished." },
+  all: { title: "No films yet", text: "Each film you start appears here, with its stage." },
+  progress: { title: "No films in progress", text: "Every film you started is finished." },
   finished: {
-    title: "No finished films yet.",
+    title: "No finished films yet",
     text: "A film appears here once its production is complete.",
   },
 };
@@ -46,9 +46,9 @@ export function AllProjectsView({
       <div className="flex flex-1 flex-col px-(--content-x) pt-8 pb-18">
         <PageHeader
           title="Projects"
-          description="Every film you have started, and where each one stands."
+          description="Every film you have started."
           actions={
-            <Button variant="primary" render={<Link href="/projects/new" />}>
+            <Button variant="primary" size="large" render={<Link href="/projects/new" />}>
               New Project
             </Button>
           }
@@ -66,26 +66,20 @@ export function AllProjectsView({
             if (items.length === 0 && !hasMore) {
               const empty = EMPTY[value as Filter];
               return (
-                <div className="flex min-h-[50dvh] max-w-[520px] flex-col items-start justify-center gap-2">
-                  <p className="text-section">{empty.title}</p>
-                  <p className="text-body text-label-2">{empty.text}</p>
-                  {value === "finished" ? (
-                    <Button
-                      variant="outlined"
-                      className="mt-4"
-                      onClick={() => setFilter("progress")}
-                    >
-                      Show In Progress
-                    </Button>
-                  ) : value === "all" ? (
-                    <Button
-                      variant="outlined"
-                      className="mt-4"
-                      render={<Link href="/projects/new" />}
-                    >
-                      New Project
-                    </Button>
-                  ) : null}
+                <div className="flex flex-1 flex-col justify-center py-10">
+                  <div className="flex max-w-(--measure) flex-col items-start gap-2">
+                    <p className="text-heading-sm text-balance">{empty.title}</p>
+                    <p className="text-body text-pretty text-label-2">{empty.text}</p>
+                    {value === "finished" ? (
+                      <Button
+                        variant="outlined"
+                        className="mt-6"
+                        onClick={() => setFilter("progress")}
+                      >
+                        Show In Progress
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               );
             }

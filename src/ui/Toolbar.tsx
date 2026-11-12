@@ -57,6 +57,8 @@ export function Toolbar({ title, titleAs = "h1", leading, trailing, className }:
         <SidebarToggle className="-ml-2 shell:group-data-[sidebar=expanded]/shell:hidden" />
         {title !== undefined && title !== null ? (
           <Title
+            // A long project name is cut with an ellipsis; the full name shows on hover.
+            title={typeof title === "string" ? title : undefined}
             className={cn(
               "min-w-0 text-body font-medium text-label-2",
               typeof title === "string" ? "truncate" : "flex items-center",

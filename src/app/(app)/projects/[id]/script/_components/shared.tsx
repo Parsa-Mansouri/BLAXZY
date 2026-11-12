@@ -134,7 +134,14 @@ export function SceneList({
             trailing={
               count > 0 ? (
                 <>
-                  <span aria-hidden="true">{count}</span>
+                  {/* Keyed by the count: a new comment makes the number settle in again. */}
+                  <span
+                    key={count}
+                    aria-hidden="true"
+                    className="inline-block swap-in tabular-nums"
+                  >
+                    {count}
+                  </span>
                   <span className="sr-only">
                     , {count} {count === 1 ? "note" : "notes"}
                   </span>
@@ -152,12 +159,13 @@ export function SceneList({
 
 /**
  * Scenes left, sheet right, filling the height left on the page (the sheet runs to the bottom
- * like a page). The list is slim so the screenplay gets a comfortable width; below
- * about 760px of content the sheet wraps under the list.
+ * like a page). The list is slim so the screenplay gets a comfortable width and is the largest
+ * thing on screen; 48px of black keep the list apart from the page. Below about 760px of
+ * content the sheet wraps under the list.
  */
 export function ScenesLayout({ side, children }: { side: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex flex-1 in-3 flex-wrap gap-x-6 gap-y-8">
+    <div className="flex flex-1 in-3 flex-wrap gap-x-12 gap-y-10">
       {side ? (
         <div className="flex min-w-0 flex-[1_1_176px] flex-col gap-6 self-start sm:max-w-44 2xl:max-w-60">
           {side}
@@ -173,9 +181,9 @@ export function FindingNote({ finding }: { finding: Finding }) {
   return (
     <div className="flex flex-col gap-1">
       <StatusLine tone="waiting">Script check · {SEVERITY[finding.severity]}</StatusLine>
-      <p className="text-secondary text-label">{finding.explanation}</p>
+      <p className="text-secondary text-pretty text-label">{finding.explanation}</p>
       {finding.suggestion ? (
-        <p className="text-secondary text-label-2">{finding.suggestion}</p>
+        <p className="text-secondary text-pretty text-label-2">{finding.suggestion}</p>
       ) : null}
     </div>
   );
@@ -204,10 +212,10 @@ export function VersionNotes({
   return (
     <section
       aria-labelledby="version-notes"
-      className={cn("mt-12 flex w-full max-w-205 flex-col gap-4 pt-6 hairline-t", className)}
+      className={cn("mt-16 flex w-full max-w-205 flex-col gap-4", className)}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <h2 id="version-notes" className="text-section">
+        <h2 id="version-notes" className="text-section text-balance">
           {title}
         </h2>
         {version.checkVerdict === "ready" ? (

@@ -1,8 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
 import Link from "next/link";
-import { Button, SelectRow, StatusDot, stagger, type StatusTone } from "@/ui";
+import { Button, SelectRow, Skeleton, StatusDot, stagger, type StatusTone } from "@/ui";
+import { DrawnTick, Settle, useChangedKeys } from "./feedback";
 
 export interface ShotListItem {
   lineageId: string;
@@ -19,6 +19,8 @@ export interface ShotListItem {
 /**
  * The shots of the film in story order, as the list on the left of a review screen. The row
  * being reviewed has its fill wiped in; every row jumps straight to its shot (no forced Next).
+ * A done shot carries a tick, which draws in when the shot was just approved or accepted; any
+ * other change of state settles in with a short fade.
  */
 export function ShotList({
   items,
@@ -35,6 +37,7 @@ export function ShotList({
   onMore: () => void;
   error?: string | null;
 }) {
+  const changed = useChangedKeys(items.map((item) => [item.lineageId, item.tone] as const));
   return (
     <>
       <ol className="flex flex-col gap-0.5">
@@ -54,11 +57,17 @@ export function ShotList({
                     <span className="min-w-0 break-words">{title}</span>
                   </span>
                 }
-                trailing={<RowStatus tone={item.tone} status={item.status} note={item.note} />}
+                trailing={<RowStatus item={item} settle={changed.has(item.lineageId)} />}
               />
             </li>
           );
         })}
+        {loading ? (
+          <li aria-hidden className="flex min-h-14 items-center gap-3 px-3.5">
+            <Skeleton className="h-4 w-4 rounded-paper" />
+            <Skeleton className="h-4 flex-1 rounded-paper" />
+          </li>
+        ) : null}
       </ol>
       {nextCursor ? (
         <div className="px-1.5 pt-3">
@@ -76,19 +85,15 @@ export function ShotList({
   );
 }
 
-function RowStatus({
-  tone,
-  status,
-  note,
-}: {
-  tone: StatusTone;
-  status: string;
-  note?: string;
-}): ReactNode {
+function RowStatus({ item, settle }: { item: ShotListItem; settle: boolean }) {
   return (
-    <span className="flex items-center gap-2">
-      {note ? <span className="font-mono">{note}</span> : <span className="sr-only">{status}</span>}
-      <StatusDot tone={tone} className="size-2" />
-    </span>
+    <Settle settleKey={item.tone} settle={settle} className="items-center gap-2">
+      {item.note ? <span>{item.note}</span> : <span className="sr-only">{item.status}</span>}
+      {item.tone === "done" ? (
+        <DrawnTick draw={settle} />
+      ) : (
+        <StatusDot tone={item.tone} className="size-2" />
+      )}
+    </Settle>
   );
 }

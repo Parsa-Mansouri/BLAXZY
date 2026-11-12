@@ -68,14 +68,14 @@ function ToastList() {
         <BaseToast.Content className="ui-toast-content flex items-start gap-2.5 p-3 pr-2">
           <Icon aria-hidden="true" className={cn("mt-px size-(--icon) shrink-0", tones[kind])} />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <BaseToast.Title className="text-headline" />
-            <BaseToast.Description className="text-callout text-label-2" />
+            <BaseToast.Title className="text-headline text-balance" />
+            <BaseToast.Description className="text-callout text-pretty text-label-2" />
           </div>
           <BaseToast.Close
             aria-label="Dismiss"
-            className="-my-1 flex size-(--control-h) shrink-0 items-center justify-center rounded-control text-label-2 focus-ring transition-colors hover:bg-fill-4 hover:text-label"
+            className="-my-1 flex size-(--control-h) shrink-0 items-center justify-center rounded-full text-label-2 focus-ring transition-colors duration-(--dur-press) hover:bg-fill-4 hover:text-label"
           >
-            <X aria-hidden="true" className="size-(--icon-sm)" />
+            <X aria-hidden="true" className="size-(--icon-lg)" />
           </BaseToast.Close>
         </BaseToast.Content>
       </BaseToast.Root>

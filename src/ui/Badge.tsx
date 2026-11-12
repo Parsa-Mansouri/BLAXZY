@@ -17,7 +17,11 @@ const tones: Record<BadgeTone, string> = {
   danger: "bg-red/15 text-red",
 };
 
-/** A status tag. Only for real status (approved, failed, needs review), never decoration. */
+/**
+ * A status tag. Only for real status the person acts on (failed, needs review), never
+ * decoration, never a "new"/"sample" tag, and never beside a StatusLine that already says it.
+ * Prefer a StatusLine; a Badge is for a dense list where a line does not fit.
+ */
 export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
   { tone = "neutral", icon, dot = false, className, children, ...rest },
   ref,
@@ -26,7 +30,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
     <span
       ref={ref}
       className={cn(
-        "inline-flex items-center gap-1 rounded-capsule px-2.5 py-0.5 text-meta font-medium whitespace-nowrap [&_svg]:size-(--icon-sm)",
+        "inline-flex items-center gap-1 rounded-capsule px-2.5 py-0.5 text-meta font-medium whitespace-nowrap tabular-nums [&_svg]:size-(--icon)",
         tones[tone],
         className,
       )}

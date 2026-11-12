@@ -1,13 +1,26 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { Clapperboard, House, LayoutGrid, Plus, Trash2, Tv, Upload } from "lucide-react";
+import { Clapperboard, House, LayoutGrid, Play, Plus, Trash2, Tv, Upload } from "lucide-react";
 import {
   Alert,
   BackControl,
   Badge,
   Button,
   ChoiceCards,
+  Confirmation,
+  Kbd,
+  Mono,
+  SkeletonButton,
+  SkeletonHeader,
+  SkeletonRegion,
+  SkeletonRows,
+  SkeletonText,
+  SkeletonTile,
+  SubmitButton,
+  TextLink,
+  Tick,
+  useFlash,
   DatePicker,
   DurationInput,
   FeatureBlock,
@@ -42,7 +55,6 @@ import {
   Sheet,
   SidebarAction,
   SidebarBody,
-  SidebarFooter,
   SidebarHeader,
   SidebarItem,
   SidebarSection,
@@ -78,6 +90,9 @@ const SECTIONS = [
   { id: "blocks", label: "Leading Option" },
   { id: "paper", label: "Paper" },
   { id: "status", label: "Status" },
+  { id: "feedback", label: "Feedback" },
+  { id: "loading", label: "Loading" },
+  { id: "icons", label: "Icons" },
   { id: "lists", label: "Grouped Lists" },
   { id: "choices", label: "Choices" },
   { id: "overlays", label: "Menus and Sheets" },
@@ -112,7 +127,8 @@ const swatches: { name: string; className: string; note: string }[] = [
   { name: "selected", className: "bg-selected", note: "#1F1F22" },
   { name: "fill", className: "bg-fill", note: "#343437 dark button" },
   { name: "outline", className: "bg-outline", note: "#48484A" },
-  { name: "accent", className: "bg-accent", note: "#FFFFFF" },
+  { name: "accent", className: "bg-accent", note: "#FFFFFF primary button" },
+  { name: "brand", className: "bg-brand", note: "#5B84FF small marks only" },
   { name: "paper", className: "bg-paper", note: "#EFE7D3" },
   { name: "done", className: "bg-done", note: "#30D158" },
   { name: "waiting", className: "bg-waiting", note: "#FF9F0A" },
@@ -130,6 +146,9 @@ const textStyles = [
   { name: "secondary 14", className: "text-secondary", sample: "You choose the style next." },
   { name: "meta 13", className: "text-meta", sample: "Earlier version, read only" },
   { name: "caps-label", className: "caps-label", sample: "Pre-production" },
+  { name: "block-title 32", className: "text-block-title", sample: "Answer a Few Questions" },
+  { name: "cover-title 22", className: "text-cover-title", sample: "Ines" },
+  { name: "mono-value 13", className: "mono-value text-meta", sample: "00:01:35 · 120 credits" },
 ];
 
 const scenes = [
@@ -162,7 +181,7 @@ function Section({
     <section
       id={id}
       aria-labelledby={`${id}-title`}
-      className="flex scroll-mt-20 flex-col gap-6 border-t border-separator pt-10 first:border-t-0 first:pt-0"
+      className="flex scroll-mt-20 flex-col gap-6 pt-8 first:pt-0"
     >
       <div className="flex flex-col gap-1">
         <h2 id={`${id}-title`} className="text-section">
@@ -202,6 +221,71 @@ function ToastDemo() {
         Danger
       </Button>
     </Row>
+  );
+}
+
+function FeedbackDemo() {
+  const [saved, flashSaved] = useFlash();
+  const [tickKey, setTickKey] = useState(0);
+  const [settleKey, setSettleKey] = useState(0);
+  const [accepted, setAccepted] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  return (
+    <div className="flex flex-col gap-8">
+      <Row label="Tick: draws in when it mounts (250ms)">
+        <span key={tickKey} className="inline-flex items-center gap-2 text-body">
+          <Tick className="size-(--icon-lg)" />
+          Answer saved
+        </span>
+        <Button size="small" onClick={() => setTickKey((n) => n + 1)}>
+          Replay
+        </Button>
+      </Row>
+      <Row label="Confirmation with useFlash(): shows for two seconds">
+        <Button onClick={flashSaved}>Save Notes</Button>
+        <Confirmation show={saved}>Saved</Confirmation>
+      </Row>
+      <Row label="Settle: a row that just changed state (replay by changing its key)">
+        <div className="flex w-full max-w-140 flex-col gap-2">
+          <OptionRow
+            key={settleKey}
+            className={settleKey > 0 ? "settle" : undefined}
+            selected={accepted}
+            onSelect={() => {
+              setAccepted((a) => !a);
+              setSettleKey((n) => n + 1);
+            }}
+          >
+            {accepted ? "Accepted" : "Accept this sheet"}
+          </OptionRow>
+        </div>
+      </Row>
+      <div className="max-w-100">
+        <Field label="Character name" error={error}>
+          <Input placeholder="Mara" />
+        </Field>
+        <div className="mt-3">
+          <Button
+            size="small"
+            onClick={() => setError((e) => (e ? undefined : "Give the character a name."))}
+          >
+            {error ? "Clear Error" : "Mark Wrong (Shake)"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SubmitDemo() {
+  return (
+    <form
+      action={async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      }}
+    >
+      <SubmitButton pendingLabel="Saving">Save Style</SubmitButton>
+    </form>
   );
 }
 
@@ -371,7 +455,7 @@ function Content() {
       <Section
         id="colour"
         title="Colour"
-        note="Black ground, white is the only accent. Colour is for status only."
+        note="Black ground, white for the one primary button, one brand colour for small marks (title rule, selected ring and tick, active stage, tab underline, links, selection, progress). Other colour is status only."
       >
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-4">
           {swatches.map((s, i) => (
@@ -385,11 +469,20 @@ function Content() {
         <Row label="Labels">
           <span className="text-body text-label">Primary #F2F2F3</span>
           <span className="text-body text-label-2">Secondary #C9C9CE</span>
-          <span className="text-body text-label-3">Placeholder and disabled #9A9AA0</span>
+          <span className="text-body text-label-3">Placeholder and disabled #A1A1A6</span>
+        </Row>
+        <Row label="Text link">
+          <p className="text-body text-label-2">
+            Read the <TextLink href="#paper">screenplay rules</TextLink> before you write.
+          </p>
         </Row>
       </Section>
 
-      <Section id="type" title="Typography" note="Geist; Geist Mono for status lines only.">
+      <Section
+        id="type"
+        title="Typography"
+        note="Geist everywhere, status lines included. Geist Mono only for technical values."
+      >
         <ul className="flex flex-col">
           {textStyles.map((t) => (
             <li
@@ -427,6 +520,12 @@ function Content() {
             title="Ines"
             description={<StatusLine tone="waiting">1 to review · 2 need an image</StatusLine>}
           />
+          <PageHeader
+            as="h2"
+            keepCase
+            title="The Unusually Long and Winding Title of a Film Somebody Typed Without Stopping"
+            description="Long user-written titles wrap in balanced lines and never overflow."
+          />
         </div>
       </Section>
 
@@ -453,10 +552,11 @@ function Content() {
           <IconButton label="Add Scene" icon={<Plus />} variant="dark" />
           <IconButton label="Delete Scene" icon={<Trash2 />} />
         </Row>
-        <Row label="States">
-          <Button variant="primary" loading={loading} onClick={fakeLoad}>
-            {loading ? "Generating" : "Generate"}
+        <Row label="States: pending keeps its width and blocks a second press; disabled stays readable">
+          <Button variant="primary" loading={loading} pendingLabel="Generating" onClick={fakeLoad}>
+            Generate
           </Button>
+          <SubmitDemo />
           <Button variant="primary" disabled>
             Disabled
           </Button>
@@ -636,17 +736,18 @@ function Content() {
             </div>
           </div>
         </Row>
-        <Row label="Tags">
-          <Badge>Draft</Badge>
-          <Badge tone="success" dot>
-            Approved
-          </Badge>
-          <Badge tone="warning" dot>
-            Needs Review
-          </Badge>
-          <Badge tone="danger" dot>
-            Failed
-          </Badge>
+        <Row label="Tags: only real status in a dense list, never decoration">
+          <Badge tone="warning">Needs Review</Badge>
+          <Badge tone="danger">Failed</Badge>
+        </Row>
+        <Row label="Technical values: Mono and Kbd">
+          <span className="text-body text-label-2">
+            Clip <Mono className="text-label">00:01:35</Mono> costs{" "}
+            <Mono className="text-label">120</Mono> credits
+          </span>
+          <span className="text-body text-label-2">
+            Hide the sidebar with <Kbd>⌘\</Kbd>
+          </span>
         </Row>
         <Row label="Activity">
           <Spinner size="sm" />
@@ -663,6 +764,57 @@ function Content() {
             <Skeleton className="aspect-video w-full" />
           </div>
         </div>
+      </Section>
+
+      <Section
+        id="feedback"
+        title="Feedback"
+        note="Motion that confirms what just happened: 150-300ms on the app curve, still under reduced motion."
+      >
+        <FeedbackDemo />
+      </Section>
+
+      <Section
+        id="loading"
+        title="Loading"
+        note="Skeletons shaped like the real screen. Wrap them in SkeletonRegion."
+      >
+        <SkeletonRegion className="max-w-5xl">
+          <SkeletonHeader actions={1} />
+          <div className="flex flex-wrap gap-x-20 gap-y-10">
+            <SkeletonRows rows={4} className="flex-[1_1_260px] sm:max-w-80" />
+            <div className="flex min-w-0 flex-[999_1_380px] flex-col gap-6">
+              <SkeletonText lines={3} />
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
+                <SkeletonTile />
+                <SkeletonTile />
+                <SkeletonTile />
+              </div>
+              <SkeletonButton />
+            </div>
+          </div>
+        </SkeletonRegion>
+      </Section>
+
+      <Section
+        id="icons"
+        title="Icons"
+        note="Lucide only, stroke 1.5, 16px beside text, 20px standalone. Same icon for the same meaning."
+      >
+        <Row label="Beside text (16px) and standalone (20px)">
+          <Button leadingIcon={<Upload />}>Upload an Image</Button>
+          <IconButton label="Add Scene" icon={<Plus />} variant="dark" />
+          <IconButton label="Delete Scene" icon={<Trash2 />} />
+        </Row>
+        <Row label="Play glyph nudged right to its visual centre (optical-play)">
+          <button
+            type="button"
+            aria-label="Play"
+            className="flex size-14 press items-center justify-center rounded-full bg-fill text-label focus-ring"
+          >
+            <Play aria-hidden="true" className="size-(--icon-lg) optical-play" />
+          </button>
+        </Row>
       </Section>
 
       <Section id="lists" title="Grouped Lists" note="Settings rows on a dark tile.">
@@ -804,7 +956,7 @@ export function Showcase() {
           <SidebarHeader>
             <span className="text-wordmark">BLAXZY</span>
           </SidebarHeader>
-          <SidebarAction icon={<Plus strokeWidth={1.5} />}>New Project</SidebarAction>
+          <SidebarAction icon={<Plus />}>New Project</SidebarAction>
           <SidebarBody aria-label="Kit sections">
             <SidebarSection title="Library">
               <SidebarItem variant="nav" icon={<House strokeWidth={1.5} />} selected href="#">
@@ -822,9 +974,6 @@ export function Showcase() {
               ))}
             </SidebarSection>
           </SidebarBody>
-          <SidebarFooter>
-            <p className="px-3 text-meta text-label-2">Development only</p>
-          </SidebarFooter>
         </>
       }
     >

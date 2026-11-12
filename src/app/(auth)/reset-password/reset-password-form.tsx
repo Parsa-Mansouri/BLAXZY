@@ -29,6 +29,7 @@ export function ResetPasswordForm({
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    if (submitting) return;
     if (!token) return;
     setError(null);
     if (password.length < minPasswordLength) {

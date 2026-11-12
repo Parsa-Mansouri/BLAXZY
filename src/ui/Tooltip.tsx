@@ -51,7 +51,7 @@ export function Tooltip({
             )}
           >
             <span>{content}</span>
-            {shortcut ? <kbd className="font-sans text-label-2">{shortcut}</kbd> : null}
+            {shortcut ? <kbd className="mono-value text-label-2">{shortcut}</kbd> : null}
           </BaseTooltip.Popup>
         </BaseTooltip.Positioner>
       </BaseTooltip.Portal>

@@ -2,7 +2,7 @@ import { fileSrc } from "@/lib/file-src";
 import { cn } from "@/ui";
 
 /**
- * An asset's sheet as a small frame. The image covers the frame; without one the frame stays
+ * An asset's sheet as a small frame (6px corners; callers set a larger radius on large frames). The image covers the frame; without one the frame stays
  * as a flat empty tile so the layout does not move (never a fake image).
  */
 export function AssetThumb({
@@ -17,7 +17,7 @@ export function AssetThumb({
   return (
     <div
       className={cn(
-        "relative aspect-video shrink-0 overflow-hidden rounded-[8px] bg-elevated",
+        "relative aspect-video shrink-0 overflow-hidden rounded-paper bg-elevated",
         className,
       )}
     >

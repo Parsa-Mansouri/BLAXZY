@@ -51,13 +51,14 @@ export function ProjectTile({
 
   function rename(event: FormEvent) {
     event.preventDefault();
+    if (pending) return;
     setError(undefined);
     startTransition(async () => {
       const result = await renameProjectAction(project.id, title);
       if (result.ok) {
         onRenamed(result.project);
         setDialog(null);
-        toast.success("Project renamed");
+        toast.success("Project renamed", `Now called “${result.project.title}”.`);
       } else {
         setError(result.error);
       }
@@ -65,6 +66,7 @@ export function ProjectTile({
   }
 
   function archive() {
+    if (pending) return;
     setError(undefined);
     startTransition(async () => {
       const result = await archiveProjectAction(project.id);

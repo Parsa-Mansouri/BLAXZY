@@ -5,7 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { BlockDetail, BlockProductionStage, TakeView } from "@/server/production";
-import { Button, IconButton, StatusLine, cn, useToast } from "@/ui";
+import {
+  Button,
+  IconButton,
+  ProgressBar,
+  StatusLine,
+  cn,
+  formatDurationLong,
+  useToast,
+} from "@/ui";
+import { FRAME_BOX, FRAME_HEIGHT } from "../../../../_components/frame";
+import { Mono } from "../../../../_components/values";
 import { refreshCredits, useCreditWatch } from "../../../../../../../_lib/credits";
 import { useRefreshReviewList } from "../../../../_components/review-list-context";
 import { usePolling } from "../../../../../_lib/use-polling";
@@ -14,7 +24,6 @@ import {
   CLIP_STATE_TONES,
   TAKE_STATUS_LABELS,
   detailKey,
-  formatLength,
   isBeforeClips,
   isRendering,
   isUnsettled,
@@ -322,23 +331,28 @@ export function ClipScreen(props: ClipScreenProps) {
     return null;
   }
 
-  const length = formatLength(shot.durationSeconds);
-  const meta = [`Shot ${shotNumber(shot.orderIndex)}`, length, CLIP_STATE_LABELS[shot.stage]]
-    .filter(Boolean)
-    .join(" · ");
+  const length =
+    shot.durationSeconds && shot.durationSeconds > 0 ? (
+      <>
+        {" · "}
+        <Mono>{formatDurationLong(shot.durationSeconds)}</Mono>
+      </>
+    ) : null;
 
   return (
     <article aria-labelledby="clip-title" className="flex flex-col gap-12">
       <div className="flex flex-col gap-6">
         <header className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-1.5">
-            <h2
-              id="clip-title"
-              className="text-heading-sm font-semibold tracking-[-0.02em] text-balance break-words"
-            >
+            <h2 id="clip-title" className="text-heading-sm text-balance break-words">
               {title}
             </h2>
-            <StatusLine tone={CLIP_STATE_TONES[shot.stage]}>{meta}</StatusLine>
+            <StatusLine tone={CLIP_STATE_TONES[shot.stage]}>
+              Shot <span className="tabular-nums">{shotNumber(shot.orderIndex)}</span>
+              {length}
+              {" · "}
+              {CLIP_STATE_LABELS[shot.stage]}
+            </StatusLine>
           </div>
           <nav aria-label="Previous and next shot" className="flex shrink-0 items-center gap-1">
             <ShotLink projectId={projectId} target={neighbours.previous} direction="previous" />
@@ -348,7 +362,7 @@ export function ClipScreen(props: ClipScreenProps) {
 
         {viewing ? (
           <div className="flex swap-in flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-card bg-elevated px-4 py-3">
-            <p className="text-body text-label">
+            <p className="text-body text-pretty text-label">
               {playingLabel} · {TAKE_STATUS_LABELS[viewing.status]}.{" "}
               <span className="text-label-2">Earlier takes are read-only.</span>
             </p>
@@ -371,7 +385,7 @@ export function ClipScreen(props: ClipScreenProps) {
                 caption={
                   <div className="flex flex-col gap-1 px-0.5">
                     {!viewing && playing.id !== latest?.id && playingLabel ? (
-                      <p className="text-secondary text-label-2">
+                      <p className="text-secondary text-pretty text-label-2">
                         {heldCaption(shot.stage, playingLabel)}
                       </p>
                     ) : null}
@@ -425,7 +439,12 @@ function ShotLink({
   direction: "previous" | "next";
 }) {
   const label = direction === "previous" ? "Previous Shot" : "Next Shot";
-  const icon = direction === "previous" ? <ChevronLeft /> : <ChevronRight />;
+  const icon =
+    direction === "previous" ? (
+      <ChevronLeft strokeWidth={1.5} />
+    ) : (
+      <ChevronRight strokeWidth={1.5} />
+    );
   const shortcut = direction === "previous" ? "[" : "]";
   if (!target) {
     return <IconButton label={label} icon={icon} disabled tooltip={false} />;
@@ -447,14 +466,19 @@ function EmptyFrame({ orientation, rendering }: { orientation: Orientation; rend
   return (
     <div
       className={cn(
-        "flex items-center justify-center overflow-hidden rounded-card bg-elevated text-meta text-label-3",
-        orientation === "portrait"
-          ? "mx-auto aspect-[9/16] w-[min(100%,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*9/16))]"
-          : "mx-auto aspect-video w-[min(100%,calc(max(18rem,calc(100dvh_-_var(--toolbar-h)_-_20rem))*16/9))]",
-        rendering && "animate-pulse motion-reduce:animate-none",
+        "relative flex items-center justify-center overflow-hidden rounded-card bg-elevated text-meta text-label-2",
+        FRAME_HEIGHT,
+        FRAME_BOX[orientation],
       )}
     >
       {rendering ? "Rendering" : "No clip yet"}
+      {rendering ? (
+        <ProgressBar
+          value={null}
+          aria-label="Rendering"
+          className="absolute inset-x-6 bottom-6 mx-auto max-w-sm"
+        />
+      ) : null}
     </div>
   );
 }

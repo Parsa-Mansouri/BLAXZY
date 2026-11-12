@@ -1,37 +1,57 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { callAuth } from "@/lib/auth-call";
 import { describeAuthFailure } from "@/lib/auth-errors";
-import { Button, Input, useToast } from "@/ui";
+import { Button, Input } from "@/ui";
+import { SavedMark } from "./saved-mark";
+
+const SAVED_MARK_MS = 3000;
 
 /** Profile rows. The name edits in place (Edit, then Save or Cancel); the email is how you sign in. */
-export function ProfileForm({ name, email }: { name: string; email: string }) {
+export function ProfileForm({
+  name,
+  email,
+  editing,
+  onEditingChange,
+}: {
+  name: string;
+  email: string;
+  editing: boolean;
+  onEditingChange: (editing: boolean) => void;
+}) {
   const router = useRouter();
-  const toast = useToast();
   const [saved, setSaved] = useState(name);
   const [draft, setDraft] = useState(name);
-  const [editing, setEditing] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (!justSaved) return;
+    const timer = window.setTimeout(() => setJustSaved(false), SAVED_MARK_MS);
+    return () => window.clearTimeout(timer);
+  }, [justSaved]);
 
   function startEditing() {
     setDraft(saved);
     setError(undefined);
-    setEditing(true);
+    setJustSaved(false);
+    onEditingChange(true);
   }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    if (pending) return;
     const trimmed = draft.trim();
     if (!trimmed) {
       setError("Enter your name.");
       return;
     }
     if (trimmed === saved) {
-      setEditing(false);
+      onEditingChange(false);
       return;
     }
     setError(undefined);
@@ -42,8 +62,8 @@ export function ProfileForm({ name, email }: { name: string; email: string }) {
     setPending(false);
     if (result.ok) {
       setSaved(trimmed);
-      setEditing(false);
-      toast.success("Name saved");
+      onEditingChange(false);
+      setJustSaved(true);
       router.refresh();
     } else {
       setError(describeAuthFailure(result.failure, "generic"));
@@ -51,15 +71,15 @@ export function ProfileForm({ name, email }: { name: string; email: string }) {
   }
 
   return (
-    <section aria-labelledby="acc-profile" className="flex in-2 flex-col">
-      <h2 id="acc-profile" className="mb-4 text-section">
+    <section aria-labelledby="acc-profile" className="flex in-2 flex-col gap-3">
+      <h2 id="acc-profile" className="text-section">
         Profile
       </h2>
       {editing ? (
         <form
           onSubmit={onSubmit}
           noValidate
-          className="flex swap-in flex-wrap items-start gap-x-6 gap-y-3 border-t border-separator py-4"
+          className="flex swap-in flex-wrap items-start gap-x-6 gap-y-3 py-1"
         >
           <label htmlFor="acc-name" className="w-24 shrink-0 pt-2.5 text-secondary text-label-2">
             Name
@@ -83,7 +103,7 @@ export function ProfileForm({ name, email }: { name: string; email: string }) {
                 type="button"
                 variant="plain"
                 size="small"
-                onClick={() => setEditing(false)}
+                onClick={() => onEditingChange(false)}
                 disabled={pending}
               >
                 Cancel
@@ -97,21 +117,18 @@ export function ProfileForm({ name, email }: { name: string; email: string }) {
           </div>
         </form>
       ) : (
-        <div className="flex min-h-10 swap-in flex-wrap items-center gap-x-6 gap-y-3 border-t border-separator py-4">
+        <div className="flex min-h-10 swap-in flex-wrap items-center gap-x-6 gap-y-3 py-1">
           <div className="w-24 shrink-0 text-secondary text-label-2">Name</div>
-          <div className="min-w-0 flex-[1_1_200px] text-row font-medium [overflow-wrap:anywhere]">
-            {saved}
-          </div>
+          <div className="min-w-0 flex-[1_1_200px] text-row font-medium break-words">{saved}</div>
+          {justSaved ? <SavedMark>Saved</SavedMark> : null}
           <Button variant="plain" size="small" onClick={startEditing} aria-label="Edit name">
             Edit
           </Button>
         </div>
       )}
-      <div className="flex min-h-10 flex-wrap items-center gap-x-6 gap-y-3 border-y border-separator py-4">
+      <div className="flex min-h-10 flex-wrap items-center gap-x-6 gap-y-3 py-1">
         <div className="w-24 shrink-0 text-secondary text-label-2">Email</div>
-        <div className="min-w-0 flex-[1_1_200px] text-row font-medium [overflow-wrap:anywhere]">
-          {email}
-        </div>
+        <div className="min-w-0 flex-[1_1_200px] text-row font-medium break-words">{email}</div>
       </div>
     </section>
   );

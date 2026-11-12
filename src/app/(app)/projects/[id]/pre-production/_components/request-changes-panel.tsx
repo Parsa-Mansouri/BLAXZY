@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState, type ComponentType, type ReactNode } from "react";
-import { Button, Textarea, cn, stagger } from "@/ui";
+import { Button, Textarea, stagger } from "@/ui";
 import {
   ErrorLine,
   PriceLine,
@@ -9,6 +9,7 @@ import {
   formatNumber,
   type IssueChoice,
 } from "../assets/[assetId]/_components/shared";
+import { ToggleChip } from "./toggle-chip";
 
 type HeadingProps = { id?: string; className?: string; children: ReactNode };
 
@@ -75,8 +76,8 @@ export function RequestChangesPanel({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Heading id={`${id}-title`} className="text-heading text-balance">
+    <div className="flex flex-col gap-8">
+      <Heading id={`${id}-title`} className="text-heading-sm text-balance">
         What should change?
       </Heading>
       <div
@@ -89,32 +90,25 @@ export function RequestChangesPanel({
         {issues.map((issue, i) => {
           const on = selected.includes(issue.code);
           return (
-            <button
+            <ToggleChip
               key={issue.code}
-              type="button"
-              aria-pressed={on}
+              on={on}
               title={issue.hint}
               onClick={() => toggle(issue.code)}
               disabled={sending}
-              className={cn(
-                "min-h-(--btn-sm) press enter rounded-capsule border px-3.5 py-1.5 text-left text-secondary font-medium focus-ring",
-                on
-                  ? "border-label bg-selected text-label"
-                  : "border-outline text-label-2 hover:text-label",
-              )}
+              className="enter"
               style={stagger(i, 60)}
             >
               {issue.label}
-            </button>
+            </ToggleChip>
           );
         })}
       </div>
       <div className="flex flex-col gap-2">
-        <label htmlFor={`${id}-note`} className="text-secondary text-label-2">
-          Anything else we should know?
-        </label>
         <Textarea
           id={`${id}-note`}
+          aria-label="Anything else we should know?"
+          placeholder="Anything else we should know?"
           value={note}
           onChange={(e) => {
             setNote(e.target.value);

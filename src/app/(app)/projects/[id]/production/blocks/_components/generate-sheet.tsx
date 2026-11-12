@@ -3,7 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Sheet, Skeleton } from "@/ui";
-import { creditsWords, formatNumber, shotsWords } from "../../_components/format";
+import { formatNumber, shotsWords } from "../../_components/format";
+import { Credits, Mono } from "../../_components/values";
 import { clipsHref } from "../../../_lib/production-routes";
 import { quoteAction, startDraftsAction, type Quote } from "../actions";
 import { refreshCredits } from "../../../../../_lib/credits";
@@ -96,23 +97,23 @@ export function GenerateSheet({
             <p className="text-body text-label-2">No approved shots are waiting for a draft.</p>
           ) : (
             <>
-              <p className="text-body text-label tabular-nums">
-                Drafts for {shotsWords(quote.count)} cost {creditsWords(quote.credits)}. You have{" "}
-                {formatNumber(quote.balance)}.
+              <p className="text-body text-pretty text-label">
+                Drafts for <span className="tabular-nums">{shotsWords(quote.count)}</span> cost{" "}
+                <Credits n={quote.credits} />. You have <Mono>{formatNumber(quote.balance)}</Mono>.
               </p>
-              <p className="text-secondary text-label-2 tabular-nums">
+              <p className="text-secondary text-pretty text-label-2">
                 Each shot you accept is then finished in full quality for{" "}
-                {creditsWords(quote.finalsEach)}. Finishing{" "}
+                <Credits n={quote.finalsEach} />. Finishing{" "}
                 {quote.count === 1
                   ? "this shot"
                   : quote.count === 2
                     ? "both shots"
                     : `all ${shotsWords(quote.count)}`}{" "}
-                in full quality would cost {creditsWords(quote.count * quote.finalsEach)} more.
+                in full quality would cost <Credits n={quote.count * quote.finalsEach} /> more.
               </p>
               {short ? (
-                <p role="status" className="text-secondary text-label tabular-nums">
-                  You need {creditsWords(quote.credits - quote.balance)} more. Add credits to your
+                <p role="status" className="text-secondary text-pretty text-label">
+                  You need <Credits n={quote.credits - quote.balance} /> more. Add credits to your
                   account to continue.
                 </p>
               ) : null}

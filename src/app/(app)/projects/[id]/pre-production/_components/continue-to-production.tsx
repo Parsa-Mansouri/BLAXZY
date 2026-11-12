@@ -61,7 +61,7 @@ export function ContinueToProduction({
                 <li key={asset.id} className="text-secondary text-label-2">
                   <Link
                     href={assetHref(projectId, asset.id)}
-                    className="rounded-row text-label underline-offset-4 focus-ring hover:underline"
+                    className="rounded-row text-brand underline-offset-4 focus-ring hover:underline"
                   >
                     {asset.name}
                   </Link>{" "}

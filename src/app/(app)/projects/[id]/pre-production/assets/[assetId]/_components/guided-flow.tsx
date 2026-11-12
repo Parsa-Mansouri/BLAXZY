@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
-import { Button, FocusLayout, OptionRow, SelectRow, SwapFade, Textarea, cn, stagger } from "@/ui";
+import { Button, FocusLayout, OptionRow, SelectRow, SwapFade, Textarea, stagger } from "@/ui";
 import type { GuidedDraft } from "../_lib/guided-draft";
 import { startFromGuidedAction, startFromPromptAction } from "../actions";
+import { DrawnTick } from "../../../_components/drawn-tick";
+import { ToggleChip } from "../../../_components/toggle-chip";
 import { focusIsFree, keepTitleVisible, useAssetScreen } from "./asset-context";
 import { ErrorLine, PriceLine, canAfford, formatNumber, type GuidedQuestion } from "./shared";
 
@@ -49,12 +51,6 @@ function answerWords(question: GuidedQuestion, answer: Answer): string {
   return text;
 }
 
-/** "defining_detail" → "Defining detail": a short row label from the question's stable key. */
-function shortLabel(question: GuidedQuestion): string {
-  const words = question.id.replaceAll("_", " ").trim();
-  return words ? words[0].toUpperCase() + words.slice(1) : question.label;
-}
-
 /**
  * The guided questions: the answers on the left (any row opens its question again), one question
  * on the right. Every question offers "I'm not sure", and a choice also "Not what you have in mind?", each with a box
@@ -63,6 +59,7 @@ function shortLabel(question: GuidedQuestion): string {
 export function GuidedFlow({
   projectId,
   assetId,
+  assetName,
   questions,
   maxAnswer,
   maxPrompt,
@@ -75,6 +72,7 @@ export function GuidedFlow({
 }: {
   projectId: string;
   assetId: string;
+  assetName: string;
   questions: GuidedQuestion[];
   maxAnswer: number;
   maxPrompt: number;
@@ -219,14 +217,6 @@ export function GuidedFlow({
       ? "Describe it in your own words."
       : "Tell us what you are picturing, even roughly.";
 
-  const chip = (on: boolean) =>
-    cn(
-      "flex min-h-11 flex-[1_1_160px] press items-center rounded-tile border px-5 text-left text-body font-medium focus-ring",
-      on
-        ? "border-accent bg-accent text-on-accent"
-        : "border-separator-opaque text-label-2 hover:text-label",
-    );
-
   return (
     <FocusLayout
       listLabel="Your answers"
@@ -237,9 +227,16 @@ export function GuidedFlow({
         return (
           <SelectRow
             key={q.id}
-            label={shortLabel(q)}
+            label={<span className="line-clamp-2">{q.label}</span>}
             value={done ? <span className="line-clamp-2">{answerWords(q, a)}</span> : undefined}
-            done={done}
+            trailing={
+              done ? (
+                <>
+                  <DrawnTick className="text-label" />
+                  <span className="sr-only">, answered</span>
+                </>
+              ) : undefined
+            }
             active={i === step}
             disabled={sending}
             onClick={() => (i === step ? undefined : go(i))}
@@ -252,19 +249,19 @@ export function GuidedFlow({
       <div ref={body} className="flex flex-1 flex-col gap-12">
         {question ? (
           <SwapFade swapKey={question.id} className="flex flex-1 flex-col gap-7">
-            <h2 id={`${id}-title`} className="text-heading text-balance">
+            <h2 id={`${id}-title`} className="text-display text-balance break-words">
               {question.label}
             </h2>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               {question.kind === "choice" ? (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-2">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-3">
                   {(question.options ?? []).map((option, i) => (
                     <OptionRow
                       key={option.value}
                       selected={answer.mode === "answer" && answer.text === option.value}
                       onSelect={() => set({ mode: "answer", text: option.value })}
                       disabled={sending}
-                      className="enter"
+                      className="min-h-16 enter"
                       style={stagger(i, 40)}
                     >
                       {option.label}
@@ -295,25 +292,21 @@ export function GuidedFlow({
                 style={stagger(question.options?.length ?? 1, 40)}
               >
                 {question.kind === "choice" ? (
-                  <button
-                    type="button"
-                    aria-pressed={answer.mode === "other"}
+                  <ToggleChip
+                    on={answer.mode === "other"}
                     onClick={() => pickFree("other")}
                     disabled={sending}
-                    className={chip(answer.mode === "other")}
                   >
                     Not what you have in mind?
-                  </button>
+                  </ToggleChip>
                 ) : null}
-                <button
-                  type="button"
-                  aria-pressed={answer.mode === "unsure"}
+                <ToggleChip
+                  on={answer.mode === "unsure"}
                   onClick={() => pickFree("unsure")}
                   disabled={sending}
-                  className={chip(answer.mode === "unsure")}
                 >
                   I’m not sure
-                </button>
+                </ToggleChip>
               </div>
               {answer.mode === "other" || answer.mode === "unsure" ? (
                 <Textarea
@@ -355,11 +348,11 @@ export function GuidedFlow({
                 id={`${id}-title`}
                 tabIndex={-1}
                 data-step-focus
-                className="text-heading text-balance outline-none"
+                className="text-display text-balance break-words outline-none"
               >
-                That is everything we need.
+                Ready to create {assetName}’s image?
               </h2>
-              <p className="max-w-[44ch] text-body text-label-2">
+              <p className="max-w-(--measure) text-body text-pretty text-label-2">
                 Press any answer in the list to change it before the image is made.
               </p>
             </div>
@@ -389,27 +382,14 @@ export function GuidedFlow({
           </SwapFade>
         )}
 
-        <p className="text-secondary text-label-2">
-          Prefer another way?{" "}
-          <button
-            type="button"
-            onClick={() => onMethod("prompt")}
-            disabled={sending}
-            className="rounded-row text-label underline underline-offset-3 focus-ring hover:text-label-2"
-          >
-            Write the prompt yourself
-          </button>{" "}
-          or{" "}
-          <button
-            type="button"
-            onClick={() => onMethod("upload")}
-            disabled={sending}
-            className="rounded-row text-label underline underline-offset-3 focus-ring hover:text-label-2"
-          >
-            upload an image
-          </button>
-          .
-        </p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <Button variant="plain" onClick={() => onMethod("prompt")} disabled={sending}>
+            Write a Prompt
+          </Button>
+          <Button variant="plain" onClick={() => onMethod("upload")} disabled={sending}>
+            Upload an Image
+          </Button>
+        </div>
       </div>
     </FocusLayout>
   );

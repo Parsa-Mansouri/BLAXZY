@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Ellipsis } from "lucide-react";
-import type { AssetStage } from "@/server/assets";
 import {
   Alert,
   Button,
@@ -18,7 +17,6 @@ import {
   StatusLine,
   Textarea,
 } from "@/ui";
-import { StageStatus } from "../../../_components/asset-stage";
 import { removeAssetAction, updateDetailsAction } from "../actions";
 import { useAssetScreen } from "./asset-context";
 import { ErrorLine, formatNumber, type AssetInfo } from "./shared";
@@ -29,7 +27,6 @@ export function AssetHeader({
   asset,
   kindName,
   category,
-  stage,
   busy,
   limits,
 }: {
@@ -37,7 +34,6 @@ export function AssetHeader({
   asset: AssetInfo;
   kindName: string;
   category: { href: string; label: string };
-  stage: AssetStage;
   busy: boolean;
   limits: { name: number; description: number };
 }) {
@@ -50,11 +46,7 @@ export function AssetHeader({
         title={asset.name}
         description={
           <div className="flex flex-col gap-2">
-            {asset.removed ? (
-              <StatusLine tone="none">{kindName} · Removed</StatusLine>
-            ) : (
-              <StageStatus stage={stage} />
-            )}
+            {asset.removed ? <StatusLine tone="none">{kindName} · Removed</StatusLine> : null}
             {asset.description ? (
               <p className="line-clamp-3 max-w-(--measure) text-body text-pretty text-label-2">
                 {asset.description}
@@ -71,7 +63,7 @@ export function AssetHeader({
                   label={`Actions for ${asset.name}`}
                   tooltip={false}
                   variant="outlined"
-                  icon={<Ellipsis />}
+                  icon={<Ellipsis strokeWidth={1.5} />}
                 />
               }
             >

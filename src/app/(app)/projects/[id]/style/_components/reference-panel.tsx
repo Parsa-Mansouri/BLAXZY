@@ -13,7 +13,7 @@ import {
   cleanTitles,
   type StyleReferenceInput,
 } from "@/lib/style-references";
-import { Button, Input, ProgressBar, Textarea, cn, stagger } from "@/ui";
+import { Button, IconButton, Input, ProgressBar, Textarea, cn, stagger } from "@/ui";
 import { createStyleReferenceUploadAction, finishStyleReferenceUploadAction } from "../actions";
 
 /** PUTs the file to the presigned URL, reporting progress. */
@@ -60,13 +60,14 @@ function Section({
   index: number;
   children: ReactNode;
 }) {
+  // No box round each group: space keeps the three apart (16px inside a group, 48px between).
   return (
     <section
       aria-labelledby={id}
       style={stagger(index, 40)}
-      className={cn("flex min-w-0 enter flex-col gap-4 rounded-block bg-elevated p-6", className)}
+      className={cn("flex min-w-0 enter flex-col gap-4", className)}
     >
-      <h3 id={id} className="text-section">
+      <h3 id={id} className="text-section text-balance">
         {title}
       </h3>
       {children}
@@ -173,7 +174,7 @@ export function ReferencePanel({
   }
 
   return (
-    <div className="grid min-h-0 flex-1 swap-in auto-rows-[minmax(0,auto)] gap-3 lg:grid-cols-2 lg:grid-rows-[auto_1fr]">
+    <div className="grid min-h-0 flex-1 swap-in auto-rows-[minmax(0,auto)] gap-x-16 gap-y-12 lg:grid-cols-2 lg:grid-rows-[auto_1fr]">
       <Section title="Films or Shows Like It" id={`${id}-films`} index={0}>
         <form
           className="flex gap-2"
@@ -199,19 +200,21 @@ export function ReferencePanel({
         {value.titles.length > 0 ? (
           <ul aria-label="Films and shows" className="flex flex-wrap gap-2">
             {value.titles.map((t) => (
+              // A removable chip (the kit has none yet): a capsule round a capsule button, so
+              // the corners stay concentric.
               <li
                 key={t}
-                className="flex swap-in items-center gap-1 rounded-capsule bg-fill py-1 pr-1 pl-3.5 text-body text-label"
+                className="flex max-w-full swap-in items-center gap-1 rounded-capsule bg-elevated-2 py-0.5 pr-0.5 pl-4 text-body text-label"
               >
                 <span className="min-w-0 break-words">{t}</span>
-                <button
-                  type="button"
-                  aria-label={`Remove ${t}`}
+                <IconButton
+                  label={`Remove ${t}`}
+                  tooltip={false}
+                  size="small"
+                  className="hover:bg-fill"
+                  icon={<X aria-hidden="true" strokeWidth={1.5} />}
                   onClick={() => removeTitle(t)}
-                  className="flex size-7 shrink-0 press items-center justify-center rounded-full text-label-2 focus-ring hover:bg-fill-4 hover:text-label"
-                >
-                  <X aria-hidden="true" className="size-3.5" />
-                </button>
+                />
               </li>
             ))}
           </ul>
@@ -228,13 +231,14 @@ export function ReferencePanel({
           onDrop={onDrop}
           className={cn(
             "grid min-h-40 flex-1 auto-rows-[minmax(120px,1fr)] grid-cols-[repeat(auto-fit,minmax(min(100%,160px),1fr))] gap-3 rounded-tile",
+            // A drop area, not a field: a white edge while images are dragged over it.
             dragging && "outline-2 outline-offset-4 outline-label",
           )}
         >
           {value.fileIds.map((fileId, i) => (
             <div
               key={fileId}
-              className="group/ref relative swap-in overflow-hidden rounded-tile bg-elevated-2"
+              className="group/ref relative swap-in overflow-hidden rounded-tile bg-elevated"
             >
               {/* Stored images are served through /api/files; next/image is not needed here. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -243,29 +247,30 @@ export function ReferencePanel({
                 alt={`Reference image ${i + 1}`}
                 className="absolute inset-0 size-full object-cover"
               />
-              <button
-                type="button"
-                aria-label={`Remove reference image ${i + 1}`}
+              <IconButton
+                label={`Remove reference image ${i + 1}`}
+                tooltip={false}
+                variant="dark"
+                size="small"
+                className="absolute top-2 right-2"
+                icon={<X aria-hidden="true" strokeWidth={1.5} />}
                 onClick={() =>
                   onChange((prev) => ({
                     ...prev,
                     fileIds: prev.fileIds.filter((f) => f !== fileId),
                   }))
                 }
-                className="absolute top-2 right-2 flex size-8 press items-center justify-center rounded-full bg-elevated-2 text-label focus-ring hover:bg-fill"
-              >
-                <X aria-hidden="true" className="size-4" />
-              </button>
+              />
             </div>
           ))}
           {uploads.map((u) => (
             <div
               key={u.key}
               aria-live="polite"
-              className="flex flex-col justify-end gap-2 rounded-tile bg-elevated-2 p-3"
+              className="flex flex-col justify-end gap-2 rounded-tile bg-elevated p-3"
             >
-              <span className="truncate text-meta text-label-2">{u.name}</span>
-              <ProgressBar value={u.progress} aria-label={`Uploading ${u.name}`} />
+              <span className="truncate font-mono text-meta text-label-2">{u.name}</span>
+              <ProgressBar value={u.progress} showValue aria-label={`Uploading ${u.name}`} />
             </div>
           ))}
           {imageSlots > 0 ? (
@@ -300,7 +305,7 @@ export function ReferencePanel({
           }}
         />
         {imageError ? (
-          <p role="alert" className="text-secondary text-red">
+          <p role="alert" className="swap-in text-secondary text-pretty text-red">
             {imageError}
           </p>
         ) : null}

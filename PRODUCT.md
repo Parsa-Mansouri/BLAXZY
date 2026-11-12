@@ -50,10 +50,11 @@ user.
 - The interface is black. The owner approved black as the ground.
 - The interface follows the owner-approved mockups (November 2026): calm and Apple-like, a
   floating rounded library sidebar, 48px capital page titles that rise in with a white rule,
-  Geist type (Geist Mono for status lines, Courier Prime on paper for screenplay text), exactly
+  Geist type (Geist Mono for technical values only, Courier Prime on paper for screenplay text), exactly
   three levels of hierarchy per screen, and one motion curve. Not Liquid Glass.
-- No colour accent until the owner's brand identity arrives: white is the accent, and one accent
-  token is reserved for the brand colour.
+- One brand accent colour (`--brand`, #5b84ff) for small marks only (title rule, selected ring
+  and tick, active stage line, tab underline, links, text selection, progress fill); white stays
+  the one primary button, and other colour is status only.
 - Rejected by the owner as "AI-looking": blue or indigo accents, bordered rounded boxes around
   everything, a narrow centred column with oversized headings and empty space, the previous
   typeface, and chatty copy such as "Welcome back".

@@ -99,7 +99,7 @@ export function DatePicker({
                 setOpen(false);
               }}
             />
-            <div className="mt-2 flex items-center justify-between pt-2 hairline-t">
+            <div className="mt-3 flex items-center justify-between">
               <Button
                 variant="plain"
                 disabled={!todayAllowed}

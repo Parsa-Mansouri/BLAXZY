@@ -3,13 +3,21 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { MessageSquarePlus } from "lucide-react";
-import { Button, PageHeader, StatusLine, SwapFade, cn } from "@/ui";
+import { Button, PageHeader, StatusLine, SwapFade, cn, useToast } from "@/ui";
 import { blockIndexAt, sceneIndexAt, splitScenes, type Scene } from "../_lib/scenes";
 import { findQuote } from "../_lib/screenplay";
 import { submitReviewAction } from "../actions";
 import { RequestChangesSheet } from "./request-changes-sheet";
 import { LineComment, isSendable, useDraftComments, type DraftComment } from "./review-comments";
-import { BlockText, ON_PAPER, PaperLayers, SHEET_X, TitlePage } from "./screenplay-sheet";
+import {
+  BlockText,
+  ON_PAPER,
+  PaperLayers,
+  SHEET_MX,
+  SHEET_RIGHT,
+  SHEET_X,
+  TitlePage,
+} from "./screenplay-sheet";
 import {
   FindingNote,
   SAMPLE_LINE,
@@ -57,8 +65,10 @@ interface CommentApi {
 
 /**
  * One scene on the paper with the margin beside it. With room (about 800px), each line's
- * comments and script checks sit in a column of at least 224px on the black beside the line; with less, they
- * sit under their line on the sheet, in a dark card. Point at a line (or tab to it) to comment.
+ * comments and script checks sit in a column of at least 224px on the black beside the line,
+ * 32px from the paper; with less, they sit under their line on the sheet, in a dark card. Point
+ * at a line (or tab to it) to comment. A commented line is marked on the paper with a short brand
+ * bar at its leading edge.
  */
 function ReviewSheet({
   scene,
@@ -88,8 +98,8 @@ function ReviewSheet({
         aria-label={sceneName(scene)}
         className={cn(
           "relative isolate flex flex-1 flex-col gap-6 py-11 font-script text-script text-ink",
-          // The paper grows to 820px; the comment margin takes the rest (at least 224px).
-          "[--sheet-w:100%] @min-[50rem]:[--sheet-w:min(51.25rem,100%_-_15.5rem)]",
+          // The paper grows to 820px; the comment margin takes the rest (224px + the 32px gap).
+          "[--sheet-w:100%] @min-[50rem]:[--sheet-w:min(51.25rem,100%_-_16rem)]",
         )}
       >
         <PaperLayers className="w-(--sheet-w)" />
@@ -109,13 +119,16 @@ function ReviewSheet({
           return (
             <div
               key={block.start}
-              className="group/line relative flex flex-col @min-[50rem]:flex-row @min-[50rem]:items-start @min-[50rem]:gap-6"
+              className="group/line relative flex flex-col @min-[50rem]:flex-row @min-[50rem]:items-start @min-[50rem]:gap-8"
             >
               <div className={cn("w-(--sheet-w) shrink-0", SHEET_X, ON_PAPER)}>
                 <div
                   className={cn(
-                    "-mx-2 rounded-[4px] px-2 py-0.5 transition-colors duration-(--dur-press)",
-                    marked ? "bg-ink/10" : "group-hover/line:bg-ink/5",
+                    "-mx-2 rounded-paper px-2 py-0.5 transition-[background-color,box-shadow] duration-(--dur-swap) ease-out",
+                    // The comment marker: a tint and a 3px brand bar on the line's leading edge.
+                    marked
+                      ? "bg-ink/10 shadow-[inset_3px_0_0_var(--color-brand)]"
+                      : "group-hover/line:bg-ink/5",
                   )}
                 >
                   <BlockText block={block} id={lineId} />
@@ -131,7 +144,8 @@ function ReviewSheet({
                 {hasSide ? (
                   <div
                     className={cn(
-                      "mx-[clamp(20px,4vw,48px)] mt-3 flex flex-col gap-3 rounded-tile bg-elevated p-3",
+                      SHEET_MX,
+                      "mt-3 flex flex-col gap-3 rounded-tile bg-elevated p-3",
                       "@min-[50rem]:mx-0 @min-[50rem]:mt-0 @min-[50rem]:bg-transparent @min-[50rem]:p-0",
                     )}
                   >
@@ -159,7 +173,8 @@ function ReviewSheet({
                 {canAdd ? (
                   <div
                     className={cn(
-                      "absolute top-full right-[clamp(20px,4vw,48px)] z-10 -translate-y-1",
+                      SHEET_RIGHT,
+                      "absolute top-full z-10 -translate-y-1",
                       "@min-[50rem]:static @min-[50rem]:translate-y-0",
                     )}
                   >
@@ -178,18 +193,20 @@ function ReviewSheet({
                         setFocusId(comment.id);
                       }}
                       className={cn(
-                        "flex press items-center justify-center rounded-capsule text-meta focus-ring",
+                        // Not the kit Button: one control that is a round icon on the paper when
+                        // narrow and the small outlined capsule on the black when wide.
+                        "flex press items-center justify-center rounded-capsule font-medium focus-ring",
                         "opacity-0 transition-opacity duration-(--dur-press) group-hover/line:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100",
                         // Narrow: a round icon on the paper, in the gap under the line.
                         "size-7 border border-ink/30 bg-paper text-ink focus-visible:outline-ink",
-                        // Wide: the outlined "Comment" pill on the black beside the line.
-                        "@min-[50rem]:h-7 @min-[50rem]:w-auto @min-[50rem]:border-outline @min-[50rem]:bg-transparent @min-[50rem]:px-3 @min-[50rem]:text-label-2 @min-[50rem]:hover:text-label @min-[50rem]:focus-visible:outline-(--focus)",
+                        // Wide: the small outlined "Comment" capsule on the black beside the line.
+                        "@min-[50rem]:h-(--btn-sm) @min-[50rem]:w-auto @min-[50rem]:border-outline @min-[50rem]:bg-transparent @min-[50rem]:px-4 @min-[50rem]:text-secondary @min-[50rem]:text-label-2 @min-[50rem]:hover:bg-fill-4 @min-[50rem]:hover:text-label @min-[50rem]:focus-visible:outline-focus",
                       )}
                     >
                       <MessageSquarePlus
                         aria-hidden="true"
-                        className="size-3.5 @min-[50rem]:hidden"
-                        strokeWidth={1.75}
+                        className="size-(--icon) @min-[50rem]:hidden"
+                        strokeWidth={1.5}
                       />
                       <span aria-hidden="true" className="hidden @min-[50rem]:inline">
                         Comment
@@ -276,6 +293,7 @@ export function ScriptReview({
   sample: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const content = version.content ?? "";
   const drafts = useDraftComments(version.id, content);
   const viewer = useVersionViewer(projectId, version.id);
@@ -298,6 +316,7 @@ export function ScriptReview({
         return;
       }
       drafts.clear();
+      toast.success("Script accepted.");
       router.refresh();
     });
   }
@@ -326,6 +345,7 @@ export function ScriptReview({
       }
       drafts.clear();
       setSheetOpen(false);
+      toast.success("Changes requested.");
       router.refresh();
     });
   }
@@ -339,6 +359,7 @@ export function ScriptReview({
           <>
             <Button
               variant="outlined"
+              size="large"
               onClick={() => {
                 setSheetError(null);
                 setSheetOpen(true);
@@ -349,6 +370,7 @@ export function ScriptReview({
             </Button>
             <Button
               variant="primary"
+              size="large"
               onClick={accept}
               loading={accepting}
               disabled={readOnly || sending}

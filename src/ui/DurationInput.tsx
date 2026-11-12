@@ -105,7 +105,7 @@ export function DurationInput({
         onKeyDown={onKeyDown(name)}
         onFocus={(event) => event.currentTarget.select()}
         className={cn(
-          "w-full min-w-0 bg-transparent py-1 text-right text-body text-label tabular-nums outline-none disabled:cursor-not-allowed",
+          "w-full min-w-0 bg-transparent py-1 text-right text-body text-inherit tabular-nums outline-none disabled:cursor-not-allowed",
         )}
       />
       <span className="text-body text-label-2">{unit}</span>
@@ -121,12 +121,11 @@ export function DurationInput({
       className={cn(
         fieldSurface,
         fieldShape[variant],
-        "w-auto max-w-full gap-4 sm:max-w-72",
+        "w-auto max-w-full gap-6 sm:max-w-72",
         className,
       )}
     >
       {field("minutes", "min", true)}
-      <span aria-hidden="true" className="h-4 w-(--hairline) bg-separator" />
       {field("seconds", "sec", false)}
     </div>
   );

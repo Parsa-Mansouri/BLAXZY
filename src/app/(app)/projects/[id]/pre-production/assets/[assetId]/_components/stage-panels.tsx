@@ -2,25 +2,25 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import type { LookView, SheetView } from "@/server/assets";
-import { Alert, Button, ProgressBar, StatusLine, SwapFade, cn } from "@/ui";
+import { Alert, Button, ProgressBar, SwapFade, cn } from "@/ui";
 import { isCreditsFailure, lookOrigin, type HeldImage } from "../_lib/asset-view";
 import { retryAction, reviewLookAction, reviewSheetAction, startOverAction } from "../actions";
+import { DrawnTick } from "../../../_components/drawn-tick";
 import { RequestChangesPanel } from "../../../_components/request-changes-panel";
 import { StageHeading, useAssetScreen } from "./asset-context";
 import {
+  Amount,
   Artwork,
   ErrorLine,
   MissingImage,
   PriceLine,
   When,
   canAfford,
-  formatNumber,
   type IssueChoice,
   type Orientation,
 } from "./shared";
 
-const SAMPLE_IMAGE = "Sample image. A placeholder from the test generator, not a real result.";
-const SAMPLE_SHEET = "Sample sheet. A placeholder from the test generator, not a real result.";
+const SAMPLE_OUTPUT = "Sample output from the test generator.";
 
 /** The picture large on the leading side (`in-2`), what to do with it beside it (`in-3`). */
 export function StageLayout({
@@ -88,7 +88,8 @@ export function WaitingStage({
   held: HeldImage | null;
   orientation: Orientation;
 }) {
-  const title = kind === "look" ? "Creating the Image" : "Building the Reference Sheet";
+  const title =
+    kind === "look" ? `Creating ${assetName}’s Image` : `Building ${assetName}’s Reference Sheet`;
   const shape = held
     ? held.kind === "sheet"
       ? "sheet"
@@ -119,10 +120,9 @@ export function WaitingStage({
       }
       rail={
         <div className="flex flex-col gap-4">
-          <StageHeading className="text-heading-sm">{title}</StageHeading>
-          <StatusLine tone="working">{kind === "look" ? "Generating" : "Building"}</StatusLine>
+          <StageHeading className="text-heading-sm text-balance break-words">{title}</StageHeading>
           <ProgressBar value={null} aria-label={title} />
-          <p className="text-body text-label-2">
+          <p className="text-body text-pretty text-label-2">
             {kind === "look"
               ? "You can leave this page. The image appears here when it is ready."
               : "You can leave this page and carry on with another asset."}
@@ -141,6 +141,7 @@ function useReview(projectId: string, initialAsking: boolean) {
   const [error, setError] = useState<string | null>(null);
   const [panelError, setPanelError] = useState<string | null>(null);
   const [asking, setAsking] = useState(initialAsking);
+  const [accepted, setAccepted] = useState(false);
 
   function run(
     target: { kind: "look" | "sheet"; id: string },
@@ -158,12 +159,14 @@ function useReview(projectId: string, initialAsking: boolean) {
         (fromPanel ? setPanelError : setError)(result.error);
         return;
       }
+      if (review.decision === "accepted") setAccepted(true);
       setAsking(false);
       refresh();
     });
   }
 
   return {
+    accepted,
     accepting,
     sending,
     error,
@@ -231,7 +234,9 @@ function Decision({
       ) : (
         <>
           <div className="flex flex-col gap-3">
-            <StageHeading className="text-heading text-balance">Is this {assetName}?</StageHeading>
+            <StageHeading className="text-heading text-balance break-words">
+              Is this {assetName}?
+            </StageHeading>
             <p className="text-body text-pretty text-label-2">{lead}</p>
             {meta}
           </div>
@@ -241,9 +246,11 @@ function Decision({
               size="large"
               loading={review.accepting}
               disabled={busy || acceptDisabled}
-              onClick={onAccept}
+              leadingIcon={review.accepted ? <DrawnTick /> : undefined}
+              onClick={review.accepted ? undefined : onAccept}
+              className={review.accepted ? "pl-5" : undefined}
             >
-              {acceptLabel}
+              {review.accepted ? "Accepted" : acceptLabel}
             </Button>
             {secondary ?? (
               <Button
@@ -307,7 +314,7 @@ export function LookReviewStage({
                 origin={lookOrigin(look)}
                 date={look.createdAt}
               />
-              {look.isSample ? <p className="text-meta text-label-2">{SAMPLE_IMAGE}</p> : null}
+              {look.isSample ? <p className="text-meta text-label-2">{SAMPLE_OUTPUT}</p> : null}
             </>
           }
           review={review}
@@ -387,7 +394,7 @@ export function SheetReviewStage({
           meta={
             <>
               <VersionLine label={`Sheet ${sheet.versionNumber}`} date={sheet.createdAt} />
-              {sheet.isSample ? <p className="text-meta text-label-2">{SAMPLE_SHEET}</p> : null}
+              {sheet.isSample ? <p className="text-meta text-label-2">{SAMPLE_OUTPUT}</p> : null}
             </>
           }
           review={review}
@@ -463,7 +470,7 @@ export function ReadyStage({
       rail={
         <>
           <div className="flex flex-col gap-3">
-            <StageHeading className="text-heading-sm text-balance">
+            <StageHeading className="text-heading-sm text-balance break-words">
               {assetName} is ready.
             </StageHeading>
             <p className="text-body text-pretty text-label-2">
@@ -476,7 +483,7 @@ export function ReadyStage({
                 date={sheet.decidedAt ?? sheet.createdAt}
               />
             ) : null}
-            {sheet?.isSample ? <p className="text-meta text-label-2">{SAMPLE_SHEET}</p> : null}
+            {sheet?.isSample ? <p className="text-meta text-label-2">{SAMPLE_OUTPUT}</p> : null}
           </div>
           <div>
             <Button variant="outlined" size="large" onClick={() => setConfirming(true)}>
@@ -534,7 +541,9 @@ export function FailedStage({
   const [error, setError] = useState<string | null>(null);
   const credits = isCreditsFailure(failed.failure);
   const title =
-    failed.kind === "look" ? "The image could not be created." : "The sheet could not be built.";
+    failed.kind === "look"
+      ? `${assetName}’s image could not be created.`
+      : `${assetName}’s sheet could not be built.`;
 
   function retry() {
     setError(null);
@@ -569,13 +578,15 @@ export function FailedStage({
       rail={
         <div role="alert" className="flex flex-col gap-8">
           <div className="flex flex-col gap-3">
-            <StageHeading className="text-heading-sm text-balance">{title}</StageHeading>
+            <StageHeading className="text-heading-sm text-balance break-words">
+              {title}
+            </StageHeading>
             <p className="text-body text-pretty text-label-2">
               {failed.failure ?? "Something went wrong while it was being made."}
             </p>
             {credits ? (
-              <p className="text-body text-label tabular-nums">
-                You now have {formatNumber(balance)} {balance === 1 ? "credit" : "credits"}.
+              <p className="text-body text-label">
+                You now have <Amount n={balance} /> {balance === 1 ? "credit" : "credits"}.
               </p>
             ) : null}
           </div>

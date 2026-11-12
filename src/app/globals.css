@@ -3,9 +3,17 @@
 /*
   BLAXZY design tokens.
 
-  True black ground, white as the only accent, colour only for status. Geist for the interface,
-  Geist Mono for real status lines only, Courier Prime for screenplay text on a paper sheet.
-  One curve for every movement: cubic-bezier(.32,.72,0,1).
+  True black ground, white for the one primary button, one brand colour for small marks only,
+  colour otherwise only for status. Geist for the interface (status lines too), Geist Mono only
+  for technical values (timecodes, durations, credits, shortcuts, file names), Courier Prime for
+  screenplay text on a paper sheet. One curve for every movement: cubic-bezier(.32,.72,0,1).
+
+  Polish rules the tokens encode (src/ui/README.md, "Polish rules"):
+  - Contrast: every label token meets WCAG AA (4.5:1) on every dark surface it sits on,
+    disabled text included; placeholders on paper use ink at 70%.
+  - Nested corners: inner radius = outer radius - padding. A container publishes the radius its
+    children should use as --nested-radius; children take it with `rounded-nested`.
+  - Icons: lucide, stroke 1.5 (enforced below), 16px beside text, 20px standalone.
 
   Components only use the Tailwind names mapped in the @theme block below. Tailwind's default
   palette, type scale and radii are cleared, so a raw colour or size cannot sneak in.
@@ -32,8 +40,9 @@
   /* ---------- Labels ---------- */
   --label: #f2f2f3; /* primary text */
   --label-2: #c9c9ce; /* secondary text, inactive nav, descriptions */
-  --label-3: #9a9aa0; /* placeholder labels in empty tiles, disabled controls, placeholders */
-  --label-4: #6e6e73; /* decoration only (done stage bar) */
+  /* Placeholders, disabled labels, empty tiles. AA on every dark surface up to --fill (4.8:1). */
+  --label-3: #a1a1a6;
+  --label-4: #6e6e73; /* decoration only, never text (4.1:1 on black) */
 
   /* ---------- Lines ---------- */
   --separator: #1f1f21; /* hairlines between rows and under tab strips */
@@ -54,9 +63,17 @@
   --accent: #ffffff;
   --on-accent: #000000;
   --on-accent-2: #3a3a3c; /* secondary text on a white block */
+  /*
+    The one brand colour. Small marks only: the title rule, the selected ring and tick, the
+    active stage line and tab underline, text links, text selection, the progress fill. Not
+    the focus ring (white) and not the caret (the text colour). Never a status, never a large fill, never body text, and never
+    text on the white block or the paper (3.4:1 and 2.7:1 there). 6.2:1 on black, 5:1 on
+    --elevated-2. Change it here to rebrand.
+  */
+  --brand: #5b84ff;
   --selection: #1f1f22; /* legacy name for the selected-row fill */
-  --text-highlight: rgb(255 255 255 / 0.24); /* selected text */
-  --focus: rgb(255 255 255 / 0.7);
+  --text-highlight: rgb(91 132 255 / 0.38); /* selected text: brand at 38%, white text stays AA */
+  --focus: rgb(255 255 255 / 0.7); /* keyboard focus ring on buttons, links, tiles, rows: white */
 
   /* ---------- Status only ---------- */
   --done: #30d158;
@@ -74,7 +91,7 @@
   --stage-done: #6e6e73;
   --stage-todo: #2a2a2c;
 
-  /* ---------- Depth: only floating surfaces and the paper sheet carry a shadow ---------- */
+  /* ---------- Depth: only floating surfaces carry a shadow (it lifts them off what is under) ---------- */
   --float-shadow:
     0 0 0 1px rgb(255 255 255 / 0.06), 0 16px 48px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.4);
   --paper-shadow: 0 24px 60px rgb(0 0 0 / 0.5);
@@ -94,8 +111,10 @@
   --row-h-lg: 48px;
   --sidebar-row-h: 40px;
   --menu-row-h: 36px;
+  /* Icons: two sizes. 16px beside text, 20px standalone (icon buttons, tiles). */
   --icon: 16px;
-  --icon-sm: 14px;
+  --icon-lg: 20px;
+  --icon-sm: 16px; /* legacy name: there is no 14px icon any more */
   --avatar: 24px;
   --thumb-w: 200px; /* option tile width */
   --sidebar-w: 260px; /* the floating panel plus its 12px gutter */
@@ -115,6 +134,7 @@
   --dur-wipe: 500ms; /* the title rule and selected-row highlight */
   --dur-rise: 650ms; /* the page title */
   --stagger-step: 40ms;
+  --dur-feedback: 250ms; /* confirmations: tick draw-in, settle (shake is 300ms) */
   /* legacy names */
   --dur-fast: var(--dur-press);
   --dur-base: var(--dur-swap);
@@ -123,6 +143,16 @@
   --motion-ease: var(--ease-curve);
   --motion-spring: var(--ease-curve);
   --dur-slide-motion: calc(var(--dur-slide) * var(--dur-move));
+
+  /* ---------- Nested corners ---------- */
+  /*
+    Inner radius = outer radius - padding. A container that holds rounded children sets
+    --nested-radius to its radius minus its padding; the children use `rounded-nested`.
+    Sidebar panel 16 - 10 = 6. Popups and menus 14 - 6 = 8. A 12px field with a chip 6px in: 6.
+    When the padding is at least the outer radius the child keeps its own shape (a capsule
+    button 24-32px inside a 20px block stays a capsule).
+  */
+  --nested-radius: 6px;
 
   /* ---------- Layers ---------- */
   --z-toolbar: 20;
@@ -191,6 +221,7 @@
   --color-accent: var(--accent);
   --color-on-accent: var(--on-accent);
   --color-on-accent-2: var(--on-accent-2);
+  --color-brand: var(--brand);
   --color-selection: var(--selection);
   --color-focus: var(--focus);
   --color-done: var(--done);
@@ -247,6 +278,16 @@
   --text-meta--line-height: 18px;
   --text-script: 16px;
   --text-script--line-height: 24px;
+  --text-block-title: 32px; /* the FeatureBlock title */
+  --text-block-title--line-height: 36px;
+  --text-block-title--letter-spacing: -0.025em;
+  --text-block-title--font-weight: 700;
+  --text-cover-title: 22px; /* the heading on a picture tile's action panel */
+  --text-cover-title--line-height: 26px;
+  --text-cover-title--letter-spacing: -0.02em;
+  --text-cover-title--font-weight: 600;
+  --text-control-lg: 16px; /* the large button's label */
+  --text-control-lg--line-height: 22px;
   --text-wordmark: 15px;
   --text-wordmark--line-height: 22px;
   --text-wordmark--letter-spacing: 0.22em;
@@ -296,6 +337,10 @@
   --radius-panel: 16px; /* the sidebar panel */
   --radius-block: 20px; /* big blocks: hero, feature block, locked panel, sheets */
   --radius-paper: 6px;
+  --radius-mark: 2px; /* bars, the title rule, the focus ring round a stage mark */
+  --radius-item: 8px; /* rows inside a popup or menu: 14 - 6 */
+  --radius-inset: 6px; /* rows inside the sidebar panel: 16 - 10 */
+  --radius-nested: var(--nested-radius); /* whatever the parent container publishes */
   --radius-capsule: 9999px;
   /* legacy names */
   --radius-control: 10px;
@@ -368,6 +413,43 @@
     transform: none;
   }
 }
+/* Feedback motion: a tick drawing in, a row settling, a field shaking off a wrong answer. */
+@keyframes tick-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes settle {
+  from {
+    opacity: 0.6;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-5px);
+  }
+  45% {
+    transform: translateX(4px);
+  }
+  70% {
+    transform: translateX(-2px);
+  }
+  85% {
+    transform: translateX(1px);
+  }
+}
 @keyframes drift-a {
   from {
     transform: translate(-12%, -8%) scale(1);
@@ -399,7 +481,7 @@
   transform-origin: bottom;
   animation: line-rise var(--dur-rise) var(--ease-curve) both;
 }
-/* The 48x3 white rule under a page title wipes in from the left (500ms, 180ms delay). */
+/* The 48x3 brand rule under a page title wipes in from the left (500ms, 180ms delay). */
 @utility rule-in {
   transform-origin: left;
   animation: wipe-x var(--dur-wipe) var(--ease-curve) 180ms both;
@@ -467,6 +549,69 @@
   transform: translateY(101%);
   transition: transform var(--dur-cover) var(--ease-curve);
 }
+/*
+  Feedback motion (150-300ms, the app curve, nothing under reduced motion):
+  - `tick-draw` on an SVG whose paths have pathLength="1" (the kit's <Tick />): the tick draws in.
+  - `settle` on a row or tile that just changed state (accepted, saved, moved): replay it by
+    changing the element's `key`.
+  - `shake` on a field that was just marked wrong (the kit's Field does this itself).
+  - `pop-in` for a small confirmation that appears in place (the kit's <Confirmation />).
+*/
+@utility tick-draw {
+  & path,
+  & polyline {
+    stroke-dasharray: 1;
+    animation: tick-draw var(--dur-feedback) var(--ease-curve) 60ms both;
+  }
+}
+@utility settle {
+  animation: settle var(--dur-feedback) var(--ease-curve) both;
+}
+@utility shake {
+  animation: shake 300ms var(--ease-curve);
+}
+@utility pop-in {
+  animation: page-in var(--dur-press) var(--ease-curve) both;
+}
+
+/* ---------- Optical alignment ---------- */
+/* Pulls display type left by its side bearing, so a 48px title lines up with the text below. */
+@utility optical-edge {
+  margin-inline-start: -0.045em;
+}
+/* Centres capitals and numerals in a circle by their cap height, not their line box. */
+@utility optical-center {
+  display: block;
+  line-height: 1;
+  text-box: trim-both cap alphabetic;
+}
+/* A play triangle's visual centre is left of its box: nudge it right. */
+@utility optical-play {
+  translate: 6% 0;
+}
+
+/* ---------- Technical values ---------- */
+/* Geist Mono with aligned figures: timecodes, durations, credits, shortcuts, file names. */
+@utility mono-value {
+  font-family: var(--font-mono-stack);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* A text link: the brand colour, underlined on hover. On the paper and white blocks it turns ink. */
+@utility link {
+  color: var(--brand);
+  text-decoration-line: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+  transition: text-decoration-color var(--dur-press) var(--ease-curve);
+  border-radius: var(--radius-mark);
+  &:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
 /* The Home hero's two slow lights (the only decorative loop). */
 @utility glow-a {
   animation: drift-a 16s ease-in-out infinite alternate;
@@ -486,19 +631,64 @@
 
 /* ---------- Shared utilities ---------- */
 
-/* Keyboard focus only: a white ring with a gap. */
+/*
+  Focus. Buttons, links, tiles and rows: keyboard focus only, a white ring with a 2px gap.
+  Text entry (inputs that take typing, textareas, contenteditable) NEVER gets a ring or box:
+  a field shows focus by its own border or underline turning full white (`field-focus`, built
+  into every kit field) plus the caret. On a light surface (the white block, the paper) the
+  border turns ink instead: those surfaces set --field-focus.
+*/
 @utility focus-ring {
-  &:focus-visible {
+  &:focus-visible:not(
+      textarea,
+      [contenteditable="true"],
+      input:not(
+        [type="range"],
+        [type="checkbox"],
+        [type="radio"],
+        [type="button"],
+        [type="submit"],
+        [type="reset"],
+        [type="file"],
+        [type="color"]
+      )
+    ) {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
 }
 
-/* Same ring for a wrapper whose inner control has keyboard focus (text fields). */
+/* The same ring for a wrapper whose inner control has keyboard focus (a slider, a toggle);
+   nothing when the focused control is text entry. */
 @utility focus-ring-within {
-  &:has(:focus-visible) {
+  &:has(:focus-visible):not(
+      :has(
+        :is(
+          textarea,
+          [contenteditable="true"],
+          input:not(
+            [type="range"],
+            [type="checkbox"],
+            [type="radio"],
+            [type="button"],
+            [type="submit"],
+            [type="reset"],
+            [type="file"],
+            [type="color"]
+          )
+        ):focus
+      )
+    ) {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
+  }
+}
+
+/* A text field's focus: its own border (or underline) turns full white; ink on light surfaces. */
+@utility field-focus {
+  transition: border-color var(--dur-press) var(--ease-curve);
+  &:focus-within:not(:has([aria-invalid="true"])) {
+    border-color: var(--field-focus, var(--label));
   }
 }
 
@@ -546,6 +736,17 @@
   & :focus-visible {
     outline-color: var(--ink);
   }
+  & ::placeholder {
+    color: rgb(27 26 23 / 0.7); /* 5.8:1 on paper */
+  }
+  & input,
+  & textarea {
+    caret-color: var(--ink);
+  }
+  & .link {
+    color: var(--ink);
+    text-decoration-color: currentColor;
+  }
 }
 
 /* ---------- Base ---------- */
@@ -577,9 +778,48 @@ body {
   color: var(--label);
 }
 
+/* The caret is the text's own colour: white on dark fields, ink on the paper and white blocks. */
 input,
-textarea {
-  caret-color: var(--accent);
+textarea,
+[contenteditable] {
+  caret-color: currentColor;
+}
+
+/* Light surfaces: fields placed on them show focus with an ink border, not a white one. */
+:where(.bg-accent, .bg-paper, .paper) {
+  --field-focus: var(--ink);
+}
+
+/* Headings wrap in balanced lines; running text avoids a one-word last line. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  text-wrap: balance;
+}
+p,
+li,
+dd,
+blockquote,
+figcaption {
+  text-wrap: pretty;
+}
+
+/* No italic anywhere: emphasis is weight or colour. */
+em,
+i,
+cite,
+dfn,
+var,
+address {
+  font-style: normal;
+}
+
+/* Icons: lucide only, stroke 1.5 everywhere (overrides any strokeWidth prop). */
+svg.lucide:not([stroke-width="0"]) {
+  stroke-width: 1.5;
 }
 
 ::placeholder {
@@ -590,6 +830,15 @@ textarea {
 a {
   text-underline-offset: 0.18em;
   text-decoration-thickness: 1px;
+}
+
+/* A bare link inside running text (no classes of its own) is a text link. */
+:where(p, li, dd) a:not([class]) {
+  color: var(--brand);
+  text-decoration-line: underline;
+}
+:where(.paper) :where(p, li, dd) a:not([class]) {
+  color: var(--ink);
 }
 
 /* Reduced motion: nothing moves. Animations and transitions finish at once. */

@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { fileSrc } from "@/lib/file-src";
-import { Button, StatusDot, StatusLine, cn, stagger } from "@/ui";
+import { Button, StatusLine, cn, stagger } from "@/ui";
 import { assetHref, categoryHref } from "../../_lib/asset-kinds";
 import { ASSET_STATUS_LABELS } from "../../_lib/asset-status";
 import type { OverviewAsset, OverviewCategory } from "../_lib/load-categories";
 import { statusWords } from "../_lib/status-words";
-import { STAGE_TONES, isWorking } from "./asset-stage";
+import { isWorking } from "./asset-stage";
 import { KIND_ASPECTS } from "./gallery-item";
 
 /** How many small pictures the leading block shows. */
@@ -28,7 +28,7 @@ function Thumb({ fileId }: { fileId: string }) {
   );
 }
 
-/** No picture or recording yet: the user still has to add one (a dashed outline). */
+/** No picture or recording yet: the user still has to add one. */
 const needsUser = (asset: OverviewAsset) =>
   !asset.thumbnailFileId && (asset.stage === "needs_image" || asset.stage === "needs_recording");
 
@@ -56,10 +56,13 @@ function nextStep(
 export function CategoryFeature({
   projectId,
   category,
+  primary = true,
   className,
 }: {
   projectId: string;
   category: OverviewCategory;
+  /** False when the page header already carries the screen's one white button. */
+  primary?: boolean;
   className?: string;
 }) {
   const words = statusWords(category.counts);
@@ -76,19 +79,26 @@ export function CategoryFeature({
     >
       <div className="flex min-w-0 flex-[1_1_320px] flex-col justify-between gap-10">
         <div className="flex flex-col gap-3">
-          <h2 id={titleId} className="text-heading uppercase">
+          <h2 id={titleId} className="text-heading text-balance break-words uppercase">
             {category.plural}
           </h2>
-          <StatusLine tone={words.tone}>{words.text}</StatusLine>
+          <StatusLine tone={words.tone} className="tabular-nums">
+            {words.text}
+          </StatusLine>
         </div>
         <div className="flex flex-wrap gap-3">
           {step ? (
-            <Button variant="primary" size="large" render={<Link href={step.href} />}>
-              {step.label}
+            <Button
+              variant={primary ? "primary" : "outlined"}
+              size="large"
+              render={<Link href={step.href} />}
+              className="max-w-full"
+            >
+              <span className="truncate">{step.label}</span>
             </Button>
           ) : null}
           <Button
-            variant="outlined"
+            variant={step ? "outlined" : "plain"}
             size="large"
             render={<Link href={categoryHref(projectId, category.kind)} />}
           >
@@ -103,12 +113,7 @@ export function CategoryFeature({
             className="flex max-w-56 min-w-0 flex-[1_1_96px] enter flex-col gap-2"
             style={stagger(i)}
           >
-            <div
-              className={cn(
-                "relative flex aspect-[4/5] items-center justify-center overflow-hidden rounded-row p-1 text-center text-meta text-label-3",
-                needsUser(asset) ? "border border-dashed border-outline" : "bg-selected",
-              )}
-            >
+            <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden rounded-tile bg-selected p-2 text-center text-meta text-label-2">
               {asset.thumbnailFileId ? (
                 <Thumb fileId={asset.thumbnailFileId} />
               ) : needsUser(asset) ? (
@@ -119,11 +124,10 @@ export function CategoryFeature({
                 <span>{ASSET_STATUS_LABELS[asset.stage]}</span>
               ) : null}
             </div>
-            <div className="flex min-w-0 items-center gap-1.5 text-meta text-label-2">
-              <StatusDot tone={STAGE_TONES[asset.stage]} />
-              <span className="truncate">{asset.name}</span>
+            <p className="line-clamp-2 min-w-0 text-meta break-words text-label-2">
+              {asset.name}
               <span className="sr-only">, {ASSET_STATUS_LABELS[asset.stage]}</span>
-            </div>
+            </p>
           </li>
         ))}
       </ul>
@@ -147,14 +151,12 @@ export function CategoryTile({
   return (
     <Link
       href={categoryHref(projectId, category.kind)}
-      className="flex min-h-50 press enter flex-col justify-between gap-6 rounded-card bg-elevated p-6 focus-ring hover:bg-elevated-2"
+      className="flex min-h-50 press enter flex-col justify-between gap-8 rounded-card bg-elevated p-6 focus-ring hover:bg-elevated-2"
       style={stagger(index, 500)}
     >
       <span className="flex flex-col gap-2">
-        <span className="text-[22px] leading-[26px] font-semibold tracking-[-0.02em] text-label uppercase">
-          {category.plural}
-        </span>
-        <StatusLine as="span" tone={words.tone}>
+        <span className="text-heading-sm break-words text-label uppercase">{category.plural}</span>
+        <StatusLine as="span" tone={words.tone} className="tabular-nums">
           {words.text}
         </StatusLine>
       </span>
@@ -163,10 +165,9 @@ export function CategoryTile({
           <span
             key={asset.id}
             className={cn(
-              "relative h-11 overflow-hidden",
+              "relative h-11 overflow-hidden bg-selected",
               aspect === "video" ? "w-17" : "w-11",
-              voice ? "rounded-full" : "rounded-lg",
-              needsUser(asset) ? "border border-dashed border-outline" : "bg-selected",
+              voice ? "rounded-full" : "rounded-row",
             )}
           >
             {asset.thumbnailFileId ? <Thumb fileId={asset.thumbnailFileId} /> : null}

@@ -38,7 +38,7 @@ const aspects = {
 
 /**
  * Option thumbnails, as in System Settings > Appearance: a picture of each choice with its label
- * beneath and a white ring around the chosen one. Arrow keys move between options.
+ * beneath and a brand ring around the chosen one. Arrow keys move between options.
  */
 export function ChoiceCards({
   options,
@@ -65,7 +65,7 @@ export function ChoiceCards({
           className={cn(
             "group flex w-(--thumb-w) cursor-default flex-col items-center gap-2 rounded-artwork text-center outline-none select-none",
             "focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus",
-            "data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
+            "data-[disabled]:pointer-events-none data-[disabled]:text-label-3",
           )}
         >
           <span
@@ -73,8 +73,8 @@ export function ChoiceCards({
               "flex w-full items-center justify-center overflow-hidden rounded-field bg-elevated text-label-2",
               "transition-[box-shadow,color] duration-(--dur-fast)",
               "group-hover:text-label group-data-[checked]:text-label",
-              "group-data-[checked]:ring-2 group-data-[checked]:ring-accent group-data-[checked]:ring-offset-2 group-data-[checked]:ring-offset-ground",
-              "[&>svg]:size-8",
+              "group-data-[checked]:ring-2 group-data-[checked]:ring-brand group-data-[checked]:ring-offset-2 group-data-[checked]:ring-offset-ground",
+              "[&>svg]:size-(--icon-lg)",
               aspects[aspect],
             )}
           >

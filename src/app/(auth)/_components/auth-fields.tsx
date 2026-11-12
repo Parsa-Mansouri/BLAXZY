@@ -1,7 +1,36 @@
 "use client";
 
-import { useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
-import { Field, Input } from "@/ui";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { Button, Field, Input } from "@/ui";
+
+/** The short sideways nudge of a field whose error just appeared (250ms, the app's curve). */
+const NUDGE: Keyframe[] = [
+  { transform: "translateX(0)" },
+  { transform: "translateX(-6px)", offset: 0.25 },
+  { transform: "translateX(5px)", offset: 0.5 },
+  { transform: "translateX(-3px)", offset: 0.75 },
+  { transform: "translateX(0)" },
+];
+
+/** Nudges the returned element once whenever `error` changes to a new message. Off under reduced motion. */
+function useNudgeOnError(error: string | undefined): RefObject<HTMLDivElement | null> {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!error || !element || typeof element.animate !== "function") return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    element.animate(NUDGE, { duration: 250, easing: "cubic-bezier(.32,.72,0,1)" });
+  }, [error]);
+  return ref;
+}
 
 /** A labelled 48px text field of the sign-in screens. */
 export function AuthField({
@@ -32,8 +61,9 @@ export function AuthField({
   autoFocus?: boolean;
   maxLength?: number;
 }) {
+  const nudge = useNudgeOnError(error);
   return (
-    <div className={style ? "enter" : undefined} style={style}>
+    <div ref={nudge} className={style ? "enter" : undefined} style={style}>
       <Field label={label} error={error} hint={hint} required>
         <Input
           name={name}
@@ -46,7 +76,7 @@ export function AuthField({
           placeholder={placeholder}
           autoFocus={autoFocus}
           maxLength={maxLength}
-          className="h-12"
+          className="h-(--btn-lg)"
         />
       </Field>
     </div>
@@ -79,8 +109,9 @@ export function AuthPasswordField({
   children?: ReactNode;
 }) {
   const [visible, setVisible] = useState(false);
+  const nudge = useNudgeOnError(error);
   return (
-    <div className={style ? "enter" : undefined} style={style}>
+    <div ref={nudge} className={style ? "enter" : undefined} style={style}>
       <Field label={label} error={error} hint={hint} required>
         <Input
           name={name}
@@ -91,17 +122,17 @@ export function AuthPasswordField({
           autoFocus={autoFocus}
           spellCheck={false}
           autoCapitalize="none"
-          className="h-12 pr-1.5"
+          className="h-(--btn-lg) pr-1.5"
           trailing={
-            <button
-              type="button"
+            <Button
+              variant="plain"
+              size="small"
               aria-pressed={visible}
               aria-label={visible ? "Hide Password" : "Show Password"}
               onClick={() => setVisible((v) => !v)}
-              className="h-9 press rounded-row px-2.5 text-secondary font-medium text-label-2 focus-ring hover:text-label"
             >
               {visible ? "Hide" : "Show"}
-            </button>
+            </Button>
           }
         />
         {children}

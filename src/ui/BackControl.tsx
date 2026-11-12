@@ -21,17 +21,13 @@ export const BackControl = forwardRef<HTMLElement, BackControlProps>(function Ba
   const props = mergeProps<"a">(
     {
       className: cn(
-        "press inline-flex h-(--btn-sm) max-w-full min-w-0 items-center gap-1.5 rounded-capsule bg-fill-4 pr-3.5 pl-2.5 text-meta font-medium text-label-2 focus-ring",
+        "press inline-flex h-(--btn-sm) max-w-full min-w-0 items-center gap-1.5 rounded-capsule bg-fill-4 pr-3.5 pl-2 text-meta font-medium text-label-2 focus-ring",
         "hover:bg-fill-3 hover:text-label",
         className,
       ),
       children: (
         <>
-          <ChevronLeft
-            aria-hidden="true"
-            className="size-(--icon-sm) shrink-0"
-            strokeWidth={1.75}
-          />
+          <ChevronLeft aria-hidden="true" className="size-(--icon) shrink-0" />
           <span className="truncate">{children}</span>
         </>
       ),

@@ -22,6 +22,7 @@ import { assetHref, type AssetKindKey } from "../../../_lib/asset-kinds";
 import { reviewSheetAction } from "../../assets/[assetId]/actions";
 import type { IssueChoice } from "../../assets/[assetId]/_components/shared";
 import { ContinueToProduction } from "../../_components/continue-to-production";
+import { DrawnTick } from "../../_components/drawn-tick";
 import { RequestChangesPanel } from "../../_components/request-changes-panel";
 import { FILL_PAGE, PICTURE_MAX_H } from "../../_lib/fill";
 import { loadReviewSheetAction, requestSheetChangesAction, type ReviewSheet } from "../actions";
@@ -225,34 +226,40 @@ export function SheetsReview({
     <div className={FILL_PAGE}>
       <PageHeader
         title="Review Sheets"
-        description="A last look at every sheet."
+        description={
+          <StatusLine tone={left.tone} className="tabular-nums">
+            <span aria-live="polite">{left.text}</span>
+          </StatusLine>
+        }
         actions={
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <StatusLine as="span" tone={left.tone}>
-              <span aria-live="polite">{left.text}</span>
-            </StatusLine>
-            {moved ? (
-              <Button variant="primary" render={<Link href={stageHref(projectId, "production")} />}>
-                Continue to Production
-              </Button>
-            ) : (
-              <ContinueToProduction projectId={projectId} size="regular" disabled={!allAccepted} />
-            )}
-          </div>
+          moved ? (
+            <Button
+              variant="primary"
+              size="large"
+              render={<Link href={stageHref(projectId, "production")} />}
+            >
+              Continue to Production
+            </Button>
+          ) : (
+            <ContinueToProduction projectId={projectId} disabled={!allAccepted} />
+          )
         }
       />
 
       {items.length === 0 ? (
-        <p className="max-w-(--measure) in-2 text-body text-label-2">
-          No sheet is ready to look at yet. Sheets appear here once their images are accepted.
-        </p>
+        <div className="flex max-w-(--measure) in-2 flex-col gap-2">
+          <h2 className="text-heading-sm text-balance">No sheets to review yet</h2>
+          <p className="text-body text-pretty text-label-2">
+            A sheet appears here once its image is accepted.
+          </p>
+        </div>
       ) : (
         <FocusLayout
           listLabel="Sheets"
           fill
           list={groups.map((group) => (
-            <div key={group.label} className="flex flex-col gap-0.5 not-first:mt-5">
-              <div className="px-3.5 pb-1.5 text-meta text-label-2">{group.label}</div>
+            <div key={group.label} className="flex flex-col gap-0.5 not-first:mt-8">
+              <h3 className="px-3.5 pb-1.5 text-meta text-label-2">{group.label}</h3>
               {group.rows.map(({ item, i }) => (
                 <SelectRow
                   key={item.id}
@@ -261,11 +268,19 @@ export function SheetsReview({
                   active={item.id === current?.id}
                   onClick={() => show(item.id)}
                   trailing={
-                    <span className="flex items-center gap-2">
-                      {item.status === "back" ? <span>Sent back</span> : null}
-                      <StatusDot tone={TONES[item.status]} className="size-2" />
-                      <span className="sr-only">{WORDS[item.status]}</span>
-                    </span>
+                    item.status === "accepted" ? (
+                      <span className="flex text-done">
+                        <DrawnTick />
+                        <span className="sr-only">{WORDS.accepted}</span>
+                      </span>
+                    ) : item.status === "back" ? (
+                      <span>{WORDS.back}</span>
+                    ) : (
+                      <span className="flex items-center">
+                        <StatusDot tone={TONES[item.status]} />
+                        <span className="sr-only">{WORDS[item.status]}</span>
+                      </span>
+                    )
                   }
                   className="enter"
                   style={stagger(Math.min(i, 12))}
@@ -291,7 +306,7 @@ export function SheetsReview({
                     className="absolute inset-0 size-full object-contain"
                   />
                 ) : current.status === "back" || sheet === null ? (
-                  <div className="flex size-full items-center justify-center p-6 text-center text-meta text-label-3">
+                  <div className="flex size-full items-center justify-center p-6 text-center text-meta text-label-2">
                     {current.status === "back" ? "A new sheet is being built" : "No sheet to show"}
                   </div>
                 ) : loadError ? (
@@ -323,10 +338,14 @@ export function SheetsReview({
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
                     <div className="flex min-w-0 flex-col gap-1">
-                      <h2 className="text-heading-sm break-words">{current.name}</h2>
-                      <StatusLine tone={TONES[current.status]}>
-                        {current.group} · {WORDS[current.status]}
-                      </StatusLine>
+                      <h2 className="text-heading-sm text-balance break-words">
+                        {current.status === "todo" ? `Is this ${current.name}?` : current.name}
+                      </h2>
+                      {current.status === "todo" ? null : (
+                        <StatusLine tone={TONES[current.status]}>
+                          {WORDS[current.status]}
+                        </StatusLine>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {current.status !== "back" && sheet ? (
@@ -349,14 +368,15 @@ export function SheetsReview({
                           variant="outlined"
                           size="large"
                           render={<Link href={assetHref(projectId, current.id)} />}
+                          className="max-w-full"
                         >
-                          Open {current.name}
+                          <span className="truncate">Open {current.name}</span>
                         </Button>
                       ) : null}
                     </div>
                   </div>
                   {current.status === "back" ? (
-                    <p className="text-secondary text-label-2">
+                    <p className="text-secondary text-pretty text-label-2">
                       It returns here when the new one is made.
                     </p>
                   ) : null}

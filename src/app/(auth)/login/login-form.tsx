@@ -21,6 +21,7 @@ export function LoginForm({ next }: { next: string }) {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    if (submitting) return;
     if (!email.trim() || !password) {
       setError("Enter your email and password.");
       return;

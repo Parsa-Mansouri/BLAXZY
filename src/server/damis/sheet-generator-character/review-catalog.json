@@ -1,0 +1,412 @@
+{
+  "schema_version": "2.1",
+  "dami": "sheet_generator_character",
+  "meta": {
+    "flow": [
+      "user rejects the sheet (or asks to change one or more detail frames)",
+      "ask: technical issue or personal preference?",
+      "user picks one or more preset reasons (with follow-ups where needed), or writes a custom note",
+      "backend builds fix_requests[] and sends previous_prompt + previous_detail_cells + fix_requests to the sheet dami",
+      "for detail-only or backdrop-only fixes, the backend also attaches the previous sheet as a reference (role previous_sheet) so the rest of the sheet stays identical",
+      "dami applies all fixes in one round and returns a new sheet"
+    ],
+    "scope_note": "The character design is already approved before the sheet is made. Preference reasons here only cover the six detail frames, composition and backdrop tone. Any change to the character's face, hair, body, outfit or colors is routed back to the Character Generator (see design_change_routing).",
+    "detail_frames": "The right third of the sheet always holds six square frames numbered 1 to 6 (reading order: 1 top left, 2 top right, 3 middle left, 4 middle right, 5 bottom left, 6 bottom right). Users refer to a detail by its number. Frames are never renumbered. Frames 1 (main fabric) and 2 (footwear) are only defaults and can be replaced like any other frame.",
+    "max_attempts_before_suggestion": 4,
+    "attempt_limit_message_fa": "چند بار تلاش کردیم و هنوز راضی نیستی. اغلب دلیلش کیفیت یا ریزِ تصویر تأییدشده است. می‌خواهی عکس‌های رفرنس اصلی (صورت یا لباس) را هم اضافه کنیم یا برد کاراکتر را دوباره بسازیم؟",
+    "modes": {
+      "wizard": "user sees only the groups, preset reasons and follow-up chips",
+      "pro": "user may also edit the fix instruction text directly"
+    },
+    "placeholders": "{value} is replaced by the selected chip's value or the user's custom text. {slot} and {slot_subject} are replaced from the previous output's detail_cells."
+  },
+  "special_actions": [
+    {
+      "code": "SR01",
+      "label_fa": "نتیجه اتفاقی خراب شده، دوباره بساز",
+      "calls_dami": false,
+      "action": "resend previous image_prompt and the same reference images to Nano Banana with a new seed, no Claude call",
+      "suggest_first_for": [
+        "ST02",
+        "ST16"
+      ],
+      "note": "Use for random glitches (melted face, wrong fingers, garbled digit) that are not caused by the prompt."
+    },
+    {
+      "code": "SX01",
+      "label_fa": "می‌خواهم طراحی کاراکتر را عوض کنم",
+      "calls_dami": false,
+      "action": "route the user back to the Character Generator review step. After the new board is approved, the Sheet Generator runs again automatically.",
+      "note": "The sheet dami never changes the approved design."
+    }
+  ],
+  "groups": [
+    {
+      "id": "face",
+      "label_fa": "صورت"
+    },
+    {
+      "id": "full_body",
+      "label_fa": "نماهای فول‌شات"
+    },
+    {
+      "id": "layout",
+      "label_fa": "چیدمان و ترکیب‌بندی"
+    },
+    {
+      "id": "background",
+      "label_fa": "بک‌گراند و نور"
+    },
+    {
+      "id": "details",
+      "label_fa": "کادرهای جزئیات (۱ تا ۶)"
+    },
+    {
+      "id": "general",
+      "label_fa": "کلی"
+    }
+  ],
+  "technical": [
+    {
+      "code": "ST01",
+      "group": "face",
+      "label_fa": "صورت کامل دیده نمی‌شود",
+      "instruction": "In the left third, the entire face must be fully visible: both eyes, nose and mouth unobstructed and in sharp focus. Nothing may crop or cover it (hair, hands, objects, shadows). The hair is fully visible."
+    },
+    {
+      "code": "ST02",
+      "group": "face",
+      "label_fa": "صورت خراب، محو یا نامتقارن است",
+      "instruction": "Render the face in the left third clean, sharp, symmetrical and anatomically correct, with no distortion, blur or melted features."
+    },
+    {
+      "code": "ST03",
+      "group": "face",
+      "label_fa": "صورت با تصویر تأییدشده نمی‌خواند",
+      "instruction": "The face in the left third must match the approved character image exactly: same face shape, eyes, nose, mouth, skin tone, hairstyle and expression. Use the approved image as the master."
+    },
+    {
+      "code": "ST04",
+      "group": "full_body",
+      "label_fa": "نمای جلو سر یا صورت دارد",
+      "instruction": "The front full-body figure must have no head. It is framed from the base of the neck down to the feet, with plain grey background where the head would be. No head, no face, no floating head. Collar, scarf and necklace at the neckline stay visible."
+    },
+    {
+      "code": "ST05",
+      "group": "full_body",
+      "label_fa": "نمای پشت اشتباه است یا وجود ندارد",
+      "instruction": "The back full-body figure must face away from the camera, showing the back of the head, the hair and the back of the outfit. No face is visible. Show the back of the outfit as designed or logically inferred from the front."
+    },
+    {
+      "code": "ST06",
+      "group": "full_body",
+      "label_fa": "پا یا بدن از کادر بریده شده",
+      "instruction": "Show both full-body figures completely inside the middle third, with both feet fully in frame and the ground visible. Nothing is cropped or cut off by the edges of the column or the canvas."
+    },
+    {
+      "code": "ST07",
+      "group": "layout",
+      "label_fa": "چیدمان سه‌ستونه رعایت نشده",
+      "instruction": "Enforce the layout strictly: three equal columns, each exactly one third of the canvas width. The face is on the left, the two full-body figures in the middle, the six numbered detail frames on the right. No element may cross into another column."
+    },
+    {
+      "code": "ST08",
+      "group": "layout",
+      "label_fa": "دو نمای فول‌شات هم‌اندازه یا هم‌خط نیستند",
+      "instruction": "Show both full-body figures at the same scale on the same ground line, evenly spaced, not overlapping each other."
+    },
+    {
+      "code": "ST09",
+      "group": "general",
+      "label_fa": "لباس با تصویر تأییدشده نمی‌خواند",
+      "instruction": "Reproduce the outfit exactly as in the approved image: cut, colors, materials, patterns, footwear and accessories. Do not simplify, restyle or add elements."
+    },
+    {
+      "code": "ST10",
+      "group": "general",
+      "label_fa": "ستون‌ها یک نفر نیستند",
+      "instruction": "Make the face, hair, body, outfit and colors identical in all columns. Use the approved image as the master design."
+    },
+    {
+      "code": "ST11",
+      "group": "background",
+      "label_fa": "بک‌گراند ساده و توسی نیست",
+      "instruction": "Use a plain, seamless, uniform neutral grey background across the whole canvas. No environment, scenery, gradient, floor line, props or color."
+    },
+    {
+      "code": "ST12",
+      "group": "background",
+      "label_fa": "رنگ‌ها اشتباه یا نور تند است",
+      "instruction": "Use soft, even, diffused studio lighting with a neutral white balance and no color cast, so the colors are true to the approved design. No harsh shadows, rim light or atmospheric effects. Remove any tint carried over from the original environment."
+    },
+    {
+      "code": "ST13",
+      "group": "background",
+      "label_fa": "کاراکتر در بک‌گراند گم شده",
+      "instruction": "Separate the character from the backdrop: shift the neutral grey backdrop slightly lighter or darker so the silhouette reads clearly. Do not add color to the backdrop and do not change the character design."
+    },
+    {
+      "code": "ST14",
+      "group": "general",
+      "label_fa": "متن، لیبل، فلش یا کادر اضافه دارد",
+      "instruction": "Remove all text, labels, captions, arrows, color swatches, logos, watermarks and any numbers other than the digits 1 to 6 above the detail frames. Remove any borders, frames or grid lines other than the six square detail frames."
+    },
+    {
+      "code": "ST15",
+      "group": "general",
+      "label_fa": "آدم یا شیء اضافه، یا صورت دوم دارد",
+      "instruction": "Show exactly one character. Remove any extra people, creatures, duplicates, second faces or objects."
+    },
+    {
+      "code": "ST16",
+      "group": "general",
+      "label_fa": "دست‌ها یا انگشت‌ها اشتباه است",
+      "instruction": "Render hands with correct anatomy: five fingers each, natural proportions, relaxed pose."
+    },
+    {
+      "code": "ST17",
+      "group": "general",
+      "label_fa": "سبک تصویر با تصویر تأییدشده فرق دارد",
+      "instruction": "Match the rendering style exactly to the approved image, even where project.style says otherwise. Do not re-interpret or correct the style. Only the background and lighting differ."
+    },
+    {
+      "code": "ST18",
+      "group": "details",
+      "label_fa": "تعداد یا چیدمان کادرهای جزئیات درست نیست",
+      "instruction": "The right third must hold exactly six square frames of equal size in a grid of 2 columns and 3 rows, with equal margins and spacing. Each frame has a thin plain dark-grey outline and shows one subject. No overlapping or missing frames."
+    },
+    {
+      "code": "ST19",
+      "group": "details",
+      "label_fa": "یکی از جزئیات چیزی است که روی کاراکتر نیست",
+      "instruction": "Every detail frame must show only what is actually on the character, with the same colors, materials and patterns as the approved image. Correct any frame that shows an invented or different element, keeping its number."
+    },
+    {
+      "code": "ST20",
+      "group": "details",
+      "label_fa": "جزئیات محو یا خیلی ریز است",
+      "instruction": "Show each detail frame as a sharp, large close-up that fills the square, so material, texture, color and construction can be read clearly. No blurry or tiny subjects."
+    },
+    {
+      "code": "ST21",
+      "group": "details",
+      "label_fa": "کادر پارچه یا کفش (پیش‌فرض) نیست یا اشتباه است",
+      "instruction": "Show a clear close-up of the main outfit fabric and a clear view of the footwear in their frames, matching the approved design exactly. Apply this only to frames the user has not replaced.",
+      "note": "Frames 1 and 2 are defaults. If the user replaced them earlier, do not offer this reason for those frames."
+    },
+    {
+      "code": "ST22",
+      "group": "details",
+      "label_fa": "شماره‌ها نیستند، اشتباه‌اند یا خوانا نیستند",
+      "instruction": "Draw a small, plain, upright, clearly legible dark-grey digit above each detail frame, in reading order: 1 and 2 above the top row, 3 and 4 above the middle row, 5 and 6 above the bottom row. Digits only, no other text.",
+      "hide_when": "render_cell_numbers is false",
+      "suggest_first": "SR01"
+    }
+  ],
+  "preference": [
+    {
+      "code": "SP01",
+      "group": "details",
+      "label_fa": "جزئیات یک کادر عوض شود",
+      "followup": {
+        "type": "steps",
+        "steps": [
+          {
+            "type": "select_detail_cell",
+            "dynamic_options_source": "previous_output.detail_cells",
+            "display": "{slot} — {slot_subject}",
+            "label_fa": "کدام کادر؟ (شماره‌ی روی تصویر)"
+          },
+          {
+            "type": "chips_or_text",
+            "allow_custom": true,
+            "label_fa": "چه جزئیاتی نشان داده شود؟",
+            "options": [
+              {
+                "label_fa": "کمربند و بست",
+                "value": "the belt and its buckle"
+              },
+              {
+                "label_fa": "اکسسوری",
+                "value": "an accessory worn by the character (specify in custom text)"
+              },
+              {
+                "label_fa": "نشانه‌ی چهره یا بدن",
+                "value": "a facial or body mark (specify in custom text)"
+              },
+              {
+                "label_fa": "آرم یا گلدوزی",
+                "value": "an emblem, embroidery or patch (specify in custom text)"
+              },
+              {
+                "label_fa": "جزئیات مو",
+                "value": "a hair detail (specify in custom text)"
+              },
+              {
+                "label_fa": "جزئیات دوخت یا بست",
+                "value": "a construction detail such as collar, cuff or closure (specify in custom text)"
+              },
+              {
+                "label_fa": "خودت یک مورد شاخص دیگر انتخاب کن",
+                "value": "__auto__"
+              }
+            ]
+          }
+        ]
+      },
+      "instruction_template": "Replace detail frame {slot} ({slot_subject}) with: {value}. It must match the approved design exactly. All other frames keep their subjects and their numbers.",
+      "instruction_template_auto": "Replace detail frame {slot} ({slot_subject}) with the next most distinctive element of the character that is not yet shown. All other frames keep their subjects and their numbers.",
+      "note": "Example: frame 4 shows the shoes and the user wants the belt instead. The user can replace any frame, including frames 1 and 2. If the character has no such element, the dami keeps the old subject and returns a warning."
+    },
+    {
+      "code": "SP02",
+      "group": "details",
+      "label_fa": "یک کادر بزرگ‌تر، نزدیک‌تر یا از زاویه‌ی دیگر باشد",
+      "followup": {
+        "type": "steps",
+        "steps": [
+          {
+            "type": "select_detail_cell",
+            "dynamic_options_source": "previous_output.detail_cells",
+            "display": "{slot} — {slot_subject}",
+            "label_fa": "کدام کادر؟"
+          },
+          {
+            "type": "chips_or_text",
+            "allow_custom": true,
+            "options": [
+              {
+                "label_fa": "بزرگ‌تر",
+                "value": "larger in the frame"
+              },
+              {
+                "label_fa": "نزدیک‌تر (ماکرو)",
+                "value": "as a closer macro shot"
+              },
+              {
+                "label_fa": "از زاویه‌ی دیگر",
+                "value": "from a different angle (specify in custom text)"
+              }
+            ]
+          }
+        ]
+      },
+      "instruction_template": "Show detail frame {slot} ({slot_subject}) {value}, so its material, texture and construction read clearly. Do not change the element itself. All other frames stay unchanged."
+    },
+    {
+      "code": "SP03",
+      "group": "background",
+      "label_fa": "رنگ توسی بک‌گراند عوض شود",
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": false,
+        "options": [
+          {
+            "label_fa": "روشن‌تر",
+            "value": "a lighter"
+          },
+          {
+            "label_fa": "تیره‌تر",
+            "value": "a darker"
+          },
+          {
+            "label_fa": "متوسط",
+            "value": "a mid-tone"
+          }
+        ]
+      },
+      "instruction_template": "Use {value} neutral grey backdrop. Keep it plain, uniform and colorless."
+    },
+    {
+      "code": "SP04",
+      "group": "layout",
+      "label_fa": "اندازه یا فاصله‌ی نماهای فول‌شات",
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": true,
+        "options": [
+          {
+            "label_fa": "نماها بزرگ‌تر باشند",
+            "value": "make both full-body figures larger within the middle third, still fully in frame"
+          },
+          {
+            "label_fa": "فاصله‌ی بیشتر بین دو نما",
+            "value": "leave more empty space between the two full-body figures"
+          },
+          {
+            "label_fa": "نماها کوچک‌تر و با حاشیه‌ی بیشتر",
+            "value": "make both full-body figures slightly smaller with more margin around them"
+          }
+        ]
+      },
+      "instruction_template": "Composition change for the middle third only: {value}. Keep identical scale and ground line for both figures."
+    },
+    {
+      "code": "SP05",
+      "group": "face",
+      "label_fa": "قاب صورت نزدیک‌تر یا بازتر باشد",
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": false,
+        "options": [
+          {
+            "label_fa": "نزدیک‌تر روی صورت",
+            "value": "frame the face closer, with less of the shoulders"
+          },
+          {
+            "label_fa": "بازتر، با شانه‌ی بیشتر",
+            "value": "frame the face wider, with more of the shoulders and neckline"
+          }
+        ]
+      },
+      "instruction_template": "In the left third, {value}. The entire face stays fully visible and sharp."
+    },
+    {
+      "code": "SP99",
+      "group": "general",
+      "label_fa": "دلیل دیگر",
+      "followup": {
+        "type": "text",
+        "allow_custom": true,
+        "options": []
+      },
+      "instruction_template": "Apply this user note, changing only what it requires and only if it concerns layout, composition, backdrop, lighting or the detail frames: {value}.",
+      "note": "If the note asks to change the character's face, hair, body, outfit or colors, the dami returns a DESIGN_CHANGE_REQUESTED warning and the backend offers SX01."
+    }
+  ],
+  "design_change_routing": {
+    "description": "The sheet dami never changes the approved design. When it receives such a request, it leaves the design untouched and returns a warning that starts with DESIGN_CHANGE_REQUESTED:.",
+    "backend_behavior": [
+      "detect a warning that starts with DESIGN_CHANGE_REQUESTED:",
+      "show the sheet result normally, plus a notice",
+      "offer SX01 (back to the Character Generator) with the user's request pre-filled as a preference fix_request",
+      "after the new board is approved, run the Sheet Generator again"
+    ],
+    "message_fa": "تغییر طراحی کاراکتر در مرحله‌ی شیت انجام نمی‌شود، چون طراحی قبلاً تأیید شده است. می‌خواهی برگردیم به مرحله‌ی کاراکتر و آن را آنجا عوض کنیم؟"
+  },
+  "rules": {
+    "multi_select": "The user may pick several reasons at once, including edits to several frames (for example frame 2 and frame 5). All become entries in fix_requests and the dami applies them in one round.",
+    "detail_cell_selection": "The digits 1 to 6 are visible on the sheet, so users can refer to a frame directly. The UI also lists the subjects from the previous output's detail_cells as '1 — main fabric', '2 — boots' and so on. The backend maps the choice to {slot} and {slot_subject}.",
+    "frames_never_renumber": "Replacing a frame changes only its subject. The other five frames keep their subjects and numbers.",
+    "previous_sheet_attachment": "For correction rounds that concern only detail frames (SP01, SP02, ST18 to ST22) or only the backdrop tone (SP03, ST13), the backend attaches the previous sheet as a reference with role previous_sheet. The dami then returns edit_mode edit_previous_sheet and writes an edit instruction so the face, figures and other frames stay the same. For all other fixes, edit_mode is full.",
+    "wizard_group_display": "In wizard mode the technical list is shown grouped by the groups array, so the user sees six short groups instead of 22 reasons at once.",
+    "random_glitch_hint": "For ST02, ST16 and ST22, suggest SR01 (rebuild with a new seed) first, because these are usually random generation errors.",
+    "approved_image_is_not_changed": "A rejected sheet never changes the approved board. Only the sheet is regenerated.",
+    "render_cell_numbers": "If rendered digits turn out unreliable, or the platform does not want digits inside the reference image sent to video models, set render_cell_numbers to false. The frames stay, and the UI overlays the numbers on the review screen only.",
+    "fix_requests_format": {
+      "example": [
+        {
+          "type": "preference",
+          "code": "SP01",
+          "instruction": "Replace detail frame 4 (leather boots, side view) with: the belt and its buckle. It must match the approved design exactly. All other frames keep their subjects and their numbers.",
+          "custom_text": "the belt and its buckle"
+        },
+        {
+          "type": "technical",
+          "code": "ST20",
+          "instruction": "Show each detail frame as a sharp, large close-up that fills the square, so material, texture, color and construction can be read clearly. No blurry or tiny subjects."
+        }
+      ]
+    }
+  }
+}

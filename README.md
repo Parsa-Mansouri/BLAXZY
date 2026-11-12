@@ -40,13 +40,13 @@ All configuration is read from the environment (see `.env.example` and `src/serv
 | `WORKER_POLL_INTERVAL_SECONDS`                                        | `2`                              | How often an idle worker checks for jobs                                                                    |
 | `WORKER_SHUTDOWN_TIMEOUT_SECONDS`                                     | `25`                             | Wait for in-flight jobs on SIGTERM; keep the container stop grace period longer                             |
 | `ANTHROPIC_API_KEY`                                                   | unset                            | Claude API; without it damis run in sample mode                                                             |
-| `DAMI_MODE`                                                           | `auto`                           | `live` calls Claude; `sample` returns generated sample output; `auto` = `sample` without an API key         |
-| `DAMI_SAMPLE_DELAY_MS`                                                | `1500`                           | Artificial latency of one sample-mode dami call (`0` in tests)                                              |
+| `DAMI_MODE`                                                           | `sample`                         | `sample` returns generated sample output (testing-phase default); `live` calls Claude; `auto` = `sample` without an API key |
+| `DAMI_SAMPLE_DELAY_MS`                                                | `3000`                           | Artificial latency of one sample-mode dami call (`0` in tests)                                              |
 | `DAMI_DEFAULT_MODEL`                                                  | unset                            | Overrides every dami's default Claude model (unset = per-dami defaults)                                     |
 | `DAMI_MAX_CONCURRENCY`                                                | `4`                              | Per-process limit on concurrent Claude calls made by damis                                                  |
 | `DAMI_MAX_RETRIES`                                                    | `4`                              | Retries per Claude call for rate limits, overloads and network errors                                       |
 | `GENERATION_PROVIDER`                                                 | `sample`                         | `sample` renders placeholder images and MP4 clips locally (no cost); `higgsfield` is not wired yet          |
-| `GENERATION_SAMPLE_DELAY_MS`                                          | `2500`                           | How long one sample generation takes (`0` in tests)                                                         |
+| `GENERATION_SAMPLE_DELAY_MS`                                          | `3000`                           | How long one sample generation takes (`0` in tests)                                                         |
 | `GENERATION_MAX_PER_USER`                                             | `3`                              | Generations one user may have running at once; extra jobs are rescheduled, not failed                       |
 | `GENERATION_STUCK_AFTER_MINUTES`                                      | `120`                            | `generation.sweep` (every 5 min) fails and refunds generations queued or running longer than this           |
 | `FFMPEG_PATH`                                                         | unset                            | ffmpeg used for sample video; unset = the `ffmpeg-static` package, else `ffmpeg` on the PATH                |
@@ -60,7 +60,7 @@ once `ANTHROPIC_API_KEY` is set (the run is recorded in `dami_run`):
 pnpm dami:run script-writer src/server/damis/script-writer/fixtures/input.json [--project <id>]
 ```
 
-Without an API key (or with `DAMI_MODE=sample`) every dami answers in **sample mode**: output is
+By default (`DAMI_MODE=sample`, the testing-phase setting) every dami answers in **sample mode**: output is
 generated from the actual input by small deterministic generators (`src/server/damis/sample/`),
 stored in `dami_run` with model `sample` and no cost, and script versions show `isSample`. The
 whole Script stage then runs end to end locally:

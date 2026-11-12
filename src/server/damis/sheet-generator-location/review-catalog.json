@@ -1,0 +1,141 @@
+{
+  "catalog": "sheet_review_catalog_location",
+  "version": 1,
+  "dami": "sheet_generator_location",
+  "applies_to": "pack_view_or_concept_sheet",
+  "flow": "Review is per view (lock) or on the concept sheet. fix_requests carry view_id. Items with edit_eligible allow edit_previous_view.",
+  "items": [
+    {
+      "code": "LST01",
+      "type": "technical",
+      "label": "An element is in the wrong place compared with another view",
+      "instruction": "Place the named anchor exactly where the layout puts it as seen from this camera, translating left and right through the orientation system.",
+      "needs_user_text": true,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LST02",
+      "type": "technical",
+      "label": "The reverse view is just a mirror of the Hero",
+      "instruction": "Show the sides that were behind the Hero camera using the layout's contents for them; do not flip the Hero.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LST03",
+      "type": "technical",
+      "label": "A door or window was invented or moved",
+      "instruction": "Remove any opening or fixed structure that is not in the layout and restore the ones that are.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LST04",
+      "type": "technical",
+      "label": "Architecture or materials changed",
+      "instruction": "Match architecture, materials, colors and wear to the Hero exactly.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LST05",
+      "type": "technical",
+      "label": "Lighting differs from the other views",
+      "instruction": "Use the Hero's time of day, light direction logic, weather and palette.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true,
+      "edit_eligible": true
+    },
+    {
+      "code": "LST06",
+      "type": "technical",
+      "label": "A person, text or label appears",
+      "instruction": "Remove all people, figures, text and labels.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true,
+      "edit_eligible": true
+    },
+    {
+      "code": "LST07",
+      "type": "technical",
+      "label": "Detail view is blurry or just a crop",
+      "instruction": "Make it a true close-up, sharp and in focus, with the same material and wear.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true,
+      "edit_eligible": true
+    },
+    {
+      "code": "LST08",
+      "type": "technical",
+      "label": "The style differs from the Hero",
+      "instruction": "Render in exactly the Hero's style; match form language, materials, surface rendering and light.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LST09",
+      "type": "technical",
+      "label": "Concept sheet layout is wrong (concept only)",
+      "instruction": "Follow the fixed layout: left half the Hero, right half the alternate as a full-width top panel and two detail panels side by side below, thin even gutters, four panels, no text.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LSP01",
+      "type": "preference",
+      "label": "I want a different angle",
+      "instruction": "Change the camera as stated in the note, keeping the space identical.",
+      "needs_user_text": true,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LSP02",
+      "type": "preference",
+      "label": "I want a different detail",
+      "instruction": "Change the detail as stated in the note, from things that exist in the spec.",
+      "needs_user_text": true,
+      "pro_only": false,
+      "calls_claude": true,
+      "edit_eligible": true
+    },
+    {
+      "code": "LSP99",
+      "type": "preference",
+      "label": "Something else (write it)",
+      "instruction": "Apply the user's note without changing DNA or layout.",
+      "needs_user_text": true,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LSR01",
+      "type": "regenerate",
+      "label": "Try again (new variation)",
+      "instruction": null,
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": false,
+      "action": "regenerate_new_seed"
+    },
+    {
+      "code": "LSX01",
+      "type": "route",
+      "label": "This needs a design change (layout, openings, materials, or the proposed unseen part)",
+      "instruction": null,
+      "needs_user_text": true,
+      "pro_only": false,
+      "calls_claude": false,
+      "action": "route_to_location_generator"
+    }
+  ]
+}

@@ -1,0 +1,441 @@
+{
+  "schema_version": "1.1",
+  "dami": "character_generator",
+  "meta": {
+    "flow": [
+      "user rejects the board",
+      "ask: technical issue or personal preference?",
+      "user picks one or more preset reasons, or writes a custom reason",
+      "backend builds fix_requests[] and sends previous_prompt + fix_requests to the dami",
+      "dami applies all fixes in one round and returns a new board"
+    ],
+    "max_attempts_before_suggestion": 4,
+    "attempt_limit_message_fa": "چند بار تلاش کردیم و هنوز راضی نیستی. معمولاً مشکل از توضیحات یا رفرنس‌هاست. می‌خواهی توضیح کاراکتر را بازنویسی کنی یا رفرنس اضافه کنی؟",
+    "modes": {
+      "wizard": "user sees only preset reasons and follow-up chips",
+      "pro": "user may also edit the fix instruction text directly"
+    },
+    "placeholders": "{value} in an instruction template is replaced by the selected chip's value or the user's custom text",
+    "style_note": "The effective style (style_override if present, otherwise the project style chosen in the Style stage) is locked in the wizard. Only Pro users can change it, either when starting a character (style_override) or during review (P12)."
+  },
+  "special_actions": [
+    {
+      "code": "R01",
+      "label_fa": "نتیجه اتفاقی خراب شده، دوباره بساز",
+      "calls_dami": false,
+      "action": "resend previous image_prompt to Nano Banana with a new seed, no Claude call",
+      "note": "Use for random glitches (extra finger, melted detail) that are not caused by the prompt."
+    }
+  ],
+  "technical": [
+    {
+      "code": "T01",
+      "label_fa": "صورت کامل دیده نمی‌شود",
+      "instruction": "The entire face in the close-up must be fully visible: both eyes, nose and mouth unobstructed and in sharp focus. Nothing may crop or cover it (hair, hands, objects, shadows)."
+    },
+    {
+      "code": "T02",
+      "label_fa": "صورت خراب، محو یا نامتقارن است",
+      "instruction": "Render the face clean, sharp, symmetrical and anatomically correct in all three views, with no distortion, blur or melted features."
+    },
+    {
+      "code": "T03",
+      "label_fa": "دست‌ها یا انگشت‌ها اشتباه است",
+      "instruction": "Render hands with correct anatomy: five fingers each, natural proportions, relaxed pose."
+    },
+    {
+      "code": "T04",
+      "label_fa": "پا یا بدن از کادر بریده شده",
+      "instruction": "Show both full-body views head to toe with both feet fully in frame and the ground visible. Nothing cropped."
+    },
+    {
+      "code": "T05",
+      "label_fa": "تناسب بدن غیرطبیعی است",
+      "instruction": "Correct the body proportions (head size, limb length, torso) so they look natural and match the described body type."
+    },
+    {
+      "code": "T06",
+      "label_fa": "چیدمان کادر درست نیست",
+      "instruction": "Enforce the layout strictly: the left one third is the close-up portrait, the right two thirds hold the two full-body views side by side."
+    },
+    {
+      "code": "T07",
+      "label_fa": "نمای پشت اشتباه است یا وجود ندارد",
+      "instruction": "The second full-body figure must show the BACK view, with the head turned away from the camera. Describe the back of the outfit and hair explicitly."
+    },
+    {
+      "code": "T08",
+      "label_fa": "سه نما یک نفر نیستند",
+      "instruction": "Make face, hair, body, outfit and colors identical in all three views. Use the front view as the master design."
+    },
+    {
+      "code": "T09",
+      "label_fa": "آدم یا شیء اضافه در تصویر هست",
+      "instruction": "Show exactly one character, three times. Remove any extra people, creatures, duplicates or objects."
+    },
+    {
+      "code": "T10",
+      "label_fa": "متن، لوگو یا واترمارک دارد",
+      "instruction": "Remove all text, labels, logos, watermarks, borders and grid lines."
+    },
+    {
+      "code": "T11",
+      "label_fa": "لباس با توضیحات یا رفرنس نمی‌خواند",
+      "instruction": "Reproduce the outfit exactly as described or as shown in the outfit reference: cut, colors, materials, patterns, footwear, accessories."
+    },
+    {
+      "code": "T12",
+      "label_fa": "صورت با عکس رفرنس نمی‌خواند",
+      "available_when": "face_reference",
+      "instruction": "Preserve the exact facial features, face shape, skin tone and hairstyle of the face reference image in all three views."
+    },
+    {
+      "code": "T13",
+      "label_fa": "کاراکتر در محیط گم شده",
+      "instruction": "Separate the character from the background by adjusting the environment's tones and composition. Never change the character design."
+    },
+    {
+      "code": "T14",
+      "label_fa": "نور خیلی تاریک یا تند است",
+      "instruction": "Use soft, controlled lighting so face and outfit details are clearly readable. Lift deep shadows, no heavy backlight, no fog covering the character."
+    },
+    {
+      "code": "T15",
+      "label_fa": "سبک تصویر با سبک انتخاب‌شده نمی‌خواند",
+      "instruction": "Render the entire board (character, environment and lighting) strictly in the effective style, using only descriptors from that style's family. Do not mix styles and do not let realistic or stylized traits leak into each other."
+    },
+    {
+      "code": "T16",
+      "label_fa": "عناصر محیط روی بدن یا صورت افتاده",
+      "instruction": "Clear the area around the characters. No furniture, architecture or objects may overlap, hide or cut through the face or body."
+    }
+  ],
+  "preference": [
+    {
+      "code": "P01",
+      "label_fa": "سن یا ظاهر صورت",
+      "conflicts_with_reference": "face",
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": true,
+        "options": [
+          {
+            "label_fa": "مسن‌تر",
+            "value": "noticeably older"
+          },
+          {
+            "label_fa": "جوان‌تر",
+            "value": "noticeably younger"
+          },
+          {
+            "label_fa": "سنگین‌تر و جدی‌تر",
+            "value": "heavier, more serious features"
+          },
+          {
+            "label_fa": "نرم‌تر و لطیف‌تر",
+            "value": "softer, gentler features"
+          }
+        ]
+      },
+      "instruction_template": "Change only the apparent age or facial look to: {value}. Keep everything else identical."
+    },
+    {
+      "code": "P02",
+      "label_fa": "مدل یا رنگ مو",
+      "conflicts_with_reference": "face",
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": true,
+        "options": [
+          {
+            "label_fa": "کوتاه‌تر",
+            "value": "shorter hair"
+          },
+          {
+            "label_fa": "بلندتر",
+            "value": "longer hair"
+          },
+          {
+            "label_fa": "تیره‌تر",
+            "value": "darker hair color"
+          },
+          {
+            "label_fa": "روشن‌تر",
+            "value": "lighter hair color"
+          }
+        ]
+      },
+      "instruction_template": "Change only the hairstyle or hair color to: {value}. Keep face, body and outfit identical."
+    },
+    {
+      "code": "P03",
+      "label_fa": "طراحی لباس",
+      "conflicts_with_reference": "outfit",
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": true,
+        "options": [
+          {
+            "label_fa": "رنگ لباس",
+            "value": "a different color palette (specify in custom text)"
+          },
+          {
+            "label_fa": "جنس لباس",
+            "value": "a different fabric or material (specify in custom text)"
+          },
+          {
+            "label_fa": "مدل لباس",
+            "value": "a different cut or silhouette (specify in custom text)"
+          },
+          {
+            "label_fa": "ساده‌تر",
+            "value": "a simpler, more minimal outfit"
+          },
+          {
+            "label_fa": "پرجزئیات‌تر",
+            "value": "a more detailed, layered outfit"
+          }
+        ]
+      },
+      "instruction_template": "Change only the outfit to: {value}. Keep the face and body identical."
+    },
+    {
+      "code": "P04",
+      "label_fa": "فرم بدن",
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": true,
+        "options": [
+          {
+            "label_fa": "لاغرتر",
+            "value": "a slimmer build"
+          },
+          {
+            "label_fa": "عضلانی‌تر",
+            "value": "a more muscular build"
+          },
+          {
+            "label_fa": "بلندتر",
+            "value": "a taller figure"
+          },
+          {
+            "label_fa": "کوتاه‌تر",
+            "value": "a shorter figure"
+          }
+        ]
+      },
+      "instruction_template": "Change only the body type to: {value}. Keep face and outfit identical."
+    },
+    {
+      "code": "P05",
+      "label_fa": "رنگ پوست",
+      "conflicts_with_reference": "face",
+      "followup": {
+        "type": "text",
+        "allow_custom": true,
+        "options": []
+      },
+      "instruction_template": "Change only the skin tone to: {value}. Keep everything else identical."
+    },
+    {
+      "code": "P06",
+      "label_fa": "حالت یا حس چهره",
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": true,
+        "options": [
+          {
+            "label_fa": "جدی‌تر",
+            "value": "a more serious, severe expression"
+          },
+          {
+            "label_fa": "مهربان‌تر",
+            "value": "a warmer, kinder expression"
+          },
+          {
+            "label_fa": "خسته‌تر",
+            "value": "a more tired, weary expression"
+          },
+          {
+            "label_fa": "مصمم‌تر",
+            "value": "a more determined expression"
+          }
+        ]
+      },
+      "instruction_template": "Change only the expression and mood to: {value}. Face remains fully visible."
+    },
+    {
+      "code": "P07",
+      "label_fa": "اکسسوری‌ها",
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": true,
+        "options": [
+          {
+            "label_fa": "حذف اکسسوری‌ها",
+            "value": "remove all optional accessories"
+          },
+          {
+            "label_fa": "اضافه کردن اکسسوری",
+            "value": "add an accessory (specify in custom text)"
+          },
+          {
+            "label_fa": "عوض کردن اکسسوری",
+            "value": "replace an accessory (specify in custom text)"
+          }
+        ]
+      },
+      "instruction_template": "Change only the accessories: {value}."
+    },
+    {
+      "code": "P08",
+      "label_fa": "خود محیط",
+      "followup": {
+        "type": "text",
+        "allow_custom": true,
+        "options": []
+      },
+      "instruction_template": "Replace the environment with: {value}. The character design stays identical."
+    },
+    {
+      "code": "P09",
+      "label_fa": "زمان روز یا حال‌وهوای نور",
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": true,
+        "options": [
+          {
+            "label_fa": "روز",
+            "value": "bright daytime"
+          },
+          {
+            "label_fa": "غروب",
+            "value": "golden hour sunset"
+          },
+          {
+            "label_fa": "شب",
+            "value": "night"
+          },
+          {
+            "label_fa": "ابری",
+            "value": "overcast daylight"
+          }
+        ]
+      },
+      "instruction_template": "Change only the time of day and lighting mood to: {value}, keeping face and outfit readable."
+    },
+    {
+      "code": "P10",
+      "label_fa": "حس کلی تصویر",
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": true,
+        "options": [
+          {
+            "label_fa": "واقعی‌تر",
+            "value": "more realistic"
+          },
+          {
+            "label_fa": "سینمایی‌تر",
+            "value": "more cinematic"
+          },
+          {
+            "label_fa": "سبک‌تر و روشن‌تر",
+            "value": "lighter and brighter in tone"
+          },
+          {
+            "label_fa": "تیره‌تر و جدی‌تر",
+            "value": "darker and more serious in tone"
+          }
+        ]
+      },
+      "instruction_template": "Adjust the overall look toward: {value}, staying strictly within the effective style."
+    },
+    {
+      "code": "P11",
+      "label_fa": "به نقش یا شخصیت نمی‌خورد",
+      "followup": {
+        "type": "text",
+        "allow_custom": true,
+        "options": []
+      },
+      "instruction_template": "The character should read more clearly as: {value}. Adjust only the design cues that convey this."
+    },
+    {
+      "code": "P12",
+      "label_fa": "سبک تصویر کاراکتر (فقط Pro)",
+      "available_in": [
+        "pro"
+      ],
+      "followup": {
+        "type": "chips_or_text",
+        "allow_custom": true,
+        "dynamic_options_source": "project.style_options",
+        "options": [
+          {
+            "label_fa": "رئال و لایو‌اکشن",
+            "value": "photorealistic live-action"
+          },
+          {
+            "label_fa": "انیمیشن سه‌بعدی",
+            "value": "3D animation"
+          },
+          {
+            "label_fa": "انیمیشن دوبعدی یا انیمه",
+            "value": "2D animation or anime"
+          },
+          {
+            "label_fa": "نقاشی و ایلاستریشن",
+            "value": "painterly illustration"
+          }
+        ]
+      },
+      "instruction_template": "Re-render the whole board in this style: {value}. Keep the character's identity, design facts and layout identical; only the rendering language changes."
+    },
+    {
+      "code": "P99",
+      "label_fa": "دلیل دیگر",
+      "followup": {
+        "type": "text",
+        "allow_custom": true,
+        "options": []
+      },
+      "instruction_template": "Apply this user note, changing only what it requires: {value}."
+    }
+  ],
+  "rules": {
+    "multi_select": "The user may pick several reasons at once. All become entries in fix_requests and the dami applies them in one round.",
+    "reference_conflict": {
+      "description": "When a preference code with conflicts_with_reference is picked and the matching reference image exists, the UI must ask before calling the dami.",
+      "message_fa": "این تغییر با عکس رفرنس تضاد دارد. چه کار کنیم؟",
+      "choices": [
+        {
+          "label_fa": "عکس رفرنس را عوض می‌کنم",
+          "action": "ask user to upload a new reference"
+        },
+        {
+          "label_fa": "رفرنس را کنار بگذار و از متن بساز",
+          "action": "drop that reference and rebuild from text"
+        }
+      ]
+    },
+    "technical_with_reference": "T11 and T12 are shown only when the matching reference role exists.",
+    "fix_requests_format": {
+      "example": [
+        {
+          "type": "technical",
+          "code": "T01",
+          "instruction": "The entire face in the close-up must be fully visible: both eyes, nose and mouth unobstructed and in sharp focus. Nothing may crop or cover it (hair, hands, objects, shadows)."
+        },
+        {
+          "type": "preference",
+          "code": "P02",
+          "instruction": "Change only the hairstyle or hair color to: shorter hair. Keep face, body and outfit identical.",
+          "custom_text": ""
+        }
+      ]
+    },
+    "style_lock": "In wizard mode the style is the project style chosen in the Style stage and cannot be changed in any review step, so P12 is hidden. In Pro mode the style choice is offered when the user starts a character (sent as style_override) and again during review (P12).",
+    "style_consistency": "Store the style_used returned by the first character of a project and send it back as project.style_descriptor for every later character, so all characters share one resolved style. A Pro style_override applies to that one character only."
+  }
+}

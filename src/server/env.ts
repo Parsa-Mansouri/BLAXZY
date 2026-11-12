@@ -41,10 +41,11 @@ export const envSchema = z.object({
   /**
    * `live` calls Claude; `sample` answers every dami with sample output generated from its input
    * (no API key, no cost); `auto` is `sample` when ANTHROPIC_API_KEY is unset, `live` otherwise.
+   * Defaults to `sample` during the testing phase, so an API key alone never starts real (paid) calls.
    */
-  DAMI_MODE: z.enum(["auto", "live", "sample"]).default("auto"),
+  DAMI_MODE: z.enum(["auto", "live", "sample"]).default("sample"),
   /** Artificial latency of one sample-mode dami call, so the flow feels real. */
-  DAMI_SAMPLE_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(1500),
+  DAMI_SAMPLE_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(3000),
   S3_ENDPOINT: z.string().url(),
   S3_REGION: z.string().min(1).default("us-east-1"),
   S3_BUCKET: z.string().min(1),
@@ -75,7 +76,7 @@ export const envSchema = z.object({
   /** Image and video generation provider. `sample` renders placeholder images locally (no cost). */
   GENERATION_PROVIDER: z.enum(["sample", "higgsfield"]).default("sample"),
   /** How long a sample-provider job takes to finish, so the flow feels real (`0` in tests). */
-  GENERATION_SAMPLE_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(2500),
+  GENERATION_SAMPLE_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(3000),
   /** Generations one user may have running at once; extra jobs wait (rescheduled, not failed). */
   GENERATION_MAX_PER_USER: z.coerce.number().int().positive().max(100).default(3),
   /**

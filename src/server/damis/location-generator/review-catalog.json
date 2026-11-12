@@ -1,0 +1,190 @@
+{
+  "catalog": "location_review_catalog",
+  "version": 1,
+  "dami": "location_generator",
+  "applies_to": "hero",
+  "flow": "User picks technical or preference, then taps items. UI sends them as fix_requests [{code, instruction, note?}].",
+  "items": [
+    {
+      "code": "LT01",
+      "type": "technical",
+      "label": "A person or figure appears",
+      "instruction": "The location must be completely empty of people, figures, silhouettes and reflections of people. Remove every living figure.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LT02",
+      "type": "technical",
+      "label": "Text or signs look garbled",
+      "instruction": "Remove all readable text, signs and writing; replace with symbols, colors or blank surfaces.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LT03",
+      "type": "technical",
+      "label": "Perspective or architecture looks warped",
+      "instruction": "Make the architecture structurally plausible: consistent perspective, straight verticals unless the style demands otherwise, coherent proportions, no melting or impossible geometry.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LT04",
+      "type": "technical",
+      "label": "Too dark, details are lost",
+      "instruction": "Lift shadow areas so architecture, materials and fixed anchors stay clearly visible, keeping the same time of day and mood.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LT05",
+      "type": "technical",
+      "label": "It came out as a collage or split image",
+      "instruction": "Render ONE continuous frame: no panels, grid, borders or split screen.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LT06",
+      "type": "technical",
+      "label": "Objects are duplicated or melted",
+      "instruction": "Make every object distinct, single and fully formed; remove duplicated, fused or distorted objects.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LT07",
+      "type": "technical",
+      "label": "Doors or windows are not where the layout says",
+      "instruction": "Place every opening and fixed object exactly where the layout and the prompt state; do not add, move or remove any.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LT08",
+      "type": "technical",
+      "label": "The style is not respected",
+      "instruction": "Render the whole frame in the effective style only: form language, materials, surface rendering, light and line work must match it, with no mixing of other styles.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LT09",
+      "type": "technical",
+      "label": "A character or prop that belongs elsewhere appears",
+      "instruction": "Remove all characters and every asset listed in exclude_assets from the scene; they must not appear.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LP01",
+      "type": "preference",
+      "label": "Too clean or too empty",
+      "instruction": "Add believable lived-in set dressing and surface wear, keeping architecture and layout unchanged.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LP02",
+      "type": "preference",
+      "label": "Too messy or too busy",
+      "instruction": "Reduce clutter and simplify set dressing, keeping architecture, layout and mood unchanged.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LP03",
+      "type": "preference",
+      "label": "Wrong time of day or light",
+      "instruction": "Change the lighting and time of day as stated in the note, keeping architecture and layout unchanged.",
+      "needs_user_text": true,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LP04",
+      "type": "preference",
+      "label": "Wrong colors or materials",
+      "instruction": "Change the palette or materials as stated in the note, keeping geometry unchanged.",
+      "needs_user_text": true,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LP05",
+      "type": "preference",
+      "label": "Feels too small or too big",
+      "instruction": "Change the perceived scale as stated in the note, using architecture and scale cues rather than people.",
+      "needs_user_text": true,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LP06",
+      "type": "preference",
+      "label": "Doesn't feel like the genre or style",
+      "instruction": "Strengthen the genre lens and style lens in layout, dressing, light and rendering, keeping the fixed anchors.",
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LP07",
+      "type": "preference",
+      "label": "I don't like the layout itself",
+      "instruction": "Redesign the layout as described in the note. Update DNA, layout and coverage consistently, then regenerate the Hero.",
+      "needs_user_text": true,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LP08",
+      "type": "preference",
+      "label": "The mood is off",
+      "instruction": "Shift the atmosphere to the mood stated in the note using light, color, weather and dressing, not new structures.",
+      "needs_user_text": true,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LP09",
+      "type": "preference",
+      "label": "Change the style (Pro only)",
+      "instruction": "Re-render in the style sent as style_override. Keep architecture, layout and fixed anchors identical.",
+      "needs_user_text": true,
+      "pro_only": true,
+      "calls_claude": true
+    },
+    {
+      "code": "LP99",
+      "type": "preference",
+      "label": "Something else (write it)",
+      "instruction": "Apply the user's note.",
+      "needs_user_text": true,
+      "pro_only": false,
+      "calls_claude": true
+    },
+    {
+      "code": "LR01",
+      "type": "regenerate",
+      "label": "Try again (new variation)",
+      "instruction": null,
+      "needs_user_text": false,
+      "pro_only": false,
+      "calls_claude": false,
+      "action": "regenerate_new_seed"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/server/auth";
-import { getPreProductionOverview, listAssetCards } from "@/server/assets";
+import { getDetectionPanel, getPreProductionOverview, listAssetCards } from "@/server/assets";
 import { kindFromSlug, kindPlural } from "../../_lib/asset-kinds";
 import { loadProjectForStage } from "../../_lib/load-stage";
 import { toGalleryItem } from "../_components/gallery-item";
@@ -17,10 +17,11 @@ export default async function CategoryPage({
   if (!kind) notFound();
   const project = await loadProjectForStage(id, "pre_production");
   const user = await requireUser();
-  const [overview, page, counts] = await Promise.all([
+  const [overview, page, counts, panel] = await Promise.all([
     getPreProductionOverview(project.id, user.id),
     listAssetCards(project.id, user.id, { kind }),
     countKindStages(project.id, user.id, kind),
+    getDetectionPanel(project.id, user.id),
   ]);
   if (!overview || !page || !counts) notFound();
   const index = overview.kinds.findIndex((k) => k.kind === kind);
@@ -36,6 +37,7 @@ export default async function CategoryPage({
       initial={page.items.map(toGalleryItem)}
       initialCursor={page.nextCursor}
       counts={counts}
+      panel={panel}
       previous={previous ? { kind: previous.kind, plural: kindPlural(previous.kind) } : null}
       next={next ? { kind: next.kind, plural: kindPlural(next.kind) } : null}
     />

@@ -274,6 +274,81 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     expect(await runCount(projectId, "script-writer")).toBe(sequences.length);
   });
 
+  it("corrects the detected list: a merge, something missing, a re-scan", async () => {
+    const { assetDetectFixHandler } = await import("./asset-detect-fix");
+    const userId = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId);
+    const v1 = await script.startFromBrief({
+      projectId,
+      userId,
+      brief: "An old fisherman named Tomas and his granddaughter Leyla find a map in a bottle.",
+    });
+    await scriptWriteHandler.run({ scriptVersionId: v1?.id ?? "" }, jobContext());
+    await script.submitScriptReview({
+      projectId,
+      userId,
+      versionId: v1?.id ?? "",
+      decision: "accepted",
+    });
+    await scriptDetectAssetsHandler.run({ scriptVersionId: v1?.id ?? "" }, jobContext());
+    const characters = await assets.listAssets(projectId, userId, { kind: "character" });
+    const names = characters?.items.map((c) => c.name) ?? [];
+    expect(names.length).toBeGreaterThanOrEqual(2);
+
+    const { getDb: db } = await import("../../src/server/db/client");
+    const { review } = await import("../../src/server/db/schema");
+    const { desc } = await import("drizzle-orm");
+    const latestReview = async () =>
+      (
+        await db()
+          .select({ id: review.id })
+          .from(review)
+          .where(eq(review.projectId, projectId))
+          .orderBy(desc(review.createdAt))
+          .limit(1)
+      )[0]?.id ?? "";
+
+    // ADT02: two characters are the same one.
+    const started = await assets.submitDetectionReview({
+      projectId,
+      userId,
+      selections: [
+        {
+          code: "ADT02",
+          targetNames: names.slice(0, 2).map((n) => `character:${n}`),
+        },
+      ],
+    });
+    expect(started).toEqual({ skipped: 0, started: true });
+    expect((await assets.getDetectionPanel(projectId, userId))?.busy).toBe(true);
+    const reviewId = await latestReview();
+    await assetDetectFixHandler.run({ reviewId }, jobContext());
+    await assetDetectFixHandler.run({ reviewId }, jobContext());
+    const after = await assets.listAssets(projectId, userId, { kind: "character" });
+    expect(after?.items.length).toBe(names.length - 1);
+    const panel = await assets.getDetectionPanel(projectId, userId);
+    expect(panel).toMatchObject({ busy: false, rounds: 1, failure: null });
+
+    // ADT01 for something the script does not contain: a NOT_IN_SCRIPT warning, no new asset.
+    await assets.submitDetectionReview({
+      projectId,
+      userId,
+      selections: [{ code: "ADT01", customText: "a purple giraffe" }],
+    });
+    await assetDetectFixHandler.run({ reviewId: await latestReview() }, jobContext());
+    const warned = await assets.getDetectionPanel(projectId, userId);
+    expect(warned?.warnings.some((w) => w.tag === "NOT_IN_SCRIPT")).toBe(true);
+
+    // ADR01: a re-scan runs incrementally and keeps the stored names.
+    await assets.submitDetectionReview({ projectId, userId, selections: [{ code: "ADR01" }] });
+    await assetDetectFixHandler.run({ reviewId: await latestReview() }, jobContext());
+    const rescanned = await assets.listAssets(projectId, userId, { kind: "character" });
+    expect(rescanned?.items.map((c) => c.name)).toEqual(
+      expect.arrayContaining(after?.items.map((c) => c.name) ?? []),
+    );
+    expect(await runCount(projectId, "asset-detector")).toBe(4);
+  });
+
   it("records a user-readable failure for a non-retryable error", async () => {
     const userId = await fixtures.newUser();
     const projectId = await fixtures.newProject(userId);

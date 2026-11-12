@@ -1,58 +1,316 @@
 {
-  "assets": [
+  "output_version": "output_21",
+  "mode": "full",
+  "scene_index": [
     {
-      "kind": "character",
-      "name": "Mara",
-      "description": "Woman in her 60s; wiry build; grey-streaked braid; oil-stained work jacket; carries a brass locket; hurried, breathless at the pier.",
-      "appearsIn": ["EXT. HARBOUR PIER - DUSK", "INT. FERRY CABIN - CONTINUOUS"]
+      "scene_number": "1",
+      "heading": "EXT. HARBOUR PIER - DUSK",
+      "anchor": null,
+      "location_id": "loc_1",
+      "location_state_id": null,
+      "time_of_day": "dusk",
+      "characters_present": ["char_1"],
+      "char_looks": [],
+      "voices_heard": [],
+      "props_present": ["prop_1"]
     },
     {
-      "kind": "character",
-      "name": "Jonas",
-      "description": "Man in his 60s; broad-shouldered; wears a flat cap; sits alone in the ferry cabin.",
-      "appearsIn": ["INT. FERRY CABIN - CONTINUOUS"]
+      "scene_number": "2",
+      "heading": "INT. FERRY CABIN - NIGHT",
+      "anchor": null,
+      "location_id": "loc_2",
+      "location_state_id": null,
+      "time_of_day": "night",
+      "characters_present": ["char_1", "char_2"],
+      "char_looks": [],
+      "voices_heard": [],
+      "props_present": ["prop_1"]
     },
     {
-      "kind": "location",
-      "name": "Harbour Pier",
-      "description": "Exterior; deserted wooden pier with planks; wind and sea spray; dusk; a ferry with blazing lights idles at the far end.",
-      "appearsIn": ["EXT. HARBOUR PIER - DUSK"]
-    },
-    {
-      "kind": "location",
-      "name": "Ferry Cabin",
-      "description": "Interior of the ferry; warm tungsten light; rows of empty benches; spray-streaked windows looking out on the pier; dusk.",
-      "appearsIn": ["INT. FERRY CABIN - CONTINUOUS"]
-    },
-    {
-      "kind": "prop",
-      "name": "Brass locket",
-      "description": "Brass locket that opens; held in Mara's hand, handed to Jonas, who opens it.",
-      "appearsIn": ["EXT. HARBOUR PIER - DUSK", "INT. FERRY CABIN - CONTINUOUS"]
-    },
-    {
-      "kind": "prop",
-      "name": "Ferry",
-      "description": "A single passenger ferry with its lights blazing; idles at the end of the pier; sounds its horn as it departs.",
-      "appearsIn": ["EXT. HARBOUR PIER - DUSK", "INT. FERRY CABIN - CONTINUOUS"]
-    },
-    {
-      "kind": "voice",
-      "name": "Mara (voice)",
-      "description": "Woman in her 60s; breathless and pleading at first, then dry and tender.",
-      "appearsIn": ["EXT. HARBOUR PIER - DUSK", "INT. FERRY CABIN - CONTINUOUS"]
-    },
-    {
-      "kind": "voice",
-      "name": "Jonas (voice)",
-      "description": "Man in his 60s; quiet, moved.",
-      "appearsIn": ["INT. FERRY CABIN - CONTINUOUS"]
-    },
-    {
-      "kind": "voice",
-      "name": "Ferryman (voice)",
-      "description": "Off-screen man calling loudly over the wind; urgent.",
-      "appearsIn": ["EXT. HARBOUR PIER - DUSK"]
+      "scene_number": "3",
+      "heading": "EXT. HARBOUR PIER - NIGHT",
+      "anchor": null,
+      "location_id": "loc_1",
+      "location_state_id": "loc_1_dark",
+      "time_of_day": "night",
+      "characters_present": [],
+      "char_looks": [],
+      "voices_heard": ["voice_1"],
+      "props_present": ["prop_2"]
     }
-  ]
+  ],
+  "characters": [
+    {
+      "char_id": "char_1",
+      "name": "MARA",
+      "name_latin": "Mara",
+      "aliases": [],
+      "kind": "human",
+      "role": "lead",
+      "asset_priority": "required",
+      "needs_visual": true,
+      "is_minor": "no",
+      "same_person_as": null,
+      "script_description": "Mara is a wiry woman in her sixties with a grey-streaked braid. She wears an oil-stained work jacket and hurries down the pier clutching a brass locket.",
+      "facts": [
+        {
+          "field": "age",
+          "value": "60s",
+          "status": "stated",
+          "scene": "1",
+          "evidence": "MARA (60s), wiry, grey-streaked braid"
+        },
+        {
+          "field": "build",
+          "value": "wiry",
+          "status": "stated",
+          "scene": "1",
+          "evidence": "MARA (60s), wiry,"
+        },
+        {
+          "field": "hair",
+          "value": "grey-streaked braid",
+          "status": "stated",
+          "scene": "1",
+          "evidence": "grey-streaked braid"
+        },
+        {
+          "field": "default wardrobe",
+          "value": "oil-stained work jacket",
+          "status": "stated",
+          "scene": "1",
+          "evidence": "oil-stained work jacket"
+        }
+      ],
+      "looks": [],
+      "signature_prop_ids": ["prop_1"],
+      "speaks": true,
+      "dialogue_line_count": 3,
+      "relationships": [],
+      "scene_refs": ["1", "2", "3"],
+      "first_scene": "1",
+      "ui_summary": "Mara, the woman returning the locket; scenes 1 to 3."
+    },
+    {
+      "char_id": "char_2",
+      "name": "JONAS",
+      "name_latin": "Jonas",
+      "aliases": [],
+      "kind": "human",
+      "role": "supporting",
+      "asset_priority": "required",
+      "needs_visual": true,
+      "is_minor": "no",
+      "same_person_as": null,
+      "script_description": "Jonas is a broad-shouldered man in his sixties in a flat cap. He sits alone in the ferry cabin and takes the locket from Mara.",
+      "facts": [
+        {
+          "field": "age",
+          "value": "60s",
+          "status": "stated",
+          "scene": "2",
+          "evidence": "JONAS (60s), broad-shouldered, flat cap"
+        },
+        {
+          "field": "build",
+          "value": "broad-shouldered",
+          "status": "stated",
+          "scene": "2",
+          "evidence": "broad-shouldered"
+        },
+        {
+          "field": "default wardrobe",
+          "value": "flat cap",
+          "status": "stated",
+          "scene": "2",
+          "evidence": "flat cap, sits alone"
+        }
+      ],
+      "looks": [],
+      "signature_prop_ids": [],
+      "speaks": false,
+      "dialogue_line_count": 0,
+      "relationships": [],
+      "scene_refs": ["2"],
+      "first_scene": "2",
+      "ui_summary": "Jonas, the man on the ferry; scene 2."
+    }
+  ],
+  "locations": [
+    {
+      "loc_id": "loc_1",
+      "name": "HARBOUR PIER",
+      "name_latin": "Harbour Pier",
+      "aliases": [],
+      "location_group": null,
+      "interior_exterior": "exterior",
+      "time_of_day": "dusk",
+      "times_of_day": ["dusk", "night"],
+      "states": [
+        {
+          "state_id": "loc_1_dark",
+          "description": "Empty, its lamps dark.",
+          "scene_refs": ["3"],
+          "evidence": "The pier is empty now, its lamps dark."
+        }
+      ],
+      "script_description": "A deserted wooden pier on the harbour, swept by wind and sea spray. Later at night it is empty and its lamps are dark.",
+      "facts": [
+        {
+          "field": "material",
+          "value": "wood",
+          "status": "stated",
+          "scene": "1",
+          "evidence": "a deserted wooden pier"
+        },
+        {
+          "field": "weather",
+          "value": "wind and sea spray",
+          "status": "stated",
+          "scene": "1",
+          "evidence": "Wind whips sea spray across a deserted wooden pier."
+        }
+      ],
+      "fixed_elements_from_script": [],
+      "related_asset_ids": [],
+      "asset_priority": "required",
+      "scene_refs": ["1", "3"],
+      "first_scene": "1",
+      "ui_summary": "The harbour pier; scenes 1 and 3."
+    },
+    {
+      "loc_id": "loc_2",
+      "name": "FERRY CABIN",
+      "name_latin": "Ferry Cabin",
+      "aliases": [],
+      "location_group": null,
+      "interior_exterior": "interior",
+      "time_of_day": "night",
+      "times_of_day": ["night"],
+      "states": [],
+      "script_description": "The passenger cabin of the ferry, lit by warm tungsten light, with rows of empty benches and a spray-streaked window.",
+      "facts": [
+        {
+          "field": "light",
+          "value": "warm tungsten light",
+          "status": "stated",
+          "scene": "2",
+          "evidence": "Warm tungsten light."
+        }
+      ],
+      "fixed_elements_from_script": [
+        { "element": "rows of empty benches", "scene": "2", "evidence": "Rows of empty benches." },
+        {
+          "element": "spray-streaked window",
+          "scene": "2",
+          "evidence": "sits alone by a spray-streaked window"
+        }
+      ],
+      "related_asset_ids": [],
+      "asset_priority": "required",
+      "scene_refs": ["2"],
+      "first_scene": "2",
+      "ui_summary": "The ferry cabin; scene 2."
+    }
+  ],
+  "props": [
+    {
+      "prop_id": "prop_1",
+      "name": "brass locket",
+      "name_latin": "brass locket",
+      "aliases": ["locket"],
+      "category_hint": "hero_prop",
+      "subtype": "jewelry",
+      "script_description": "A brass locket that Mara clutches and hands to Jonas, who opens it.",
+      "facts": [
+        {
+          "field": "material",
+          "value": "brass",
+          "status": "stated",
+          "scene": "1",
+          "evidence": "clutching a brass locket"
+        }
+      ],
+      "states": [
+        {
+          "state_id": "prop_1_closed",
+          "description": "Closed, in Mara's hand.",
+          "scene_refs": ["1"],
+          "evidence": "clutching a brass locket"
+        },
+        {
+          "state_id": "prop_1_open",
+          "description": "Opened by Jonas.",
+          "scene_refs": ["2"],
+          "evidence": "Jonas takes it, opens it, and smiles."
+        }
+      ],
+      "text_on_object": [],
+      "users": ["char_1", "char_2"],
+      "location_ids": ["loc_1", "loc_2"],
+      "related_asset_ids": [],
+      "asset_priority": "required",
+      "scene_refs": ["1", "2"],
+      "first_scene": "1",
+      "ui_summary": "The brass locket; scenes 1 and 2."
+    },
+    {
+      "prop_id": "prop_2",
+      "name": "old lantern",
+      "name_latin": "old lantern",
+      "aliases": [],
+      "category_hint": "set_dressing",
+      "subtype": null,
+      "script_description": "An old lantern flickering on the wet planks of the empty pier.",
+      "facts": [
+        {
+          "field": "condition",
+          "value": "old, flickering",
+          "status": "stated",
+          "scene": "3",
+          "evidence": "An old lantern flickers on the wet planks."
+        }
+      ],
+      "states": [],
+      "text_on_object": [],
+      "users": [],
+      "location_ids": ["loc_1"],
+      "related_asset_ids": [],
+      "asset_priority": "optional",
+      "scene_refs": ["3"],
+      "first_scene": "3",
+      "ui_summary": "An old lantern on the pier; scene 3."
+    }
+  ],
+  "voices": [
+    {
+      "voice_id": "voice_1",
+      "owner_char_id": "char_1",
+      "delivery": ["on_screen", "voice_over"],
+      "language": "English",
+      "hints": [
+        {
+          "field": "emotional register",
+          "value": "breathless",
+          "status": "stated",
+          "scene": "1",
+          "evidence": "(breathless)"
+        }
+      ],
+      "dialogue_line_count": 3,
+      "scene_refs": ["1", "2", "3"],
+      "ui_summary": "Mara's voice, on screen and in voice-over; scenes 1 to 3."
+    }
+  ],
+  "diff": { "added": [], "updated": [], "removed": [] },
+  "summary": {
+    "scene_count": 3,
+    "character_count": 2,
+    "location_count": 2,
+    "prop_count": 2,
+    "voice_count": 1
+  },
+  "applied_fixes": [],
+  "assumptions": ["Jonas's age range is read from the parenthetical (60s)."],
+  "warnings": []
 }

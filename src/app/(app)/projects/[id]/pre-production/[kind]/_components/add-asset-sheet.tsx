@@ -14,16 +14,19 @@ export function AddAssetSheet({
   projectId,
   kind,
   onAdded,
+  prefill,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
   kind: AssetKindKey;
   onAdded: () => void;
+  /** Starting name and description (a thing the detector could not find in the script). */
+  prefill?: { name: string; description: string };
 }) {
   const toast = useToast();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [name, setName] = useState(prefill?.name ?? "");
+  const [description, setDescription] = useState(prefill?.description ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
   const noun = ASSET_KIND_LABELS.find((k) => k.kind === kind)?.one ?? "asset";

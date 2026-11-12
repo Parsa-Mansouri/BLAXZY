@@ -57,7 +57,8 @@ export async function countKindStages(
       limit: MAX_CARD_PAGE_SIZE,
     });
     if (!page) return null;
-    for (const card of page.items) stages.push(card.stage);
+    // Skipped assets are not designed: they are not counted (as on the overview).
+    for (const card of page.items) if (card.asset.priority !== "skipped") stages.push(card.stage);
     cursor = page.nextCursor;
   } while (cursor && stages.length < MAX_PER_KIND);
   return countStages(stages);
@@ -82,6 +83,7 @@ export async function loadCategories(
         });
         if (!page) break;
         for (const card of page.items) {
+          if (card.asset.priority === "skipped") continue;
           assets.push({
             id: card.asset.id,
             name: card.asset.name,

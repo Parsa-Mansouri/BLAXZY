@@ -1,7 +1,13 @@
 # assets
 
-Assets (Output_021) detected from the accepted script, applied as a diff by `(kind, slug)`.
-Manual assets are never changed by detection; assets no longer in the script become `removed`.
+Assets (Output_021) come from the owner's Asset Detector v1. `detection.ts` is the dami boundary:
+`detectorView` gives stored assets the run's temporary ids (`char_1`, `loc_1` ...) as `known_assets`
+and `previous_output`; `planDetection` maps the answer back to real names. `detection-store.ts`
+applies it (`applyDetection`: names never change, new names are unique, approved assets are never
+silently removed, skipped stays skipped, legacy creature/costume/other rows are untouched) and
+records it in the append-only `asset_detection` table. The category screens' review loop
+(`getDetectionPanel`, `submitDetectionReview`) runs the owner's catalog: ADP01 skips at once,
+ADR01 re-scans and the dami fixes run as `asset.detect.fix`.
 
 ## Pre-production (Output_030)
 

@@ -1,19 +1,48 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { Button, PageHeader, Skeleton, StatusLine, cn, stagger } from "@/ui";
+import type { DetectionPanel } from "@/server/assets";
+import {
+  Button,
+  MenuItem,
+  MenuSeparator,
+  PageHeader,
+  Skeleton,
+  StatusLine,
+  cn,
+  stagger,
+  useToast,
+} from "@/ui";
 import { ASSET_KIND_LABELS, categoryHref, type AssetKindKey } from "../../../_lib/asset-kinds";
 import { usePolling } from "../../../_lib/use-polling";
 import { isWorking } from "../../_components/asset-stage";
 import { KIND_ASPECTS, type GalleryItem } from "../../_components/gallery-item";
 import { FILL_PAGE } from "../../_lib/fill";
 import { statusWords, type StageCounts } from "../../_lib/status-words";
-import { loadCardsAction, refreshCardsAction } from "../actions";
+import {
+  assetRef,
+  categoryWarnings,
+  draftWith,
+  EMPTY_DRAFT,
+  SKIP_CODE,
+  type ReviewDraft,
+  type WarningFix,
+} from "../../_lib/detection-review";
+import {
+  detectionPanelAction,
+  includeAssetAction,
+  loadCardsAction,
+  refreshCardsAction,
+  submitDetectionReviewAction,
+} from "../actions";
 import { AddAssetSheet } from "./add-asset-sheet";
 import { AssetCard } from "./asset-card";
+import { RemoveAssetAlert, RenameAssetSheet } from "./asset-edits";
+import { DetectionReviewSheet } from "./detection-review-sheet";
+import { DetectionWarnings } from "./detection-warnings";
 import { MergeAssets } from "./merge-assets";
 
 interface Neighbour {
@@ -42,6 +71,7 @@ export function CategoryPanel({
   initial,
   initialCursor,
   counts: initialCounts,
+  panel: initialPanel,
   previous,
   next,
 }: {
@@ -51,6 +81,8 @@ export function CategoryPanel({
   initial: GalleryItem[];
   initialCursor: string | null;
   counts: StageCounts;
+  /** The detected list's review state; null hides the review. */
+  panel: DetectionPanel | null;
   previous: Neighbour | null;
   next: Neighbour | null;
 }) {
@@ -101,6 +133,146 @@ export function CategoryPanel({
     });
   }
 
+  /* The detected list's review ("Something wrong with this list?"). */
+  const [panel, setPanel] = useState(initialPanel);
+  const [seenPanel, setSeenPanel] = useState(initialPanel);
+  if (seenPanel !== initialPanel) {
+    setSeenPanel(initialPanel);
+    setPanel(initialPanel);
+  }
+  const [review, setReview] = useState<{ open: boolean; seed: ReviewDraft; key: number }>({
+    open: false,
+    seed: EMPTY_DRAFT,
+    key: 0,
+  });
+  const [edit, setEdit] = useState<{ type: "rename" | "remove"; item: GalleryItem } | null>(null);
+  const [addPrefill, setAddPrefill] = useState<{ name: string; description: string } | null>(null);
+  const [addKey, setAddKey] = useState(0);
+  const [skippingId, setSkippingId] = useState<string | null>(null);
+  const toast = useToast();
+
+  const correcting = panel?.busy ?? false;
+  usePolling(async (isActive) => {
+    const result = await detectionPanelAction(projectId);
+    if (!isActive() || !result.ok) return;
+    setPanel(result.data);
+    if (!result.data.busy) router.refresh();
+  }, correcting);
+
+  const available = useMemo(() => new Set(panel?.options.map((o) => o.code)), [panel]);
+  const warnings = useMemo(
+    () => (panel ? categoryWarnings(panel.warnings, kind, items, panel.options) : []),
+    [panel, kind, items],
+  );
+  const listed = items.filter((item) => item.priority !== "skipped");
+  const skippedItems = items.filter((item) => item.priority === "skipped");
+
+  function openReview(seed: ReviewDraft = EMPTY_DRAFT) {
+    setReview((r) => ({ open: true, seed, key: r.key + 1 }));
+  }
+
+  function openAdd(prefill: { name: string; description: string } | null) {
+    setAddPrefill(prefill);
+    setAddKey((k) => k + 1);
+    setAddOpen(true);
+  }
+
+  function sent(result: { skipped: number; started: boolean }) {
+    setReview((r) => ({ ...r, open: false }));
+    if (result.started) {
+      setPanel((p) => (p ? { ...p, busy: true, failure: null } : p));
+    } else if (result.skipped > 0) {
+      toast.success("Skipped. It will not be designed.");
+    }
+    router.refresh();
+  }
+
+  function skip(item: GalleryItem) {
+    setSkippingId(item.id);
+    void submitDetectionReviewAction(projectId, [
+      { code: SKIP_CODE, targetNames: [assetRef(item)] },
+    ]).then((result) => {
+      setSkippingId(null);
+      if (!result.ok) {
+        toast.danger(result.error);
+        return;
+      }
+      toast.success(`${item.name} skipped. It will not be designed.`);
+      router.refresh();
+    });
+  }
+
+  function include(item: GalleryItem) {
+    setSkippingId(item.id);
+    void includeAssetAction(projectId, item.id).then((result) => {
+      setSkippingId(null);
+      if (!result.ok) {
+        toast.danger(result.error);
+        return;
+      }
+      toast.success(`${item.name} is back in the list.`);
+      router.refresh();
+    });
+  }
+
+  function fixWarning(fix: WarningFix) {
+    switch (fix.type) {
+      case "same":
+        openReview(draftWith("ADT02", { targets: fix.targets }));
+        break;
+      case "review":
+        openReview(draftWith(fix.code));
+        break;
+      case "add":
+        openAdd({ name: fix.name, description: fix.description });
+        break;
+      case "remove": {
+        const item = items.find((i) => i.id === fix.assetId);
+        if (item) setEdit({ type: "remove", item });
+        break;
+      }
+    }
+  }
+
+  /** The card's menu: fixes to the detected list first, then Rename and Remove. */
+  function menuFor(item: GalleryItem) {
+    const reason = (code: string, label: string) =>
+      available.has(code) ? (
+        <MenuItem
+          key={code}
+          disabled={correcting}
+          onClick={() => openReview(draftWith(code, { targets: [item.id] }))}
+        >
+          {label}
+        </MenuItem>
+      ) : null;
+    const skipped = item.priority === "skipped";
+    return (
+      <>
+        {!skipped && available.has(SKIP_CODE) ? (
+          <MenuItem onClick={() => skip(item)} disabled={skippingId === item.id}>
+            Not Needed as Its Own Asset
+          </MenuItem>
+        ) : null}
+        {skipped ? (
+          <MenuItem onClick={() => include(item)} disabled={skippingId === item.id}>
+            Include It Again
+          </MenuItem>
+        ) : null}
+        {reason("ADT05", "The Description Is Wrong…")}
+        {reason("ADT06", "Wrong Scenes…")}
+        {reason("ADT04", "Wrong Category…")}
+        {reason("ADT03", "This Is Actually Two…")}
+        {items.length >= 2 ? reason("ADT02", "Same as Another…") : null}
+        {panel ? <MenuSeparator /> : null}
+        <MenuItem onClick={() => setEdit({ type: "rename", item })}>Rename…</MenuItem>
+        <MenuItem destructive onClick={() => setEdit({ type: "remove", item })}>
+          Remove…
+        </MenuItem>
+      </>
+    );
+  }
+
   const words = statusWords(counts);
   const aspect = KIND_ASPECTS[kind];
   const one = ASSET_KIND_LABELS.find((k) => k.kind === kind)?.one ?? "asset";
@@ -124,6 +296,31 @@ export function CategoryPanel({
         }
       />
 
+      {panel ? (
+        <div className="mb-10 flex in-1 flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Button variant="outlined" onClick={() => openReview()} disabled={correcting}>
+              Something Wrong With This List?
+            </Button>
+            <div aria-live="polite" className="min-w-0">
+              {correcting ? (
+                <StatusLine tone="working">Correcting the list</StatusLine>
+              ) : panel.failure ? (
+                <StatusLine tone="failed" srPrefix="Failed">
+                  {panel.failure}
+                </StatusLine>
+              ) : null}
+            </div>
+          </div>
+          {panel.suggestion && panel.rounds >= panel.maxRounds && !correcting ? (
+            <p className="max-w-(--measure) text-secondary text-pretty text-label-2">
+              {panel.suggestion}
+            </p>
+          ) : null}
+          <DetectionWarnings warnings={warnings} disabled={correcting} onFix={fixWarning} />
+        </div>
+      ) : null}
+
       {items.length === 0 ? (
         <div className="mb-8 flex max-w-(--measure) in-2 flex-col gap-2">
           <h2 className="text-heading-sm text-balance">
@@ -136,11 +333,14 @@ export function CategoryPanel({
       ) : null}
 
       <ul className={cn("mb-16 grid in-2 gap-x-7 gap-y-10", GRID[aspect])}>
-        {items.map((item, i) => (
+        {listed.map((item, i) => (
           <li key={item.id} className="min-w-0">
             <AssetCard
               projectId={projectId}
               item={item}
+              menu={menuFor(item)}
+              onSkip={available.has(SKIP_CODE) ? () => skip(item) : undefined}
+              skipping={skippingId === item.id}
               className="enter"
               style={stagger(Math.min(i, 12))}
             />
@@ -149,9 +349,9 @@ export function CategoryPanel({
         <li className="min-w-0">
           <button
             type="button"
-            onClick={() => setAddOpen(true)}
+            onClick={() => openAdd(null)}
             className="flex w-full press enter flex-col gap-3 rounded-card text-left focus-ring"
-            style={stagger(Math.min(items.length, 12))}
+            style={stagger(Math.min(listed.length, 12))}
           >
             <span
               className={cn(
@@ -187,6 +387,29 @@ export function CategoryPanel({
         </p>
       ) : null}
 
+      {skippedItems.length > 0 ? (
+        <section aria-labelledby="skipped-heading" className="mt-6 mb-16 flex in-3 flex-col gap-5">
+          <div className="flex flex-col gap-1 border-t border-outline-quiet pt-6">
+            <h2
+              id="skipped-heading"
+              className="font-mono text-meta tracking-caps text-label-2 uppercase"
+            >
+              Skipped
+            </h2>
+            <p className="text-secondary text-pretty text-label-3">
+              Not designed. Shots describe them from the script instead.
+            </p>
+          </div>
+          <ul className={cn("grid gap-x-7 gap-y-10", GRID[aspect])}>
+            {skippedItems.map((item) => (
+              <li key={item.id} className="min-w-0">
+                <AssetCard projectId={projectId} item={item} menu={menuFor(item)} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {previous || next ? (
         <nav
           aria-label="Categories"
@@ -218,12 +441,42 @@ export function CategoryPanel({
       ) : null}
 
       <AddAssetSheet
+        key={addKey}
         open={addOpen}
         onOpenChange={setAddOpen}
         projectId={projectId}
         kind={kind}
+        prefill={addPrefill ?? undefined}
         onAdded={() => router.refresh()}
       />
+      {panel ? (
+        <DetectionReviewSheet
+          key={review.key}
+          open={review.open}
+          onOpenChange={(open) => setReview((r) => ({ ...r, open }))}
+          projectId={projectId}
+          options={panel.options}
+          items={items}
+          seed={review.seed}
+          onSent={sent}
+        />
+      ) : null}
+      {edit?.type === "rename" ? (
+        <RenameAssetSheet
+          projectId={projectId}
+          item={edit.item}
+          onClose={() => setEdit(null)}
+          onDone={() => router.refresh()}
+        />
+      ) : null}
+      {edit?.type === "remove" ? (
+        <RemoveAssetAlert
+          projectId={projectId}
+          item={edit.item}
+          onClose={() => setEdit(null)}
+          onDone={() => router.refresh()}
+        />
+      ) : null}
       <MergeAssets
         open={mergeOpen}
         onOpenChange={setMergeOpen}

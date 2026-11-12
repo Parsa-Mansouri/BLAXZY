@@ -1,13 +1,15 @@
-import { applyDetection, getKnownAssets, hasDetectionFor } from "../../src/server/assets";
+import { applyDetection, hasDetectionFor, loadDetectorState } from "../../src/server/assets";
 import { hasCurrentBlocksFor, markBlocksStale, setSectioningState } from "../../src/server/blocks";
-import { assetDetector, runDami } from "../../src/server/damis";
 import { defineHandler, enqueue, scriptDetectAssets, scriptSection } from "../../src/server/jobs";
 import { loadScriptJob, ScriptInputError } from "../../src/server/script";
+import { detectorProject, detectorScript, runDetector, viewFor } from "./asset-detection";
 import { handleFailure } from "./script-failure";
 
 /**
- * Detects the assets of the accepted script as a diff, marks the old blocks stale, then queues
- * sectioning. Skips a version that is no longer the accepted one.
+ * Detects the assets of the accepted script with Asset Detector v1, applies the result, marks the
+ * old blocks stale, then queues sectioning. The first detection is full; later ones (an edited
+ * script) are incremental with every stored asset as `known_assets` (approved ones keep their
+ * names). Skips a version that is no longer the accepted one.
  */
 export const scriptDetectAssetsHandler = defineHandler(
   scriptDetectAssets,
@@ -30,10 +32,19 @@ export const scriptDetectAssetsHandler = defineHandler(
         projectId: project.id,
         reason: `The script changed (version ${version.versionNumber}).`,
       });
-      const knownAssets = await getKnownAssets(project.id);
-      const run = await runDami(
-        assetDetector,
-        { style: project.style, content: version.content, knownAssets },
+      const state = await loadDetectorState(project.id);
+      const hasDetected = state.rows.some(
+        (r) => r.asset.status === "active" && r.asset.origin === "detected",
+      );
+      const mode = hasDetected ? "incremental" : "full";
+      const view = viewFor(state.rows, state.latest?.sceneIndex ?? [], mode);
+      const run = await runDetector(
+        {
+          mode,
+          project: detectorProject(project.style, "wizard"),
+          script: detectorScript(version),
+          ...(mode === "incremental" ? { known_assets: view.known } : {}),
+        },
         { userId: project.ownerId, projectId: project.id, signal: context.signal },
       );
       const current = await loadScriptJob(versionId);
@@ -42,7 +53,9 @@ export const scriptDetectAssetsHandler = defineHandler(
         projectId: project.id,
         scriptVersionId: versionId,
         damiRunId: run.runId,
-        assets: run.output.assets,
+        mode,
+        output: run.output,
+        byTemp: view.byTemp,
       });
       await enqueue(scriptSection, { scriptVersionId: versionId });
     } catch (error) {

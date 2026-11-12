@@ -43,6 +43,13 @@
       "when": 1794489351072,
       "tag": "0005_script_screenplay",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794491818339,
+      "tag": "0006_asset_detector_v1",
+      "breakpoints": true
     }
   ]
 }

@@ -379,7 +379,14 @@ async function readiness(
   const active = await db
     .select({ id: asset.id, kind: asset.kind })
     .from(asset)
-    .where(and(eq(asset.projectId, projectId), eq(asset.status, "active")));
+    .where(
+      and(
+        eq(asset.projectId, projectId),
+        eq(asset.status, "active"),
+        // A skipped asset (ADP01) is not designed: it never blocks the stage.
+        ne(asset.priority, "skipped"),
+      ),
+    );
   const { looks, sheets } = await latestByAsset(
     db,
     active.map((a) => a.id),
@@ -439,7 +446,14 @@ export async function nextAssetNeedingInput(
   const active = await db
     .select({ id: asset.id, name: asset.name, kind: asset.kind, displayOrder: asset.displayOrder })
     .from(asset)
-    .where(and(eq(asset.projectId, projectId), eq(asset.status, "active")));
+    .where(
+      and(
+        eq(asset.projectId, projectId),
+        eq(asset.status, "active"),
+        // A skipped asset (ADP01) is not designed: it never blocks the stage.
+        ne(asset.priority, "skipped"),
+      ),
+    );
   const { looks, sheets } = await latestByAsset(
     db,
     active.map((a) => a.id),
@@ -1110,7 +1124,16 @@ export async function updateAsset(input: {
     const [updated] = await tx
       .update(asset)
       .set({
-        ...(name !== undefined ? { name } : {}),
+        // A rename keeps the old name as an alias (the owner's BO01), so re-detection still matches.
+        ...(name !== undefined
+          ? {
+              name,
+              details: {
+                ...row.details,
+                aliases: [...new Set([...(row.details?.aliases ?? []), row.name])],
+              },
+            }
+          : {}),
         ...(description !== undefined ? { description: description || null } : {}),
       })
       .where(eq(asset.id, assetId))
@@ -1132,6 +1155,33 @@ export async function updateAsset(input: {
       description: description !== undefined,
       ...(name !== undefined ? { from: row.name, to: name, blocksRewritten } : {}),
     });
+    return updated ?? null;
+  });
+}
+
+/**
+ * Includes a skipped asset again (undoes ADP01): its priority goes back to what the detector
+ * said (required when unknown). Returns the asset, or null when it is not the user's.
+ */
+export async function includeSkippedAsset(input: {
+  assetId: string;
+  userId: string;
+}): Promise<Asset | null> {
+  const { assetId, userId } = parse(assetRefInput, input);
+  if (!isUuid(assetId)) return null;
+  return getDb().transaction(async (tx) => {
+    const locked = await lockAsset(tx, assetId, userId);
+    if (!locked) return null;
+    const { asset: row } = locked;
+    assertActive(row);
+    if (row.priority !== "skipped") return row;
+    const priority = row.details?.detectedPriority ?? "required";
+    const [updated] = await tx
+      .update(asset)
+      .set({ priority })
+      .where(eq(asset.id, assetId))
+      .returning();
+    await logEvent(tx, row.projectId, userId, "asset.included", { assetId, priority });
     return updated ?? null;
   });
 }

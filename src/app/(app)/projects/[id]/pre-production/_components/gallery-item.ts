@@ -9,6 +9,8 @@ export interface GalleryItem {
   kind: Kind;
   name: string;
   description: string | null;
+  /** required, optional (may be skipped) or skipped (not designed). */
+  priority: Asset["priority"];
   stage: AssetStage;
   thumbnailFileId: string | null;
 }
@@ -19,6 +21,7 @@ export function toGalleryItem(card: AssetCard): GalleryItem {
     kind: card.asset.kind,
     name: card.asset.name,
     description: card.asset.description,
+    priority: card.asset.priority,
     stage: card.stage,
     thumbnailFileId: card.thumbnailFileId,
   };

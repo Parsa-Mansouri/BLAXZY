@@ -1,9 +1,10 @@
 /**
- * Asset detection diffs against the real local Postgres. Skipped when it is unreachable.
+ * Applying Asset Detector results, and the detected list's review loop, against the real local
+ * Postgres. Skipped when it is unreachable.
  */
 import "dotenv/config";
 import { afterAll, describe, expect, it } from "vitest";
-import type { DetectedAsset } from "@/server/damis";
+import type { AssetDetectorOutput } from "@/server/damis";
 import { createFixtures, databaseReachable } from "@/server/test-support/script-fixtures";
 
 const reachable = await databaseReachable();
@@ -11,8 +12,9 @@ const reachable = await databaseReachable();
 describe.skipIf(!reachable)("assets service (integration)", async () => {
   const assets = await import("@/server/assets");
   const { closeDb, getDb } = await import("@/server/db/client");
-  const { asset, damiRun, project, scriptVersion } = await import("@/server/db/schema");
-  const { eq } = await import("drizzle-orm");
+  const { asset, assetDetection, assetLook, damiRun, project, scriptVersion } =
+    await import("@/server/db/schema");
+  const { and, eq } = await import("drizzle-orm");
   const fixtures = createFixtures();
 
   afterAll(async () => {
@@ -40,47 +42,185 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     return { runId: run.id, versionId: version.id };
   }
 
-  const detected = (kind: DetectedAsset["kind"], name: string): DetectedAsset => ({
-    kind,
-    name,
-    description: `${name}, as described.`,
-    appearsIn: ["Scene 1"],
-  });
+  type Entry = {
+    kind: "character" | "location" | "prop" | "voice_only";
+    name: string;
+    description?: string;
+  };
 
-  it("diffs detections: add, keep, remove, reactivate; manual assets untouched", async () => {
+  /** A detector answer for these entries, with the run's temporary ids for stored assets. */
+  async function detect(projectId: string, entries: Entry[], removedNames: string[] = []) {
+    const state = await assets.loadDetectorState(projectId);
+    const view = assets.detectorView(state.rows, state.latest?.sceneIndex ?? []);
+    const counters: Record<string, number> = { char: 50, loc: 50, prop: 50, voice: 50 };
+    const idFor = (kind: string, prefix: string, name: string) =>
+      view.tempByName.get(`${kind}:${name.trim().toLowerCase()}`) ??
+      `${prefix}_${++counters[prefix]!}`;
+    const base = {
+      aliases: [],
+      facts: [],
+      asset_priority: "required" as const,
+      scene_refs: ["1"],
+      first_scene: "1",
+      ui_summary: "",
+    };
+    const characters = entries
+      .filter((e) => e.kind === "character" || e.kind === "voice_only")
+      .map((e) => ({
+        ...base,
+        char_id: idFor("character", "char", e.name),
+        name: e.name,
+        name_latin: e.name,
+        kind: e.kind === "voice_only" ? ("voice_only" as const) : ("human" as const),
+        role: "lead" as const,
+        needs_visual: e.kind !== "voice_only",
+        is_minor: "unknown" as const,
+        same_person_as: null,
+        script_description: e.description ?? `${e.name}, as described.`,
+        looks: [],
+        signature_prop_ids: [],
+        speaks: e.kind === "voice_only",
+        dialogue_line_count: 0,
+        relationships: [],
+      }));
+    const removed = removedNames
+      .map((n) => [...view.tempByName].find(([k]) => k.endsWith(`:${n.toLowerCase()}`))?.[1])
+      .filter((id): id is string => id !== undefined);
+    const output: AssetDetectorOutput = {
+      output_version: "output_21",
+      mode: "full",
+      scene_index: [],
+      characters,
+      locations: entries
+        .filter((e) => e.kind === "location")
+        .map((e) => ({
+          ...base,
+          loc_id: idFor("location", "loc", e.name),
+          name: e.name,
+          name_latin: e.name,
+          location_group: null,
+          interior_exterior: "interior" as const,
+          time_of_day: "night" as const,
+          times_of_day: ["night" as const],
+          states: [],
+          script_description: e.description ?? `${e.name}, as described.`,
+          fixed_elements_from_script: [],
+          related_asset_ids: [],
+        })),
+      props: entries
+        .filter((e) => e.kind === "prop")
+        .map((e) => ({
+          ...base,
+          prop_id: idFor("prop", "prop", e.name),
+          name: e.name,
+          name_latin: e.name,
+          category_hint: "hand_prop" as const,
+          subtype: null,
+          script_description: e.description ?? `${e.name}, as described.`,
+          states: [],
+          text_on_object: [],
+          users: [],
+          location_ids: [],
+          related_asset_ids: [],
+        })),
+      voices: characters
+        .filter((c) => c.kind === "voice_only")
+        .map((c, i) => ({
+          voice_id: `voice_${60 + i}`,
+          owner_char_id: c.char_id,
+          delivery: ["voice_over" as const],
+          language: "en",
+          hints: [],
+          dialogue_line_count: 1,
+          scene_refs: ["1"],
+          ui_summary: "Narrator",
+        })),
+      diff: { added: [], updated: [], removed },
+      summary: {
+        scene_count: 0,
+        character_count: 0,
+        location_count: 0,
+        prop_count: 0,
+        voice_count: 0,
+      },
+      applied_fixes: [],
+      assumptions: [],
+      warnings: ["MINOR_PRESENT: char_51"],
+    };
+    return { output, byTemp: view.byTemp };
+  }
+
+  async function apply(
+    projectId: string,
+    v: { versionId: string; runId: string },
+    mode: "full" | "incremental",
+    entries: Entry[],
+    removedNames: string[] = [],
+  ) {
+    const { output, byTemp } = await detect(projectId, entries, removedNames);
+    return assets.applyDetection({
+      projectId,
+      scriptVersionId: v.versionId,
+      damiRunId: v.runId,
+      mode,
+      output,
+      byTemp,
+    });
+  }
+
+  it("applies detections: add, keep by known id, remove, keep approved, unique names", async () => {
     const userId = await fixtures.newUser();
     const projectId = await fixtures.newProject(userId);
     const first = await versionAndRun(projectId, 1);
     expect(await assets.hasDetectionFor(projectId, first.versionId)).toBe(false);
 
-    const r1 = await assets.applyDetection({
-      projectId,
-      scriptVersionId: first.versionId,
-      damiRunId: first.runId,
-      assets: [
-        detected("character", "Mara"),
-        detected("character", "Jonas"),
-        detected("location", "Harbour Pier"),
-      ],
-    });
-    expect(r1).toEqual({ added: 3, kept: 0, removed: 0 });
+    const r1 = await apply(projectId, first, "full", [
+      { kind: "character", name: "Mara" },
+      { kind: "character", name: "Jonas" },
+      { kind: "character", name: "Mara" },
+      { kind: "location", name: "Harbour Pier" },
+      { kind: "voice_only", name: "Narrator" },
+    ]);
+    expect(r1).toMatchObject({ added: 5, kept: 0, removed: 0 });
     expect(await assets.hasDetectionFor(projectId, first.versionId)).toBe(true);
+    const chars = await assets.listAssets(projectId, userId, { kind: "character" });
+    expect(chars?.items.map((a) => a.name)).toEqual(["Mara", "Jonas", "Mara (2)"]);
+    const voices = await assets.listAssets(projectId, userId, { kind: "voice" });
+    expect(voices?.items.map((a) => [a.name, a.details?.subkind])).toEqual([
+      ["Narrator", "voice_only"],
+    ]);
 
-    // A manual asset the detector never sees.
+    // A manual asset; Harbour Pier gets an accepted look (approved: never silently removed).
     await getDb().insert(asset).values({ projectId, kind: "prop", name: "Hat", origin: "manual" });
+    const pier = (await assets.listAssets(projectId, userId, { kind: "location" }))?.items[0];
+    await getDb()
+      .insert(assetLook)
+      .values({
+        assetId: pier?.id ?? "",
+        projectId,
+        versionNumber: 1,
+        source: "uploaded",
+        status: "accepted",
+      });
+    // The user skips Jonas; a later detection keeps that choice.
+    await getDb()
+      .update(asset)
+      .set({ priority: "skipped" })
+      .where(and(eq(asset.projectId, projectId), eq(asset.name, "Jonas")));
 
     const second = await versionAndRun(projectId, 2);
-    const r2 = await assets.applyDetection({
+    const r2 = await apply(
       projectId,
-      scriptVersionId: second.versionId,
-      damiRunId: second.runId,
-      assets: [
-        // The same name in other case and spacing is the same asset; it keeps its stored name.
-        { ...detected("character", "  MARA "), description: "Now with a surname." },
-        detected("prop", "Locket: [gold]"),
+      second,
+      "incremental",
+      [
+        { kind: "character", name: "Mara", description: "Now with a surname." },
+        { kind: "character", name: "Jonas" },
+        { kind: "prop", name: "Locket: [gold]" },
       ],
-    });
-    expect(r2).toEqual({ added: 1, kept: 1, removed: 2 });
+      ["Mara (2)", "Harbour Pier"],
+    );
+    expect(r2).toMatchObject({ added: 1, kept: 2, removed: 1 });
 
     const all = await assets.listAssets(projectId, userId, { includeRemoved: true });
     const byName = new Map(all?.items.map((a) => [a.name, a]));
@@ -90,40 +230,62 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
       firstScriptVersionId: first.versionId,
       lastScriptVersionId: second.versionId,
     });
-    expect(byName.get("Jonas")?.status).toBe("removed");
-    expect(byName.get("Harbour Pier")?.status).toBe("removed");
+    expect(byName.get("Mara (2)")?.status).toBe("removed");
+    expect(byName.get("Jonas")).toMatchObject({ status: "active", priority: "skipped" });
+    expect(byName.get("Harbour Pier")?.status).toBe("active");
     expect(byName.get("Hat")).toMatchObject({ status: "active", origin: "manual" });
+    expect(byName.get("Locket - (gold)")?.status).toBe("active");
 
-    const active = await assets.listAssets(projectId, userId);
-    expect(active?.items.map((a) => a.name).sort()).toEqual(["Hat", "Locket - (gold)", "Mara"]);
+    const [detection] = await getDb()
+      .select()
+      .from(assetDetection)
+      .where(eq(assetDetection.scriptVersionId, second.versionId));
+    expect(detection?.mode).toBe("incremental");
+    expect(detection?.diff.removed).toEqual(["character:Mara (2)", "location:Harbour Pier"]);
+    expect(detection?.warnings.some((w) => w.startsWith("APPROVED_CONFLICT: Harbour Pier"))).toBe(
+      true,
+    );
+    // Temporary ids never reach the database.
+    expect(JSON.stringify(detection)).not.toMatch(/(char|loc|prop|voice)_\d+/);
 
+    const panel = await assets.getDetectionPanel(projectId, userId);
+    expect(panel?.warnings.map((w) => w.tag)).toEqual(["APPROVED_CONFLICT"]);
+    expect(panel?.options.map((o) => o.code)).toContain("ADT01");
+    expect(panel?.options.map((o) => o.code)).not.toContain("ADT07");
+
+    // A removed asset found again is revived under its name.
     const third = await versionAndRun(projectId, 3);
-    const r3 = await assets.applyDetection({
-      projectId,
-      scriptVersionId: third.versionId,
-      damiRunId: third.runId,
-      assets: [
-        detected("character", "Mara"),
-        detected("character", "Jonas"),
-        detected("prop", "Locket - (gold)"),
-      ],
-    });
-    expect(r3).toEqual({ added: 0, kept: 3, removed: 0 });
-    const jonas = (await assets.listAssets(projectId, userId, { kind: "character" }))?.items.find(
-      (a) => a.name === "Jonas",
-    );
-    expect(jonas?.status).toBe("active");
+    await apply(projectId, third, "incremental", [{ kind: "character", name: "mara (2)" }]);
+    const revived = await assets.listAssets(projectId, userId, { kind: "character" });
+    expect(revived?.items.map((a) => a.name)).toContain("Mara (2)");
+  });
 
-    expect(await assets.countAssetsByKind(projectId, userId)).toMatchObject({
-      character: 2,
-      prop: 2,
-      location: 0,
-      voice: 0,
+  it("skips assets without a dami and checks what a correction round needs", async () => {
+    const userId = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId);
+    const v = await versionAndRun(projectId, 1);
+    await apply(projectId, v, "full", [
+      { kind: "character", name: "Ines" },
+      { kind: "prop", name: "Lamp" },
+    ]);
+    const skipped = await assets.submitDetectionReview({
+      projectId,
+      userId,
+      selections: [{ code: "ADP01", targetNames: ["prop:Lamp"] }],
     });
-    const known = await assets.getKnownAssets(projectId);
-    expect(known.map((k) => k.name).sort()).toEqual(
-      ["Harbour Pier", "Hat", "Jonas", "Locket - (gold)", "Mara"].sort(),
-    );
+    expect(skipped).toEqual({ skipped: 1, started: false });
+    const lamp = (await assets.listAssets(projectId, userId, { kind: "prop" }))?.items[0];
+    expect(lamp?.priority).toBe("skipped");
+    await expect(
+      assets.submitDetectionReview({ projectId, userId, selections: [{ code: "ADT07" }] }),
+    ).rejects.toThrow(/not available/);
+    await expect(
+      assets.submitDetectionReview({
+        projectId,
+        userId,
+        selections: [{ code: "ADT05", customText: "wrong" }],
+      }),
+    ).rejects.toThrow(/Pick the assets/);
   });
 
   it("paginates and hides other users' assets", async () => {
@@ -131,12 +293,12 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     const other = await fixtures.newUser();
     const projectId = await fixtures.newProject(userId);
     const v = await versionAndRun(projectId, 1);
-    await assets.applyDetection({
+    await apply(
       projectId,
-      scriptVersionId: v.versionId,
-      damiRunId: v.runId,
-      assets: ["a", "b", "c", "d", "e"].map((s) => detected("prop", s.toUpperCase())),
-    });
+      v,
+      "full",
+      ["a", "b", "c", "d", "e"].map((s) => ({ kind: "prop" as const, name: s.toUpperCase() })),
+    );
     const page1 = await assets.listAssets(projectId, userId, { limit: 2 });
     const page2 = await assets.listAssets(projectId, userId, {
       limit: 2,
@@ -162,17 +324,12 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     const projectId = await fixtures.newProject(userId);
     await getDb().update(project).set({ stage: "pre_production" }).where(eq(project.id, projectId));
     const v = await versionAndRun(projectId, 1);
-    await assets.applyDetection({
-      projectId,
-      scriptVersionId: v.versionId,
-      damiRunId: v.runId,
-      assets: [
-        detected("prop", "Lamp"),
-        detected("character", "Ines"),
-        detected("location", "Lamp Room"),
-        detected("character", "Tomas"),
-      ],
-    });
+    await apply(projectId, v, "full", [
+      { kind: "prop", name: "Lamp" },
+      { kind: "character", name: "Ines" },
+      { kind: "location", name: "Lamp Room" },
+      { kind: "character", name: "Tomas" },
+    ]);
     const rows = await getDb()
       .select({ id: asset.id, name: asset.name })
       .from(asset)

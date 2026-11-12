@@ -7,6 +7,7 @@ export {
   type JobPayload,
 } from "./define";
 export {
+  assetDetectFix,
   assetLookFix,
   assetLookGenerate,
   assetSheetFix,

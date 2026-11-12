@@ -4,7 +4,8 @@ import { useState, useTransition, type CSSProperties, type ReactNode } from "rea
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fileSrc } from "@/lib/file-src";
-import { Button, PictureTile, StatusLine, useToast } from "@/ui";
+import { Ellipsis } from "lucide-react";
+import { Button, IconButton, Menu, PictureTile, StatusLine, cn, useToast } from "@/ui";
 import { ASSET_STATUS_LABELS } from "../../../_lib/asset-status";
 import { DrawnTick } from "../../_components/drawn-tick";
 import { StageStatus, isWorking } from "../../_components/asset-stage";
@@ -29,11 +30,19 @@ function placeholderFor(item: GalleryItem): string {
 export function AssetCard({
   projectId,
   item,
+  menu,
+  onSkip,
+  skipping = false,
   className,
   style,
 }: {
   projectId: string;
   item: GalleryItem;
+  /** The card's menu items (fixes to the detected list, Rename, Remove). */
+  menu?: ReactNode;
+  /** Skips an optional asset (it is not designed). */
+  onSkip?: () => void;
+  skipping?: boolean;
   className?: string;
   style?: CSSProperties;
 }) {
@@ -42,6 +51,8 @@ export function AssetCard({
   const [accepting, startAccepting] = useTransition();
   const [accepted, setAccepted] = useState(false);
   const voice = item.kind === "voice";
+  const skipped = item.priority === "skipped";
+  const optional = item.priority === "optional";
 
   const link = (label: string, intent?: AssetIntent, primary = false) => (
     <Button
@@ -66,7 +77,10 @@ export function AssetCard({
   }
 
   let actions: ReactNode;
-  switch (item.stage) {
+  switch (skipped ? "skipped" : item.stage) {
+    case "skipped":
+      actions = link("Open");
+      break;
     case "sheet_review":
       actions = (
         <>
@@ -115,10 +129,47 @@ export function AssetCard({
       actions = link("Open");
   }
 
-  const placeholder = placeholderFor(item);
+  if (optional && onSkip) {
+    actions = (
+      <>
+        {actions}
+        <Button key="skip" variant="dark" loading={skipping} onClick={onSkip}>
+          Skip It
+        </Button>
+      </>
+    );
+  }
+
+  const placeholder = skipped ? "Not designed" : placeholderFor(item);
+  const caption = (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="min-w-0 flex-1 truncate">{item.name}</span>
+      {optional ? (
+        <span className="font-normal shrink-0 font-mono text-meta tracking-caps text-label-3 uppercase">
+          Optional
+        </span>
+      ) : null}
+      {menu ? (
+        <Menu
+          align="end"
+          trigger={
+            <IconButton
+              label={`More for ${item.name}`}
+              tooltip={false}
+              size="small"
+              className="-my-1.5 shrink-0"
+              icon={<Ellipsis strokeWidth={1.5} />}
+            />
+          }
+        >
+          {menu}
+        </Menu>
+      ) : null}
+    </span>
+  );
   return (
     <PictureTile
-      label={`${item.name}, ${ASSET_STATUS_LABELS[item.stage]}`}
+      label={`${item.name}, ${skipped ? "Skipped" : ASSET_STATUS_LABELS[item.stage]}`}
       aspect={KIND_ASPECTS[item.kind]}
       picture={
         item.thumbnailFileId ? (
@@ -135,9 +186,10 @@ export function AssetCard({
       }
       placeholder={placeholder}
       actions={actions}
-      caption={item.name}
+      caption={caption}
       status={
-        accepted && (item.stage === "sheet_review" || item.stage === "ready") ? (
+        skipped ? undefined : accepted &&
+          (item.stage === "sheet_review" || item.stage === "ready") ? (
           <StatusLine tone="none" className="text-done">
             <span className="inline-flex items-center gap-1.5">
               <DrawnTick />
@@ -148,7 +200,10 @@ export function AssetCard({
           <StageStatus stage={item.stage} />
         )
       }
-      className={className}
+      className={cn(
+        skipped && "opacity-55 transition-opacity focus-within:opacity-100 hover:opacity-100",
+        className,
+      )}
       style={style}
     />
   );

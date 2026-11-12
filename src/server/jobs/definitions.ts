@@ -69,6 +69,17 @@ export const scriptDetectAssets = defineJob({
   options: damiJob,
 });
 
+/**
+ * One correction round of the detected asset list ("Something wrong with this list?"): the
+ * Asset Detector in fix mode with the review's fix requests, or a re-scan (incremental).
+ */
+export const assetDetectFix = defineJob({
+  name: "asset.detect.fix",
+  payload: z.object({ reviewId: z.string().uuid() }),
+  options: damiJob,
+  dedupeKey: (p) => p.reviewId,
+});
+
 /** Cut an accepted script into prompt blocks. */
 export const scriptSection = defineJob({
   name: "script.section",

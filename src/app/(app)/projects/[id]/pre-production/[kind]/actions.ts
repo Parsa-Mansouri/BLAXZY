@@ -6,11 +6,18 @@ import {
   addAsset,
   AssetInputError,
   getAssetDetail,
+  getDetectionPanel,
+  includeSkippedAsset,
   listAssetCards,
   mergeAssets,
   MAX_CARD_PAGE_SIZE,
+  removeAsset,
+  submitDetectionReview,
   submitSheetReview,
+  updateAsset,
+  type DetectionPanel,
 } from "@/server/assets";
+import type { FixSelection } from "@/server/damis";
 import { ASSET_KIND_LABELS, type AssetKindKey } from "../../_lib/asset-kinds";
 import { toGalleryItem, type GalleryItem } from "../_components/gallery-item";
 import { countKindStages } from "../_lib/load-categories";
@@ -157,6 +164,85 @@ export async function mergeAssetsAction(
   try {
     const kept = await mergeAssets({ keepId, mergeId, userId: user.id });
     if (!kept) return { ok: false, error: "One of these assets no longer exists." };
+    revalidatePath(`/projects/${projectId}/pre-production`, "layout");
+    return { ok: true, data: null };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** What the category screens show about the detected list ("Something wrong with this list?"). */
+export async function detectionPanelAction(
+  projectId: string,
+): Promise<ActionResult<DetectionPanel>> {
+  const user = await requireUser();
+  try {
+    const panel = await getDetectionPanel(projectId, user.id);
+    return panel ? { ok: true, data: panel } : { ok: false, error: MISSING };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * One review round of the detected list: skips apply at once, corrections and re-scans start in
+ * the background.
+ */
+export async function submitDetectionReviewAction(
+  projectId: string,
+  selections: FixSelection[],
+  note?: string,
+): Promise<ActionResult<{ skipped: number; started: boolean }>> {
+  const user = await requireUser();
+  try {
+    const result = await submitDetectionReview({ projectId, userId: user.id, selections, note });
+    if (!result) return { ok: false, error: MISSING };
+    revalidatePath(`/projects/${projectId}/pre-production`, "layout");
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Renames an asset (its old name is kept as an alias). */
+export async function renameAssetAction(
+  projectId: string,
+  assetId: string,
+  name: string,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    const updated = await updateAsset({ assetId, userId: user.id, name });
+    if (!updated) return { ok: false, error: "This asset no longer exists." };
+    revalidatePath(`/projects/${projectId}/pre-production`, "layout");
+    return { ok: true, data: null };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Removes an asset from Pre-production (its images and sheets are kept). */
+export async function removeAssetAction(projectId: string, assetId: string): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    const removed = await removeAsset({ assetId, userId: user.id });
+    if (!removed) return { ok: false, error: "This asset no longer exists." };
+    revalidatePath(`/projects/${projectId}/pre-production`, "layout");
+    return { ok: true, data: null };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Includes a skipped asset again (it will be designed). */
+export async function includeAssetAction(
+  projectId: string,
+  assetId: string,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    const included = await includeSkippedAsset({ assetId, userId: user.id });
+    if (!included) return { ok: false, error: "This asset no longer exists." };
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");
     return { ok: true, data: null };
   } catch (error) {

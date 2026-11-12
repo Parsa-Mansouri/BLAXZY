@@ -207,11 +207,23 @@ export {
 export {
   assetDetectorInputSchema,
   assetDetectorOutputSchema,
+  CHARACTER_KINDS,
+  DETECTOR_MODES,
   type AssetDetectorInput,
   type AssetDetectorOutput,
-  type DetectedAsset,
+  type DetectedCharacter,
+  type DetectedLocation,
+  type DetectedProp,
+  type DetectedVoice,
+  type DetectorFact,
+  type DetectorFixRequest,
+  type DetectorMode,
   type KnownAsset,
+  type SceneIndexEntry,
 } from "./asset-detector/schema";
+export { checkDetection, detectorScriptText } from "./asset-detector/dami";
+export { containsQuote, normalizeQuoteText } from "./shared/quotes";
+export { isSceneHeading } from "./shared/script-lines";
 export {
   promptSectionerInputSchema,
   MAX_BLOCK_SECONDS,

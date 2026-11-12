@@ -4,17 +4,42 @@
  * are for job handlers and the worker; the rest take the acting user and check ownership.
  */
 export {
-  applyDetection,
   AssetInputError,
   countAssetsByKind,
   DEFAULT_ASSET_PAGE_SIZE,
-  getKnownAssets,
   getSectionerAssets,
-  hasDetectionFor,
   listAssets,
   MAX_ASSET_PAGE_SIZE,
   type Asset,
 } from "./service";
+export {
+  applyDetection,
+  detectionAnswered,
+  getDetectionPanel,
+  hasDetectionFor,
+  loadDetectionFix,
+  loadDetectorState,
+  recordFixFailure,
+  submitDetectionReview,
+  type ApplyDetectionResult,
+  type DetectionFixJob,
+  type DetectionPanel,
+  type DetectionRow,
+  type DetectionWarning,
+} from "./detection-store";
+export {
+  DETECTED_KINDS,
+  detectorView,
+  isDetectedKind,
+  planDetection,
+  tempIdsFor,
+  visibleWarnings,
+  type DetectedKind,
+  type DetectionPlan,
+  type DetectorView,
+  type KnownRow,
+  type PlannedAsset,
+} from "./detection";
 export {
   ASSET_STAGES,
   deriveAssetStage,
@@ -39,6 +64,7 @@ export {
   DEFAULT_CARD_PAGE_SIZE,
   getAssetDetail,
   getPreProductionOverview,
+  includeSkippedAsset,
   listAssetCards,
   MAX_ASSET_DESCRIPTION_LENGTH,
   MAX_ASSET_NAME_LENGTH,

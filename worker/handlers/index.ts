@@ -1,5 +1,6 @@
 import type { GenerationFinishedHandler } from "../../src/server/generation";
 import type { JobHandler, JobSchedule } from "../../src/server/jobs";
+import { assetDetectFixHandler } from "./asset-detect-fix";
 import { assetGenerationHook } from "./asset-generation-hook";
 import { assetLookFixHandler, assetLookGenerateHandler } from "./asset-look";
 import { assetSheetFixHandler, assetSheetGenerateHandler } from "./asset-sheet";
@@ -39,6 +40,7 @@ export const handlers: JobHandler[] = [
   scriptReviseHandler,
   scriptDetectAssetsHandler,
   scriptSectionHandler,
+  assetDetectFixHandler,
   generationRunHandler,
   generationSweepHandler,
   assetLookGenerateHandler,

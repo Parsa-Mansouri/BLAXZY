@@ -88,6 +88,13 @@ export type AssetKind = (typeof ASSET_KINDS)[number];
 export const ASSET_STATUSES = ["active", "removed"] as const;
 export type AssetStatus = (typeof ASSET_STATUSES)[number];
 
+/**
+ * required / optional come from the Asset Detector; skipped is the user's choice (ADP01): the
+ * asset is not designed, and later damis describe it inline from its script description.
+ */
+export const ASSET_PRIORITIES = ["required", "optional", "skipped"] as const;
+export type AssetPriority = (typeof ASSET_PRIORITIES)[number];
+
 export const ASSET_ORIGINS = ["detected", "manual"] as const;
 export type AssetOrigin = (typeof ASSET_ORIGINS)[number];
 
@@ -97,6 +104,7 @@ export type DamiRunStatus = (typeof DAMI_RUN_STATUSES)[number];
 export const REVIEW_SUBJECTS = [
   "script_version",
   "asset",
+  "asset_detection",
   "asset_look",
   "asset_sheet",
   "prompt_block",
@@ -175,6 +183,73 @@ export type ReviewFixRequest = {
   targetNames?: string[];
   /** The view or frame of a sheet the request is about. */
   viewId?: string;
+};
+
+/** A fact the Asset Detector read from the script, with its verbatim evidence. */
+export type AssetFact = {
+  field: string;
+  value: string;
+  status: "stated" | "implied" | "user";
+  scene: string;
+  evidence: string;
+};
+
+/** A look (characters) or state (locations, props) the script asks for, with its scenes. */
+export type AssetVariant = {
+  id: string;
+  description: string;
+  sceneRefs: string[];
+  evidence: string;
+};
+
+/**
+ * What the Asset Detector knows about an asset beyond its name and description (output_21).
+ * Every reference to another asset is by its real name (the asset's id within its kind); the
+ * detector's own ids never reach the database.
+ */
+export type AssetDetails = {
+  /** Characters: human, animal, creature, robot or background_group (voice_only is a voice). */
+  subkind?: string;
+  role?: string;
+  /** The detector's own priority, so an asset the user skipped can be included again. */
+  detectedPriority?: "required" | "optional";
+  aliases?: string[];
+  nameLatin?: string;
+  isMinor?: "yes" | "no" | "unknown";
+  needsVisual?: boolean;
+  /** The character this one is a different age or form of (name). */
+  samePersonAs?: string | null;
+  facts?: AssetFact[];
+  looks?: AssetVariant[];
+  states?: AssetVariant[];
+  sceneRefs?: string[];
+  firstScene?: string;
+  uiSummary?: string;
+  relationships?: { name: string; relation: string }[];
+  signatureProps?: string[];
+  speaks?: boolean;
+  dialogueLineCount?: number;
+  /** Locations. */
+  locationGroup?: string | null;
+  interiorExterior?: "interior" | "exterior" | "int_ext";
+  timeOfDay?: string;
+  timesOfDay?: string[];
+  fixedElements?: { element: string; scene: string; evidence: string }[];
+  /** Props. */
+  categoryHint?: string;
+  subtype?: string | null;
+  textOnObject?: { text: string; evidence: string }[];
+  /** Character names who handle the prop. */
+  users?: string[];
+  /** Location names where the prop appears. */
+  locationIds?: string[];
+  /** Related assets as `kind:Name` refs. */
+  relatedAssets?: string[];
+  /** Voices: the speaking character's name, how and in what language it is heard. */
+  owner?: string;
+  delivery?: string[];
+  language?: string;
+  hints?: AssetFact[];
 };
 
 /** A comment anchored to a passage of the reviewed text. */
@@ -462,6 +537,10 @@ export const asset = pgTable(
     status: text("status").$type<AssetStatus>().notNull().default("active"),
     origin: text("origin").$type<AssetOrigin>().notNull().default("detected"),
     displayOrder: integer("display_order").notNull().default(0),
+    /** required / optional (the detector), skipped (the user). Older rows read as required. */
+    priority: text("priority").$type<AssetPriority>().notNull().default("required"),
+    /** The detector's structured knowledge of the asset (see `AssetDetails`). */
+    details: jsonb("details").$type<AssetDetails>(),
     /** The script version in which the asset was first detected. */
     firstScriptVersionId: uuid("first_script_version_id").references(() => scriptVersion.id),
     /** The latest script version in which it was detected. */
@@ -473,6 +552,67 @@ export const asset = pgTable(
   (t) => [
     uniqueIndex("asset_project_kind_name_unique").on(t.projectId, t.kind, sql`lower(${t.name})`),
     index("asset_project_kind_status_idx").on(t.projectId, t.kind, t.status),
+  ],
+);
+
+/**
+ * One Asset Detector result as applied (append-only): the scene index and the diff in asset
+ * names, and what the detector assumed or warned about. Modes: full (first detection),
+ * incremental (an edited script, a re-scan) and fix (a correction round from a review).
+ */
+export const ASSET_DETECTION_MODES = ["full", "incremental", "fix"] as const;
+export type AssetDetectionMode = (typeof ASSET_DETECTION_MODES)[number];
+
+/** One scene of the detection's scene index, with assets by name. */
+export type DetectionSceneIndexEntry = {
+  sceneNumber: string;
+  heading: string;
+  anchor: string | null;
+  location: string | null;
+  locationState: string | null;
+  timeOfDay: string;
+  characters: string[];
+  characterLooks: { character: string; look: string }[];
+  voices: string[];
+  props: string[];
+};
+
+/** The diff as `kind:Name` refs. */
+export type DetectionDiff = { added: string[]; updated: string[]; removed: string[] };
+
+export const assetDetection = pgTable(
+  "asset_detection",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    scriptVersionId: uuid("script_version_id")
+      .notNull()
+      .references(() => scriptVersion.id),
+    damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    mode: text("mode").$type<AssetDetectionMode>().notNull(),
+    sceneIndex: jsonb("scene_index")
+      .$type<DetectionSceneIndexEntry[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    diff: jsonb("diff")
+      .$type<DetectionDiff>()
+      .notNull()
+      .default(sql`'{"added":[],"updated":[],"removed":[]}'::jsonb`),
+    assumptions: jsonb("assumptions")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    warnings: jsonb("warnings")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("asset_detection_project_created_idx").on(t.projectId, t.createdAt.desc()),
+    index("asset_detection_script_version_idx").on(t.scriptVersionId),
   ],
 );
 

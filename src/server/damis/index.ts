@@ -10,7 +10,8 @@ import type { AnyDami } from "./framework/define";
 import { promptSectioner } from "./prompt-sectioner/dami";
 import { scriptChecker } from "./script-checker/dami";
 import { scriptReviser } from "./script-reviser/dami";
-import { scriptWriter } from "./script-writer/dami";
+import { enhancer } from "./enhancer/dami";
+import { scriptOutliner, scriptWriter } from "./script-writer/dami";
 import { sheetFixer } from "./sheet-fixer/dami";
 import { sheetGenerator } from "./sheet-generator/dami";
 import { takeFixer } from "./take-fixer/dami";
@@ -75,13 +76,87 @@ export type { DamiTask, PromptModule } from "./modules/types";
 export { projectStyleSchema, planDuration, type DurationPlan } from "./shared/style";
 
 // The damis
-export { scriptWriter, assetDetector, promptSectioner, scriptChecker, scriptReviser };
+export {
+  scriptWriter,
+  scriptOutliner,
+  enhancer,
+  assetDetector,
+  promptSectioner,
+  scriptChecker,
+  scriptReviser,
+};
 export {
   scriptWriterInputSchema,
   scriptWriterOutputSchema,
+  scriptOutlineInputSchema,
+  screenplaySchema,
+  screenplaySceneSchema,
+  continuityLedgerSchema,
+  submitOutlineSchema,
+  submitScreenplaySchema,
+  type ApprovedOutline,
+  type ContinuityLedger,
+  type Screenplay,
+  type ScreenplayScene,
+  type ScriptOutlineInput,
   type ScriptWriterInput,
   type ScriptWriterOutput,
+  type SubmitOutline,
+  type SubmitScreenplay,
+  type WriterFeedback,
+  type WriterProject,
 } from "./script-writer/schema";
+export { REVISE_RUN_SETTINGS, writerMaxTokens } from "./script-writer/dami";
+export {
+  episodeCount,
+  needsOutline,
+  singleCallTarget,
+  writerProject,
+} from "./script-writer/project";
+export {
+  isWriterReasonCode,
+  issueTypeFor,
+  writerReason,
+  WRITER_PREFERENCE_REASONS,
+  WRITER_REASON_CODES,
+  WRITER_REASONS,
+  WRITER_TECHNICAL_REASONS,
+  type WriterReason,
+  type WriterReasonCode,
+} from "./script-writer/reasons";
+export {
+  enhancerInputSchema,
+  enhancerOutputSchema,
+  OWNER_ENHANCER_GENRES,
+  OWNER_ENHANCER_STYLES,
+  type EnhancerInput,
+  type EnhancerOutput,
+} from "./enhancer/schema";
+export {
+  durationBudget,
+  estimate,
+  HARD_MAX_SECONDS,
+  MAX_SEQUENCE_SECONDS,
+  parseDurationText,
+  runtimeCorrectionNote,
+  runtimeVerdict,
+  SINGLE_CALL_MAX_SECONDS,
+  toleranceSeconds,
+  type DurationBudget,
+  type RuntimeEstimate,
+  type RuntimeVerdict,
+} from "./shared/duration";
+export {
+  flattenForDetector,
+  parseStoredScreenplay,
+  renderScreenplay,
+  sceneHeadingText,
+  sceneNumberAt,
+  type DetectorScene,
+  type EpisodeMarker,
+  type RenderedScreenplay,
+  type StoredScreenplay,
+} from "./shared/screenplay";
 export {
   scriptCheckerInputSchema,
   scriptCheckerOutputSchema,
@@ -262,6 +337,8 @@ export {
 /** Every dami by key (for the CLI and, later, Pro's dami picker). */
 export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [scriptWriter.key]: scriptWriter,
+  [scriptOutliner.key]: scriptOutliner,
+  [enhancer.key]: enhancer,
   [scriptChecker.key]: scriptChecker,
   [scriptReviser.key]: scriptReviser,
   [assetDetector.key]: assetDetector,

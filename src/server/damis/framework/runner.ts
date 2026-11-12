@@ -8,7 +8,7 @@ import {
   type ClaudeResponse,
 } from "./client";
 import { getProcessClaudeLimiter, Semaphore } from "./concurrency";
-import { STREAMING_THRESHOLD_TOKENS, type DamiDefinition } from "./define";
+import { STREAMING_THRESHOLD_TOKENS, type DamiDefinition, type DamiEffort } from "./define";
 import {
   DamiApiError,
   DamiConfigError,
@@ -33,6 +33,8 @@ export type DamiRunContext = {
   projectId?: string | null;
   /** Explicit model for this run; overrides DAMI_DEFAULT_MODEL and the dami default. */
   model?: string;
+  /** `output_config.effort` for this run; overrides the dami's `effort`. */
+  effort?: DamiEffort;
   /** `max_tokens` for this run; overrides the dami's `maxOutputTokens`. */
   maxOutputTokens?: number;
   signal?: AbortSignal;
@@ -218,7 +220,7 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
   const request = buildClaudeRequest(prompt, {
     model,
     maxTokens,
-    effort: dami.effort,
+    effort: ctx.effort ?? dami.effort,
     outputSchema: dami.output,
     images,
   });

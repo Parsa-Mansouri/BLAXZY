@@ -12,6 +12,7 @@ import {
   dropSchema,
   jobContext,
   pointQueueAtThrowawaySchema,
+  TEST_STYLE,
 } from "../../src/server/test-support/script-fixtures";
 
 const jobSchema = pointQueueAtThrowawaySchema();
@@ -68,11 +69,14 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     const written = await script.getScriptVersion(v1?.id ?? "", userId);
     expect(written).toMatchObject({ status: "in_review", isSample: true, title: "The Fisherman" });
     expect(written?.content).toContain("TOMAS");
+    expect(written?.structured).toBe(true);
+    expect(written?.assumptions.length).toBeGreaterThan(0);
+    expect(written?.runtime?.verdict).toBe("ok");
     expect(await runCount(projectId, "script-writer")).toBe(1);
 
-    // Reject with chips, a note and a comment; revise.
+    // Reject with a reason code, a note and a comment; the writer revises (revise mode).
     const content = written?.content ?? "";
-    const quote = "Not today. Not after all this.";
+    const quote = content.split("\n").find((l) => l.startsWith("Tomas ")) ?? "";
     const start = content.indexOf(quote);
     expect(start).toBeGreaterThan(0);
     const v2 = await script.submitScriptReview({
@@ -80,7 +84,7 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
       userId,
       versionId: v1?.id ?? "",
       decision: "rejected",
-      issueCodes: ["ending_weak"],
+      issueCodes: ["different_ending_tone"],
       note: "More hope at the end.",
       comments: [{ quote, start, end: start + quote.length, note: "Angrier." }],
     });
@@ -91,9 +95,11 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
       source: "revised",
       title: "The Fisherman",
     });
-    expect(revised?.content).toContain(`${quote} (angrier)`);
-    expect(revised?.notes).toHaveLength(3);
-    expect(await runCount(projectId, "script-reviser")).toBe(1);
+    expect(revised?.structured).toBe(true);
+    expect(revised?.content).not.toEqual(content);
+    expect(revised?.notes.length).toBeGreaterThan(0);
+    expect(await runCount(projectId, "script-writer")).toBe(2);
+    expect(await runCount(projectId, "script-reviser")).toBe(0);
 
     // Accept; detect assets; section.
     await script.submitScriptReview({
@@ -124,7 +130,7 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     const edited = await script.editAcceptedScript({
       projectId,
       userId,
-      content: (revised?.content ?? "").replace("Ask me tomorrow.", "Ask me in a year."),
+      content: `${(revised?.content ?? "").trimEnd()}\n\nA gull lands on the rail and stays.`,
     });
     await scriptDetectAssetsHandler.run({ scriptVersionId: v2?.id ?? "" }, jobContext());
     await scriptSectionHandler.run({ scriptVersionId: v2?.id ?? "" }, jobContext());
@@ -180,6 +186,92 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     expect(checked?.findings?.length).toBeGreaterThanOrEqual(2);
     expect(checked?.checkVerdict).not.toBeNull();
     expect(await runCount(projectId, "script-checker")).toBe(1);
+  });
+
+  it("expands a quick idea with the Enhancer and saves the look line", async () => {
+    const { scriptEnhanceHandler } = await import("./script-enhance");
+    const userId = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId, {
+      ...TEST_STYLE,
+      genre: "comedy",
+      visualStyle: "claymation",
+    });
+    const v1 = await script.startFromIdea({ projectId, userId, idea: "A chef drops the eggs." });
+    expect(v1?.source).toBe("enhanced");
+    await twice(scriptEnhanceHandler, v1?.id ?? "");
+    const ready = await script.getScriptVersion(v1?.id ?? "", userId);
+    expect(ready).toMatchObject({ status: "in_review", source: "enhanced", isSample: true });
+    expect(ready?.content).toContain("A chef drops the eggs.");
+    expect(ready?.lookLine).toBeTruthy();
+    expect(ready?.enhanceFellBack).toBe(false);
+    expect(ready?.structured).toBe(false);
+    const [row] = await getDb().select().from(project).where(eq(project.id, projectId));
+    expect(row?.style?.lookLine).toBe(ready?.lookLine);
+    expect(await runCount(projectId, "enhancer")).toBe(1);
+  });
+
+  it("writes a series one episode per call, stitched in order", async () => {
+    const userId = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId, {
+      ...TEST_STYLE,
+      format: "series",
+      totalDurationSeconds: 180,
+      episodeDurationSeconds: 60,
+    });
+    const v1 = await script.startFromBrief({ projectId, userId, brief: "Two rival bakers." });
+    await twice(scriptWriteHandler, v1?.id ?? "");
+    const written = await script.getScriptVersion(v1?.id ?? "", userId);
+    expect(written?.status).toBe("in_review");
+    const episodes = (written?.content ?? "").split("\n").filter((l) => /^EPISODE \d+/.test(l));
+    expect(episodes).toHaveLength(3);
+    expect(await runCount(projectId, "script-writer")).toBeGreaterThanOrEqual(3);
+  });
+
+  it("plans a long film as an outline, then writes it sequence by sequence", async () => {
+    const { scriptWriteSegmentHandler } = await import("./script-write-segment");
+    const userId = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId, {
+      ...TEST_STYLE,
+      totalDurationSeconds: 20 * 60,
+    });
+    const v1 = await script.startFromBrief({ projectId, userId, brief: "A courier named Lena." });
+    await twice(scriptWriteHandler, v1?.id ?? "");
+    const outlined = await script.getScriptVersion(v1?.id ?? "", userId);
+    expect(outlined?.status).toBe("in_review");
+    expect(outlined?.content).toBeNull();
+    const outline = outlined?.outline;
+    if (!outline) throw new Error("no outline");
+    await expect(
+      script.submitScriptReview({
+        projectId,
+        userId,
+        versionId: v1?.id ?? "",
+        decision: "accepted",
+      }),
+    ).rejects.toThrow(/Approve the outline/);
+
+    const v2 = await script.approveOutline({
+      projectId,
+      userId,
+      versionId: v1?.id ?? "",
+      approvedAdditions: [0],
+    });
+    expect(v2).toMatchObject({ status: "pending", source: "generated", writingSegments: true });
+    // The write job hands over to the segment jobs; run them in order (each twice).
+    await scriptWriteHandler.run({ scriptVersionId: v2?.id ?? "" }, jobContext());
+    const sequences = outline.acts.flatMap((a) => a.sequences);
+    for (let i = 0; i < sequences.length; i++) {
+      const data = { scriptVersionId: v2?.id ?? "", segmentIndex: i };
+      await scriptWriteSegmentHandler.run(data, jobContext());
+      await scriptWriteSegmentHandler.run(data, jobContext());
+    }
+    const written = await script.getScriptVersion(v2?.id ?? "", userId);
+    expect(written?.status).toBe("in_review");
+    expect(written?.structured).toBe(true);
+    const sceneCount = sequences.reduce((n, s) => n + s.scenes.length, 0);
+    const headings = (written?.content ?? "").split("\n").filter((l) => /^(INT|EXT)\./.test(l));
+    expect(headings).toHaveLength(sceneCount);
+    expect(await runCount(projectId, "script-writer")).toBe(sequences.length);
   });
 
   it("records a user-readable failure for a non-retryable error", async () => {

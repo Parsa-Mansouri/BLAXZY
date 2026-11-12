@@ -15,6 +15,18 @@ code that calls the Claude API and the only writer of `dami_run`.
 - One folder per dami: `schema.ts`, `prompt.ts`, `dami.ts`, `fixtures/` (`input.json` for
   `pnpm dami:run`, `model-output.json` for tests), and a test.
 
+## Script stage
+
+- `script-writer/` is the owner's Script Writer v0.2. `script-writer` (generate, revise,
+  write_segment, answering `submit_screenplay`) and `script-writer-outline` (outline, answering
+  `submit_outline`) share one prompt: the core plus one genre and one style module, copied
+  verbatim into `modules.ts`. `project.ts` builds the `<project>` block (no format or orientation
+  text); `reasons.ts` holds the 19 revise reason codes.
+- `shared/duration.ts` is the owner's runtime budget and `estimate()`; the worker runs the
+  auto-correction loop. `shared/screenplay.ts` renders the structured screenplay as the canonical
+  text stored in `script_version.content` and flattens it for the Asset Detector.
+- `enhancer/` rewrites a quick idea (genre and style blocks verbatim from the owner's file).
+
 ## Images
 
 A message part may be `{ image: { fileId } }`: the dami input keeps only file ids. In live mode

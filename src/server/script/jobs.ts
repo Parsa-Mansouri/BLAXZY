@@ -3,6 +3,7 @@
  * its result with conditional updates so a duplicate or stale run cannot overwrite newer state.
  */
 import { and, desc, eq, isNull } from "drizzle-orm";
+import type { StoredScreenplay, SubmitOutline } from "@/server/damis";
 import { getDb } from "@/server/db/client";
 import {
   project,
@@ -11,10 +12,16 @@ import {
   scriptVersion,
   type ProjectStyle,
   type ReviewComment,
+  type ReviewFixRequest,
 } from "@/server/db/schema";
 import { getOwnedFileInfo, type FileInfo } from "@/server/storage";
 import { uuidSchema } from "./schemas";
-import { readNotes, type ScriptDamiNotes, type ScriptVersionRow } from "./views";
+import {
+  readNotes,
+  type ScriptDamiNotes,
+  type ScriptVersionRow,
+  type SegmentProgress,
+} from "./views";
 
 export type ScriptJobContext = {
   version: ScriptVersionRow;
@@ -23,7 +30,12 @@ export type ScriptJobContext = {
   isLatest: boolean;
   /** Revised versions: the rejected parent and the review that rejected it. */
   parent: ScriptVersionRow | null;
-  review: { issueCodes: string[]; note: string | null; comments: ReviewComment[] } | null;
+  review: {
+    issueCodes: string[];
+    fixRequests: ReviewFixRequest[];
+    note: string | null;
+    comments: ReviewComment[];
+  } | null;
   /** Uploaded versions: the source document. */
   file: FileInfo | null;
 };
@@ -75,7 +87,14 @@ export async function loadScriptJob(versionId: string): Promise<ScriptJobContext
       )
       .orderBy(desc(review.createdAt))
       .limit(1);
-    rejection = r ? { issueCodes: r.issueCodes, note: r.note, comments: r.comments } : null;
+    rejection = r
+      ? {
+          issueCodes: r.issueCodes,
+          fixRequests: r.fixRequests,
+          note: r.note,
+          comments: r.comments,
+        }
+      : null;
   }
   const file = version.fileId ? await getOwnedFileInfo(version.fileId, row.project.ownerId) : null;
   return {
@@ -95,8 +114,11 @@ export async function loadScriptJob(versionId: string): Promise<ScriptJobContext
 export async function completeScriptVersion(input: {
   versionId: string;
   content: string;
-  damiRunId: string;
+  /** Null when no dami produced the text (an enhanced version that kept the user's own words). */
+  damiRunId: string | null;
   notes: ScriptDamiNotes;
+  /** The Script Writer's structured screenplay, when it wrote one. */
+  screenplay?: StoredScreenplay | null;
 }): Promise<boolean> {
   return getDb().transaction(async (tx) => {
     const [row] = await tx
@@ -105,13 +127,16 @@ export async function completeScriptVersion(input: {
       .where(and(eq(scriptVersion.id, input.versionId), eq(scriptVersion.status, "pending")))
       .for("update");
     if (!row) return false;
+    const { segmentProgress: _done, ...previous } = readNotes(row.damiNotes);
+    void _done;
     await tx
       .update(scriptVersion)
       .set({
         status: "in_review",
         content: input.content.replace(/\r\n?/g, "\n"),
-        damiRunId: input.damiRunId,
-        damiNotes: { ...readNotes(row.damiNotes), ...input.notes, failure: null },
+        screenplay: input.screenplay ?? null,
+        ...(input.damiRunId ? { damiRunId: input.damiRunId } : {}),
+        damiNotes: { ...previous, ...input.notes, failure: null },
       })
       .where(eq(scriptVersion.id, input.versionId));
     await tx.insert(projectEvent).values({
@@ -120,6 +145,70 @@ export async function completeScriptVersion(input: {
       type: "script.ready",
       payload: { versionId: row.id, source: row.source },
     });
+    return true;
+  });
+}
+
+/**
+ * Long pieces: pending → in_review with the outline to approve (no script text yet). Returns
+ * false when another run already finished the version.
+ */
+export async function completeOutline(input: {
+  versionId: string;
+  outline: SubmitOutline;
+  damiRunId: string;
+}): Promise<boolean> {
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(scriptVersion)
+      .where(and(eq(scriptVersion.id, input.versionId), eq(scriptVersion.status, "pending")))
+      .for("update");
+    if (!row) return false;
+    const notes: ScriptDamiNotes = {
+      ...readNotes(row.damiNotes),
+      outline: input.outline,
+      outlineApproved: false,
+      logline: input.outline.logline,
+      warnings: input.outline.warnings,
+      failure: null,
+    };
+    await tx
+      .update(scriptVersion)
+      .set({ status: "in_review", damiRunId: input.damiRunId, damiNotes: notes })
+      .where(eq(scriptVersion.id, input.versionId));
+    await tx.insert(projectEvent).values({
+      projectId: row.projectId,
+      userId: null,
+      type: "script.outline-ready",
+      payload: { versionId: row.id },
+    });
+    return true;
+  });
+}
+
+/**
+ * Stores the progress of a version written sequence by sequence, only while the version is
+ * pending and its stored progress is still at `expectedIndex` (a duplicate run changes nothing).
+ */
+export async function storeSegmentProgress(input: {
+  versionId: string;
+  expectedIndex: number;
+  progress: SegmentProgress;
+}): Promise<boolean> {
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(scriptVersion)
+      .where(and(eq(scriptVersion.id, input.versionId), eq(scriptVersion.status, "pending")))
+      .for("update");
+    if (!row) return false;
+    const notes = readNotes(row.damiNotes);
+    if ((notes.segmentProgress?.nextIndex ?? 0) !== input.expectedIndex) return false;
+    await tx
+      .update(scriptVersion)
+      .set({ damiNotes: { ...notes, segmentProgress: input.progress } })
+      .where(eq(scriptVersion.id, input.versionId));
     return true;
   });
 }

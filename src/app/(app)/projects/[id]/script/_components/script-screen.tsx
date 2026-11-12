@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { BackgroundStatus } from "../../_lib/background-status";
+import { OutlineReview } from "./outline-review";
 import { ScriptAccepted } from "./script-accepted";
 import { ScriptReview } from "./script-review";
 import { ScriptStart } from "./script-start";
@@ -32,6 +33,7 @@ export function ScriptScreen(props: ScriptScreenProps) {
         projectId={projectId}
         maxBriefChars={props.maxBriefChars}
         initialBrief={current?.source === "generated" ? (current.brief ?? "") : ""}
+        initialIdea={current?.source === "enhanced" ? (current.brief ?? "") : ""}
       />
     );
   }
@@ -46,6 +48,18 @@ export function ScriptScreen(props: ScriptScreenProps) {
         projectId={projectId}
         version={current}
         onStartOver={() => setStartingOver(current.id)}
+      />
+    );
+  }
+
+  if (current.status === "in_review" && current.outline) {
+    return (
+      <OutlineReview
+        key={current.id}
+        projectId={projectId}
+        version={current}
+        outline={current.outline}
+        sample={props.sample}
       />
     );
   }

@@ -1,9 +1,138 @@
 {
-  "title": "The Last Ferry",
-  "logline": "A retired mechanic races to catch the last ferry of the night to return a locket to the man who left her forty years ago, before he is gone for good.",
-  "content": "FADE IN:\n\nEXT. HARBOUR PIER - DUSK\n\nWind whips sea spray across a deserted wooden pier. A single ferry, lights blazing, idles at the far end.\n\nMARA (60s), wiry, grey-streaked braid, oil-stained work jacket, hurries down the planks clutching a brass locket.\n\nFERRYMAN (O.S.)\nLast crossing! Now or never!\n\nMARA\n(breathless)\nWait. Please wait.\n\nINT. FERRY CABIN - CONTINUOUS\n\nWarm tungsten light. Rows of empty benches. JONAS (60s), broad-shouldered, flat cap, sits alone by a spray-streaked window.\n\nMara stops in the doorway. Jonas looks up. Neither speaks.\n\nShe opens her hand: the locket. He takes it, opens it, and his face breaks into a slow smile.\n\nJONAS\nYou kept it.\n\nMARA\nForty years. You're late.\n\nThe ferry horn sounds. Through the window, the pier lights slide away.\n\nFADE OUT.",
-  "notes": [
-    "Set in an unnamed northern harbour at dusk; names Mara and Jonas are my choice.",
-    "The ferryman stays off screen to keep the cast at two on camera."
-  ]
+  "story_parse": {
+    "characters": [
+      {
+        "name": "Anna",
+        "role": "protagonist",
+        "want": "to know if he still remembers",
+        "relationships": "former lover of Tomas"
+      },
+      {
+        "name": "Tomas",
+        "role": "co-lead",
+        "want": "to say what he never said",
+        "relationships": "former lover of Anna"
+      }
+    ],
+    "central_action": "Two former lovers meet by chance on the last ferry of the night.",
+    "fixed_events": ["They meet again on the last ferry of the night."],
+    "desired_ending": "Not stated.",
+    "unknowns": ["Their names", "Why they parted", "How it ends"]
+  },
+  "beats": [
+    {
+      "id": "b1",
+      "type": "opening_state",
+      "summary": "Anna rides the empty ferry alone.",
+      "genre_effect": "Her want shows in what she does not do.",
+      "style_effect": "Wet rails, the engine's hum, real cold."
+    },
+    {
+      "id": "b2",
+      "type": "collision",
+      "summary": "Tomas sits down across from her.",
+      "genre_effect": "They talk about the weather and mean the past.",
+      "style_effect": "Tangible objects: a paper cup, a scarf."
+    },
+    {
+      "id": "b3",
+      "type": "ending",
+      "summary": "She leaves the scarf on the bench for him.",
+      "genre_effect": "The ending is her choice.",
+      "style_effect": "The pier lights come closer."
+    }
+  ],
+  "screenplay": {
+    "title": "The Last Ferry",
+    "logline": "On the last ferry of the night, a woman meets the man she once loved and has one crossing to decide what to leave behind.",
+    "language": "en",
+    "estimated_duration_seconds": 58,
+    "scenes": [
+      {
+        "scene_number": 1,
+        "heading": { "int_ext": "INT", "location": "Ferry Cabin", "time_of_day": "NIGHT" },
+        "purpose": "Bring the two of them face to face.",
+        "change": "Anna is no longer alone with her memory.",
+        "elements": [
+          {
+            "type": "action",
+            "text": "Rows of empty benches. ANNA (70s), a wool scarf wound twice, holds a paper cup she does not drink."
+          },
+          {
+            "type": "action",
+            "text": "TOMAS (70s), a cane hooked over his arm, stops in the aisle. He sits across from her."
+          },
+          { "type": "dialogue", "character": "Tomas", "text": "Still taking the late boat." },
+          {
+            "type": "dialogue",
+            "character": "Anna",
+            "parenthetical": "not looking up",
+            "text": "Still noticing."
+          },
+          { "type": "action", "text": "The engine shudders. Their knees almost touch." }
+        ],
+        "estimated_seconds": 24
+      },
+      {
+        "scene_number": 2,
+        "heading": { "int_ext": "EXT", "location": "Ferry Deck", "time_of_day": "NIGHT" },
+        "purpose": "Let Anna choose what to give back.",
+        "change": "Anna leaves something of herself with Tomas.",
+        "elements": [
+          {
+            "type": "action",
+            "text": "Cold wind. The pier lights grow closer. Anna and Tomas stand at the rail."
+          },
+          {
+            "type": "dialogue",
+            "character": "Tomas",
+            "text": "I should have come to the station that day."
+          },
+          {
+            "type": "dialogue",
+            "character": "Anna",
+            "text": "I waited until the last train. Then I stopped waiting."
+          },
+          {
+            "type": "action",
+            "text": "The ferry bumps the pier. Anna unwinds her scarf and lays it on the rail beside his hand."
+          },
+          { "type": "action", "text": "She walks down the ramp without looking back." }
+        ],
+        "estimated_seconds": 34
+      }
+    ]
+  },
+  "added_assumptions": [
+    {
+      "text": "The lovers are named Anna and Tomas.",
+      "reason": "The story gives no names.",
+      "scene_number": 1
+    },
+    {
+      "text": "They parted because Tomas did not come to the station.",
+      "reason": "The story does not say why they parted.",
+      "scene_number": 2
+    },
+    {
+      "text": "Anna leaves her scarf behind as the ending.",
+      "reason": "The story states no ending.",
+      "scene_number": 2
+    }
+  ],
+  "validation": {
+    "premise_preserved": true,
+    "every_scene_has_goal_and_change": true,
+    "cause_and_effect_clear": true,
+    "genre_effect_traceable": true,
+    "style_effect_traceable": true,
+    "genre_and_style_kept_separate": true,
+    "all_action_visible_or_audible": true,
+    "names_and_props_consistent": true,
+    "elements_valid": true,
+    "no_production_directives": true,
+    "within_duration_budget": true,
+    "notes": ""
+  },
+  "warnings": []
 }

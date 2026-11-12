@@ -14,6 +14,7 @@ import {
   scriptVersion,
   WIZARD_STAGES,
   type ReviewComment,
+  type ReviewFixRequest,
   type ScriptSource,
   type WizardStage,
 } from "@/server/db/schema";
@@ -21,20 +22,29 @@ import {
   enqueue,
   scriptCheck,
   scriptDetectAssets,
+  scriptEnhance,
   scriptRevise,
   scriptWrite,
   type JobDefinition,
 } from "@/server/jobs";
+import {
+  isWriterReasonCode,
+  SCRIPT_ISSUES,
+  writerReason,
+  type ScriptIssueCode,
+} from "@/server/damis";
 import { advanceStage, canOpenStage } from "@/server/projects";
 import { FILE_PURPOSES, getOwnedFileInfo } from "@/server/storage";
 import { ScriptInputError } from "./errors";
 import { containsQuoteInScript } from "./quotes";
 import {
+  approveOutlineSchema,
   editAcceptedSchema,
   MAX_LISTED_VERSIONS,
   parseInput,
   retrySchema,
   startFromBriefSchema,
+  startFromIdeaSchema,
   startFromUploadSchema,
   submitReviewSchema,
   uuidSchema,
@@ -68,7 +78,20 @@ const JOB_FOR_SOURCE: Record<ScriptSource, JobDefinition<typeof scriptWrite.payl
   uploaded: scriptCheck,
   revised: scriptRevise,
   edited: null,
+  enhanced: scriptEnhance,
 };
+
+/** The fix requests a review stores for its codes (writer reasons or reviser issues). */
+function fixRequestsFor(codes: readonly string[]): ReviewFixRequest[] {
+  return codes.map((code) => {
+    if (isWriterReasonCode(code)) {
+      const reason = writerReason(code);
+      return { type: reason.type, code, instruction: reason.instruction };
+    }
+    const issue = SCRIPT_ISSUES[code as ScriptIssueCode];
+    return { type: "technical", code, instruction: issue?.label ?? code };
+  });
+}
 
 /* ------------------------------------------------------------------------------------------ */
 /* Helpers                                                                                     */
@@ -241,6 +264,117 @@ export async function startFromBrief(input: {
   return loadView(created.id);
 }
 
+/**
+ * New enhanced version (pending) from the user's quick idea; enqueues `script.enhance`. The
+ * Enhancer rewrites the idea as prose (kept as the version's content); review, acceptance,
+ * detection and sectioning then work as for an upload.
+ */
+export async function startFromIdea(input: {
+  projectId: string;
+  userId: string;
+  idea: string;
+}): Promise<ScriptVersionView | null> {
+  const { projectId, userId, idea } = parseInput(startFromIdeaSchema, input);
+  if (!uuidSchema.safeParse(projectId).success) return null;
+  const created = await getDb().transaction(async (tx) => {
+    const owned = await lockOwnedProject(tx, projectId, userId);
+    if (!owned) return null;
+    assertScriptStageOpen(owned);
+    const latest = await latestVersion(tx, projectId);
+    if (latest?.status === "pending") throw new ScriptInputError(BUSY_MESSAGE);
+    const row = await insertVersion(
+      tx,
+      { projectId, source: "enhanced", status: "pending", brief: idea, createdBy: userId },
+      latest,
+    );
+    await logEvent(tx, projectId, userId, "script.started", {
+      versionId: row.id,
+      source: "enhanced",
+    });
+    return row;
+  });
+  if (!created) return null;
+  await enqueueForVersion(created);
+  return loadView(created.id);
+}
+
+/**
+ * Approves the outline of a long piece (a version in review that holds an outline and no text):
+ * the outline version is superseded and the next version (generated, pending) is written
+ * sequence by sequence from it, with the proposed additions the user approved.
+ */
+export async function approveOutline(input: {
+  projectId: string;
+  userId: string;
+  versionId: string;
+  approvedAdditions?: number[];
+}): Promise<ScriptVersionView | null> {
+  const parsed = parseInput(approveOutlineSchema, input);
+  const { projectId, userId, versionId } = parsed;
+  if (!uuidSchema.safeParse(projectId).success || !uuidSchema.safeParse(versionId).success) {
+    return null;
+  }
+  const created = await getDb().transaction(async (tx) => {
+    const owned = await lockOwnedProject(tx, projectId, userId);
+    if (!owned) return null;
+    const latest = await latestVersion(tx, projectId);
+    const [version] = await tx
+      .select()
+      .from(scriptVersion)
+      .where(and(eq(scriptVersion.id, versionId), projectScope(projectId)))
+      .limit(1);
+    if (!version) return null;
+    const notes = readNotes(version.damiNotes);
+    if (version.status !== "in_review" || latest?.id !== version.id || !notes.outline) {
+      throw new ScriptInputError("This outline is no longer waiting for review. Reload the page.");
+    }
+    const additions = [...new Set(parsed.approvedAdditions)].filter(
+      (i) => i < (notes.outline?.proposed_additions.length ?? 0),
+    );
+    const now = new Date();
+    await tx.insert(review).values({
+      projectId,
+      userId,
+      subjectType: "script_version",
+      subjectId: version.id,
+      decision: "accepted",
+      note: additions.length > 0 ? `Approved additions: ${additions.join(", ")}` : null,
+      damiRunId: version.damiRunId,
+    });
+    await tx
+      .update(scriptVersion)
+      .set({ status: "superseded", decidedAt: now })
+      .where(eq(scriptVersion.id, version.id));
+    const next = await insertVersion(
+      tx,
+      {
+        projectId,
+        parentId: version.id,
+        source: "generated",
+        status: "pending",
+        brief: version.brief,
+        damiNotes: {
+          outline: notes.outline,
+          outlineApproved: true,
+          approvedAdditions: additions,
+          logline: notes.outline.logline,
+        } satisfies ScriptDamiNotes,
+        createdBy: userId,
+      },
+      latest,
+    );
+    await logEvent(tx, projectId, userId, "script.outline-approved", {
+      versionId: version.id,
+      nextVersionId: next.id,
+      approvedAdditions: additions,
+    });
+    return next;
+  });
+  if (!created) return null;
+  await enqueueForVersion(created);
+  return loadView(created.id);
+}
+
 /** New uploaded version (pending) from a ready, owned file; enqueues `script.check`. */
 export async function startFromUpload(input: {
   projectId: string;
@@ -389,6 +523,14 @@ export async function submitScriptReview(input: {
       throw new ScriptInputError("This version is no longer waiting for review. Reload the page.");
     }
     const content = version.content ?? "";
+    const versionNotes = readNotes(version.damiNotes);
+    const isOutline = versionNotes.outline !== undefined && version.content === null;
+    if (isOutline && decision === "accepted") {
+      throw new ScriptInputError("Approve the outline first; the script is written from it.");
+    }
+    if (isOutline && comments.length > 0) {
+      throw new ScriptInputError("Comments work on script text. Write a note for the outline.");
+    }
     for (const comment of comments) {
       if (comment.end < comment.start || comment.end > content.length) {
         throw new ScriptInputError("A comment points outside the script. Reload and try again.");
@@ -408,6 +550,7 @@ export async function submitScriptReview(input: {
       subjectId: version.id,
       decision,
       issueCodes: decision === "rejected" ? issueCodes : [],
+      fixRequests: decision === "rejected" ? fixRequestsFor(issueCodes) : [],
       note,
       comments,
       damiRunId: version.damiRunId,
@@ -418,14 +561,24 @@ export async function submitScriptReview(input: {
         .update(scriptVersion)
         .set({ status: "rejected", decidedAt: now })
         .where(eq(scriptVersion.id, version.id));
+      // An outline is re-planned from the note (generated again); a script is revised.
+      const outlineFeedback = isOutline
+        ? [
+            ...issueCodes.map((c) => (isWriterReasonCode(c) ? writerReason(c).instruction : c)),
+            note ?? "",
+          ]
+            .filter(Boolean)
+            .join("\n")
+        : null;
       const next = await insertVersion(
         tx,
         {
           projectId,
           parentId: version.id,
-          source: "revised",
+          source: isOutline ? "generated" : "revised",
           status: "pending",
           brief: version.brief,
+          ...(outlineFeedback ? { damiNotes: { outlineFeedback } satisfies ScriptDamiNotes } : {}),
           createdBy: userId,
         },
         latest,

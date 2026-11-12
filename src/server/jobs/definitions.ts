@@ -24,6 +24,28 @@ export const scriptWrite = defineJob({
   dedupeKey: (p) => p.scriptVersionId,
 });
 
+/**
+ * Long pieces: write one sequence of the approved outline (write_segment), then queue the next;
+ * the last one stitches the script. Sequential, so each continues from the previous one's ledger.
+ */
+export const scriptWriteSegment = defineJob({
+  name: "script.write-segment",
+  payload: z.object({
+    scriptVersionId: z.string().uuid(),
+    segmentIndex: z.number().int().min(0).max(1000),
+  }),
+  options: damiJob,
+  dedupeKey: (p) => `${p.scriptVersionId}:${p.segmentIndex}`,
+});
+
+/** Rewrite the user's quick idea with the Enhancer (their own text is kept if it fails). */
+export const scriptEnhance = defineJob({
+  name: "script.enhance",
+  payload: scriptPayload,
+  options: damiJob,
+  dedupeKey: (p) => p.scriptVersionId,
+});
+
 /** Extract an uploaded script's text and check it. */
 export const scriptCheck = defineJob({
   name: "script.check",

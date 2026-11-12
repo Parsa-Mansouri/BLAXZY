@@ -206,7 +206,9 @@ export function VersionNotes({
       ? "What Changed"
       : version.source === "uploaded"
         ? "Script Check"
-        : "Writer’s Notes";
+        : version.source === "enhanced"
+          ? "Where Your Words Won"
+          : "Writer’s Notes";
   return (
     <section
       aria-labelledby="version-notes"

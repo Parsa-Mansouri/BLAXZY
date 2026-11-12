@@ -16,6 +16,7 @@ const WORKING_DESCRIPTION: Record<Source, string> = {
   uploaded: "Your script is checked for format, length and anything hard to film.",
   revised: "Revised from your comments and the changes you asked for.",
   edited: "Your edits are being saved.",
+  enhanced: "Your idea is expanded into a fuller story in the genre and look you chose.",
 };
 
 const WORKING_HEADING: Record<Source, string> = {
@@ -23,6 +24,7 @@ const WORKING_HEADING: Record<Source, string> = {
   uploaded: "Your script is being read.",
   revised: "Your script is being revised.",
   edited: "Your script is being saved.",
+  enhanced: "Your idea is being expanded.",
 };
 
 const WORKING_STATUS: Record<Source, string> = {
@@ -30,6 +32,7 @@ const WORKING_STATUS: Record<Source, string> = {
   uploaded: "Reading your script",
   revised: "Revising the script",
   edited: "Saving the script",
+  enhanced: "Expanding your idea",
 };
 
 const FAILED_HEADING: Record<Source, string> = {
@@ -37,6 +40,7 @@ const FAILED_HEADING: Record<Source, string> = {
   uploaded: "Your script could not be read.",
   revised: "The script could not be revised.",
   edited: "The script could not be saved.",
+  enhanced: "Your idea could not be expanded.",
 };
 
 /** Polls until the latest version leaves `pending`, then refreshes the page. */
@@ -84,7 +88,9 @@ export function ScriptWorking({
       {/* The heading says what is happening; the bar shows it moving (no status line repeating it). */}
       <section aria-labelledby="working" className="flex in-2 flex-col gap-6">
         <h2 id="working" role="status" className="max-w-[24ch] text-heading text-balance">
-          {WORKING_HEADING[version.source]}
+          {version.writingSegments
+            ? "Your script is being written, one part of the outline at a time."
+            : WORKING_HEADING[version.source]}
         </h2>
         <ProgressBar value={null} aria-label={status} className="max-w-(--measure)" />
         <p className="max-w-(--measure) text-body text-pretty text-label-2">
@@ -92,7 +98,9 @@ export function ScriptWorking({
         </p>
       </section>
 
-      {version.source === "generated" && version.brief ? <AskedFor brief={version.brief} /> : null}
+      {(version.source === "generated" || version.source === "enhanced") && version.brief ? (
+        <AskedFor brief={version.brief} />
+      ) : null}
 
       {previous && previousScenes.length > 0 ? (
         <section aria-labelledby="previous-version" className="mt-16 flex in-3 flex-col gap-6">
@@ -118,7 +126,7 @@ export function ScriptFailed({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const fromBrief = version.source === "generated";
+  const fromBrief = version.source === "generated" || version.source === "enhanced";
 
   function retry() {
     setError(null);

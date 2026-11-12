@@ -17,6 +17,7 @@ import {
   createScriptUploadAction,
   finishScriptUploadAction,
   startFromBriefAction,
+  startFromIdeaAction,
 } from "../actions";
 import { shake } from "../_lib/feedback";
 
@@ -88,10 +89,13 @@ export function ScriptStart({
   projectId,
   maxBriefChars,
   initialBrief,
+  initialIdea = "",
 }: {
   projectId: string;
   maxBriefChars: number;
   initialBrief: string;
+  /** The quick idea of a failed enhanced version, to try again. */
+  initialIdea?: string;
 }) {
   const router = useRouter();
   const id = useId();
@@ -103,12 +107,39 @@ export function ScriptStart({
   const [upload, setUpload] = useState<UploadPhase>({ kind: "idle" });
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const ideaField = useRef<HTMLTextAreaElement>(null);
+  const [idea, setIdea] = useState(initialIdea);
+  const [ideaError, setIdeaError] = useState<string | null>(null);
+  const [expanding, startExpanding] = useTransition();
 
   const length = brief.trim().length;
   const over = brief.length > maxBriefChars;
   // The count only shows once it matters.
   const nearLimit = brief.length > maxBriefChars * 0.8;
-  const busy = writing || upload.kind !== "idle";
+  const busy = writing || expanding || upload.kind !== "idle";
+
+  function expand() {
+    if (idea.trim().length === 0) {
+      setIdeaError("Write your idea first. A line is enough.");
+      ideaField.current?.focus();
+      shake(ideaField.current);
+      return;
+    }
+    if (idea.length > maxBriefChars) {
+      setIdeaError(`Shorten the idea to ${numberFormat.format(maxBriefChars)} characters.`);
+      shake(ideaField.current);
+      return;
+    }
+    setIdeaError(null);
+    startExpanding(async () => {
+      const result = await startFromIdeaAction(projectId, idea);
+      if (!result.ok) {
+        setIdeaError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
 
   function write() {
     if (length === 0) {
@@ -197,7 +228,7 @@ export function ScriptStart({
     <>
       <PageHeader
         title="Script"
-        description="Start from an idea, or bring a script you already have."
+        description="Describe your story, grow a quick idea, or bring a script you already have."
       />
 
       {/* Both roads fill the page: the white block grows, the upload tile beside it. */}
@@ -304,97 +335,159 @@ export function ScriptStart({
           </div>
         </section>
 
-        <section
-          aria-labelledby={`${id}-upload`}
-          // Padding 10 round the drop area so its 10px corners sit concentric in the 20px block;
-          // the heading keeps the block's 24px inset.
-          className="flex min-h-105 min-w-0 flex-[1_1_280px] in-3 flex-col gap-5 rounded-block bg-elevated p-2.5"
-        >
-          <div className="flex flex-col gap-1.5 px-3.5 pt-3.5">
-            <h2 id={`${id}-upload`} className="text-section text-balance">
-              Upload a Script
-            </h2>
-            <p className="text-secondary text-pretty text-label-2">
-              We check it and get it ready for review.
-            </p>
-          </div>
-
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              if (!busy) setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            className={cn(
-              "flex min-h-40 flex-1 flex-col items-center justify-center gap-3 rounded-row border border-dashed p-4 text-center",
-              "transition-colors duration-(--dur-press)",
-              dragging ? "border-label bg-fill-4" : "border-outline",
-            )}
+        <div className="flex min-h-105 min-w-0 flex-[1_1_280px] flex-col gap-3">
+          <section
+            aria-labelledby={`${id}-idea`}
+            className="flex in-3 flex-col gap-4 rounded-block bg-elevated p-6"
           >
-            {upload.kind === "idle" ? (
-              <>
-                <p className="text-secondary text-label-3">
-                  Drop a file here
-                  <span className="block">Text, Markdown, Word or PDF, up to 10 MB</span>
-                </p>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => fileInput.current?.click()}
-                  disabled={busy}
-                >
-                  Choose a File
-                </Button>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  accept=".txt,.md,.docx,.pdf"
-                  className="sr-only"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = "";
-                    if (file) void uploadFile(file);
-                  }}
-                />
-              </>
-            ) : (
-              <div
-                className="flex w-full swap-in flex-col items-stretch gap-3 text-left"
-                aria-live="polite"
+            <div className="flex flex-col gap-1.5">
+              <h2 id={`${id}-idea`} className="text-section text-balance">
+                Quick Idea
+              </h2>
+              <p className="text-secondary text-pretty text-label-2">
+                One line is enough. We grow it into a fuller story in your genre and look, then you
+                review it like any script.
+              </p>
+            </div>
+            <label htmlFor={`${id}-idea-field`} className="sr-only">
+              Your idea
+            </label>
+            <textarea
+              ref={ideaField}
+              id={`${id}-idea-field`}
+              value={idea}
+              onChange={(e) => {
+                setIdea(e.target.value);
+                if (ideaError) setIdeaError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  expand();
+                }
+              }}
+              placeholder="A night porter finds a guest who checked in fifty years ago."
+              aria-invalid={ideaError ? true : undefined}
+              aria-describedby={ideaError ? `${id}-idea-error` : undefined}
+              disabled={busy}
+              className={cn(
+                "field-sizing-content max-h-48 min-h-16 w-full resize-none border-b border-outline bg-transparent pb-2 text-body text-label caret-label outline-none",
+                "transition-colors duration-(--dur-press) placeholder:text-label-3 focus:border-label disabled:opacity-60",
+              )}
+            />
+            {ideaError ? (
+              <p
+                id={`${id}-idea-error`}
+                role="alert"
+                className="swap-in text-secondary text-pretty text-red"
               >
-                <p className="flex items-center gap-2 text-body text-label">
-                  <FileText
+                {ideaError}
+              </p>
+            ) : null}
+            <div>
+              <Button
+                variant="outlined"
+                onClick={expand}
+                loading={expanding}
+                disabled={busy && !expanding}
+              >
+                Expand My Idea
+              </Button>
+            </div>
+          </section>
+          <section
+            aria-labelledby={`${id}-upload`}
+            // Padding 10 round the drop area so its 10px corners sit concentric in the 20px block;
+            // the heading keeps the block's 24px inset.
+            className="flex min-w-0 flex-1 in-3 flex-col gap-5 rounded-block bg-elevated p-2.5"
+          >
+            <div className="flex flex-col gap-1.5 px-3.5 pt-3.5">
+              <h2 id={`${id}-upload`} className="text-section text-balance">
+                Upload a Script
+              </h2>
+              <p className="text-secondary text-pretty text-label-2">
+                We check it and get it ready for review.
+              </p>
+            </div>
+
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!busy) setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              className={cn(
+                "flex min-h-40 flex-1 flex-col items-center justify-center gap-3 rounded-row border border-dashed p-4 text-center",
+                "transition-colors duration-(--dur-press)",
+                dragging ? "border-label bg-fill-4" : "border-outline",
+              )}
+            >
+              {upload.kind === "idle" ? (
+                <>
+                  <p className="text-secondary text-label-3">
+                    Drop a file here
+                    <span className="block">Text, Markdown, Word or PDF, up to 10 MB</span>
+                  </p>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => fileInput.current?.click()}
+                    disabled={busy}
+                  >
+                    Choose a File
+                  </Button>
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept=".txt,.md,.docx,.pdf"
+                    className="sr-only"
+                    tabIndex={-1}
                     aria-hidden="true"
-                    className="size-(--icon) shrink-0 text-label-2"
-                    strokeWidth={1.5}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void uploadFile(file);
+                    }}
                   />
-                  <span className="min-w-0 truncate font-mono text-secondary">{upload.name}</span>
-                </p>
-                <ProgressBar
-                  value={upload.kind === "uploading" ? upload.progress : null}
-                  aria-label="Upload progress"
-                />
-                <StatusLine tone="working">
-                  {upload.kind === "uploading" ? (
-                    <>
-                      Uploading <span className="tabular-nums">{Math.round(upload.progress)}%</span>
-                    </>
-                  ) : (
-                    "Opening the script"
-                  )}
-                </StatusLine>
-              </div>
-            )}
-          </div>
-          {uploadError ? (
-            <p role="alert" className="swap-in px-3.5 pb-3.5 text-secondary text-pretty text-red">
-              {uploadError}
-            </p>
-          ) : null}
-        </section>
+                </>
+              ) : (
+                <div
+                  className="flex w-full swap-in flex-col items-stretch gap-3 text-left"
+                  aria-live="polite"
+                >
+                  <p className="flex items-center gap-2 text-body text-label">
+                    <FileText
+                      aria-hidden="true"
+                      className="size-(--icon) shrink-0 text-label-2"
+                      strokeWidth={1.5}
+                    />
+                    <span className="min-w-0 truncate font-mono text-secondary">{upload.name}</span>
+                  </p>
+                  <ProgressBar
+                    value={upload.kind === "uploading" ? upload.progress : null}
+                    aria-label="Upload progress"
+                  />
+                  <StatusLine tone="working">
+                    {upload.kind === "uploading" ? (
+                      <>
+                        Uploading{" "}
+                        <span className="tabular-nums">{Math.round(upload.progress)}%</span>
+                      </>
+                    ) : (
+                      "Opening the script"
+                    )}
+                  </StatusLine>
+                </div>
+              )}
+            </div>
+            {uploadError ? (
+              <p role="alert" className="swap-in px-3.5 pb-3.5 text-secondary text-pretty text-red">
+                {uploadError}
+              </p>
+            ) : null}
+          </section>
+        </div>
       </div>
     </>
   );

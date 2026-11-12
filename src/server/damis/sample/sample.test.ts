@@ -9,7 +9,9 @@ import { scriptCheckerOutputSchema } from "../script-checker/schema";
 import { scriptReviser } from "../script-reviser/dami";
 import { scriptReviserModelOutputSchema } from "../script-reviser/schema";
 import { scriptWriter } from "../script-writer/dami";
-import { scriptWriterOutputSchema } from "../script-writer/schema";
+import { writerProject, singleCallTarget } from "../script-writer/project";
+import { submitScreenplaySchema } from "../script-writer/schema";
+import { renderScreenplay } from "../shared/screenplay";
 import { isEpisodeHeading, isSceneHeading, splitLines } from "../shared/script-lines";
 import { testDeps } from "../test-utils";
 import { createSampleClaudeClient } from "./client";
@@ -72,6 +74,14 @@ const PERSIAN_SCRIPT = [
   "رضا چمدانی را به سمت در می‌برد.",
 ].join("\n");
 
+function writerInput(style: ProjectStyle, brief: string) {
+  return {
+    mode: "generate" as const,
+    project: writerProject(style, singleCallTarget(style)),
+    story: brief,
+  };
+}
+
 function sampleDeps() {
   return testDeps(createSampleClaudeClient({ delayMs: 0 })).deps;
 }
@@ -80,22 +90,18 @@ describe("sample generators", () => {
   for (const { name, style, brief } of briefs) {
     it(`runs the whole chain through the runner: ${name}`, async () => {
       const deps = sampleDeps();
-      const raw = sampleScriptWriter({ style, brief });
-      expect(scriptWriterOutputSchema.safeParse(raw).success).toBe(true);
-      // The runner applies the dami's own checks (word count, episode headings).
-      const written = await runDami(scriptWriter, { style, brief }, {}, deps);
+      const raw = sampleScriptWriter(writerInput(style, brief));
+      expect(submitScreenplaySchema.safeParse(raw).success).toBe(true);
+      // The runner applies the dami's own checks (numbering, per-scene sums).
+      const written = await runDami(scriptWriter, writerInput(style, brief), {}, deps);
       expect(written.output).toEqual(raw);
-      const lines = splitLines(written.output.content);
+      const content = renderScreenplay({ screenplay: written.output.screenplay }).text;
+      const lines = splitLines(content);
       const scenes = lines.filter(isSceneHeading).length;
-      if (style.format === "movie") {
-        expect(scenes).toBeGreaterThanOrEqual(3);
-        expect(scenes).toBeLessThanOrEqual(5);
-      } else {
-        expect(lines.filter(isEpisodeHeading)).toHaveLength(5);
-      }
-      expect(written.output.title.length).toBeGreaterThan(0);
+      expect(scenes).toBe(written.output.screenplay.scenes.length);
+      expect(lines.some(isEpisodeHeading)).toBe(false);
+      expect(written.output.screenplay.title.length).toBeGreaterThan(0);
 
-      const content = written.output.content;
       const checked = await runDami(scriptChecker, { style, content }, {}, deps);
       expect(checked.output.issues.length).toBeGreaterThanOrEqual(2);
       expect(checked.output.issues.length).toBeLessThanOrEqual(3);
@@ -128,7 +134,7 @@ describe("sample generators", () => {
       expect(kinds).toContain("location");
       expect(kinds).toContain("prop");
       const characters = detected.output.assets.filter((a) => a.kind === "character");
-      expect(characters.length).toBeGreaterThanOrEqual(2);
+      expect(characters.length).toBeGreaterThanOrEqual(style.totalDurationSeconds < 30 ? 1 : 2);
       expect(characters.length).toBeLessThanOrEqual(3);
 
       const sectioned = await sectionScript(
@@ -142,7 +148,7 @@ describe("sample generators", () => {
   }
 
   it("is deterministic for a given input", () => {
-    const input = { style: movie(120), brief: "A night train and a stolen photograph." };
+    const input = writerInput(movie(120), "A night train and a stolen photograph.");
     expect(sampleScriptWriter(input)).toEqual(sampleScriptWriter(input));
   });
 
@@ -175,7 +181,9 @@ describe("sample generators", () => {
 
   it("keeps the names of known assets (ignoring case)", () => {
     const style = movie(60);
-    const content = sampleScriptWriter({ style, brief: "Lighthouse" }).content;
+    const content = renderScreenplay({
+      screenplay: sampleScriptWriter(writerInput(style, "Lighthouse")).screenplay,
+    }).text;
     const first = sampleAssetDetector({ style, content });
     const character = first.assets.find((a) => a.kind === "character");
     if (!character) throw new Error("no character detected");
@@ -201,7 +209,7 @@ describe("sample generators", () => {
         sampleDelayMs: 0,
       },
     });
-    const result = await runDami(scriptWriter, { style: movie(60), brief: "Lighthouse" }, {}, deps);
+    const result = await runDami(scriptWriter, writerInput(movie(60), "Lighthouse"), {}, deps);
     expect(result.model).toBe("sample");
     expect(result.costUsd).toBeNull();
     expect(store.runs[0]?.model).toBe("sample");

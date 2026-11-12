@@ -1,13 +1,19 @@
 {
-  "style": {
-    "visualStyle": "Cinematic live-action",
+  "mode": "generate",
+  "project": {
     "genre": "Drama",
-    "format": "movie",
-    "orientation": "portrait",
-    "totalDurationSeconds": 60,
-    "extras": {
-      "tone": "bittersweet, restrained"
-    }
+    "visualStyle": "Realistic",
+    "format": "film",
+    "targetDurationSeconds": 60,
+    "budget": {
+      "sceneCountRange": { "min": 1, "max": 3 },
+      "dialogueWordBudget": 68,
+      "actionBeatBudget": 11,
+      "toleranceSeconds": 6
+    },
+    "outputLanguage": "en",
+    "creativeExpansion": false,
+    "projectNotes": "tone: bittersweet, restrained"
   },
-  "brief": "Two old lovers meet again on the last ferry of the night."
+  "story": "Two old lovers meet again on the last ferry of the night."
 }

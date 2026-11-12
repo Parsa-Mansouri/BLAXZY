@@ -11,9 +11,11 @@ import { blockReviseHandler, productionPrepareHandler } from "./production-prepa
 import { takeFixHandler, takeGenerateHandler } from "./production-take";
 import { scriptCheckHandler } from "./script-check";
 import { scriptDetectAssetsHandler } from "./script-detect-assets";
+import { scriptEnhanceHandler } from "./script-enhance";
 import { scriptReviseHandler } from "./script-revise";
 import { scriptSectionHandler } from "./script-section";
 import { scriptWriteHandler } from "./script-write";
+import { scriptWriteSegmentHandler } from "./script-write-segment";
 import { systemPingHandler } from "./system-ping";
 
 export { assetGenerationHook, productionGenerationHook };
@@ -31,6 +33,8 @@ export const schedules: JobSchedule[] = [generationSweepSchedule];
 export const handlers: JobHandler[] = [
   systemPingHandler,
   scriptWriteHandler,
+  scriptWriteSegmentHandler,
+  scriptEnhanceHandler,
   scriptCheckHandler,
   scriptReviseHandler,
   scriptDetectAssetsHandler,

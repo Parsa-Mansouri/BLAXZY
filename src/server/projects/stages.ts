@@ -5,6 +5,7 @@ import {
   project,
   projectEvent,
   WIZARD_STAGES,
+  type ProjectStyle,
   type WizardStage,
 } from "@/server/db/schema";
 import { projectStyleSchema } from "@/server/damis";
@@ -216,4 +217,33 @@ export async function listEpisodes(projectId: string, userId: string): Promise<E
     .where(eq(episode.projectId, projectId))
     .orderBy(asc(episode.number))
     .limit(500);
+}
+
+/** Style fields a dami fills in on the user's behalf (never the user's own answers). */
+export type DamiStylePatch = Partial<Pick<ProjectStyle, "lookLine" | "styleDescriptor">>;
+
+/**
+ * Worker only: merges dami-written fields into the project's style and logs `style.enriched`
+ * with the whole style (the event log keeps every version). Returns false when the project has no
+ * style or is gone.
+ */
+export async function mergeDamiStyle(projectId: string, patch: DamiStylePatch): Promise<boolean> {
+  if (!uuidSchema.safeParse(projectId).success) return false;
+  return getDb().transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(project)
+      .where(and(eq(project.id, projectId), notArchived))
+      .for("update");
+    if (!existing?.style) return false;
+    const style = validateStyle({ ...existing.style, ...patch });
+    await tx.update(project).set({ style }).where(eq(project.id, existing.id));
+    await tx.insert(projectEvent).values({
+      projectId: existing.id,
+      userId: null,
+      type: "style.enriched",
+      payload: { fields: Object.keys(patch), style },
+    });
+    return true;
+  });
 }

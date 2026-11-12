@@ -34,6 +34,17 @@ const PARENTHETICAL = /^\(.*\)$/;
 /** All capitals, at least one letter, no lower-case letters outside a trailing extension. */
 function isCue(text: string): boolean {
   const name = text.replace(/\s*\((?:V\.O\.|O\.S\.|O\.C\.|CONT'D|CONT’D|[A-Z.' ’]+)\)\s*$/i, "");
+  // Scripts without letter case (Persian, Arabic ...): a short name of at most three words
+  // without sentence punctuation.
+  if (name.toUpperCase() === name.toLowerCase() || !/[A-Za-z]/.test(name)) {
+    return (
+      /\p{L}/u.test(name) &&
+      !/[A-Za-z]/.test(name) &&
+      name.length <= 40 &&
+      name.trim().split(/\s+/).length <= 3 &&
+      !/[.!?:;,؟،۔。！？]$/.test(name)
+    );
+  }
   if (!/[A-Z]/.test(name)) return false;
   if (/[a-z]/.test(name)) return false;
   if (name.length > 40) return false;

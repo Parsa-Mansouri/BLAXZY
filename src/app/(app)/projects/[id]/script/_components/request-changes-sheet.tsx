@@ -2,26 +2,27 @@
 
 import { useState } from "react";
 import { Button, Field, Sheet, Textarea, cn } from "@/ui";
-import type { ScriptIssueCode } from "@/server/damis/script-reviser/issues";
+import {
+  WRITER_REASONS,
+  type WriterReason,
+  type WriterReasonCode,
+} from "@/server/damis/script-writer/reasons";
 import { Fader, type FaderStop } from "./fader";
 
 const MAX_NOTE_CHARS = 8000;
 
-type FaderKey = "pace" | "length" | "talk";
+type FaderKey = "length" | "genre" | "style" | "depth";
 
-/** The three nudges: stop labels (-1, 0, +1) and the issue code each non-zero stop sends. */
+/**
+ * The four nudges, each a pair of the writer's reason codes: stop labels (-1, 0, +1) and the
+ * code each non-zero stop sends.
+ */
 const FADERS: readonly {
   key: FaderKey;
   name: string;
   labels: readonly [string, string, string];
-  codes: { [-1]: ScriptIssueCode; 1: ScriptIssueCode };
+  codes: { [-1]: WriterReasonCode; 1: WriterReasonCode };
 }[] = [
-  {
-    key: "pace",
-    name: "Pace",
-    labels: ["Let it breathe", "As is", "Speed it up"],
-    codes: { [-1]: "pacing_rushed", 1: "pacing_slow" },
-  },
   {
     key: "length",
     name: "Length",
@@ -29,20 +30,82 @@ const FADERS: readonly {
     codes: { [-1]: "too_long", 1: "too_short" },
   },
   {
-    key: "talk",
-    name: "Talk",
-    labels: ["Less talk", "As is", "More talk"],
-    codes: { [-1]: "too_much_dialogue", 1: "too_little_dialogue" },
+    key: "genre",
+    name: "Genre",
+    labels: ["Lighter", "As is", "Stronger"],
+    codes: { [-1]: "less_genre_feeling", 1: "more_genre_feeling" },
+  },
+  {
+    key: "style",
+    name: "Look",
+    labels: ["Plainer", "As is", "Bolder"],
+    codes: { [-1]: "less_visual_style", 1: "more_visual_style" },
+  },
+  {
+    key: "depth",
+    name: "Depth",
+    labels: ["Simpler", "As is", "Deeper"],
+    codes: { [-1]: "simplify", 1: "add_depth" },
   },
 ];
 
-/** The four things to fix, as tiles. */
-const TILES: readonly { label: string; code: ScriptIssueCode }[] = [
-  { label: "Opening", code: "opening_weak" },
-  { label: "Ending", code: "ending_weak" },
-  { label: "Tone", code: "tone_off" },
-  { label: "Story logic", code: "plot_hole" },
+const ON_FADERS = new Set<string>(FADERS.flatMap((f) => [f.codes[-1], f.codes[1]]));
+
+/** The remaining reasons, as square tiles: things that are wrong, and things to make different. */
+const TILE_GROUPS: readonly { title: string; reasons: WriterReason[] }[] = [
+  {
+    title: "Something’s Wrong",
+    reasons: WRITER_REASONS.filter((r) => r.type === "technical" && !ON_FADERS.has(r.code)),
+  },
+  {
+    title: "Make It Different",
+    reasons: WRITER_REASONS.filter((r) => r.type === "preference" && !ON_FADERS.has(r.code)),
+  },
 ];
+
+function ReasonTile({
+  reason,
+  on,
+  disabled,
+  onToggle,
+}: {
+  reason: WriterReason;
+  on: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={onToggle}
+      title={reason.instruction}
+      className={cn(
+        "relative flex aspect-square flex-col items-start justify-end rounded-item border p-3 text-left text-body transition-colors motion-reduce:transition-none",
+        on
+          ? "border-brand bg-brand/10 text-label"
+          : "border-outline-quiet bg-elevated text-label-2 hover:border-outline",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "absolute top-2.5 left-2.5 flex size-4 items-center justify-center rounded-[3px] border transition-colors motion-reduce:transition-none",
+          on ? "border-brand bg-brand" : "border-outline",
+        )}
+      >
+        {on ? (
+          <svg viewBox="0 0 10 10" className="size-2.5 text-ground" fill="none">
+            <path d="M2 5.2 4.2 7.4 8 2.8" stroke="currentColor" strokeWidth="1.6" />
+          </svg>
+        ) : null}
+      </span>
+      {reason.label}
+    </button>
+  );
+}
 
 export function RequestChangesSheet({
   open,
@@ -51,6 +114,7 @@ export function RequestChangesSheet({
   sending,
   serverError,
   onSubmit,
+  initialNote = "",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,14 +122,17 @@ export function RequestChangesSheet({
   sending: boolean;
   serverError: string | null;
   onSubmit: (input: { issueCodes: string[]; note: string }) => void;
+  /** Prefilled note (rejecting one of the writer's assumptions). */
+  initialNote?: string;
 }) {
   const [stops, setStops] = useState<Record<FaderKey, FaderStop>>({
-    pace: 0,
     length: 0,
-    talk: 0,
+    genre: 0,
+    style: 0,
+    depth: 0,
   });
-  const [picked, setPicked] = useState<ScriptIssueCode[]>([]);
-  const [note, setNote] = useState("");
+  const [picked, setPicked] = useState<WriterReasonCode[]>([]);
+  const [note, setNote] = useState(initialNote);
   const [error, setError] = useState<string | null>(null);
 
   function setStop(key: FaderKey, value: FaderStop) {
@@ -73,19 +140,19 @@ export function RequestChangesSheet({
     setStops((s) => ({ ...s, [key]: value }));
   }
 
-  function toggle(code: ScriptIssueCode) {
+  function toggle(code: WriterReasonCode) {
     setError(null);
     setPicked((list) => (list.includes(code) ? list.filter((c) => c !== code) : [...list, code]));
   }
 
   function submit() {
     const trimmed = note.trim();
-    const codes: ScriptIssueCode[] = [];
+    const codes: WriterReasonCode[] = [];
     for (const fader of FADERS) {
       const stop = stops[fader.key];
       if (stop !== 0) codes.push(fader.codes[stop]);
     }
-    codes.push(...TILES.map((t) => t.code).filter((c) => picked.includes(c)));
+    codes.push(...picked);
     if (codes.length === 0 && !trimmed && commentCount === 0) {
       setError(
         "Move a fader, pick something to fix, write a note, or comment on the script first.",
@@ -157,42 +224,24 @@ export function RequestChangesSheet({
           </div>
         </section>
 
-        <div role="group" aria-label="Fix" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {TILES.map((tile) => {
-            const on = picked.includes(tile.code);
-            return (
-              <button
-                key={tile.code}
-                type="button"
-                role="checkbox"
-                aria-checked={on}
-                disabled={sending}
-                onClick={() => toggle(tile.code)}
-                className={cn(
-                  "relative flex aspect-square flex-col items-start justify-end rounded-item border p-3 text-left text-body transition-colors motion-reduce:transition-none",
-                  on
-                    ? "border-brand bg-brand/10 text-label"
-                    : "border-outline-quiet bg-elevated text-label-2 hover:border-outline",
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "absolute top-2.5 left-2.5 flex size-4 items-center justify-center rounded-[3px] border transition-colors motion-reduce:transition-none",
-                    on ? "border-brand bg-brand" : "border-outline",
-                  )}
-                >
-                  {on ? (
-                    <svg viewBox="0 0 10 10" className="size-2.5 text-ground" fill="none">
-                      <path d="M2 5.2 4.2 7.4 8 2.8" stroke="currentColor" strokeWidth="1.6" />
-                    </svg>
-                  ) : null}
-                </span>
-                {tile.label}
-              </button>
-            );
-          })}
-        </div>
+        {TILE_GROUPS.map((group) => (
+          <section key={group.title} aria-label={group.title} className="flex flex-col gap-2">
+            <h3 className="font-mono text-meta tracking-caps text-label-2 uppercase">
+              {group.title}
+            </h3>
+            <div role="group" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {group.reasons.map((reason) => (
+                <ReasonTile
+                  key={reason.code}
+                  reason={reason}
+                  on={picked.includes(reason.code)}
+                  disabled={sending}
+                  onToggle={() => toggle(reason.code)}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
 
         {shownError ? (
           <p role="alert" className="swap-in text-secondary text-red">

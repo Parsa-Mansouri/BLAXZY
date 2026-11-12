@@ -20,9 +20,11 @@ export {
   generationSweep,
   scriptCheck,
   scriptDetectAssets,
+  scriptEnhance,
   scriptRevise,
   scriptSection,
   scriptWrite,
+  scriptWriteSegment,
   systemPing,
 } from "./definitions";
 export { closeJobQueue, enqueue, InvalidJobPayloadError, type EnqueueOptions } from "./enqueue";

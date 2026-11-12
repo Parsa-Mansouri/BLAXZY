@@ -21,11 +21,14 @@ import { sampleBlockReviser, sampleTakeFixer, sampleTextBlocks } from "./product
 import { samplePromptSectioner } from "./prompt-sectioner";
 import { sampleScriptChecker } from "./script-checker";
 import { sampleScriptReviser } from "./script-reviser";
-import { sampleScriptWriter } from "./script-writer";
+import { sampleEnhancer } from "./enhancer";
+import { sampleScriptOutline, sampleScriptWriter } from "./script-writer";
 
 /** Sample output by dami key. Each generator validates the input with the dami's schema. */
 export const SAMPLE_GENERATORS: Readonly<Record<string, (input: unknown) => unknown>> = {
   "script-writer": sampleScriptWriter,
+  "script-writer-outline": sampleScriptOutline,
+  enhancer: sampleEnhancer,
   "script-checker": sampleScriptChecker,
   "script-reviser": sampleScriptReviser,
   "asset-detector": sampleAssetDetector,

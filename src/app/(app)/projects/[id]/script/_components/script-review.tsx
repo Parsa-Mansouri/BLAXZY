@@ -35,6 +35,7 @@ import { findQuote, type ScreenplayLine } from "../_lib/screenplay";
 import { submitReviewAction } from "../actions";
 import { ApplyCommentsDock } from "./apply-comments-dock";
 import { RequestChangesSheet } from "./request-changes-sheet";
+import { WriterNotes } from "./writer-notes";
 import {
   LineComment,
   MAX_COMMENT_CHARS,
@@ -691,10 +692,12 @@ function ReviewBody({
   version,
   fallbackTitle,
   comments,
+  onRejectAssumption,
 }: {
   version: VersionView;
   fallbackTitle: string;
   comments: CommentApi | null;
+  onRejectAssumption: ((assumption: VersionView["assumptions"][number]) => void) | null;
 }) {
   const content = version.content ?? "";
   const scenes = useMemo(() => splitScenes(content), [content]);
@@ -763,6 +766,7 @@ function ReviewBody({
         ) : (
           <p className="text-body text-label-2">This version has no text.</p>
         )}
+        <WriterNotes version={version} onRejectAssumption={onRejectAssumption} />
         <VersionNotes version={version} looseFindings={loose} />
       </div>
     </div>
@@ -794,6 +798,14 @@ export function ScriptReview({
   const [error, setError] = useState<string | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [sheetError, setSheetError] = useState<string | null>(null);
+  // A prefilled note (turning down one of the writer's assumptions) remounts the sheet.
+  const [prefill, setPrefill] = useState<{ key: number; note: string }>({ key: 0, note: "" });
+
+  function openSheet(note = "") {
+    setSheetError(null);
+    setPrefill((p) => ({ key: p.key + 1, note }));
+    setSheetOpen(true);
+  }
 
   const shown = viewer.viewing ?? version;
   const readOnly = viewer.viewing !== null;
@@ -874,10 +886,7 @@ export function ScriptReview({
             <Button
               variant="outlined"
               size="large"
-              onClick={() => {
-                setSheetError(null);
-                setSheetOpen(true);
-              }}
+              onClick={() => openSheet()}
               disabled={readOnly || accepting || applying}
             >
               Request Changes
@@ -911,6 +920,14 @@ export function ScriptReview({
           version={shown}
           fallbackTitle={fallbackTitle}
           comments={readOnly ? null : drafts}
+          onRejectAssumption={
+            readOnly
+              ? null
+              : (a) =>
+                  openSheet(
+                    `Leave this out and keep the story working without it (scene ${a.sceneNumber}): ${a.text}`,
+                  )
+          }
         />
       </div>
 
@@ -925,6 +942,8 @@ export function ScriptReview({
       ) : null}
 
       <RequestChangesSheet
+        key={prefill.key}
+        initialNote={prefill.note}
         open={sheetOpen}
         onOpenChange={(open) => {
           if (!sending) setSheetOpen(open);

@@ -53,13 +53,15 @@ export type ProjectFormat = (typeof PROJECT_FORMATS)[number];
 export const ORIENTATIONS = ["landscape", "portrait"] as const;
 export type Orientation = (typeof ORIENTATIONS)[number];
 
-export const SCRIPT_SOURCES = ["uploaded", "generated", "revised", "edited"] as const;
+/** enhanced: the user's quick idea, rewritten by the Enhancer dami (prose, not a screenplay). */
+export const SCRIPT_SOURCES = ["uploaded", "generated", "revised", "edited", "enhanced"] as const;
 export type ScriptSource = (typeof SCRIPT_SOURCES)[number];
 
 /**
  * pending: a dami is still producing/checking it · in_review: waiting for the user ·
  * accepted / rejected: the user's decision · superseded: an older accepted version replaced
- * by a newer accepted one · failed: the dami run failed.
+ * by a newer accepted one, or an approved outline replaced by the script written from it ·
+ * failed: the dami run failed.
  */
 export const SCRIPT_STATUSES = [
   "pending",
@@ -414,6 +416,11 @@ export const scriptVersion = pgTable(
     status: text("status").$type<ScriptStatus>().notNull().default("pending"),
     /** The script text. Null while a dami is still writing it. */
     content: text("content"),
+    /**
+     * The Script Writer's structured screenplay (`StoredScreenplay`), when a dami wrote one;
+     * `content` is then its rendered text. Null for uploaded, edited and enhanced versions.
+     */
+    screenplay: jsonb("screenplay").$type<unknown>(),
     /** The user's short description, when the script was generated from one. */
     brief: text("brief"),
     /** Notes from the script-checker or writer dami, shown to the user in review. */

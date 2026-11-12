@@ -36,6 +36,13 @@
       "when": 1794487116377,
       "tag": "0004_named_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794489351072,
+      "tag": "0005_script_screenplay",
+      "breakpoints": true
     }
   ]
 }

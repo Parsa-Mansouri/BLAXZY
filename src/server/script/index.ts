@@ -5,24 +5,31 @@
 export { ScriptInputError } from "./errors";
 export { extractScriptText, MAX_SCRIPT_CHARS } from "./extract";
 export {
+  approveOutline,
   editAcceptedScript,
   getScriptState,
   getScriptVersion,
   retryScriptVersion,
   startFromBrief,
+  startFromIdea,
   startFromUpload,
   submitScriptReview,
   type ScriptState,
 } from "./service";
 export {
+  completeOutline,
   completeScriptVersion,
   failScriptVersion,
   loadScriptJob,
+  storeSegmentProgress,
   type ScriptJobContext,
 } from "./jobs";
 export { MAX_BRIEF_CHARS, MAX_LISTED_VERSIONS, MAX_REVIEW_COMMENTS } from "./schemas";
 export { readNotes as readScriptNotes } from "./views";
 export type {
+  AddedAssumption,
+  OutlineView,
+  SegmentProgress,
   ScriptDamiNotes,
   ScriptVersionRow,
   ScriptVersionSummary,

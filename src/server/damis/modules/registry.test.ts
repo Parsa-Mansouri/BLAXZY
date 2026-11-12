@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { partText } from "../framework/define";
 import type { ProjectStyle } from "@/server/db/schema";
-import { buildScriptWriterPrompt } from "../script-writer/prompt";
+import { buildScriptCheckerPrompt } from "../script-checker/prompt";
 import {
   composeModules,
   GENERIC_GENRE_MODULE,
@@ -102,9 +102,9 @@ describe("module registry", () => {
   });
 
   it("keeps stable text first and per-project text in the user message", () => {
-    const prompt = buildScriptWriterPrompt({
+    const prompt = buildScriptCheckerPrompt({
       style: { ...style, extras: { tone: "dry" } },
-      brief: "x",
+      content: "x",
     });
     expect(prompt.system.map((p) => p.cache)).toEqual([true, true]);
     const system = prompt.system.map((p) => p.text).join("\n");

@@ -8,9 +8,11 @@ import {
   editAcceptedScript,
   getScriptState,
   getScriptVersion,
+  approveOutline,
   retryScriptVersion,
   ScriptInputError,
   startFromBrief,
+  startFromIdea,
   startFromUpload,
   submitScriptReview,
   type ScriptVersionView,
@@ -43,6 +45,41 @@ export async function startFromBriefAction(
   const user = await requireUser();
   try {
     const version = await startFromBrief({ projectId, userId: user.id, brief });
+    if (!version) return { ok: false, error: MISSING };
+    refreshProject(projectId);
+    return { ok: true, data: null };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Starts the Enhancer on the user's quick idea. */
+export async function startFromIdeaAction(projectId: string, idea: string): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    const version = await startFromIdea({ projectId, userId: user.id, idea });
+    if (!version) return { ok: false, error: MISSING };
+    refreshProject(projectId);
+    return { ok: true, data: null };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Approves a long piece's outline (with the proposed additions the user ticked). */
+export async function approveOutlineAction(
+  projectId: string,
+  versionId: string,
+  approvedAdditions: number[],
+): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    const version = await approveOutline({
+      projectId,
+      userId: user.id,
+      versionId,
+      approvedAdditions,
+    });
     if (!version) return { ok: false, error: MISSING };
     refreshProject(projectId);
     return { ok: true, data: null };

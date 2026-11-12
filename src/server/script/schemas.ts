@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SCRIPT_ISSUE_CODES } from "@/server/damis";
+import { SCRIPT_ISSUE_CODES, WRITER_REASON_CODES } from "@/server/damis";
 import { ScriptInputError } from "./errors";
 import { MAX_SCRIPT_CHARS } from "./extract";
 
@@ -22,6 +22,27 @@ export const startFromBriefSchema = z.object({
     .max(MAX_BRIEF_CHARS, "Keep the description under 20,000 characters."),
 });
 
+export const startFromIdeaSchema = z.object({
+  ...ids,
+  idea: z
+    .string({ error: "Write your idea in a few words." })
+    .trim()
+    .min(1, "Write your idea in a few words.")
+    .max(MAX_BRIEF_CHARS, "Keep the idea under 20,000 characters."),
+});
+
+export const approveOutlineSchema = z.object({
+  ...ids,
+  versionId: z.string(),
+  approvedAdditions: z.array(z.number().int().min(0).max(200)).max(200).default([]),
+});
+
+/** Review codes: the Script Writer reason codes (generated scripts) and the reviser issue codes. */
+export const REVIEW_CODES = [...new Set([...WRITER_REASON_CODES, ...SCRIPT_ISSUE_CODES])] as [
+  string,
+  ...string[],
+];
+
 export const startFromUploadSchema = z.object({ ...ids, fileId: z.string() });
 
 const commentSchema = z.object({
@@ -40,8 +61,8 @@ export const submitReviewSchema = z.object({
   versionId: z.string(),
   decision: z.enum(["accepted", "rejected"], { error: "Choose accept or reject." }),
   issueCodes: z
-    .array(z.enum(SCRIPT_ISSUE_CODES, { error: "One of the chosen issues is not known." }))
-    .max(SCRIPT_ISSUE_CODES.length)
+    .array(z.enum(REVIEW_CODES, { error: "One of the chosen issues is not known." }))
+    .max(REVIEW_CODES.length)
     .optional(),
   note: z
     .string()

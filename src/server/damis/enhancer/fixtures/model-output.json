@@ -1,0 +1,11 @@
+{
+  "status": "ok",
+  "enhanced_prompt": "In a restaurant kitchen, a chef drops a tray of eggs. The tray hits the floor and the eggs splatter; he freezes mid-motion, taking in the mess with complete seriousness, and holds the stillness a beat before he reacts. Rounded, appealing character forms and soft glossy materials under bright, coherent lighting.\n\nIn the dining room, the chef sincerely tries to hide the mess from his boss, positioning himself casually in front of it with a stiff, overly calm posture and holding the pose a beat too long. Soft, evenly lit dining room with warm glossy surfaces and saturated colors, polished render.",
+  "look_line": "Stylized 3D animated look with rounded, appealing forms, soft glossy materials, bright global-illumination lighting, saturated warm colors, and a polished render.",
+  "applied": {
+    "genre": "Comedy",
+    "visual_style": "3D Animation"
+  },
+  "overrides": [],
+  "error": null
+}

@@ -37,6 +37,8 @@ export type DamiRunContext = {
 
 export type DamiRuntimeConfig = {
   apiKey: string | undefined;
+  /** Workspace to bill when the key is not scoped to one (`ANTHROPIC_WORKSPACE_ID`). */
+  workspaceId?: string;
   defaultModel: string | undefined;
   maxConcurrency: number;
   maxRetries: number;
@@ -81,6 +83,7 @@ function resolveConfig(deps: DamiRunnerDeps): DamiRuntimeConfig {
   const apiKey = "apiKey" in given ? given.apiKey : env?.ANTHROPIC_API_KEY;
   return {
     apiKey,
+    workspaceId: "workspaceId" in given ? given.workspaceId : env?.ANTHROPIC_WORKSPACE_ID,
     defaultModel: "defaultModel" in given ? given.defaultModel : env?.DAMI_DEFAULT_MODEL,
     maxConcurrency: given.maxConcurrency ?? env?.DAMI_MAX_CONCURRENCY ?? 4,
     maxRetries: given.maxRetries ?? env?.DAMI_MAX_RETRIES ?? 4,
@@ -173,7 +176,7 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
     deps.client ??
     (sample
       ? createSampleClaudeClient({ delayMs: config.sampleDelayMs })
-      : getDefaultClaudeClient(config.apiKey));
+      : getDefaultClaudeClient(config.apiKey, config.workspaceId));
   if (!client) {
     throw new DamiConfigError(
       dami.key,

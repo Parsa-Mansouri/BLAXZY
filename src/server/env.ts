@@ -27,6 +27,11 @@ export const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(1),
   BETTER_AUTH_URL: z.string().url().default("http://localhost:3000"),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  /**
+   * Needed only when the API key is not scoped to a workspace (a user key from the Console):
+   * the workspace to bill, sent as the `anthropic-workspace-id` header.
+   */
+  ANTHROPIC_WORKSPACE_ID: z.string().min(1).optional(),
   /** Overrides every dami's default Claude model (e.g. a cheaper model on staging). */
   DAMI_DEFAULT_MODEL: z.string().min(1).optional(),
   /** Per-process limit on concurrent Claude API calls made by damis. */

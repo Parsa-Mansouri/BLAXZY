@@ -8,7 +8,18 @@ import { SAMPLE_PROVIDER_ID, SampleProvider } from "./sample/provider";
 import type { GenerationProvider } from "./types";
 
 export { ProviderError, ProviderNotConfiguredError } from "./errors";
-export { aspectRatioFor, MODEL_POLICY, pickModel, type AspectRatio } from "./policy";
+export {
+  ASPECT_RATIOS,
+  aspectRatioFor,
+  isAspectRatio,
+  isVideoAspectRatio,
+  MODEL_POLICY,
+  pickModel,
+  VIDEO_ASPECT_RATIOS,
+  type AspectRatio,
+  type GenerationOverrides,
+  type VideoAspectRatio,
+} from "./policy";
 export type {
   GenerationProvider,
   GenerationReference,

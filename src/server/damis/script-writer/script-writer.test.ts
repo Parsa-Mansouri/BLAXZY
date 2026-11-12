@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { partText } from "../framework/define";
 import { runDami } from "../framework/runner";
 import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
 import { scriptWriter } from "./dami";
@@ -29,7 +30,7 @@ describe("script-writer", () => {
     expect(system).toContain("What generative video can and cannot film");
     expect(system).toContain("## Genre: Drama");
     expect(system).toContain("## Orientation: portrait");
-    const user = prompt.messages[0]?.content[0]?.text ?? "";
+    const user = partText(prompt.messages[0]?.content[0]) ?? "";
     expect(user).toContain(
       "<brief>\nTwo old lovers meet again on the last ferry of the night.\n</brief>",
     );

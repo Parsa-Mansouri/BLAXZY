@@ -13,55 +13,46 @@
   "assets": [
     {
       "kind": "character",
-      "slug": "mara",
       "name": "Mara",
       "description": "Woman in her 60s; wiry build; grey-streaked braid; oil-stained work jacket; carries a brass locket; hurried, breathless at the pier."
     },
     {
       "kind": "character",
-      "slug": "jonas",
       "name": "Jonas",
       "description": "Man in his 60s; broad-shouldered; wears a flat cap; sits alone in the ferry cabin."
     },
     {
       "kind": "location",
-      "slug": "harbour-pier",
       "name": "Harbour Pier",
       "description": "Exterior; deserted wooden pier with planks; wind and sea spray; dusk; a ferry with blazing lights idles at the far end."
     },
     {
       "kind": "location",
-      "slug": "ferry-cabin",
       "name": "Ferry Cabin",
       "description": "Interior of the ferry; warm tungsten light; rows of empty benches; spray-streaked windows looking out on the pier; dusk."
     },
     {
       "kind": "prop",
-      "slug": "brass-locket",
       "name": "Brass locket",
       "description": "Brass locket that opens; held in Mara's hand, handed to Jonas, who opens it."
     },
     {
       "kind": "prop",
-      "slug": "ferry",
       "name": "Ferry",
       "description": "A single passenger ferry with its lights blazing; idles at the end of the pier; sounds its horn as it departs."
     },
     {
       "kind": "voice",
-      "slug": "mara",
       "name": "Mara (voice)",
       "description": "Woman in her 60s; breathless and pleading at first, then dry and tender."
     },
     {
       "kind": "voice",
-      "slug": "jonas",
       "name": "Jonas (voice)",
       "description": "Man in his 60s; quiet, moved."
     },
     {
       "kind": "voice",
-      "slug": "ferryman",
       "name": "Ferryman (voice)",
       "description": "Off-screen man calling loudly over the wind; urgent."
     }

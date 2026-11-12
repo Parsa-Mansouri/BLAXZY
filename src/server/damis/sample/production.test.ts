@@ -30,13 +30,13 @@ type AssetIn = {
   description?: string;
 };
 
-// A non-English name goes with an ASCII slug: refs are always kind:slug.
+// A non-English name is its own id: refs are kind:Name in any script.
 const BASE_ASSETS: AssetIn[] = [
-  { ref: "character:ines", kind: "character", name: "Ines", description: "Young woman, red coat." },
-  { ref: "character:maryam", kind: "character", name: "مریم" },
-  { ref: "location:cafe-muller", kind: "location", name: "Café Müller" },
-  { ref: "prop:map", kind: "prop", name: "Old map" },
-  { ref: "voice:ines", kind: "voice", name: "Ines (voice)" },
+  { ref: "character:Ines", kind: "character", name: "Ines", description: "Young woman, red coat." },
+  { ref: "character:مریم", kind: "character", name: "مریم" },
+  { ref: "location:Café Müller", kind: "location", name: "Café Müller" },
+  { ref: "prop:Old map", kind: "prop", name: "Old map" },
+  { ref: "voice:Ines (voice)", kind: "voice", name: "Ines (voice)" },
 ];
 
 function blockOf(prompt: string, refs: string[]) {
@@ -50,17 +50,17 @@ function blockOf(prompt: string, refs: string[]) {
 }
 
 const PROMPT = [
-  "SCENE: Café Müller [location:cafe-muller], interior, day.",
-  "CAST: Ines [character:ines], young woman in a red coat. مریم [character:maryam], in a blue scarf.",
-  'SHOT 1 (0-8s): MEDIUM, static. Ines turns the old map [prop:map] over. Ines [voice:ines] (quiet): "Here." The ferry [prop:ferry] hoots. Ines [character:ines] smiles.',
+  "SCENE: Café Müller [location:Café Müller], interior, day.",
+  "CAST: Ines [character:Ines], young woman in a red coat. مریم [character:مریم], in a blue scarf.",
+  'SHOT 1 (0-8s): MEDIUM, static. Ines turns the old map [prop:Old map] over. Ines [voice:Ines (voice)] (quiet): "Here." The ferry [prop:Ferry] hoots. Ines [character:Ines] smiles.',
 ].join("\n");
 const REFS = [
-  "location:cafe-muller",
-  "character:ines",
-  "character:maryam",
-  "prop:map",
-  "voice:ines",
-  "prop:ferry",
+  "location:Café Müller",
+  "character:Ines",
+  "character:مریم",
+  "prop:Old map",
+  "voice:Ines (voice)",
+  "prop:Ferry",
 ];
 
 function run(assets: AssetIn[], prompt = PROMPT, refs = REFS, previous?: object) {
@@ -76,10 +76,10 @@ describe("sample text-blocks", () => {
     const { output, issues } = run(BASE_ASSETS);
     expect(issues).toEqual([]);
     expect(output.assetRefs).toEqual([
-      "location:cafe-muller",
-      "character:ines",
-      "character:maryam",
-      "prop:map",
+      "location:Café Müller",
+      "character:Ines",
+      "character:مریم",
+      "prop:Old map",
     ]);
     expect(output.prompt).toContain("Café Müller <<<image_1>>>");
     expect(output.prompt).toContain("Ines <<<image_2>>>");
@@ -90,7 +90,7 @@ describe("sample text-blocks", () => {
     expect(output.prompt).toContain("The ferry hoots.");
     expect(output.prompt).not.toContain("[");
     expect(output.notes).toEqual([
-      '"prop:ferry" has no reference sheet yet; it is named in words only.',
+      '"prop:Ferry" has no reference sheet yet; it is named in words only.',
     ]);
   });
 
@@ -107,26 +107,26 @@ describe("sample text-blocks", () => {
     const assets: AssetIn[] = [];
     const lines: string[] = [];
     for (let i = 0; i < 6; i++) {
-      assets.push({ ref: `prop:thing-${i}`, kind: "prop", name: `Thing ${i}` });
-      refs.push(`prop:thing-${i}`);
-      lines.push(`Thing ${i} [prop:thing-${i}]`);
+      assets.push({ ref: `prop:Thing ${i}`, kind: "prop", name: `Thing ${i}` });
+      refs.push(`prop:Thing ${i}`);
+      lines.push(`Thing ${i} [prop:Thing ${i}]`);
     }
-    assets.push({ ref: "location:hall", kind: "location", name: "Hall" });
-    refs.push("location:hall");
-    lines.push("Hall [location:hall]");
+    assets.push({ ref: "location:Hall", kind: "location", name: "Hall" });
+    refs.push("location:Hall");
+    lines.push("Hall [location:Hall]");
     for (let i = 0; i < 4; i++) {
-      assets.push({ ref: `character:c-${i}`, kind: "character", name: `Char ${i}` });
-      refs.push(`character:c-${i}`);
-      lines.push(`Char ${i} [character:c-${i}]`);
+      assets.push({ ref: `character:Char ${i}`, kind: "character", name: `Char ${i}` });
+      refs.push(`character:Char ${i}`);
+      lines.push(`Char ${i} [character:Char ${i}]`);
     }
     const { output, issues } = run(assets, lines.join(". "), refs);
     expect(issues).toEqual([]);
     expect(output.assetRefs).toHaveLength(MAX_REFERENCE_IMAGES);
-    for (let i = 0; i < 4; i++) expect(output.assetRefs).toContain(`character:c-${i}`);
-    expect(output.assetRefs).toContain("location:hall");
+    for (let i = 0; i < 4; i++) expect(output.assetRefs).toContain(`character:Char ${i}`);
+    expect(output.assetRefs).toContain("location:Hall");
     // Two props are dropped, the last two named, each with a note.
-    expect(output.assetRefs).not.toContain("prop:thing-4");
-    expect(output.assetRefs).not.toContain("prop:thing-5");
+    expect(output.assetRefs).not.toContain("prop:Thing 4");
+    expect(output.assetRefs).not.toContain("prop:Thing 5");
     expect(output.notes).toHaveLength(2);
     expect(output.prompt).toContain("Thing 4.");
   });
@@ -134,7 +134,7 @@ describe("sample text-blocks", () => {
   it("adds a short continuity line without tokens from the previous block", () => {
     const { output, issues } = run(BASE_ASSETS, PROMPT, REFS, {
       title: "Sc 1 · Before",
-      promptTail: "Ines <<<image_1>>> [character:ines] stands by the window in her red coat.",
+      promptTail: "Ines <<<image_1>>> [character:Ines] stands by the window in her red coat.",
     });
     expect(issues).toEqual([]);
     expect(output.prompt).toContain('CONTINUITY: picks up from "Sc 1 · Before"');
@@ -162,11 +162,11 @@ describe("sample block-reviser and take-fixer", () => {
         title: "t",
         scriptExcerpt: "Ines walks in.",
         prompt,
-        assetRefs: ["location:hall", "character:ines"],
+        assetRefs: ["location:Hall", "character:Ines"],
       },
       assets: [
-        { ref: "location:hall", kind: "location", name: "Hall" },
-        { ref: "character:ines", kind: "character", name: "Ines" },
+        { ref: "location:Hall", kind: "location", name: "Hall" },
+        { ref: "character:Ines", kind: "character", name: "Ines" },
       ],
       review,
     };
@@ -178,7 +178,7 @@ describe("sample block-reviser and take-fixer", () => {
       "note",
     ]);
     expect(output.prompt).toContain("Closer on her hands.");
-    expect(output.assetRefs).toEqual(["location:hall", "character:ines"]);
+    expect(output.assetRefs).toEqual(["location:Hall", "character:Ines"]);
   });
 
   it("take-fixer reflects every request and keeps the tokens, for both stages", () => {
@@ -187,7 +187,7 @@ describe("sample block-reviser and take-fixer", () => {
         style,
         block: { title: "t", scriptExcerpt: "Ines walks in." },
         previousPrompt: "SCENE: Hall <<<image_1>>>. Ines <<<image_2>>> walks in.",
-        assetRefs: ["location:hall", "character:ines"],
+        assetRefs: ["location:Hall", "character:Ines"],
         stage,
         review: { issueCodes: ["face_distorted"], note: "Slower." },
       };
@@ -206,9 +206,9 @@ describe("sample block-reviser and take-fixer", () => {
         title: "t",
         scriptExcerpt: "x",
         prompt: "Ines <<<image_1>>> walks in.",
-        assetRefs: ["character:ines"],
+        assetRefs: ["character:Ines"],
       },
-      assets: [{ ref: "character:ines", kind: "character", name: "Ines" }],
+      assets: [{ ref: "character:Ines", kind: "character", name: "Ines" }],
       review: { issueCodes: [...BLOCK_ISSUE_CODES] },
     };
     expect(
@@ -221,7 +221,7 @@ describe("sample block-reviser and take-fixer", () => {
       style,
       block: { title: "t", scriptExcerpt: "x" },
       previousPrompt: "Ines <<<image_1>>> walks in.",
-      assetRefs: ["character:ines"],
+      assetRefs: ["character:Ines"],
       stage: "draft",
       review: { issueCodes: [...TAKE_ISSUE_CODES] },
     };

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { partText } from "../framework/define";
 import { runDami } from "../framework/runner";
 import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
 import { sheetGenerator } from "./dami";
@@ -35,7 +36,7 @@ describe("sheet-generator", () => {
     const system = a.system.map((p) => p.text).join("\n");
     expect(system).not.toContain("Mara");
     expect(system).toContain("turnaround");
-    const user = a.messages[0]?.content.map((p) => p.text).join("\n") ?? "";
+    const user = a.messages[0]?.content.map(partText).join("\n") ?? "";
     expect(user).toContain("Mara");
     expect(user).toContain("oil-stained");
   });

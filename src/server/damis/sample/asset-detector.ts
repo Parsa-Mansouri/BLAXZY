@@ -1,6 +1,6 @@
 /**
  * Sample asset-detector: characters from character cues, locations from scene headings, props
- * from a small lexicon, each with the scenes it appears in. Known assets keep their slugs.
+ * from a small lexicon, each with the scenes it appears in. Known assets keep their names.
  */
 import type { AssetKind } from "@/server/db/schema";
 import {
@@ -8,6 +8,7 @@ import {
   type AssetDetectorOutput,
   type DetectedAsset,
 } from "../asset-detector/schema";
+import { cleanAssetName, nameKey, uniqueName } from "../shared/asset-ref";
 import { isSceneHeading, splitLines } from "../shared/script-lines";
 import {
   cueName,
@@ -15,7 +16,6 @@ import {
   headingTime,
   isInterior,
   parseScenes,
-  slugify,
   titleCase,
   truncate,
   type ParsedScene,
@@ -52,7 +52,7 @@ const PROP_LEXICON = [
 const MAX_PROPS = 4;
 
 function normalizeName(name: string): string {
-  return name.toLowerCase().normalize("NFKC").replace(/\s+/g, " ").trim();
+  return nameKey(cleanAssetName(name.normalize("NFKC")));
 }
 
 function escapeRegExp(text: string): string {
@@ -68,24 +68,19 @@ export function sampleAssetDetector(raw: unknown): AssetDetectorOutput {
   const lines = splitLines(input.content);
   const scenes = parseScenes(input.content);
   const known = new Map(
-    (input.knownAssets ?? []).map((k) => [`${k.kind}|${normalizeName(k.name)}`, k.slug]),
+    (input.knownAssets ?? []).map((k) => [`${k.kind}|${normalizeName(k.name)}`, k.name]),
   );
-  const used = new Set<string>();
-  const counters = new Map<AssetKind, number>();
+  const used = new Map<AssetKind, string[]>();
 
-  /** The known slug for this name, else a fresh unique one. */
-  const slugFor = (kind: AssetKind, name: string): string => {
-    const knownSlug = known.get(`${kind}|${normalizeName(name)}`);
-    let slug = knownSlug ?? slugify(name);
-    if (!slug) {
-      const n = (counters.get(kind) ?? 0) + 1;
-      counters.set(kind, n);
-      slug = `${kind}-${n}`;
-    }
-    let candidate = slug;
-    for (let i = 2; used.has(`${kind}:${candidate}`); i++) candidate = `${slug}-${i}`.slice(0, 48);
-    used.add(`${kind}:${candidate}`);
-    return candidate;
+  /** The known name for this entity, else the cleaned name made unique within its kind. */
+  const nameFor = (kind: AssetKind, name: string): string => {
+    const taken = used.get(kind) ?? [];
+    const chosen = uniqueName(
+      known.get(`${kind}|${normalizeName(name)}`) ?? (cleanAssetName(name) || kind),
+      taken,
+    );
+    used.set(kind, [...taken, chosen]);
+    return chosen;
   };
 
   const assets: DetectedAsset[] = [];
@@ -108,8 +103,7 @@ export function sampleAssetDetector(raw: unknown): AssetDetectorOutput {
     );
     assets.push({
       kind: "character",
-      name,
-      slug: slugFor("character", name),
+      name: nameFor("character", name),
       description: intro
         ? truncate(`As introduced: ${intro.trim()}`, 600)
         : `${name}: a speaking character; the script gives no physical description yet.`,
@@ -133,8 +127,7 @@ export function sampleAssetDetector(raw: unknown): AssetDetectorOutput {
       .find((l) => l.length > 0);
     assets.push({
       kind: "location",
-      name,
-      slug: slugFor("location", name),
+      name: nameFor("location", name),
       description: truncate(
         `${isInterior(first.heading) ? "Interior" : "Exterior"}${times.length ? `, seen at ${times.join(", ")}` : ""}.${firstAction ? ` ${firstAction}` : ""}`,
         600,
@@ -163,8 +156,7 @@ export function sampleAssetDetector(raw: unknown): AssetDetectorOutput {
     const mention = lines.find((l) => !isSceneHeading(l) && pattern.test(l));
     props.push({
       kind: "prop",
-      name,
-      slug: slugFor("prop", name),
+      name: nameFor("prop", name),
       description: truncate(mention ? `${name}; first seen: ${mention.trim()}` : name, 600),
       appearsIn: appears.map((s) => s.heading),
     });

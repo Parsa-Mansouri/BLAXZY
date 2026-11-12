@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GenerationPurpose } from "@/server/db/schema";
 import { runFfmpeg } from "../ffmpeg";
-import type { AspectRatio } from "../policy";
+import type { VideoAspectRatio } from "../policy";
 import type { ProviderResult } from "../types";
 import {
   background,
@@ -38,7 +38,7 @@ export type VideoResolution = "480p" | "1080p";
 export type SampleVideoSpec = {
   purpose: GenerationPurpose;
   label: string;
-  aspectRatio: AspectRatio;
+  aspectRatio: VideoAspectRatio;
   resolution: VideoResolution;
   /** Whole seconds, 1..15. */
   durationSeconds: number;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { partText } from "../framework/define";
 import { runDami } from "../framework/runner";
 import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
 import { textBlocks } from "./dami";
@@ -44,33 +45,33 @@ describe("text-blocks", () => {
     expect(textBlocks.check(malformed, input)).toContain(
       '"<<<image_02>>>" is not a valid token; write <<<image_N>>> with N from 1',
     );
-    const tagged = withPrompt(`${output.prompt}\nThe ferry [prop:ferry] leaves.`);
+    const tagged = withPrompt(`${output.prompt}\nThe ferry [prop:Ferry] leaves.`);
     expect(textBlocks.check(tagged, input)).toContain(
-      "the prompt still contains the tag [prop:ferry]; replace it with its token or remove it",
+      "the prompt still contains the tag [prop:Ferry]; replace it with its token or remove it",
     );
   });
 
   it("rejects refs that were not passed in, voices, repeats and too many refs", () => {
     const unknown = withPrompt(`${output.prompt} Ines <<<image_4>>>`, [
       ...output.assetRefs,
-      "character:ines",
+      "character:Ines",
     ]);
     expect(textBlocks.check(unknown, input)).toContain(
-      'assetRefs has "character:ines", which is not in the asset list',
+      'assetRefs has "character:Ines", which is not in the asset list',
     );
     const voice = withPrompt(`${output.prompt} Mara <<<image_4>>>`, [
       ...output.assetRefs,
-      "voice:mara",
+      "voice:Mara (voice)",
     ]);
     expect(textBlocks.check(voice, input)).toContain(
-      'assetRefs has "voice:mara", a voice; voices are never image references',
+      'assetRefs has "voice:Mara (voice)", a voice; voices are never image references',
     );
     const repeat = withPrompt(`${output.prompt} Mara <<<image_4>>>`, [
       ...output.assetRefs,
-      "character:mara",
+      "character:Mara",
     ]);
     expect(textBlocks.check(repeat, input)).toContain(
-      'assetRefs lists "character:mara" more than once',
+      'assetRefs lists "character:Mara" more than once',
     );
     const refs = Array.from({ length: 10 }, (_, i) => `prop:thing-${i}`);
     const many = withPrompt(
@@ -89,7 +90,7 @@ describe("text-blocks", () => {
       assetRefs: output.assetRefs.slice(0, 2),
     };
     expect(textBlocks.check(dropped, input)).toEqual([
-      '"prop:brass-locket" is named in the block and available, but is not in assetRefs; reference it',
+      '"prop:Brass locket" is named in the block and available, but is not in assetRefs; reference it',
     ]);
   });
 
@@ -100,9 +101,9 @@ describe("text-blocks", () => {
     const system = a.system.map((p) => p.text).join("\n");
     expect(system).toContain("<<<image_N>>>");
     expect(system).not.toContain(input.block.prompt);
-    const user = a.messages[0]?.content.map((p) => p.text).join("\n") ?? "";
+    const user = a.messages[0]?.content.map(partText).join("\n") ?? "";
     expect(user).toContain(input.block.prompt);
-    expect(user).toContain('- voice:mara "Mara (voice)" (voice: never an image reference)');
+    expect(user).toContain("- voice:Mara (voice) (voice: never an image reference)");
     expect(user).toContain("<previous_tail>");
   });
 

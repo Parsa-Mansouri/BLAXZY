@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type { DamiPrompt } from "../framework/define";
 import { composeModules } from "../modules/registry";
 import { GENERATIVE_VIDEO_RULES, PRODUCTION_CONTEXT, SAFETY_RULES } from "../shared/craft";
+import { formatAssetRef } from "../shared/asset-ref";
 import { renderProjectParameters } from "../shared/project";
 import { numberLines, splitLines } from "../shared/script-lines";
 import { MAX_BLOCK_SECONDS, type promptSectionerInputSchema } from "./schema";
@@ -16,7 +17,7 @@ ${PRODUCTION_CONTEXT}
 
 ## What you receive
 - The project parameters and the modules above (genre, visual style, format, orientation).
-- The asset list: every character, location, prop, creature, costume and voice, as kind:slug with its name and description.
+- The asset list: every character, location, prop, creature, costume and voice, as kind:Name with its description. The name is the asset's id.
 - The whole screenplay with numbered lines, for context: what happened before and what comes after.
 - The line range to cut in this request. Cut only that range; use the rest only to understand it.
 
@@ -39,7 +40,7 @@ SHOT 2 (4-9s): ...
 SOUND: <ambience, effects, music cue; voice-over lines verbatim>
 
 Rules for the prompt:
-- Asset tags: the first time an asset appears in the prompt, write its name followed by its tag in square brackets, exactly "Mara [character:mara]" or "the brass locket [prop:brass-locket]". Later mentions use the plain name. Use only slugs from the asset list. assetRefs lists exactly the tags used in the prompt, each once, in order of first appearance. The system later replaces tags with reference images, so a missing tag means a missing reference.
+- Asset tags: the first time an asset appears in the prompt, write its name followed by its tag in square brackets, exactly "Mara [character:Mara]" or "the brass locket [prop:Brass Locket]": the tag is the asset's kind:Name from the asset list, copied exactly (case, spaces, a "(2)" suffix and non-Latin letters included). Later mentions use the plain name. Use only refs from the asset list. assetRefs lists exactly the tags used in the prompt, each once, in order of first appearance. The system later replaces tags with reference images, so a missing tag means a missing reference.
 - Tag the location in SCENE, every character in CAST, and every prop, creature or costume where it first appears. Tag a voice asset where its character speaks or a narrator is heard.
 - Shot timings are consecutive, start at 0 and end exactly at durationSeconds. One to four shots per block; one shot is often best. Each shot has one clear action.
 - Dialogue goes inside the shot where it is spoken, verbatim from the script in its original language, with an English delivery note: MARA (quiet, bitter): "Line as written." Never translate or paraphrase dialogue.
@@ -64,7 +65,7 @@ function renderAssets(input: Input): string {
     return "## Assets\n(none listed: tag nothing, describe everything in words)";
   const rows = input.assets.map((a) => {
     const description = a.description ? ` - ${a.description.replace(/\s+/g, " ")}` : "";
-    return `- ${a.kind}:${a.slug} "${a.name}"${description}`;
+    return `- ${formatAssetRef(a.kind, a.name)}${description}`;
   });
   return ["## Assets", ...rows].join("\n");
 }

@@ -72,17 +72,6 @@ export function titleCase(text: string): string {
     .join(" ");
 }
 
-/** `Harbour Pier` → `harbour-pier`; empty when the name has no ASCII letters or digits. */
-export function slugify(name: string): string {
-  const ascii = name
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return ascii.slice(0, 48).replace(/-+$/g, "");
-}
-
 export function countWords(text: string): number {
   const matches = text.trim().match(/\S+/g);
   return matches ? matches.length : 0;

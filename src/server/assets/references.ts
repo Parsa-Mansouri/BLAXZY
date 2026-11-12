@@ -5,11 +5,12 @@
  */
 import { and, asc, eq, inArray, ne, or } from "drizzle-orm";
 import { getDb, type DbExecutor } from "@/server/db/client";
-import { asset, ASSET_KINDS, type AssetKind } from "@/server/db/schema";
+import { formatAssetRef, parseAssetRef, type ParsedAssetRef } from "@/server/damis";
+import { asset, type AssetKind } from "@/server/db/schema";
 import { latestByAsset, newestLookWithStatus, newestSheetWithStatus, type AssetRow } from "./looks";
 import { deriveAssetState } from "./stage";
 
-/** An asset as a block reference. `ref` is `kind:slug`. */
+/** An asset as a block reference. `ref` is `kind:Name`. */
 export type ReferenceAsset = {
   ref: string;
   assetId: string;
@@ -27,14 +28,7 @@ export type ReferenceAsset = {
 /** The most assets one project hands to Production at once (the damis' input limit). */
 const MAX_REFERENCE_ASSETS = 500;
 
-const REF_PATTERN = new RegExp(`^(${ASSET_KINDS.join("|")}):([a-z0-9]+(?:-[a-z0-9]+)*)$`);
-
-/** `character:mara` → `{ kind, slug }`, or null when malformed. */
-export function parseAssetRef(ref: string): { kind: AssetKind; slug: string } | null {
-  const match = REF_PATTERN.exec(ref);
-  if (!match) return null;
-  return { kind: match[1] as AssetKind, slug: match[2] as string };
-}
+export { parseAssetRef };
 
 async function describe(db: DbExecutor, rows: AssetRow[]): Promise<ReferenceAsset[]> {
   const ids = rows.map((r) => r.id);
@@ -52,7 +46,7 @@ async function describe(db: DbExecutor, rows: AssetRow[]): Promise<ReferenceAsse
     const sheetFileId = sheet && look && sheet.lookId === look.id ? sheet.fileId : null;
     const imageFileId = row.kind === "voice" ? null : (sheetFileId ?? look?.fileId ?? null);
     return {
-      ref: `${row.kind}:${row.slug}`,
+      ref: formatAssetRef(row.kind, row.name),
       assetId: row.id,
       kind: row.kind,
       name: row.name,
@@ -78,7 +72,7 @@ export async function listReadyReferenceAssets(
   return (await describe(db, rows)).filter((a) => a.ready && a.referenceFileId !== null);
 }
 
-/** The project's assets named by `kind:slug` refs (removed ones too), keyed by ref. */
+/** The project's assets named by `kind:Name` refs (removed ones too), keyed by ref. */
 export async function describeAssetRefs(
   projectId: string,
   refs: readonly string[],
@@ -86,7 +80,7 @@ export async function describeAssetRefs(
 ): Promise<Map<string, ReferenceAsset>> {
   const parsed = [...new Set(refs)]
     .map(parseAssetRef)
-    .filter((r): r is { kind: AssetKind; slug: string } => r !== null)
+    .filter((r): r is ParsedAssetRef => r !== null)
     .slice(0, MAX_REFERENCE_ASSETS);
   if (parsed.length === 0) return new Map();
   const rows = await db
@@ -95,7 +89,7 @@ export async function describeAssetRefs(
     .where(
       and(
         eq(asset.projectId, projectId),
-        or(...parsed.map((r) => and(eq(asset.kind, r.kind), eq(asset.slug, r.slug)))),
+        or(...parsed.map((r) => and(eq(asset.kind, r.kind), eq(asset.name, r.name)))),
       ),
     );
   return new Map((await describe(db, rows)).map((a) => [a.ref, a]));

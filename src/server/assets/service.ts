@@ -1,6 +1,13 @@
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { DetectedAsset, KnownAsset, SectionerAsset } from "@/server/damis";
+import {
+  cleanAssetName,
+  nameKey,
+  uniqueName,
+  type DetectedAsset,
+  type KnownAsset,
+  type SectionerAsset,
+} from "@/server/damis";
 import { getDb } from "@/server/db/client";
 import { ASSET_KINDS, asset, project, projectEvent, type AssetKind } from "@/server/db/schema";
 
@@ -33,7 +40,6 @@ export function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<
 const detectedSchema = z.object({
   kind: z.enum(ASSET_KINDS),
   name: z.string().trim().min(1).max(200),
-  slug: z.string().min(1).max(48),
   description: z.string().trim().max(4000),
 });
 
@@ -52,9 +58,10 @@ const listAssetsSchema = z.object({
 });
 
 /**
- * Applies one detection result as a diff by (kind, slug), in one transaction: new assets are
- * inserted active; present ones get the new name/description/lastScriptVersionId (and are
- * reactivated if removed); detected assets missing from the result become `removed`. Manual
+ * Applies one detection result as a diff by (kind, name), in one transaction. Names are the
+ * assets' ids: they are cleaned and compared ignoring case. New assets are inserted active with a
+ * name unique in their kind ("Mara (2)" when needed); present ones keep their stored name (so refs
+ * stay valid) and get the new description/lastScriptVersionId (and are reactivated if removed); detected assets missing from the result become `removed`. Manual
  * assets are never changed. Logs `assets.detected`, which also marks the version as detected.
  */
 export async function applyDetection(input: {
@@ -73,22 +80,29 @@ export async function applyDetection(input: {
     if (!owner) throw new AssetInputError("That project does not exist.");
 
     const existing = await tx.select().from(asset).where(eq(asset.projectId, projectId));
-    const byKey = new Map(existing.map((a) => [`${a.kind}:${a.slug}`, a]));
+    const keyOf = (kind: AssetKind, name: string) => `${kind}:${nameKey(name)}`;
+    const byKey = new Map(existing.map((a) => [keyOf(a.kind, a.name), a]));
+    const taken = new Map<AssetKind, string[]>();
+    for (const a of existing) taken.set(a.kind, [...(taken.get(a.kind) ?? []), a.name]);
     const seen = new Set<string>();
     let added = 0;
     let kept = 0;
 
     for (const [index, detected] of assets.entries()) {
-      const key = `${detected.kind}:${detected.slug}`;
+      const cleaned = cleanAssetName(detected.name);
+      if (!cleaned) continue;
+      const key = keyOf(detected.kind, cleaned);
       if (seen.has(key)) continue; // the dami's check forbids duplicates; first one wins
       seen.add(key);
       const found = byKey.get(key);
       if (!found) {
+        const kindNames = taken.get(detected.kind) ?? [];
+        const name = uniqueName(cleaned, kindNames);
+        taken.set(detected.kind, [...kindNames, name]);
         await tx.insert(asset).values({
           projectId,
           kind: detected.kind,
-          name: detected.name,
-          slug: detected.slug,
+          name,
           description: detected.description || null,
           status: "active",
           origin: "detected",
@@ -105,7 +119,6 @@ export async function applyDetection(input: {
       await tx
         .update(asset)
         .set({
-          name: detected.name,
           description: detected.description || null,
           status: "active",
           displayOrder: index,
@@ -116,7 +129,7 @@ export async function applyDetection(input: {
     }
 
     const gone = existing.filter(
-      (a) => a.origin === "detected" && a.status === "active" && !seen.has(`${a.kind}:${a.slug}`),
+      (a) => a.origin === "detected" && a.status === "active" && !seen.has(keyOf(a.kind, a.name)),
     );
     if (gone.length > 0) {
       await tx
@@ -165,7 +178,6 @@ export async function getKnownAssets(projectId: string): Promise<KnownAsset[]> {
     .select({
       kind: asset.kind,
       name: asset.name,
-      slug: asset.slug,
       description: asset.description,
     })
     .from(asset)
@@ -180,7 +192,6 @@ export async function getSectionerAssets(projectId: string): Promise<SectionerAs
   return getDb()
     .select({
       kind: asset.kind,
-      slug: asset.slug,
       name: asset.name,
       description: asset.description,
     })

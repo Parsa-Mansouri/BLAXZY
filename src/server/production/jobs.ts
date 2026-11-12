@@ -16,7 +16,10 @@ import {
   type PromptBlock,
 } from "@/server/blocks";
 import {
+  ASSET_TAG_PATTERN,
+  assetTag,
   BLOCK_ISSUE_CODES,
+  isVoiceRef,
   TAKE_ISSUE_CODES,
   type BlockIssueCode,
   type BlockReviserInput,
@@ -25,7 +28,6 @@ import {
 } from "@/server/damis";
 import { getDb } from "@/server/db/client";
 import {
-  ASSET_KINDS,
   blockTake,
   generation,
   project,
@@ -72,10 +74,8 @@ export const TAKE_FAILED =
 export const PROMPT_TAIL_LENGTH = 300;
 const LABEL_LENGTH = 120;
 
-const TAG_PATTERN = new RegExp(
-  `( ?)\\[((?:${ASSET_KINDS.join("|")}):[a-z0-9]+(?:-[a-z0-9]+)*)\\]`,
-  "g",
-);
+/** A `[kind:Name]` tag with the space before it: group 1 the space, group 2 the ref. */
+const TAG_PATTERN = new RegExp(`( ?)${ASSET_TAG_PATTERN.source}`, "g");
 
 function clip(text: string, max: number): string {
   const trimmed = text.trim();
@@ -166,7 +166,7 @@ export function promptForChosenAssets(
   const keep = new Set(chosen);
   const tagged = new Set<string>();
   const stripped = prompt.replace(TAG_PATTERN, (all, space: string, ref: string) => {
-    if (ref.startsWith("voice:") || keep.has(ref)) {
+    if (isVoiceRef(ref) || keep.has(ref)) {
       tagged.add(ref);
       return all;
     }
@@ -174,7 +174,7 @@ export function promptForChosenAssets(
   });
   const missing = chosen.filter((ref) => !tagged.has(ref));
   if (missing.length === 0) return stripped;
-  const line = missing.map((ref) => `${names.get(ref) ?? ref} [${ref}]`).join(", ");
+  const line = missing.map((ref) => `${names.get(ref) ?? ref} ${assetTag(ref)}`).join(", ");
   return `${stripped.trimEnd()}\nALSO IN THIS SHOT: ${line}.`;
 }
 

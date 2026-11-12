@@ -2,13 +2,21 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type {
   ContentBlock,
   ContentBlockParam,
+  ImageBlockParam,
   JSONOutputFormat,
   MessageParam,
   TextBlockParam,
 } from "@anthropic-ai/sdk/resources/messages";
 import type { z } from "zod";
 import type { ClaudeRequest } from "./client";
-import type { DamiEffort, DamiPrompt, PromptText } from "./define";
+import {
+  isPromptImage,
+  type DamiEffort,
+  type DamiPrompt,
+  type PromptPart,
+  type PromptText,
+} from "./define";
+import type { ResolvedImage } from "./images";
 
 /** The API allows at most 4 cache breakpoints per request. */
 const MAX_CACHE_BREAKPOINTS = 4;
@@ -37,8 +45,32 @@ function textBlock(part: PromptText): TextBlockParam {
     : { type: "text", text: part.text };
 }
 
+function imageBlock(source: ResolvedImage, cache: boolean | undefined): ImageBlockParam {
+  const block: ImageBlockParam = {
+    type: "image",
+    source: { type: "base64", media_type: source.mediaType, data: source.data },
+  };
+  return cache ? { ...block, cache_control: { type: "ephemeral" } } : block;
+}
+
+/**
+ * One message block. An image must be resolved in `images`; when no map is given (sample mode,
+ * which never reads storage) it is stood in for by a short text naming the file.
+ */
+function partBlock(
+  part: PromptPart,
+  images: ReadonlyMap<string, ResolvedImage> | undefined,
+): TextBlockParam | ImageBlockParam {
+  if (!isPromptImage(part)) return textBlock(part);
+  if (!images) return textBlock({ text: `[image file ${part.image.fileId}]`, cache: part.cache });
+  const resolved = images.get(part.image.fileId);
+  if (!resolved) throw new Error(`Image file ${part.image.fileId} was not resolved`);
+  return imageBlock(resolved, part.cache);
+}
+
+/** Cache breakpoints a prompt marks: text and image blocks with `cache: true`. */
 export function countBreakpoints(prompt: DamiPrompt): number {
-  const all = [...prompt.system, ...prompt.messages.flatMap((m) => m.content)];
+  const all: PromptPart[] = [...prompt.system, ...prompt.messages.flatMap((m) => m.content)];
   return all.filter((p) => p.cache).length;
 }
 
@@ -47,6 +79,8 @@ export type RequestOptions = {
   maxTokens: number;
   effort: DamiEffort | undefined;
   outputSchema: z.ZodType;
+  /** Resolved images by file id (live mode). Omitted: images become text stand-ins. */
+  images?: ReadonlyMap<string, ResolvedImage>;
 };
 
 /**
@@ -60,7 +94,7 @@ export function buildClaudeRequest(prompt: DamiPrompt, options: RequestOptions):
   }
   const messages: MessageParam[] = prompt.messages.map((m) => ({
     role: m.role,
-    content: m.content.map(textBlock),
+    content: m.content.map((part) => partBlock(part, options.images)),
   }));
   return {
     model: options.model,

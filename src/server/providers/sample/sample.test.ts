@@ -53,6 +53,10 @@ describe("sample image", () => {
       { ...spec, aspectRatio: "9:16", size: [720, 1280] },
       { ...spec, purpose: "asset_sheet", aspectRatio: "16:9", size: [1600, 900] },
       { ...spec, purpose: "asset_sheet", aspectRatio: "9:16", size: [900, 1600] },
+      { ...spec, aspectRatio: "1:1", size: [1024, 1024] },
+      { ...spec, aspectRatio: "4:3", size: [1280, 960] },
+      { ...spec, aspectRatio: "3:4", size: [960, 1280] },
+      { ...spec, purpose: "asset_sheet", aspectRatio: "1:1", size: [1400, 1400] },
     ] as const;
     for (const { size, ...s } of cases) {
       const bytes = await renderSampleImage(s);
@@ -165,6 +169,29 @@ describe("SampleProvider", () => {
       d: "0000000000000000",
     });
     expect(await provider.getStatus(forged)).toEqual({ state: "succeeded" });
+  });
+
+  it("keeps an image's ratio and a video's 16:9 or 9:16 in the job", async () => {
+    const provider = new SampleProvider(fakeClock(), () => 0);
+    const square = await provider.create(
+      request({ params: { aspectRatio: "1:1", resolution: "2k" } }),
+    );
+    expect(decodeSampleJobId(square.providerJobId)?.a).toBe("1:1");
+    const video = await provider.create(
+      videoRequest({ params: { aspectRatio: "4:3", resolution: "480p", durationSeconds: 3 } }),
+    );
+    expect(decodeSampleJobId(video.providerJobId)?.a).toBe("16:9");
+  });
+
+  it("gives a re-roll (a new variant) a new digest", () => {
+    const base = requestDigest(request());
+    const reroll = requestDigest(
+      request({ params: { aspectRatio: "16:9", resolution: "2k", variant: "r1" } }),
+    );
+    const again = requestDigest(
+      request({ params: { aspectRatio: "16:9", resolution: "2k", variant: "r2" } }),
+    );
+    expect(new Set([base, reroll, again]).size).toBe(3);
   });
 
   it("digests requests by content, ignoring key order", () => {

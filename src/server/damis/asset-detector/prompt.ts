@@ -19,19 +19,18 @@ ${PRODUCTION_CONTEXT}
 - location: every distinct place where a scene is set. The interior and exterior of the same building are separate locations. Different rooms that look different are separate locations, named "Place - Room" ("Mara's Flat - Kitchen"). The same place at different times of day or in different weather is one location; list the times and conditions in its description.
 - prop: objects that are handled, matter to the story or recur and must stay identical (a locket, a revolver, a car, a letter, a phone). Not furniture or set dressing that is merely there.
 - costume: only an outfit that matters in itself: it changes on purpose, is worn by several characters (a uniform), or is a story element (the wedding dress). Ordinary clothing belongs in the character's description.
-- voice: one per character who speaks, and one for a narrator. Its slug is the speaking character's slug (the narrator's is "narrator"); its name is "<character name> (voice)". Its description: what the script states or directly implies about how they sound (age, gender, accent, language, register, manner, recurring vocal traits).
+- voice: one per character who speaks, and one for a narrator. Its name is "<character name> (voice)" (the narrator's is "Narrator (voice)"). Its description: what the script states or directly implies about how they sound (age, gender, accent, language, register, manner, recurring vocal traits).
 - other: anything else that must stay consistent across clips and fits no kind above (a recurring vehicle fleet, a weather phenomenon that is a story element, a recurring visual motif).
 
 ## One entity, one asset
 - A character may be called by name, surname, title, nickname, relation or role: "the old man", "GRANDPA", "JOE", "Mr. Kowalski", "Dad". When the script makes clear these are the same person, they are one asset. Use the most frequent proper name as name and list the other names in the description ("Also called: Grandpa, the old man.").
 - A place named slightly differently in different headings ("MARA'S FLAT", "MARA'S APARTMENT") is one location.
-- Do not merge different entities that share a word. The same person at clearly different ages ("YOUNG MARA" in a flashback) is a separate character asset, because the look differs: "Mara (child)" with slug "mara-child".
+- Do not merge different entities that share a word. The same person at clearly different ages ("YOUNG MARA" in a flashback) is a separate character asset, because the look differs: "Mara (child)".
 - If you are unsure whether two names are one entity, keep them separate and say so in both descriptions ("Possibly the same person as ...").
 
-## Names and slugs
-- name: as the script names the entity, in the script's own language and spelling.
-- slug: lower-case ASCII letters and digits in words joined by single hyphens, at most 40 characters, derived from the name (transliterate non-Latin names: "Мара" becomes "mara"; drop articles and possessives: "Mara's Flat - Kitchen" becomes "mara-flat-kitchen"). Unique within its kind.
-- Known assets: when the input lists known assets from an earlier detection, an entity that is one of them MUST reuse its exact slug and name, even if the script now spells or calls it slightly differently. Create new slugs only for genuinely new entities. Known assets no longer in the script are simply left out.
+## Names
+- name: as the script names the entity, in the script's own language and spelling, without square brackets, angle brackets or colons. The name identifies the asset, so it is unique within its kind (ignoring case).
+- Known assets: when the input lists known assets from an earlier detection, an entity that is one of them MUST reuse its exact name, even if the script now spells or calls it slightly differently. Create new names only for genuinely new entities. Known assets no longer in the script are simply left out.
 
 ## Descriptions
 Written in English, because they feed image generation; names and quoted terms keep their original spelling.
@@ -61,12 +60,9 @@ function renderKnownAssets(input: Input): string {
     const description = a.description
       ? ` - ${a.description.replace(/\s+/g, " ").slice(0, 300)}`
       : "";
-    return `- ${a.kind}:${a.slug} "${a.name}"${description}`;
+    return `- ${a.kind} "${a.name}"${description}`;
   });
-  return [
-    "## Known assets (reuse these exact slugs and names for the same entities)",
-    ...rows,
-  ].join("\n");
+  return ["## Known assets (reuse these exact names for the same entities)", ...rows].join("\n");
 }
 
 export function buildAssetDetectorPrompt(input: Input): DamiPrompt {

@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import { GENERATION_KINDS, GENERATION_PURPOSES } from "@/server/db/schema";
+import { ASPECT_RATIOS } from "../policy";
 
 const PREFIX = "sample_";
 export const MAX_LABEL_LENGTH = 120;
@@ -20,7 +21,8 @@ const sampleJobSchema = z.object({
   o: z.enum(SAMPLE_OUTCOMES),
   k: z.enum(GENERATION_KINDS),
   p: z.enum(GENERATION_PURPOSES),
-  a: z.enum(["16:9", "9:16"]),
+  /** Aspect ratio (a video is only ever 16:9 or 9:16). */
+  a: z.enum(ASPECT_RATIOS),
   l: z.string().max(MAX_LABEL_LENGTH),
   /** Request digest (hex), the seed of the image's tints (a final's is its draft's). */
   d: z.string().regex(/^[0-9a-f]{16}$/),

@@ -40,10 +40,9 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     return { runId: run.id, versionId: version.id };
   }
 
-  const detected = (kind: DetectedAsset["kind"], name: string, slug: string): DetectedAsset => ({
+  const detected = (kind: DetectedAsset["kind"], name: string): DetectedAsset => ({
     kind,
     name,
-    slug,
     description: `${name}, as described.`,
     appearsIn: ["Scene 1"],
   });
@@ -59,18 +58,16 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
       scriptVersionId: first.versionId,
       damiRunId: first.runId,
       assets: [
-        detected("character", "Mara", "mara"),
-        detected("character", "Jonas", "jonas"),
-        detected("location", "Harbour Pier", "harbour-pier"),
+        detected("character", "Mara"),
+        detected("character", "Jonas"),
+        detected("location", "Harbour Pier"),
       ],
     });
     expect(r1).toEqual({ added: 3, kept: 0, removed: 0 });
     expect(await assets.hasDetectionFor(projectId, first.versionId)).toBe(true);
 
     // A manual asset the detector never sees.
-    await getDb()
-      .insert(asset)
-      .values({ projectId, kind: "prop", name: "Hat", slug: "hat", origin: "manual" });
+    await getDb().insert(asset).values({ projectId, kind: "prop", name: "Hat", origin: "manual" });
 
     const second = await versionAndRun(projectId, 2);
     const r2 = await assets.applyDetection({
@@ -78,27 +75,27 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
       scriptVersionId: second.versionId,
       damiRunId: second.runId,
       assets: [
-        { ...detected("character", "Mara Lind", "mara"), description: "Now with a surname." },
-        detected("prop", "Locket", "locket"),
+        // The same name in other case and spacing is the same asset; it keeps its stored name.
+        { ...detected("character", "  MARA "), description: "Now with a surname." },
+        detected("prop", "Locket: [gold]"),
       ],
     });
     expect(r2).toEqual({ added: 1, kept: 1, removed: 2 });
 
     const all = await assets.listAssets(projectId, userId, { includeRemoved: true });
-    const bySlug = new Map(all?.items.map((a) => [a.slug, a]));
-    expect(bySlug.get("mara")).toMatchObject({
-      name: "Mara Lind",
+    const byName = new Map(all?.items.map((a) => [a.name, a]));
+    expect(byName.get("Mara")).toMatchObject({
       description: "Now with a surname.",
       status: "active",
       firstScriptVersionId: first.versionId,
       lastScriptVersionId: second.versionId,
     });
-    expect(bySlug.get("jonas")?.status).toBe("removed");
-    expect(bySlug.get("harbour-pier")?.status).toBe("removed");
-    expect(bySlug.get("hat")).toMatchObject({ status: "active", origin: "manual" });
+    expect(byName.get("Jonas")?.status).toBe("removed");
+    expect(byName.get("Harbour Pier")?.status).toBe("removed");
+    expect(byName.get("Hat")).toMatchObject({ status: "active", origin: "manual" });
 
     const active = await assets.listAssets(projectId, userId);
-    expect(active?.items.map((a) => a.slug).sort()).toEqual(["hat", "locket", "mara"]);
+    expect(active?.items.map((a) => a.name).sort()).toEqual(["Hat", "Locket - (gold)", "Mara"]);
 
     const third = await versionAndRun(projectId, 3);
     const r3 = await assets.applyDetection({
@@ -106,14 +103,14 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
       scriptVersionId: third.versionId,
       damiRunId: third.runId,
       assets: [
-        detected("character", "Mara Lind", "mara"),
-        detected("character", "Jonas", "jonas"),
-        detected("prop", "Locket", "locket"),
+        detected("character", "Mara"),
+        detected("character", "Jonas"),
+        detected("prop", "Locket - (gold)"),
       ],
     });
     expect(r3).toEqual({ added: 0, kept: 3, removed: 0 });
     const jonas = (await assets.listAssets(projectId, userId, { kind: "character" }))?.items.find(
-      (a) => a.slug === "jonas",
+      (a) => a.name === "Jonas",
     );
     expect(jonas?.status).toBe("active");
 
@@ -124,8 +121,8 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
       voice: 0,
     });
     const known = await assets.getKnownAssets(projectId);
-    expect(known.map((k) => k.slug).sort()).toEqual(
-      ["harbour-pier", "hat", "jonas", "locket", "mara"].sort(),
+    expect(known.map((k) => k.name).sort()).toEqual(
+      ["Harbour Pier", "Hat", "Jonas", "Locket - (gold)", "Mara"].sort(),
     );
   });
 
@@ -138,7 +135,7 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
       projectId,
       scriptVersionId: v.versionId,
       damiRunId: v.runId,
-      assets: ["a", "b", "c", "d", "e"].map((s) => detected("prop", s.toUpperCase(), s)),
+      assets: ["a", "b", "c", "d", "e"].map((s) => detected("prop", s.toUpperCase())),
     });
     const page1 = await assets.listAssets(projectId, userId, { limit: 2 });
     const page2 = await assets.listAssets(projectId, userId, {
@@ -151,9 +148,9 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     });
     expect(
       [...(page1?.items ?? []), ...(page2?.items ?? []), ...(page3?.items ?? [])].map(
-        (a) => a.slug,
+        (a) => a.name,
       ),
-    ).toEqual(["a", "b", "c", "d", "e"]);
+    ).toEqual(["A", "B", "C", "D", "E"]);
     expect(page3?.nextCursor).toBeNull();
     expect(await assets.listAssets(projectId, other)).toBeNull();
     expect(await assets.countAssetsByKind(projectId, other)).toBeNull();
@@ -170,23 +167,23 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
       scriptVersionId: v.versionId,
       damiRunId: v.runId,
       assets: [
-        detected("prop", "Lamp", "lamp"),
-        detected("character", "Ines", "ines"),
-        detected("location", "Lamp Room", "lamp-room"),
-        detected("character", "Tomas", "tomas"),
+        detected("prop", "Lamp"),
+        detected("character", "Ines"),
+        detected("location", "Lamp Room"),
+        detected("character", "Tomas"),
       ],
     });
     const rows = await getDb()
-      .select({ id: asset.id, slug: asset.slug })
+      .select({ id: asset.id, name: asset.name })
       .from(asset)
       .where(eq(asset.projectId, projectId));
-    const id = (slug: string) => rows.find((r) => r.slug === slug)?.id ?? "";
-    const next = async (slug: string) =>
-      (await assets.nextAssetNeedingInput(projectId, userId, id(slug)))?.name ?? null;
-    expect(await next("ines")).toBe("Tomas");
-    expect(await next("tomas")).toBe("Lamp Room");
-    expect(await next("lamp-room")).toBe("Lamp");
-    expect(await next("lamp")).toBe("Ines");
-    expect(await assets.nextAssetNeedingInput(projectId, other, id("ines"))).toBeNull();
+    const id = (name: string) => rows.find((r) => r.name === name)?.id ?? "";
+    const next = async (name: string) =>
+      (await assets.nextAssetNeedingInput(projectId, userId, id(name)))?.name ?? null;
+    expect(await next("Ines")).toBe("Tomas");
+    expect(await next("Tomas")).toBe("Lamp Room");
+    expect(await next("Lamp Room")).toBe("Lamp");
+    expect(await next("Lamp")).toBe("Ines");
+    expect(await assets.nextAssetNeedingInput(projectId, other, id("Ines"))).toBeNull();
   });
 });

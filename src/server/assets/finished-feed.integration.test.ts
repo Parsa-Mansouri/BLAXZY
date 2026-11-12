@@ -55,7 +55,7 @@ describe.skipIf(!reachable)("finished feed (integration)", async () => {
     const db = getDb();
     const [a] = await db
       .insert(asset)
-      .values({ projectId, kind: "character", name: "Ines", slug: "ines", origin: "manual" })
+      .values({ projectId, kind: "character", name: "Ines", origin: "manual" })
       .returning({ id: asset.id });
     const [f] = await db
       .insert(file)

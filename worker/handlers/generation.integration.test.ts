@@ -184,6 +184,28 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
       /needs the accepted draft/,
     );
     expect(await gen.getGeneration("not-a-uuid", userId)).toBeNull();
+    await expect(
+      gen.requestGeneration({ ...base, purpose: "block_draft", aspectRatio: "1:1" }),
+    ).rejects.toThrow(/16:9 or 9:16/);
+  });
+
+  it("takes an aspect-ratio override and a re-roll variant", async () => {
+    const { userId, projectId } = await funded(20);
+    const input = {
+      userId,
+      projectId,
+      purpose: "asset_look" as const,
+      prompt: "A brass locket",
+      style: TEST_STYLE,
+      aspectRatio: "3:4" as const,
+    };
+    const first = await requestOnly(input);
+    const reroll = await requestOnly({ ...input, variant: "reroll-1" });
+    expect((await row(first.generationId))?.params).toMatchObject({ aspectRatio: "3:4" });
+    expect((await row(reroll.generationId))?.params).toMatchObject({
+      aspectRatio: "3:4",
+      variant: "reroll-1",
+    });
   });
 
   it("[[fail]] → failed with a readable error and refunded", async () => {

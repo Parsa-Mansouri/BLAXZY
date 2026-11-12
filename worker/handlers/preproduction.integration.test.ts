@@ -599,12 +599,14 @@ describe.skipIf(!reachable)(
       );
     });
 
-    it("adds, updates and merges assets; merge rewrites the blocks' assetRefs", async () => {
+    it("adds, renames and merges assets; renames and merges rewrite the blocks' refs and tags", async () => {
       const { userId, projectId } = await setup(0);
       const keep = await add(projectId, userId, "character", "Tomas");
       const dupe = await add(projectId, userId, "character", "Old Tomas");
       const again = await add(projectId, userId, "character", "Tomas");
-      expect([keep.slug, dupe.slug, again.slug]).toEqual(["tomas", "old-tomas", "tomas-2"]);
+      expect([keep.name, dupe.name, again.name]).toEqual(["Tomas", "Old Tomas", "Tomas (2)"]);
+      const lower = await add(projectId, userId, "character", "tomas");
+      expect(lower.name).toBe("tomas (3)");
       expect(keep.origin).toBe("manual");
       const updated = await assets.updateAsset({
         assetId: dupe.id,
@@ -612,7 +614,9 @@ describe.skipIf(!reachable)(
         name: "Tomas (old)",
         description: "",
       });
-      expect(updated).toMatchObject({ name: "Tomas (old)", slug: "old-tomas", description: null });
+      expect(updated).toMatchObject({ name: "Tomas (old)", description: null });
+      const clash = await assets.updateAsset({ assetId: lower.id, userId, name: "TOMAS (2)" });
+      expect(clash?.name).toBe("TOMAS (3)"); // its own old name is free again
 
       const scriptVersionId = await fixtures.acceptedScript(projectId, userId);
       await blocks.replaceBlocks({
@@ -623,18 +627,18 @@ describe.skipIf(!reachable)(
           {
             title: "Stairs",
             scriptExcerpt: "TOMAS climbs the stairs.",
-            prompt: "Tomas climbs.",
+            prompt: "Tomas [character:Tomas (old)] climbs the Lighthouse [location:Lighthouse].",
             durationSeconds: 8,
-            assetRefs: ["character:old-tomas", "location:lighthouse"],
+            assetRefs: ["character:Tomas (old)", "location:Lighthouse"],
             orderIndex: 0,
             ...lines(0),
           },
           {
             title: "Both",
             scriptExcerpt: "TOMAS meets himself.",
-            prompt: "Both.",
+            prompt: "Tomas [character:Tomas] meets Tomas [character:Tomas (old)].",
             durationSeconds: 6,
-            assetRefs: ["character:tomas", "character:old-tomas"],
+            assetRefs: ["character:Tomas", "character:Tomas (old)"],
             orderIndex: 1,
             ...lines(1),
           },
@@ -643,7 +647,7 @@ describe.skipIf(!reachable)(
             scriptExcerpt: "The sea.",
             prompt: "Sea.",
             durationSeconds: 5,
-            assetRefs: ["location:lighthouse"],
+            assetRefs: ["location:Lighthouse"],
             orderIndex: 2,
             ...lines(2),
           },
@@ -661,9 +665,14 @@ describe.skipIf(!reachable)(
       expect(merged?.id).toBe(keep.id);
       const current = await blocks.listBlocks(projectId, userId);
       expect(current?.items.map((b) => b.assetRefs)).toEqual([
-        ["character:tomas", "location:lighthouse"],
-        ["character:tomas"],
-        ["location:lighthouse"],
+        ["character:Tomas", "location:Lighthouse"],
+        ["character:Tomas"],
+        ["location:Lighthouse"],
+      ]);
+      expect(current?.items.map((b) => b.prompt)).toEqual([
+        "Tomas [character:Tomas] climbs the Lighthouse [location:Lighthouse].",
+        "Tomas [character:Tomas] meets Tomas [character:Tomas].",
+        "Sea.",
       ]);
       expect(current?.items.map((b) => b.versionNumber)).toEqual([2, 2, 1]);
       const all = await getDb()
@@ -672,7 +681,21 @@ describe.skipIf(!reachable)(
         .where(eq(s.promptBlock.projectId, projectId));
       expect(all).toHaveLength(5); // the two old versions are kept
       const list = await assets.listAssets(projectId, userId, { kind: "character" });
-      expect(list?.items.map((a) => a.id)).toEqual([keep.id, again.id]);
+      expect(list?.items.map((a) => a.id)).toEqual([keep.id, again.id, lower.id]);
+
+      // A rename is a new id: the blocks that name the asset get a new version with the new ref.
+      const renamed = await assets.updateAsset({ assetId: keep.id, userId, name: "Tomas: Senior" });
+      expect(renamed?.name).toBe("Tomas - Senior");
+      const afterRename = await blocks.listBlocks(projectId, userId);
+      expect(afterRename?.items.map((b) => b.assetRefs)).toEqual([
+        ["character:Tomas - Senior", "location:Lighthouse"],
+        ["character:Tomas - Senior"],
+        ["location:Lighthouse"],
+      ]);
+      expect(afterRename?.items[0]?.prompt).toBe(
+        "Tomas [character:Tomas - Senior] climbs the Lighthouse [location:Lighthouse].",
+      );
+      expect(afterRename?.items.map((b) => b.versionNumber)).toEqual([3, 3, 1]);
       const removed = await assets.getAssetDetail(dupe.id, userId);
       expect(removed?.asset.status).toBe("removed");
       await expect(

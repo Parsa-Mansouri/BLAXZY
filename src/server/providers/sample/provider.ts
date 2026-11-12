@@ -13,7 +13,13 @@ import { createHash } from "node:crypto";
 import type { GenerationPurpose } from "@/server/db/schema";
 import { getEnv } from "@/server/env";
 import { ProviderError } from "../errors";
-import { clampDurationSeconds, VIDEO_DURATION_LIMITS } from "../policy";
+import {
+  clampDurationSeconds,
+  isAspectRatio,
+  isVideoAspectRatio,
+  VIDEO_DURATION_LIMITS,
+  type AspectRatio,
+} from "../policy";
 import type {
   GenerationProvider,
   GenerationRequest,
@@ -87,6 +93,13 @@ function labelOf(request: GenerationRequest): string {
   return text.length > MAX_LABEL_LENGTH ? `${text.slice(0, MAX_LABEL_LENGTH - 1)}…` : text;
 }
 
+/** The request's ratio; a video is only 16:9 or 9:16, anything unknown is 16:9. */
+function sampleAspectRatio(request: GenerationRequest): AspectRatio {
+  const ratio = request.params.aspectRatio;
+  if (request.kind === "video") return isVideoAspectRatio(ratio) ? ratio : "16:9";
+  return isAspectRatio(ratio) ? ratio : "16:9";
+}
+
 function resolutionOf(request: GenerationRequest): "480p" | "1080p" {
   const resolution = request.params.resolution;
   if (resolution === "480p" || resolution === "1080p") return resolution;
@@ -117,7 +130,7 @@ export class SampleProvider implements GenerationProvider {
       o: outcomeOf(request.prompt),
       k: request.kind,
       p: request.purpose,
-      a: request.params.aspectRatio === "9:16" ? "9:16" : "16:9",
+      a: sampleAspectRatio(request),
       l: labelOf(request),
       d: requestDigest(request),
     };
@@ -177,7 +190,7 @@ export class SampleProvider implements GenerationProvider {
         {
           purpose: job.p,
           label: job.l,
-          aspectRatio: job.a,
+          aspectRatio: job.a === "9:16" ? "9:16" : "16:9",
           resolution: job.q ?? (job.p === "block_final" ? "1080p" : "480p"),
           durationSeconds: job.s ?? VIDEO_DURATION_LIMITS.default,
           sound: job.n ?? false,

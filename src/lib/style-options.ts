@@ -1,7 +1,8 @@
 /**
- * The choices on the Style screen. Pure data with no server imports. The `value` of a visual
- * style or genre is the key of the matching dami module, so the writers get the right guidance;
- * a typed "Other" value is stored as the text itself.
+ * The choices on the Style screen: the owner's genres and visual styles. Pure data with no server
+ * imports. The `value` is a stable key (the draft damis resolve it through their module aliases;
+ * `ownerGenreName` / `ownerStyleName` give the names the owner's dami files use); a typed
+ * "Other" value is stored as the text itself.
  */
 
 export interface StyleOption {
@@ -15,11 +16,27 @@ export interface StyleOption {
   image?: string;
 }
 
+/** The owner's seven visual styles. The keys are stable; the labels are the owner's names. */
 export const VISUAL_STYLES: readonly StyleOption[] = [
   {
-    value: "cinematic-live-action",
-    label: "Cinematic Live Action",
+    value: "realistic",
+    label: "Realistic",
     description: "Real people and places, shot like a feature film.",
+  },
+  {
+    value: "noir",
+    label: "Noir",
+    description: "Hard shadows, rain-slick streets and smoky light.",
+  },
+  {
+    value: "futuristic",
+    label: "Futuristic",
+    description: "Sleek technology, neon and engineered worlds.",
+  },
+  {
+    value: "horror-visual",
+    label: "Horror Visual Style",
+    description: "Dread in every frame: dark corners and uneasy light.",
   },
   {
     value: "3d-animation",
@@ -27,20 +44,61 @@ export const VISUAL_STYLES: readonly StyleOption[] = [
     description: "Rendered characters and worlds, polished and dimensional.",
   },
   {
-    value: "2d-animation",
-    label: "2D and Anime",
-    description: "Hand-drawn lines and flat colour, in motion.",
+    value: "anime",
+    label: "Anime",
+    description: "Clean line art, cel shading and painted backgrounds.",
+  },
+  {
+    value: "claymation",
+    label: "Claymation",
+    description: "Handmade clay figures and sets, moved frame by frame.",
   },
 ];
 
+/** The owner's six genres. */
 export const GENRES: readonly StyleOption[] = [
   { value: "drama", label: "Drama", description: "Character and conflict, played straight." },
   { value: "comedy", label: "Comedy", description: "Timing, surprise and warmth." },
-  { value: "thriller", label: "Thriller", description: "Tension that keeps tightening." },
   { value: "horror", label: "Horror", description: "Dread, then the thing itself." },
+  { value: "thriller", label: "Thriller", description: "Tension that keeps tightening." },
+  { value: "action", label: "Action", description: "Momentum, stakes and set pieces." },
   { value: "sci-fi", label: "Science Fiction", description: "Ideas, futures and strange worlds." },
-  { value: "documentary", label: "Documentary", description: "Real subjects, told as they are." },
 ];
+
+/** Keys older projects stored, mapped to today's options. */
+export const LEGACY_STYLE_KEYS: Readonly<Record<string, string>> = {
+  "cinematic-live-action": "realistic",
+  "2d-animation": "anime",
+};
+export const LEGACY_GENRE_KEYS: Readonly<Record<string, string>> = {
+  documentary: "drama",
+};
+
+function ownerName(
+  stored: string,
+  options: readonly StyleOption[],
+  legacy: Readonly<Record<string, string>>,
+): string {
+  const key = legacy[stored] ?? stored;
+  return options.find((o) => o.value === key)?.label ?? stored;
+}
+
+/**
+ * The genre as the owner's dami files name it ("Science Fiction"). Legacy keys map to today's
+ * genres (documentary → Drama); a typed "Other" genre is passed through as written.
+ */
+export function ownerGenreName(stored: string): string {
+  return ownerName(stored, GENRES, LEGACY_GENRE_KEYS);
+}
+
+/**
+ * The visual style as the owner's dami files name it ("Horror Visual Style"). Legacy keys map to
+ * today's styles (cinematic-live-action → Realistic, 2d-animation → Anime); a typed "Other" style
+ * is passed through as written.
+ */
+export function ownerStyleName(stored: string): string {
+  return ownerName(stored, VISUAL_STYLES, LEGACY_STYLE_KEYS);
+}
 
 export const FORMATS = [
   { value: "movie", label: "Movie" },
@@ -94,12 +152,13 @@ export function durationError(
   return null;
 }
 
-/** The option a stored value belongs to, or "other" with the typed text. */
+/** The option a stored value belongs to (legacy keys included), or "other" with the typed text. */
 export function splitChoice(
   stored: string | undefined,
   options: readonly StyleOption[],
 ): { choice: string | null; other: string } {
   if (!stored) return { choice: null, other: "" };
-  if (options.some((o) => o.value === stored)) return { choice: stored, other: "" };
+  const key = LEGACY_STYLE_KEYS[stored] ?? LEGACY_GENRE_KEYS[stored] ?? stored;
+  if (options.some((o) => o.value === key)) return { choice: key, other: "" };
   return { choice: OTHER_VALUE, other: stored };
 }

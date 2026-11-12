@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { partText } from "../framework/define";
 import { runDami } from "../framework/runner";
 import { splitLines } from "../shared/script-lines";
 import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
@@ -79,7 +80,7 @@ describe("script-reviser", () => {
 
   it("locates anchored comments and lists the catalogue in the prompt", () => {
     const prompt = scriptReviser.build(input);
-    const user = prompt.messages[0]?.content[0]?.text ?? "";
+    const user = partText(prompt.messages[0]?.content[0]) ?? "";
     expect(user).toContain("comment 1 (line 28)");
     expect(user).toContain('- ending_weak ("The ending is weak")');
     expect(user).toContain("28| Forty years. You're late.");

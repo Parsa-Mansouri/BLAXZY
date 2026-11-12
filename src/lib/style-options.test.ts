@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { durationError, episodeCount, GENRES, OTHER_VALUE, splitChoice } from "./style-options";
+import {
+  durationError,
+  episodeCount,
+  GENRES,
+  OTHER_VALUE,
+  ownerGenreName,
+  ownerStyleName,
+  splitChoice,
+  VISUAL_STYLES,
+} from "./style-options";
 
 describe("durationError", () => {
   it("accepts a normal duration", () => {
@@ -29,5 +38,45 @@ describe("splitChoice", () => {
     expect(splitChoice("drama", GENRES)).toEqual({ choice: "drama", other: "" });
     expect(splitChoice("western", GENRES)).toEqual({ choice: OTHER_VALUE, other: "western" });
     expect(splitChoice(undefined, GENRES)).toEqual({ choice: null, other: "" });
+  });
+});
+
+describe("owner names", () => {
+  it("lists the owner's genres and styles, in order", () => {
+    expect(GENRES.map((g) => g.label)).toEqual([
+      "Drama",
+      "Comedy",
+      "Horror",
+      "Thriller",
+      "Action",
+      "Science Fiction",
+    ]);
+    expect(VISUAL_STYLES.map((s) => s.label)).toEqual([
+      "Realistic",
+      "Noir",
+      "Futuristic",
+      "Horror Visual Style",
+      "3D Animation",
+      "Anime",
+      "Claymation",
+    ]);
+  });
+
+  it("maps keys, legacy keys and Other text to the owner's names", () => {
+    expect(ownerGenreName("sci-fi")).toBe("Science Fiction");
+    expect(ownerGenreName("documentary")).toBe("Drama");
+    expect(ownerGenreName("Space western")).toBe("Space western");
+    expect(ownerStyleName("horror-visual")).toBe("Horror Visual Style");
+    expect(ownerStyleName("cinematic-live-action")).toBe("Realistic");
+    expect(ownerStyleName("2d-animation")).toBe("Anime");
+    expect(ownerStyleName("Watercolour")).toBe("Watercolour");
+  });
+
+  it("shows legacy keys as today's choice", () => {
+    expect(splitChoice("cinematic-live-action", VISUAL_STYLES)).toEqual({
+      choice: "realistic",
+      other: "",
+    });
+    expect(splitChoice("documentary", GENRES)).toEqual({ choice: "drama", other: "" });
   });
 });

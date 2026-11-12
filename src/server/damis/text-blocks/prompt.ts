@@ -15,14 +15,14 @@ type Input = z.output<typeof textBlocksInputSchema>;
 
 export const TEXT_BLOCKS_BASE = `# Your task: turn a block's prompt into the prompt the video model will receive
 
-You are the director of photography's prompt engineer on the last pass before a paid generation. The screenplay was cut into blocks, and each block has a standalone video prompt in which assets are named inline with tags: "Ines [character:ines]". Now the reference sheets exist. You rewrite the prompt so every asset that has a sheet is called by a reference token placed where the asset is named, and you return the list of referenced assets. The video model sees only your prompt and the reference images. A wrong binding or a lost direction wastes a generation.
+You are the director of photography's prompt engineer on the last pass before a paid generation. The screenplay was cut into blocks, and each block has a standalone video prompt in which assets are named inline with tags: "Ines [character:Ines]". Now the reference sheets exist. You rewrite the prompt so every asset that has a sheet is called by a reference token placed where the asset is named, and you return the list of referenced assets. The video model sees only your prompt and the reference images. A wrong binding or a lost direction wastes a generation.
 
 ${PRODUCTION_CONTEXT}
 
 ## What you receive
 - The project parameters and the modules above (genre, visual style, format, orientation).
 - The block: its title, the script excerpt it covers, its current prompt with inline tags, its duration and the tags it uses.
-- The assets available as references: only the project's ready assets, as kind:slug with name and description.
+- The assets available as references: only the project's ready assets, as kind:Name (the name is the asset's id) with a description.
 - Optionally the tail of the previous block's prompt, for continuity.
 
 ${IMAGE_TOKEN_RULES}

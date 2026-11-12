@@ -74,7 +74,6 @@ export function createProductionFixtures() {
     projectId: string,
     userId: string,
     kind: AssetKind,
-    slug: string,
     name: string,
   ): Promise<{ assetId: string; lookFileId: string; sheetFileId: string; ref: string }> {
     const { getDb } = await import("@/server/db/client");
@@ -82,7 +81,7 @@ export function createProductionFixtures() {
     const db = getDb();
     const [created] = await db
       .insert(asset)
-      .values({ projectId, kind, slug, name, description: `${name}, as in the script.` })
+      .values({ projectId, kind, name, description: `${name}, as in the script.` })
       .returning({ id: asset.id });
     if (!created) throw new Error("insert failed");
     const lookFileId = await storedPng(userId, projectId, "asset_image", 40);
@@ -110,7 +109,7 @@ export function createProductionFixtures() {
       fileId: sheetFileId,
       decidedAt: new Date(),
     });
-    return { assetId: created.id, lookFileId, sheetFileId, ref: `${kind}:${slug}` };
+    return { assetId: created.id, lookFileId, sheetFileId, ref: `${kind}:${name}` };
   }
 
   /** Replaces the project's blocks (as sectioning does). */

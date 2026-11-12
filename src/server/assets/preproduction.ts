@@ -9,12 +9,15 @@
  * transaction that creates the look or sheet has committed. Nothing is overwritten or deleted:
  * decisions change statuses, and new attempts are new versions.
  */
-import { and, asc, eq, inArray, isNull, max, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, max, ne } from "drizzle-orm";
 import { z } from "zod";
 import { rewriteAssetRefs } from "@/server/blocks";
 import {
   ASSET_QUESTIONS,
-  ASSET_SLUG_PATTERN,
+  formatAssetRef,
+  uniqueName,
+  cleanAssetName,
+  MAX_ASSET_NAME,
   LOOK_ISSUE_CODES,
   SHEET_ISSUE_CODES,
   lookIssueFits,
@@ -86,7 +89,7 @@ export const MAX_LOOK_PROMPT_LENGTH = 4000;
 /** Longest answer to one guided question (the asset-prompt-writer's limit). */
 export const MAX_GUIDED_ANSWER_LENGTH = 1000;
 export const MAX_REVIEW_NOTE_LENGTH = 2000;
-export const MAX_ASSET_NAME_LENGTH = 200;
+export const MAX_ASSET_NAME_LENGTH = MAX_ASSET_NAME;
 export const MAX_ASSET_DESCRIPTION_LENGTH = 4000;
 export const DEFAULT_CARD_PAGE_SIZE = 24;
 export const MAX_CARD_PAGE_SIZE = 100;
@@ -164,7 +167,9 @@ const nameSchema = z
   .string({ error: "Give the asset a name." })
   .trim()
   .min(1, "Give the asset a name.")
-  .max(MAX_ASSET_NAME_LENGTH, `Keep the name under ${MAX_ASSET_NAME_LENGTH} characters.`);
+  .max(MAX_ASSET_NAME_LENGTH, `Keep the name under ${MAX_ASSET_NAME_LENGTH} characters.`)
+  .transform(cleanAssetName)
+  .pipe(z.string().min(1, "Use letters or digits in the name."));
 const descriptionSchema = z
   .string()
   .trim()
@@ -1013,39 +1018,30 @@ export async function replaceLook(input: {
 /* Managing assets                                                                             */
 /* ------------------------------------------------------------------------------------------ */
 
-/** `Old Tomas (the keeper)` → `old-tomas-the-keeper` (empty when nothing usable is left). */
-export function slugify(name: string): string {
-  return name
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40)
-    .replace(/-+$/g, "");
-}
-
-async function freeSlug(tx: DbTx, projectId: string, kind: AssetKind, name: string) {
-  const base = slugify(name) || kind;
-  const taken = await tx
-    .select({ slug: asset.slug })
+/** The names of the project's assets of one kind (removed ones too: a name stays taken). */
+async function takenNames(
+  tx: DbTx,
+  projectId: string,
+  kind: AssetKind,
+  exceptId?: string,
+): Promise<string[]> {
+  const rows = await tx
+    .select({ name: asset.name })
     .from(asset)
     .where(
       and(
         eq(asset.projectId, projectId),
         eq(asset.kind, kind),
-        sql`(${asset.slug} = ${base} or ${asset.slug} like ${`${base}-%`})`,
+        exceptId ? ne(asset.id, exceptId) : undefined,
       ),
     );
-  const used = new Set(taken.map((t) => t.slug));
-  if (!used.has(base)) return base;
-  for (let n = 2; ; n++) {
-    const candidate = `${base}-${n}`;
-    if (!used.has(candidate)) return candidate;
-  }
+  return rows.map((r) => r.name);
 }
 
-/** Adds an asset by hand (origin manual; detection never changes or removes it). */
+/**
+ * Adds an asset by hand (origin manual; detection never changes or removes it). The name is
+ * cleaned and made unique in its kind: a second "Mara" becomes "Mara (2)".
+ */
 export async function addAsset(input: {
   projectId: string;
   userId: string;
@@ -1053,13 +1049,11 @@ export async function addAsset(input: {
   name: string;
   description?: string;
 }): Promise<Asset | null> {
-  const { projectId, userId, kind, name, description } = parse(addInput, input);
+  const { projectId, userId, kind, name: given, description } = parse(addInput, input);
   return getDb().transaction(async (tx) => {
     const owned = await openProject(tx, projectId, userId, true);
     if (!owned) return null;
-    const slug = await freeSlug(tx, projectId, kind, name);
-    if (!ASSET_SLUG_PATTERN.test(slug))
-      throw new AssetInputError("Use letters or digits in the name.");
+    const name = uniqueName(given, await takenNames(tx, projectId, kind));
     const [last] = await tx
       .select({ order: max(asset.displayOrder) })
       .from(asset)
@@ -1070,7 +1064,6 @@ export async function addAsset(input: {
         projectId,
         kind,
         name,
-        slug,
         description: description ? description : null,
         status: "active",
         origin: "manual",
@@ -1078,25 +1071,41 @@ export async function addAsset(input: {
       })
       .returning();
     if (!row) throw new Error("asset insert returned no row");
-    await logEvent(tx, projectId, userId, "asset.added", { assetId: row.id, kind, slug });
+    await logEvent(tx, projectId, userId, "asset.added", { assetId: row.id, kind, name });
     return row;
   });
 }
 
-/** Renames an asset or changes its description (its slug, the stable key, stays). */
+/**
+ * Renames an asset or changes its description. The name is the asset's id, so a rename makes it
+ * unique in its kind ("Mara (2)" when "Mara" is taken) and rewrites every current block that
+ * refers to it (`rewriteAssetRefs`).
+ */
 export async function updateAsset(input: {
   assetId: string;
   userId: string;
   name?: string;
   description?: string;
 }): Promise<Asset | null> {
-  const { assetId, userId, name, description } = parse(updateInput, input);
+  const { assetId, userId, name: given, description } = parse(updateInput, input);
   if (!isUuid(assetId)) return null;
   return getDb().transaction(async (tx) => {
+    // Project first (as block rewrites do), then the asset.
+    const [first] = await tx
+      .select({ projectId: asset.projectId })
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1);
+    if (!first) return null;
+    if (!(await openProject(tx, first.projectId, userId, true))) return null;
     const locked = await lockAsset(tx, assetId, userId);
     if (!locked) return null;
     const { asset: row } = locked;
     assertActive(row);
+    const name =
+      given === undefined || given === row.name
+        ? undefined
+        : uniqueName(given, await takenNames(tx, row.projectId, row.kind, row.id));
     if (name === undefined && description === undefined) return row;
     const [updated] = await tx
       .update(asset)
@@ -1106,10 +1115,22 @@ export async function updateAsset(input: {
       })
       .where(eq(asset.id, assetId))
       .returning();
+    const blocksRewritten =
+      name !== undefined
+        ? await rewriteAssetRefs(
+            {
+              projectId: row.projectId,
+              from: formatAssetRef(row.kind, row.name),
+              to: formatAssetRef(row.kind, name),
+            },
+            tx,
+          )
+        : 0;
     await logEvent(tx, row.projectId, userId, "asset.updated", {
       assetId,
       name: name !== undefined,
       description: description !== undefined,
+      ...(name !== undefined ? { from: row.name, to: name, blocksRewritten } : {}),
     });
     return updated ?? null;
   });
@@ -1128,7 +1149,7 @@ export async function removeAsset(input: { assetId: string; userId: string }): P
     await logEvent(tx, row.projectId, userId, "asset.removed", {
       assetId,
       kind: row.kind,
-      slug: row.slug,
+      name: row.name,
     });
     return true;
   });
@@ -1136,7 +1157,7 @@ export async function removeAsset(input: { assetId: string; userId: string }): P
 
 /**
  * Merges `mergeId` into `keepId` (same project and kind, both active): the merged asset becomes
- * removed and the current blocks' `assetRefs` point at the kept asset's slug instead.
+ * removed and the current blocks' refs and tags point at the kept asset instead.
  */
 export async function mergeAssets(input: {
   keepId: string;
@@ -1174,8 +1195,8 @@ export async function mergeAssets(input: {
     const blocksRewritten = await rewriteAssetRefs(
       {
         projectId: keep.projectId,
-        from: `${merged.kind}:${merged.slug}`,
-        to: `${keep.kind}:${keep.slug}`,
+        from: formatAssetRef(merged.kind, merged.name),
+        to: formatAssetRef(keep.kind, keep.name),
       },
       tx,
     );
@@ -1183,8 +1204,8 @@ export async function mergeAssets(input: {
       keepId,
       mergeId,
       kind: keep.kind,
-      keepSlug: keep.slug,
-      mergeSlug: merged.slug,
+      keepName: keep.name,
+      mergeName: merged.name,
       blocksRewritten,
     });
     return keep;

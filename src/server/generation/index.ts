@@ -11,6 +11,8 @@ export {
   requestGeneration,
   MAX_PROMPT_LENGTH,
   MAX_REFERENCES,
+  MAX_VARIANT_LENGTH,
+  VARIANT_PARAM,
   type GenerationView,
   type RequestGenerationInput,
 } from "./service";

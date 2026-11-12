@@ -1,22 +1,18 @@
 import { defineDami } from "../framework/define";
 import { CLAUDE_MODELS } from "../framework/models";
+import { formatAssetRef, taggedRefs } from "../shared/asset-ref";
 import { sliceLines, splitLines } from "../shared/script-lines";
 import { absorbBlankGaps, checkRangeCoverage } from "./coverage";
 import { buildPromptSectionerPrompt } from "./prompt";
 import {
-  ASSET_TAG_PATTERN,
   promptSectionerInputSchema,
   promptSectionerModelOutputSchema,
   type PromptSectionerOutput,
 } from "./schema";
 
-function tagsIn(prompt: string): string[] {
-  return [...prompt.matchAll(ASSET_TAG_PATTERN)].map((m) => m[1] ?? "");
-}
-
 export const promptSectioner = defineDami({
   key: "prompt-sectioner",
-  version: "1.0.0",
+  version: "1.1.0",
   description:
     "Cuts a range of a screenplay into generation blocks of at most 15 seconds, each with a standalone screenplay-style video prompt that tags its assets. Use `sectionScript` for a whole script.",
   input: promptSectionerInputSchema,
@@ -32,10 +28,10 @@ export const promptSectioner = defineDami({
     const lines = splitLines(input.content);
     const range = input.range ?? { startLine: 1, endLine: lines.length };
     const issues = checkRangeCoverage(output.blocks, range, lines);
-    const known = new Set(input.assets.map((a) => `${a.kind}:${a.slug}`));
+    const known = new Set(input.assets.map((a) => formatAssetRef(a.kind, a.name)));
     output.blocks.forEach((block, i) => {
       const refs = new Set(block.assetRefs);
-      const tags = new Set(tagsIn(block.prompt));
+      const tags = new Set(taggedRefs(block.prompt));
       for (const ref of refs) {
         if (!known.has(ref))
           issues.push(`blocks.${i}: assetRefs has "${ref}", which is not in the asset list`);

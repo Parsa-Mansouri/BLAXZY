@@ -17,7 +17,7 @@ import { takeFixer } from "./take-fixer/dami";
 import { textBlocks } from "./text-blocks/dami";
 
 // Framework
-export { defineDami } from "./framework/define";
+export { defineDami, isPromptImage, partText } from "./framework/define";
 export type {
   AnyDami,
   DamiConfig,
@@ -27,8 +27,12 @@ export type {
   DamiMessage,
   DamiPrompt,
   DamiResult,
+  PromptImage,
+  PromptPart,
   PromptText,
 } from "./framework/define";
+export { MAX_IMAGE_EDGE_PX, prepareImageBytes } from "./framework/images";
+export type { ImageResolver, ResolvedImage } from "./framework/images";
 export { runDami } from "./framework/runner";
 export type {
   DamiRunContext,
@@ -106,9 +110,28 @@ export {
   type ScriptIssueDefinition,
 } from "./script-reviser/issues";
 export {
+  ASSET_REF_PATTERN,
+  ASSET_TAG_PATTERN,
+  MAX_ASSET_NAME,
+  assetNameSchema,
+  assetRefSchema,
+  assetTag,
+  assetTagPattern,
+  cleanAssetName,
+  formatAssetRef,
+  isAssetRef,
+  isCleanAssetName,
+  isVoiceRef,
+  nameKey,
+  parseAssetRef,
+  replaceAssetTag,
+  taggedRefs,
+  uniqueName,
+  type ParsedAssetRef,
+} from "./shared/asset-ref";
+export {
   assetDetectorInputSchema,
   assetDetectorOutputSchema,
-  ASSET_SLUG_PATTERN,
   type AssetDetectorInput,
   type AssetDetectorOutput,
   type DetectedAsset,
@@ -251,3 +274,28 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [blockReviser.key]: blockReviser,
   [takeFixer.key]: takeFixer,
 };
+
+// Review catalogs (the owner's complaint menus)
+export {
+  AUTO_VALUE,
+  buildFixRequests,
+  findReviewOption,
+  fixRequestCodes,
+  getReviewCatalog,
+  REVIEW_CATALOG_KEYS,
+  REVIEW_OPTION_KINDS,
+  ReviewCatalogError,
+  visibleOptions,
+  type FixRequest,
+  type FixSelection,
+  type FollowupChoice,
+  type FollowupStep,
+  type ReviewCatalog,
+  type ReviewCatalogKey,
+  type ReviewCondition,
+  type ReviewFollowup,
+  type ReviewGroup,
+  type ReviewOption,
+  type ReviewOptionKind,
+  type ReviewSector,
+} from "./shared/review-catalog";

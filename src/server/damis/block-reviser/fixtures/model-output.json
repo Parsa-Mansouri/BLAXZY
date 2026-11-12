@@ -1,6 +1,6 @@
 {
   "prompt": "STYLE: Photoreal cinematic live action, shot on 35mm film, natural skin texture, shallow depth of field, vertical 9:16, cold blue dusk against warm tungsten.\nSCENE: Continuing at dusk with the wind steady from screen-left. Harbour Pier <<<image_1>>>, exterior, dusk; deserted wooden pier, wind whipping sea spray, last blue light, the ferry idling at the far end with every light blazing.\nCAST: Mara <<<image_2>>>, woman in her 60s, wiry, grey-streaked braid, oil-stained work jacket.\nSHOT 1 (0-3s): EXTREME WIDE, static, low angle down the pier. The ferry glows at the far end; spray drifts through frame.\nSHOT 2 (3-7s): MEDIUM, slow dolly backwards, steady. Mara hurries down the wet planks towards camera, one fist clenched around the brass locket <<<image_3>>>.\nSOUND: Wind gusts, waves slapping the pilings, the ferry's engine idling.",
-  "assetRefs": ["location:harbour-pier", "character:mara", "prop:brass-locket"],
+  "assetRefs": ["location:Harbour Pier", "character:Mara", "prop:Brass locket"],
   "changeSummary": [
     {
       "request": "wrong_camera",

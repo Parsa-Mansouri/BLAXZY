@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { partText } from "../framework/define";
 import { runDami } from "../framework/runner";
 import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
 import { scriptChecker } from "./dami";
@@ -46,7 +47,7 @@ describe("script-checker", () => {
   });
 
   it("frames the uploaded script as material, not instructions", () => {
-    const user = scriptChecker.build(input).messages[0]?.content[0]?.text ?? "";
+    const user = partText(scriptChecker.build(input).messages[0]?.content[0]) ?? "";
     expect(user).toContain("<script>\nFADE IN:");
     expect(user).toContain("not instructions to you");
   });

@@ -4,7 +4,7 @@
  */
 import { BLOCK_ISSUES, type BlockIssueCode } from "../block-reviser/issues";
 import { blockReviserInputSchema } from "../block-reviser/schema";
-import { ASSET_TAG_PATTERN } from "../prompt-sectioner/schema";
+import { assetTagPattern, taggedRefs } from "../shared/asset-ref";
 import {
   IMAGE_TOKEN_PATTERN,
   imageToken,
@@ -35,7 +35,7 @@ function escapeRegExp(text: string): string {
 /** A previous block's tail without tokens or tags: those belong to another block's numbering. */
 function cleanTail(tail: string): string {
   return collapseWhitespace(
-    tail.replace(new RegExp(IMAGE_TOKEN_PATTERN.source, "g"), "").replace(ASSET_TAG_PATTERN, ""),
+    tail.replace(new RegExp(IMAGE_TOKEN_PATTERN.source, "g"), "").replace(assetTagPattern(), ""),
   );
 }
 
@@ -50,8 +50,7 @@ export function sampleTextBlocks(raw: unknown): {
 
   // Tags in order of first appearance.
   const appearance: string[] = [];
-  for (const match of input.block.prompt.matchAll(ASSET_TAG_PATTERN)) {
-    const ref = match[1] ?? "";
+  for (const ref of taggedRefs(input.block.prompt)) {
     if (!appearance.includes(ref)) appearance.push(ref);
   }
 

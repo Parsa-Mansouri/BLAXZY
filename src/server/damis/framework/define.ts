@@ -6,7 +6,21 @@ import type { z } from "zod";
  */
 export type PromptText = { text: string; cache?: boolean };
 
-export type DamiMessage = { role: "user" | "assistant"; content: PromptText[] };
+/**
+ * An image from object storage, by file id only (so `dami_run.input` stays small). In live mode the
+ * runner loads, downscales and base64-encodes it before the request is built; sample mode never
+ * reads it. `cache: true` puts a prompt-cache breakpoint after it, like `PromptText`.
+ */
+export type PromptImage = { image: { fileId: string }; cache?: boolean };
+
+/** One block of a message: text or an image. */
+export type PromptPart = PromptText | PromptImage;
+
+export function isPromptImage(part: PromptPart): part is PromptImage {
+  return "image" in part;
+}
+
+export type DamiMessage = { role: "user" | "assistant"; content: PromptPart[] };
 
 /**
  * What a dami's `build` returns. Order matters for caching: stable text first (the dami's base
@@ -69,7 +83,8 @@ export type DamiInput<D> =
 export type DamiResult<D> = D extends DamiDefinition<z.ZodType, z.ZodType, infer R> ? R : never;
 
 const KEY_PATTERN = /^[a-z][a-z0-9-]*$/;
-const STREAMING_THRESHOLD_TOKENS = 16_000;
+/** Calls with a larger `max_tokens` stream by default, to avoid HTTP timeouts. */
+export const STREAMING_THRESHOLD_TOKENS = 16_000;
 
 export function defineDami<I extends z.ZodType, O extends z.ZodType, R = z.output<O>>(
   config: DamiConfig<I, O, R>,
@@ -96,4 +111,9 @@ export function defineDami<I extends z.ZodType, O extends z.ZodType, R = z.outpu
     // Without `finalize`, R defaults to z.output<O> and the output is returned unchanged.
     finalize: (output, input) => (finalize ? finalize(output, input) : (output as unknown as R)),
   };
+}
+
+/** The text of a prompt part ("" for an image or a missing part). */
+export function partText(part: PromptPart | undefined): string {
+  return part && !isPromptImage(part) ? part.text : "";
 }

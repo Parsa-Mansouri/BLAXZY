@@ -36,10 +36,19 @@ export function sampleImageSize(spec: Pick<SampleImageSpec, "purpose" | "aspectR
   width: number;
   height: number;
 } {
-  const landscape = spec.aspectRatio === "16:9";
-  if (isSheet(spec.purpose))
-    return landscape ? { width: 1600, height: 900 } : { width: 900, height: 1600 };
-  return landscape ? { width: 1280, height: 720 } : { width: 720, height: 1280 };
+  const sheet = isSheet(spec.purpose);
+  switch (spec.aspectRatio) {
+    case "16:9":
+      return sheet ? { width: 1600, height: 900 } : { width: 1280, height: 720 };
+    case "9:16":
+      return sheet ? { width: 900, height: 1600 } : { width: 720, height: 1280 };
+    case "1:1":
+      return sheet ? { width: 1400, height: 1400 } : { width: 1024, height: 1024 };
+    case "4:3":
+      return sheet ? { width: 1600, height: 1200 } : { width: 1280, height: 960 };
+    case "3:4":
+      return sheet ? { width: 1200, height: 1600 } : { width: 960, height: 1280 };
+  }
 }
 
 export function escapeXml(text: string): string {

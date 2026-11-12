@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { partText } from "../framework/define";
 import type { ProjectStyle } from "@/server/db/schema";
 import { buildScriptWriterPrompt } from "../script-writer/prompt";
 import {
@@ -49,6 +50,19 @@ describe("module registry", () => {
     expect(resolveStyleModule("Cinematic live-action").key).toBe("cinematic-live-action");
   });
 
+  it("resolves the Style screen's keys (the owner's list) for the draft damis", () => {
+    expect(resolveStyleModule("realistic").key).toBe("cinematic-live-action");
+    expect(resolveStyleModule("anime").key).toBe("2d-animation");
+    expect(resolveStyleModule("3d-animation").key).toBe("3d-animation");
+    for (const key of ["noir", "futuristic", "horror-visual", "claymation"]) {
+      expect(resolveStyleModule(key)).toBe(GENERIC_STYLE_MODULE);
+    }
+    expect(resolveGenreModule("action").key).toBe("thriller");
+    for (const key of ["drama", "comedy", "horror", "thriller", "sci-fi"]) {
+      expect(resolveGenreModule(key).key).toBe(key);
+    }
+  });
+
   it("falls back to the generic modules for unknown values", () => {
     expect(resolveGenreModule("Western")).toBe(GENERIC_GENRE_MODULE);
     expect(resolveGenreModule("")).toBe(GENERIC_GENRE_MODULE);
@@ -96,7 +110,7 @@ describe("module registry", () => {
     const system = prompt.system.map((p) => p.text).join("\n");
     expect(system).not.toContain("2 min");
     expect(system).not.toContain("dry");
-    const user = prompt.messages[0]?.content.map((p) => p.text).join("\n") ?? "";
+    const user = prompt.messages[0]?.content.map(partText).join("\n") ?? "";
     expect(user).toContain("2 min");
     expect(user).toContain("- tone: dry");
   });

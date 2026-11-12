@@ -9,11 +9,17 @@ import {
   promptSectionerInputSchema,
   type PromptSectionerModelBlock,
 } from "../prompt-sectioner/schema";
+import { assetTag, formatAssetRef } from "../shared/asset-ref";
 import { isBlank, isSceneHeading, sliceLines, splitLines } from "../shared/script-lines";
 import { WORDS_PER_MINUTE } from "../shared/style";
 import { collapseWhitespace, countWords, headingPlace, isTransition, truncate } from "./util";
 
 type Input = z.output<typeof promptSectionerInputSchema>;
+
+/** "Mara (2)" → "Mara", "Mara (voice)" → "Mara". */
+function baseName(name: string): string {
+  return name.replace(/\s*\([^()]*\)$/, "").trim();
+}
 
 /** About 15 seconds of screenplay text. */
 const MAX_BLOCK_WORDS = Math.floor((WORDS_PER_MINUTE / 60) * MAX_BLOCK_SECONDS);
@@ -22,11 +28,11 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Assets whose name (or slug words) appear in the text, in order of first appearance. */
+/** Assets whose name (or its base, without a trailing "(...)") appears in the text, in order of first appearance. */
 function assetsIn(text: string, assets: Input["assets"]) {
   const found: Array<{ index: number; asset: Input["assets"][number] }> = [];
   for (const asset of assets) {
-    const names = [asset.name, asset.slug.replace(/-/g, " ")];
+    const names = [...new Set([asset.name, baseName(asset.name)])].filter(Boolean);
     let index = -1;
     for (const name of names) {
       const match = new RegExp(
@@ -95,7 +101,8 @@ export function samplePromptSectioner(raw: unknown): { blocks: PromptSectionerMo
         }
       }
       const found = assetsIn(`${heading ?? ""}\n${excerpt}`, input.assets);
-      const tag = (a: Input["assets"][number]) => `${a.name} [${a.kind}:${a.slug}]`;
+      const tag = (a: Input["assets"][number]) =>
+        `${a.name} ${assetTag(formatAssetRef(a.kind, a.name))}`;
       const where = found.filter((a) => a.kind === "location");
       const cast = found.filter((a) => a.kind === "character");
       const things = found.filter((a) => a.kind !== "location" && a.kind !== "character");
@@ -126,7 +133,7 @@ export function samplePromptSectioner(raw: unknown): { blocks: PromptSectionerMo
         endLine: block.endLine,
         prompt: prompt.slice(0, 6000),
         durationSeconds: seconds,
-        assetRefs: found.map((a) => `${a.kind}:${a.slug}`),
+        assetRefs: found.map((a) => formatAssetRef(a.kind, a.name)),
       };
     }),
   };

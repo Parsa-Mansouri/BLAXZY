@@ -7,7 +7,7 @@ import { blockReviserInputSchema, blockReviserOutputSchema } from "./schema";
 
 export const blockReviser = defineDami({
   key: "block-reviser",
-  version: "1.0.0",
+  version: "1.1.0",
   description:
     "Revises a prepared block's prompt and reference list for the director's review, changing only what the review asks for.",
   input: blockReviserInputSchema,

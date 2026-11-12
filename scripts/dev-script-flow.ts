@@ -120,7 +120,7 @@ async function main(): Promise<void> {
   const counts = await countAssetsByKind(project.id, userId);
   const list = await listAssets(project.id, userId, { limit: 100 });
   console.log("4. Detected assets:");
-  for (const a of list?.items ?? []) console.log(`   ${a.kind.padEnd(9)} ${a.name} (${a.slug})`);
+  for (const a of list?.items ?? []) console.log(`   ${a.kind.padEnd(9)} ${a.name} (${a.status})`);
   console.log(`   counts: ${JSON.stringify(counts)}`);
   console.log(`5. Prompt blocks: ${status.blockCount}`);
 }

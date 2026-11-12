@@ -8,7 +8,7 @@ import {
   type ClaudeResponse,
 } from "./client";
 import { getProcessClaudeLimiter, Semaphore } from "./concurrency";
-import type { DamiDefinition } from "./define";
+import { STREAMING_THRESHOLD_TOKENS, type DamiDefinition } from "./define";
 import {
   DamiApiError,
   DamiConfigError,
@@ -18,6 +18,7 @@ import {
   DamiRefusalError,
   DamiTruncatedError,
 } from "./errors";
+import { resolvePromptImages, storageImageResolver, type ImageResolver } from "./images";
 import { resolveDamiMode, SAMPLE_MODEL, type DamiMode } from "./mode";
 import { resolveModel } from "./models";
 import { addUsage, computeCostUsd, ZERO_USAGE, type TokenUsage } from "./pricing";
@@ -32,6 +33,8 @@ export type DamiRunContext = {
   projectId?: string | null;
   /** Explicit model for this run; overrides DAMI_DEFAULT_MODEL and the dami default. */
   model?: string;
+  /** `max_tokens` for this run; overrides the dami's `maxOutputTokens`. */
+  maxOutputTokens?: number;
   signal?: AbortSignal;
 };
 
@@ -58,6 +61,8 @@ export type DamiRunnerDeps = {
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
   backoff?: { baseDelayMs: number; maxDelayMs: number };
+  /** Loads prompt images (live mode only). Default: object storage, downscaled with sharp. */
+  resolveImage?: ImageResolver;
 };
 
 export type DamiRunResult<R> = {
@@ -188,11 +193,34 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const backoff = { ...DEFAULT_BACKOFF, ...deps.backoff, random: deps.random ?? Math.random };
 
-  const request = buildClaudeRequest(dami.build(validInput), {
+  const maxTokens = ctx.maxOutputTokens ?? dami.maxOutputTokens;
+  if (!Number.isInteger(maxTokens) || maxTokens < 1) {
+    throw new DamiConfigError(
+      dami.key,
+      `Dami "${dami.key}": maxOutputTokens must be a positive integer`,
+    );
+  }
+  const prompt = dami.build(validInput);
+  // Sample mode never reads storage: images become text stand-ins.
+  let images: Awaited<ReturnType<typeof resolvePromptImages>> | undefined;
+  if (!sample) {
+    try {
+      images = await resolvePromptImages(
+        prompt,
+        deps.resolveImage ?? storageImageResolver,
+        ctx.signal,
+      );
+    } catch (error) {
+      throw new DamiInputError(dami.key, [`An image could not be loaded: ${describeError(error)}`]);
+    }
+  }
+  const streaming = dami.streaming || maxTokens > STREAMING_THRESHOLD_TOKENS;
+  const request = buildClaudeRequest(prompt, {
     model,
-    maxTokens: dami.maxOutputTokens,
+    maxTokens,
     effort: dami.effort,
     outputSchema: dami.output,
+    images,
   });
   const callOptions = { signal: ctx.signal, dami: { key: dami.key, input: validInput } };
 
@@ -213,7 +241,7 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
       attempts++;
       try {
         const response = await limiter.run(() =>
-          dami.streaming
+          streaming
             ? client.streamMessage(req, callOptions)
             : client.createMessage(req, callOptions),
         );
@@ -249,7 +277,7 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
         );
       }
       if (response.stop_reason === "max_tokens") {
-        throw new DamiTruncatedError(dami.key, dami.maxOutputTokens);
+        throw new DamiTruncatedError(dami.key, maxTokens);
       }
       const result = validateOutput(dami, responseText(response.content), validInput);
       if (result.ok) {

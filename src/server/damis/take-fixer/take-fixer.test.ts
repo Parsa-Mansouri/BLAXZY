@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { partText } from "../framework/define";
 import { runDami } from "../framework/runner";
 import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
 import { takeFixer } from "./dami";
@@ -87,7 +88,7 @@ describe("take-fixer", () => {
     const system = a.system.map((p) => p.text).join("\n");
     for (const code of TAKE_ISSUE_CODES) expect(system).toContain(`- ${code} (`);
     expect(system).not.toContain(input.previousPrompt);
-    const user = a.messages[0]?.content.map((p) => p.text).join("\n") ?? "";
+    const user = a.messages[0]?.content.map(partText).join("\n") ?? "";
     expect(user).toContain(input.previousPrompt);
     expect(user).toContain('face_distorted ("Face distorted")');
     expect(user).toContain("Her braid looks wrong.");

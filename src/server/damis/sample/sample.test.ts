@@ -158,7 +158,6 @@ describe("sample generators", () => {
     expect(assetDetectorOutputSchema.safeParse(detected).success).toBe(true);
     const characters = detected.assets.filter((a) => a.kind === "character");
     expect(characters.map((c) => c.name)).toEqual(["مریم", "رضا"]);
-    expect(characters.map((c) => c.slug)).toEqual(["character-1", "character-2"]);
     const run = await runDami(assetDetector, { style, content }, {}, deps);
 
     const review = {
@@ -174,7 +173,7 @@ describe("sample generators", () => {
     expect(sectioned.blocks.length).toBeGreaterThan(0);
   });
 
-  it("keeps the slugs of known assets", () => {
+  it("keeps the names of known assets (ignoring case)", () => {
     const style = movie(60);
     const content = sampleScriptWriter({ style, brief: "Lighthouse" }).content;
     const first = sampleAssetDetector({ style, content });
@@ -183,9 +182,11 @@ describe("sample generators", () => {
     const again = sampleAssetDetector({
       style,
       content,
-      knownAssets: [{ kind: "character", name: character.name, slug: "the-hero" }],
+      knownAssets: [{ kind: "character", name: character.name.toUpperCase() }],
     });
-    expect(again.assets.find((a) => a.name === character.name)?.slug).toBe("the-hero");
+    const names = again.assets.filter((a) => a.kind === "character").map((a) => a.name);
+    expect(names).toContain(character.name.toUpperCase());
+    expect(names).not.toContain(character.name);
   });
 
   it("records model sample and no cost in sample mode", async () => {

@@ -1,13 +1,13 @@
 import { defineDami } from "../framework/define";
 import { CLAUDE_MODELS } from "../framework/models";
-import { ASSET_TAG_PATTERN } from "../prompt-sectioner/schema";
+import { taggedRefs } from "../shared/asset-ref";
 import { checkBlockPrompt, MAX_REFERENCE_IMAGES } from "../shared/block";
 import { buildTextBlocksPrompt } from "./prompt";
 import { textBlocksInputSchema, textBlocksOutputSchema } from "./schema";
 
 export const textBlocks = defineDami({
   key: "text-blocks",
-  version: "1.0.0",
+  version: "1.1.0",
   description:
     "Turns a sectioned block into the generation-ready video prompt: each asset that has a reference sheet is called by an <<<image_N>>> token placed where the asset is named.",
   input: textBlocksInputSchema,
@@ -25,7 +25,7 @@ export const textBlocks = defineDami({
     // non-voice asset it names must be referenced.
     const byRef = new Map(input.assets.map((a) => [a.ref, a]));
     const named = new Set<string>(input.block.assetRefs);
-    for (const match of input.block.prompt.matchAll(ASSET_TAG_PATTERN)) named.add(match[1] ?? "");
+    for (const ref of taggedRefs(input.block.prompt)) named.add(ref);
     const wanted = [...named].filter((ref) => {
       const asset = byRef.get(ref);
       return asset !== undefined && asset.kind !== "voice";

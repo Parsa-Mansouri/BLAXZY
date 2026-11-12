@@ -21,6 +21,19 @@ describe("pickModel", () => {
     expect(pickModel("block_final", landscape).model).toBe(MODEL_POLICY.block_final.model);
   });
 
+  it("takes an aspect-ratio override, but only 16:9 or 9:16 for video", () => {
+    expect(pickModel("asset_look", landscape, {}, { aspectRatio: "3:4" }).params.aspectRatio).toBe(
+      "3:4",
+    );
+    expect(pickModel("asset_sheet", portrait, {}, { aspectRatio: "1:1" }).params.aspectRatio).toBe(
+      "1:1",
+    );
+    expect(
+      pickModel("block_draft", landscape, {}, { aspectRatio: "9:16" }).params.aspectRatio,
+    ).toBe("9:16");
+    expect(() => pickModel("block_draft", landscape, {}, { aspectRatio: "1:1" })).toThrow(/16:9/);
+  });
+
   it("follows the project's orientation for looks and shots", () => {
     expect(pickModel("asset_look", landscape).params.aspectRatio).toBe("16:9");
     expect(pickModel("asset_look", portrait).params.aspectRatio).toBe("9:16");

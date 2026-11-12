@@ -4,6 +4,7 @@
  */
 import { describeAssetRefs } from "@/server/assets";
 import { listCurrentBlockStates, listScriptResetBlocks, type PromptBlock } from "@/server/blocks";
+import { isVoiceRef } from "@/server/damis";
 import type { DbExecutor } from "@/server/db/client";
 import type { AssetKind } from "@/server/db/schema";
 import { deriveBlockStage, emptyCounts, isBusy, type BlockProductionStage } from "./stage";
@@ -62,7 +63,7 @@ function refsOf(block: PromptBlock): string[] {
   if (block.productionState === "ready" && block.productionAssetRefs) {
     return block.productionAssetRefs;
   }
-  return (block.productionAssetRefs ?? block.assetRefs).filter((r) => !r.startsWith("voice:"));
+  return (block.productionAssetRefs ?? block.assetRefs).filter((r) => !isVoiceRef(r));
 }
 
 /** Views of blocks of one project (any number; one query per kind of data). */

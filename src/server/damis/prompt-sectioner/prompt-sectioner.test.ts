@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ClaudeRequest } from "../framework/client";
+import { partText } from "../framework/define";
 import { runDami } from "../framework/runner";
 import { planSegments, splitLines } from "../shared/script-lines";
 import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
@@ -27,8 +28,8 @@ function rangeAnswer(request: ClaudeRequest) {
       startLine: s,
       endLine: Math.min(end, s + 3),
       durationSeconds: 5,
-      assetRefs: ["location:harbour-pier"],
-      prompt: "STYLE: test\nSCENE: Harbour Pier [location:harbour-pier] at dusk.",
+      assetRefs: ["location:Harbour Pier"],
+      prompt: "STYLE: test\nSCENE: Harbour Pier [location:Harbour Pier] at dusk.",
     });
   }
   return Promise.resolve(jsonResponse({ blocks }));
@@ -54,10 +55,10 @@ describe("prompt-sectioner", () => {
     const prompt = promptSectioner.build({ ...input, range: { startLine: 16, endLine: 32 } });
     const [context, task] = prompt.messages[0]?.content ?? [];
     expect(context?.cache).toBe(true);
-    expect(context?.text).toContain("16| INT. FERRY CABIN - CONTINUOUS");
-    expect(context?.text).toContain('- character:mara "Mara"');
+    expect(partText(context)).toContain("16| INT. FERRY CABIN - CONTINUOUS");
+    expect(partText(context)).toContain("- character:Mara - ");
     expect(task?.cache).toBeUndefined();
-    expect(task?.text).toContain("Cut lines 16-32");
+    expect(partText(task)).toContain("Cut lines 16-32");
   });
 
   it("reports gaps and overlaps but tolerates blank-only gaps", () => {
@@ -86,13 +87,13 @@ describe("prompt-sectioner", () => {
   it("checks asset tags against assetRefs and the asset list", () => {
     const [first, ...rest] = output.blocks;
     if (!first) throw new Error("fixture needs blocks");
-    const untagged = { ...first, assetRefs: [...first.assetRefs, "character:jonas"] };
+    const untagged = { ...first, assetRefs: [...first.assetRefs, "character:Jonas"] };
     expect(promptSectioner.check({ blocks: [untagged, ...rest] }, input)).toEqual([
-      'blocks.0: "character:jonas" is in assetRefs but never tagged as [character:jonas] in the prompt',
+      'blocks.0: "character:Jonas" is in assetRefs but never tagged as [character:Jonas] in the prompt',
     ]);
-    const unknown = { ...first, prompt: `${first.prompt} A gull [creature:gull].` };
+    const unknown = { ...first, prompt: `${first.prompt} A gull [creature:Gull].` };
     expect(promptSectioner.check({ blocks: [unknown, ...rest] }, input)).toEqual([
-      "blocks.0: the prompt tags [creature:gull], which is not in the asset list",
+      "blocks.0: the prompt tags [creature:Gull], which is not in the asset list",
     ]);
   });
 });

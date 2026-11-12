@@ -6,7 +6,20 @@ import type {
 } from "@/server/db/schema";
 import type { ModelChoice } from "./types";
 
-export type AspectRatio = "16:9" | "9:16";
+/** Every ratio an image may take; videos only take `VIDEO_ASPECT_RATIOS`. */
+export const ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const;
+export type AspectRatio = (typeof ASPECT_RATIOS)[number];
+
+export const VIDEO_ASPECT_RATIOS = ["16:9", "9:16"] as const;
+export type VideoAspectRatio = (typeof VIDEO_ASPECT_RATIOS)[number];
+
+export function isAspectRatio(value: unknown): value is AspectRatio {
+  return typeof value === "string" && (ASPECT_RATIOS as readonly string[]).includes(value);
+}
+
+export function isVideoAspectRatio(value: unknown): value is VideoAspectRatio {
+  return typeof value === "string" && (VIDEO_ASPECT_RATIOS as readonly string[]).includes(value);
+}
 
 type PolicyEntry = {
   kind: GenerationKind;
@@ -50,7 +63,7 @@ export const MODEL_POLICY: Readonly<Record<GenerationPurpose, PolicyEntry>> = {
   },
 };
 
-export function aspectRatioFor(orientation: Orientation): AspectRatio {
+export function aspectRatioFor(orientation: Orientation): VideoAspectRatio {
   return orientation === "portrait" ? "9:16" : "16:9";
 }
 
@@ -69,19 +82,36 @@ export function clampDurationSeconds(value: number | undefined): number {
 /** What a caller decides about a video (ignored for images). */
 export type VideoOptions = { durationSeconds?: number; sound?: boolean };
 
+/** What a caller may override for one generation. */
+export type GenerationOverrides = {
+  /** Instead of the policy's ratio. Images take any `ASPECT_RATIOS`; videos 16:9 or 9:16. */
+  aspectRatio?: AspectRatio;
+};
+
 /**
  * The model and parameters the platform uses for a purpose in a project of this style. Video
  * params also carry `durationSeconds` (clamped to 1..15 s, default 5) and `sound` (default
- * false) next to the policy's `resolution`.
+ * false) next to the policy's `resolution`. `overrides.aspectRatio` replaces the policy's ratio
+ * (throws for a video ratio other than 16:9 or 9:16).
  */
 export function pickModel(
   purpose: GenerationPurpose,
   style: ProjectStyle,
   video: VideoOptions = {},
+  overrides: GenerationOverrides = {},
 ): ModelChoice {
   const entry = MODEL_POLICY[purpose];
   if (!entry) throw new Error(`No model policy for purpose "${purpose}"`);
-  const aspectRatio = entry.aspect === "project" ? aspectRatioFor(style.orientation) : entry.aspect;
+  if (
+    overrides.aspectRatio &&
+    entry.kind === "video" &&
+    !isVideoAspectRatio(overrides.aspectRatio)
+  ) {
+    throw new Error(`A video cannot be ${overrides.aspectRatio}: use 16:9 or 9:16`);
+  }
+  const aspectRatio =
+    overrides.aspectRatio ??
+    (entry.aspect === "project" ? aspectRatioFor(style.orientation) : entry.aspect);
   const params: Record<string, unknown> = { ...entry.params, aspectRatio };
   if (entry.kind === "video") {
     params.durationSeconds = clampDurationSeconds(video.durationSeconds);

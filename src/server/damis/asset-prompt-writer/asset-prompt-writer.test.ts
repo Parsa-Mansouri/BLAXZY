@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { partText } from "../framework/define";
 import { ASSET_KINDS } from "@/server/db/schema";
 import { runDami } from "../framework/runner";
 import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
@@ -82,7 +83,7 @@ describe("asset-prompt-writer", () => {
     const system = a.system.map((p) => p.text).join("\n");
     expect(system).not.toContain(input.asset.name);
     expect(system).toContain("Photoreal studio reference photograph");
-    const user = a.messages[0]?.content.map((p) => p.text).join("\n") ?? "";
+    const user = a.messages[0]?.content.map(partText).join("\n") ?? "";
     expect(user).toContain("Mara");
     expect(user).toContain("grey eyes");
     expect(user).toContain("How old are they? Older (60s-70s)");

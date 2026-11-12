@@ -64,20 +64,20 @@ describe.skipIf(!hasFfmpeg)(
       {
         excerpt: "TOMAS climbs the stairs of the lighthouse.",
         prompt:
-          "SCENE: Lighthouse [location:lighthouse].\nTomas [character:tomas] climbs the stairs.",
-        assetRefs: ["location:lighthouse", "character:tomas"],
+          "SCENE: Lighthouse [location:Lighthouse].\nTomas [character:Tomas] climbs the stairs.",
+        assetRefs: ["location:Lighthouse", "character:Tomas"],
         title: "The climb",
       },
       {
         excerpt: "TOMAS lights the lamp.",
-        prompt: "Tomas [character:tomas] lights the Lamp [prop:lamp] at the top of the tower.",
-        assetRefs: ["character:tomas", "prop:lamp"],
+        prompt: "Tomas [character:Tomas] lights the Lamp [prop:Lamp] at the top of the tower.",
+        assetRefs: ["character:Tomas", "prop:Lamp"],
         title: "The lamp",
       },
       {
         excerpt: "The beam sweeps the sea.",
-        prompt: "SCENE: Lighthouse [location:lighthouse]. The beam sweeps the dark sea.",
-        assetRefs: ["location:lighthouse"],
+        prompt: "SCENE: Lighthouse [location:Lighthouse]. The beam sweeps the dark sea.",
+        assetRefs: ["location:Lighthouse"],
         title: "Beam, sea",
       },
     ];
@@ -86,15 +86,9 @@ describe.skipIf(!hasFfmpeg)(
       const userId = await fixtures.newUser();
       const { projectId, scriptVersionId } = await fixtures.newProductionProject(userId);
       if (credits > 0) await billing.grantCredits({ userId, amount: credits });
-      const tomas = await fixtures.readyAsset(projectId, userId, "character", "tomas", "Tomas");
-      const lighthouse = await fixtures.readyAsset(
-        projectId,
-        userId,
-        "location",
-        "lighthouse",
-        "Lighthouse",
-      );
-      const lamp = await fixtures.readyAsset(projectId, userId, "prop", "lamp", "Lamp");
+      const tomas = await fixtures.readyAsset(projectId, userId, "character", "Tomas");
+      const lighthouse = await fixtures.readyAsset(projectId, userId, "location", "Lighthouse");
+      const lamp = await fixtures.readyAsset(projectId, userId, "prop", "Lamp");
       await fixtures.setBlocks(projectId, scriptVersionId, shots);
       return { userId, projectId, scriptVersionId, tomas, lighthouse, lamp };
     }
@@ -230,7 +224,7 @@ describe.skipIf(!hasFfmpeg)(
       expect(d1.stage).toBe("block_review");
       expect(d1.prompt).toContain("Lighthouse <<<image_1>>>");
       expect(d1.prompt).toContain("Tomas <<<image_2>>>");
-      expect(d1.assets.map((a) => a.ref)).toEqual(["location:lighthouse", "character:tomas"]);
+      expect(d1.assets.map((a) => a.ref)).toEqual(["location:Lighthouse", "character:Tomas"]);
       expect(d1.assets[0]?.thumbnailFileId).toBe(lighthouse.sheetFileId);
       const d2 = await detail(l2, userId);
       expect(d2.prompt).toContain("CONTINUITY"); // the previous block's tail
@@ -286,7 +280,7 @@ describe.skipIf(!hasFfmpeg)(
       expect(changed?.stage).toBe("preparing");
       await drain(projectId);
       const d3 = await detail(l3, userId);
-      expect(d3.assets.map((a) => a.ref)).toEqual(["location:lighthouse", "prop:lamp"]);
+      expect(d3.assets.map((a) => a.ref)).toEqual(["location:Lighthouse", "prop:Lamp"]);
       expect(d3.prompt).toContain("<<<image_2>>>");
 
       // Approve all; the completion gate is closed.
@@ -670,13 +664,13 @@ describe.skipIf(!hasFfmpeg)(
         SHOTS[0] as (typeof SHOTS)[number],
         {
           ...(SHOTS[1] as (typeof SHOTS)[number]),
-          prompt: "Tomas [character:tomas] trims the wick.",
-          assetRefs: ["character:tomas"],
+          prompt: "Tomas [character:Tomas] trims the wick.",
+          assetRefs: ["character:Tomas"],
         },
         {
           excerpt: "Dawn over the rocks.",
-          prompt: "Dawn light over the rocks below the Lighthouse [location:lighthouse].",
-          assetRefs: ["location:lighthouse"],
+          prompt: "Dawn light over the rocks below the Lighthouse [location:Lighthouse].",
+          assetRefs: ["location:Lighthouse"],
           title: "Dawn",
         },
       ]);
@@ -795,7 +789,7 @@ describe.skipIf(!hasFfmpeg)(
     const EDITED_LAMP = {
       ...(SHOTS[1] as (typeof SHOTS)[number]),
       excerpt: "TOMAS lights the old lamp.",
-      prompt: "Tomas [character:tomas] lights the old Lamp [prop:lamp] at the top of the tower.",
+      prompt: "Tomas [character:Tomas] lights the old Lamp [prop:Lamp] at the top of the tower.",
     };
 
     it("a script edit reopens a finished film, keeps unchanged finals, and it finishes again", async () => {

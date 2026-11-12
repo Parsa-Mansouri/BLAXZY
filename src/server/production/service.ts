@@ -25,7 +25,12 @@ import {
   restartBlockPreparation,
   type PromptBlock,
 } from "@/server/blocks";
-import { BLOCK_ISSUE_CODES, MAX_REFERENCE_IMAGES, TAKE_ISSUE_CODES } from "@/server/damis";
+import {
+  BLOCK_ISSUE_CODES,
+  isVoiceRef,
+  MAX_REFERENCE_IMAGES,
+  TAKE_ISSUE_CODES,
+} from "@/server/damis";
 import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
 import { blockTake, project, review, type ProjectStyle } from "@/server/db/schema";
 import { MAX_REFERENCES, quoteGeneration } from "@/server/generation";
@@ -505,7 +510,7 @@ export async function setBlockAssets(input: {
       }
       refs.push(asset.ref);
     }
-    const voices = block.assetRefs.filter((r) => r.startsWith("voice:"));
+    const voices = block.assetRefs.filter((r) => isVoiceRef(r));
     const next = await createNextBlockVersion(
       block,
       { assetRefs: [...refs, ...voices], productionState: "pending", productionAssetRefs: refs },

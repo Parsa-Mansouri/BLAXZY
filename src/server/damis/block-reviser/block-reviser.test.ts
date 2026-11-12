@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { partText } from "../framework/define";
 import { runDami } from "../framework/runner";
 import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
 import { blockReviser } from "./dami";
@@ -65,10 +66,10 @@ describe("block-reviser", () => {
     const voice = {
       ...output,
       prompt: `${output.prompt} Mara <<<image_4>>>`,
-      assetRefs: [...output.assetRefs, "voice:mara"],
+      assetRefs: [...output.assetRefs, "voice:Mara (voice)"],
     };
     expect(blockReviser.check(voice, input)).toEqual([
-      'assetRefs has "voice:mara", a voice; voices are never image references',
+      'assetRefs has "voice:Mara (voice)", a voice; voices are never image references',
     ]);
     const removed = {
       ...output,
@@ -78,9 +79,9 @@ describe("block-reviser", () => {
       assetRefs: output.assetRefs.slice(0, 2),
     };
     expect(blockReviser.check(removed, input)).toEqual([]);
-    const unknown = { ...output, assetRefs: ["location:nowhere", ...output.assetRefs.slice(1)] };
+    const unknown = { ...output, assetRefs: ["location:Nowhere", ...output.assetRefs.slice(1)] };
     expect(blockReviser.check(unknown, input)).toEqual([
-      'assetRefs has "location:nowhere", which is not in the asset list',
+      'assetRefs has "location:Nowhere", which is not in the asset list',
     ]);
   });
 
@@ -91,9 +92,9 @@ describe("block-reviser", () => {
     const system = a.system.map((p) => p.text).join("\n");
     for (const code of BLOCK_ISSUE_CODES) expect(system).toContain(`- ${code} (`);
     expect(system).not.toContain(input.block.prompt);
-    const user = a.messages[0]?.content.map((p) => p.text).join("\n") ?? "";
+    const user = a.messages[0]?.content.map(partText).join("\n") ?? "";
     expect(user).toContain(input.block.prompt);
-    expect(user).toContain("<<<image_1>>> = location:harbour-pier");
+    expect(user).toContain("<<<image_1>>> = location:Harbour Pier");
     expect(user).toContain('wrong_camera ("Wrong shot size or camera")');
     expect(user).toContain("Keep Mara on the planks the whole time.");
   });

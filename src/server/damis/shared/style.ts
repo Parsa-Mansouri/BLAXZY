@@ -36,6 +36,11 @@ export const projectStyleSchema = z
         genre: styleReferenceSchema.optional(),
       })
       .optional(),
+    styleDescriptor: z.string().trim().min(1).max(2000).optional(),
+    lookLine: z.string().trim().min(1).max(1000).optional(),
+    eraSetting: z.string().trim().min(1).max(500).optional(),
+    artDirectionNotes: z.string().trim().min(1).max(4000).optional(),
+    audienceRating: z.string().trim().min(1).max(40).optional(),
   })
   .superRefine((style, ctx) => {
     if (style.format === "series" && style.episodeDurationSeconds === undefined) {

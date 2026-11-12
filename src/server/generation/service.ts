@@ -19,7 +19,15 @@ import {
 } from "@/server/db/schema";
 import { enqueue, generationRun } from "@/server/jobs";
 import { errorMessage, logLine } from "@/server/jobs/log";
-import { getProvider, isSampleProvider, pickModel } from "@/server/providers";
+import {
+  ASPECT_RATIOS,
+  getProvider,
+  isSampleProvider,
+  isVideoAspectRatio,
+  MODEL_POLICY,
+  pickModel,
+  type AspectRatio,
+} from "@/server/providers";
 import { getOwnedFileInfo, type FilePurpose } from "@/server/storage";
 import { GenerationInputError } from "./errors";
 
@@ -68,9 +76,19 @@ export type RequestGenerationInput = {
    * project) the final finishes.
    */
   draftGenerationId?: string;
+  /** Instead of the policy's ratio for this purpose. Images: any ratio; videos: 16:9 or 9:16. */
+  aspectRatio?: AspectRatio;
+  /**
+   * A nonce for a re-roll: the same request with a new `variant` is a new seed (a different
+   * image). Sent to the provider as the `variant` param.
+   */
+  variant?: string;
 };
 
 export const MAX_PROMPT_LENGTH = 8_000;
+export const MAX_VARIANT_LENGTH = 64;
+/** The provider param a re-roll's nonce travels in. */
+export const VARIANT_PARAM = "variant";
 export const MAX_REFERENCES = 8;
 export const MAX_LABEL_LENGTH = 120;
 
@@ -126,6 +144,13 @@ const requestSchema = z.object({
   durationSeconds: z.number({ error: "The duration must be a number of seconds." }).optional(),
   sound: z.boolean().optional(),
   draftGenerationId: z.string().optional(),
+  aspectRatio: z.enum(ASPECT_RATIOS, { error: "That aspect ratio is not supported." }).optional(),
+  variant: z
+    .string()
+    .trim()
+    .min(1)
+    .max(MAX_VARIANT_LENGTH, `Keep the variant under ${MAX_VARIANT_LENGTH} characters.`)
+    .optional(),
 });
 
 function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
@@ -266,11 +291,21 @@ export async function requestGeneration(
   if (!isFinal && data.draftGenerationId !== undefined) {
     throw new GenerationInputError("Only a final is made from a draft.");
   }
+  if (
+    data.aspectRatio &&
+    MODEL_POLICY[data.purpose].kind === "video" &&
+    !isVideoAspectRatio(data.aspectRatio)
+  ) {
+    throw new GenerationInputError("A video can only be 16:9 or 9:16.");
+  }
   const referenceFileIds = await checkReferences(data.referenceFileIds, data.userId);
-  const choice = pickModel(data.purpose, data.style, {
-    durationSeconds: data.durationSeconds,
-    sound: data.sound,
-  });
+  const choice = pickModel(
+    data.purpose,
+    data.style,
+    { durationSeconds: data.durationSeconds, sound: data.sound },
+    { aspectRatio: data.aspectRatio },
+  );
+  if (data.variant) choice.params[VARIANT_PARAM] = data.variant;
   const provider = getProvider();
   const priceCredits = await provider.price({
     kind: choice.kind,

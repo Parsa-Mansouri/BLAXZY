@@ -7,7 +7,7 @@ import { takeFixerInputSchema, takeFixerOutputSchema } from "./schema";
 
 export const takeFixer = defineDami({
   key: "take-fixer",
-  version: "1.0.0",
+  version: "1.1.0",
   description:
     "Rewrites the prompt of a rejected clip for a retry, addressing each issue of the review and keeping the reference tokens and their order unchanged.",
   input: takeFixerInputSchema,

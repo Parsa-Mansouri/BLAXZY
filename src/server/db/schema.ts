@@ -145,6 +145,34 @@ export type ProjectStyle = {
     visualStyle?: StyleReference;
     genre?: StyleReference;
   };
+  /** The visual style as the first character design described it (its `style_used`). */
+  styleDescriptor?: string;
+  /** The one-line look the Enhancer wrote for the story. */
+  lookLine?: string;
+  /** When and where the story is set, as one line. */
+  eraSetting?: string;
+  /** Free art-direction notes that every designer should follow. */
+  artDirectionNotes?: string;
+  /** The intended audience rating (for example "PG-13"). */
+  audienceRating?: string;
+};
+
+/**
+ * One change a reviewer asked for, built from a review catalog option (see
+ * `damis/shared/review-catalog.ts`): technical problems are fixes, preferences are taste.
+ */
+export type ReviewFixRequest = {
+  type: "technical" | "preference";
+  /** The catalog option's code. */
+  code: string;
+  /** The instruction for the dami, with the option's template already filled. */
+  instruction: string;
+  /** What the reviewer typed, when the option asks for text. */
+  customText?: string;
+  /** The assets (by name) the request is about. */
+  targetNames?: string[];
+  /** The view or frame of a sheet the request is about. */
+  viewId?: string;
 };
 
 /** A comment anchored to a passage of the reviewed text. */
@@ -418,9 +446,11 @@ export const asset = pgTable(
       .notNull()
       .references(() => project.id),
     kind: text("kind").$type<AssetKind>().notNull(),
+    /**
+     * The asset's id within its project and kind: its real name, unique ignoring case ("Mara",
+     * "Mara (2)"). Refs are `kind:Name` (see `damis/shared/asset-ref.ts`).
+     */
     name: text("name").notNull(),
-    /** Stable, lower-case key within the project and kind; used to match across script versions. */
-    slug: text("slug").notNull(),
     description: text("description"),
     status: text("status").$type<AssetStatus>().notNull().default("active"),
     origin: text("origin").$type<AssetOrigin>().notNull().default("detected"),
@@ -434,7 +464,7 @@ export const asset = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    uniqueIndex("asset_project_kind_slug_unique").on(t.projectId, t.kind, t.slug),
+    uniqueIndex("asset_project_kind_name_unique").on(t.projectId, t.kind, sql`lower(${t.name})`),
     index("asset_project_kind_status_idx").on(t.projectId, t.kind, t.status),
   ],
 );
@@ -471,7 +501,7 @@ export const promptBlock = pgTable(
     scriptExcerpt: text("script_excerpt").notNull(),
     prompt: text("prompt").notNull(),
     durationSeconds: integer("duration_seconds"),
-    /** Slugs of the assets that appear in this block, as `kind:slug`. */
+    /** The assets that appear in this block, as `kind:Name` refs. */
     assetRefs: jsonb("asset_refs")
       .$type<string[]>()
       .notNull()
@@ -481,7 +511,7 @@ export const promptBlock = pgTable(
     staleReason: text("stale_reason"),
     /**
      * Production preparation (text-blocks dami), filled once per block version: the prompt with
-     * its asset mentions bound to reference tokens, and the assets in token order (`kind:slug`).
+     * its asset mentions bound to reference tokens, and the assets in token order (`kind:Name`).
      * A user change to the prompt or the assets creates the next version of the block.
      */
     productionState: text("production_state").$type<ProductionState>().notNull().default("none"),
@@ -523,6 +553,11 @@ export const review = pgTable(
     /** Codes of the predefined issues the user picked (empty when accepted). */
     issueCodes: jsonb("issue_codes")
       .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** The changes asked for, from the review catalog (empty when accepted or for older reviews). */
+    fixRequests: jsonb("fix_requests")
+      .$type<ReviewFixRequest[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
     /** The user's free-text reason. */

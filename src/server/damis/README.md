@@ -41,6 +41,27 @@ code that calls the Claude API and the only writer of `dami_run`.
 - Fix rounds of locations and props run at `low` effort (the owner's temperature 0.3).
 - The draft `asset-prompt-writer` and `asset-fixer` were retired.
 
+## Sheet makers (pre-production)
+
+- `sheet-generator-character/` (v4, the whole owner file is the system prompt): one 16:9 sheet
+  prompt from the approved board (reference 1); six numbered detail frames, `edit_mode` and the
+  catalog codes whose fix may edit the previous sheet (`edit-eligible.ts`, from the catalog's
+  prose rule; applied when the catalog is normalized).
+- `sheet-generator-location/` (v1, core + `location-shared/` orientation and lenses) and
+  `sheet-generator-prop/` (v1, core + the four `prop-shared/` modules): the prompts for the
+  remaining views of a pack, with dependencies, references (at most four) and reviewer checks.
+  Their checks are the owner's tests and validators (generation order after dependencies, edit
+  mode only for edit-eligible requests, the prop's minimum level and state views).
+- None of them redesigns: a request they will not apply comes back as a
+  `DESIGN_CHANGE_REQUESTED:` warning (`designChangeRequests`), and `sheetFixProblems` accepts
+  a requested code that is either applied or explained in `warnings`.
+- The draft `sheet-generator` and `sheet-fixer` (and `SHEET_ISSUES`) were retired.
+
+## Registry
+
+`DAMIS` in `index.ts` lists every live dami by key and `SAMPLE_GENERATORS` in `sample/client.ts`
+has one deterministic generator for each; `registry.test.ts` keeps the two in step.
+
 ## Images
 
 A message part may be `{ image: { fileId } }`: the dami input keeps only file ids. In live mode

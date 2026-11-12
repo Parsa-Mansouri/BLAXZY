@@ -77,8 +77,9 @@ retryScriptVersion(input: { projectId; userId; versionId }): Promise<ScriptVersi
 applyDetection(input: { projectId; scriptVersionId; damiRunId; assets: DetectedAsset[] }): Promise<{
   added: number; kept: number; removed: number;
 }>
-// diff by (kind, slug): new → insert active; present → update name/description/lastScriptVersionId
-// (and reactivate if removed); absent and origin detected → status removed. Manual assets untouched.
+// the detector's diff by (kind, name; ids are real names, "Mara (2)" for a duplicate): new →
+// insert active; present → update details/lastScriptVersionId (and reactivate if removed); an
+// approved asset the detector drops is only flagged in a warning. Manual assets untouched.
 listAssets(projectId, userId, opts?: { kind?: AssetKind; includeRemoved?: boolean; limit?; cursor? }):
   Promise<{ items: Asset[]; nextCursor: string | null } | null>
 countAssetsByKind(projectId, userId): Promise<Record<AssetKind, number> | null>

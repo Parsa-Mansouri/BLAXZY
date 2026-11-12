@@ -6,36 +6,44 @@
  *
  * On the user's project "The Lighthouse Keeper" (already in pre-production): tops up credits if
  * needed; for the first character still waiting for an image, answers the guided questions, waits,
- * rejects the look with one issue, waits for the fixed look, accepts it, waits for the sheet and
- * accepts it; uploads a small generated PNG for the first location still waiting and accepts it
- * and its sheet. Prints every asset's stage, the overview and the credits before and after. The
+ * rejects the look with one issue, waits for the fixed look, accepts it, waits for the character
+ * sheet (sheet-generator-character), sends it back once for a detail-frame fix (ST20, which edits
+ * the previous sheet) and accepts the fixed one; uploads a small generated PNG as the Hero of the
+ * first location still waiting, accepts it, then approves every view of the location pack as it
+ * is made (sheet-generator-location), locks the pack and waits for the contact sheet; designs the
+ * first prop still waiting ("Design it for me", answering a blocking question with "I'm not
+ * sure"), accepts it and does the same with its prop sheet (sheet-generator-prop). Prints every asset's stage, the overview and the credits before and after. The
  * other assets are left untouched. Works in sample mode.
  */
 import "dotenv/config";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import sharp from "sharp";
 import {
+  addAsset,
+  answerLookQuestion,
   getAssetDetail,
   getPreProductionOverview,
   listAssetCards,
+  lockSheet,
   fieldsToConfirm,
   startDesign,
   startLookFromGuided,
   submitLookReview,
   submitSheetReview,
+  submitSheetViewReview,
   type AssetCard,
   type AssetDetail,
 } from "../src/server/assets";
 import { getBalance, grantCredits } from "../src/server/billing";
-import { getDamiMode, type GuidedQuestion } from "../src/server/damis";
+import { AI_DECIDES, getDamiMode, type GuidedQuestion } from "../src/server/damis";
 import { closeDb, getDb } from "../src/server/db/client";
 import { ASSET_KINDS, project, user, type AssetKind } from "../src/server/db/schema";
 import { closeJobQueue } from "../src/server/jobs";
 import { putFileBytes } from "../src/server/storage";
 
 const PROJECT_TITLE = "The Lighthouse Keeper";
-/** Two looks (4 each) and a sheet (6) for the character, a sheet (6) for the location, plus room. */
-const CREDITS_NEEDED = 40;
+/** Looks and sheets for the character, the location pack's and prop sheet's views, plus room. */
+const CREDITS_NEEDED = 250;
 const TIMEOUT_MS = 3 * 60 * 1000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -62,6 +70,41 @@ async function waitFor(
     }
     await sleep(500);
   }
+}
+
+const OPEN_VIEW = ["planned", "pending", "in_review"];
+
+/** Approves every view of a pack as it is made, then locks it and waits for the contact sheet. */
+async function approvePack(assetId: string, userId: string, start: AssetDetail): Promise<void> {
+  let d = start;
+  console.log(`   views: ${d.packViews.map((v) => v.viewId).join(", ") || "(none)"}`);
+  while (d.packViews.some((v) => OPEN_VIEW.includes(v.status))) {
+    const view = d.packViews.find((v) => v.status === "in_review");
+    if (view) {
+      await submitSheetViewReview({
+        viewRowId: view.id,
+        userId,
+        decision: "accepted",
+        hypothesesApproved: true,
+      });
+      console.log(`   approved ${view.label}`);
+    }
+    d = await waitFor(
+      "next view",
+      assetId,
+      userId,
+      (x) =>
+        x.packViews.some((v) => v.status === "in_review") ||
+        !x.packViews.some((v) => OPEN_VIEW.includes(v.status)),
+    );
+    const failed = d.packViews.find((v) => v.status === "failed");
+    if (failed) throw new Error(`${failed.label} failed: ${failed.failure ?? ""}`);
+  }
+  if (!d.lockGate?.canLock) throw new Error(`Cannot lock: ${d.lockGate?.missing.join(", ")}`);
+  const stage = await lockSheet({ sheetId: d.sheets[0]?.id ?? "", userId });
+  console.log(`   locked the pack: ${stage}`);
+  d = await waitFor("contact sheet", assetId, userId, (x) => Boolean(x.sheets[0]?.fileId));
+  console.log(`   contact sheet file ${d.sheets[0]?.fileId}`);
 }
 
 /** The first option of each choice, a short sample text for each required text question. */
@@ -110,10 +153,27 @@ async function printState(projectId: string, userId: string): Promise<void> {
   console.log(`   overview: ${JSON.stringify(await getPreProductionOverview(projectId, userId))}`);
 }
 
-function firstWaiting(cards: AssetCard[], kind: AssetKind): AssetCard {
+const NEW_ASSETS: Partial<Record<AssetKind, { name: string; description: string }>> = {
+  character: { name: "Harbour Master", description: "A stern harbour master in his fifties." },
+  location: { name: "Net Loft", description: "A cramped loft where the nets are mended." },
+  prop: { name: "Brass Compass", description: "A brass pocket compass with a hinged lid." },
+};
+
+/** The first asset of a kind waiting for an image, or a new one added for this run. */
+async function firstWaiting(
+  cards: AssetCard[],
+  kind: AssetKind,
+  projectId: string,
+  userId: string,
+): Promise<AssetCard["asset"]> {
   const card = cards.find((c) => c.asset.kind === kind && c.stage === "needs_image");
-  if (!card) throw new Error(`No ${kind} is waiting for an image in "${PROJECT_TITLE}".`);
-  return card;
+  if (card) return card.asset;
+  const fresh = NEW_ASSETS[kind];
+  if (!fresh) throw new Error(`No ${kind} is waiting for an image in "${PROJECT_TITLE}".`);
+  const added = await addAsset({ projectId, userId, kind, ...fresh });
+  if (!added) throw new Error("addAsset returned null");
+  console.log(`   (no ${kind} was waiting: added "${added.name}")`);
+  return added;
 }
 
 async function main(): Promise<void> {
@@ -163,7 +223,7 @@ async function main(): Promise<void> {
   const cards = await allCards(projectId, userId);
 
   // A character from guided answers, rejected once, then accepted with its sheet.
-  const character = firstWaiting(cards, "character").asset;
+  const character = await firstWaiting(cards, "character", projectId, userId);
   console.log(`1. ${character.name}: guided answers`);
   const questions = (await getAssetDetail(character.id, userId))?.questions ?? [];
   const answers = sampleAnswers(questions);
@@ -192,7 +252,25 @@ async function main(): Promise<void> {
   console.log(`3. ${character.name}: accept the look; building the sheet`);
   await submitLookReview({ lookId: look2?.id ?? "", userId, decision: "accepted" });
   d = await waitFor("sheet in review", character.id, userId, (x) => x.stage === "sheet_review");
-  console.log(`   sheet v${d.sheets[0]?.versionNumber} file ${d.sheets[0]?.fileId}`);
+  const sheet1 = d.sheets[0];
+  console.log(`   sheet v${sheet1?.versionNumber} file ${sheet1?.fileId}`);
+  for (const cell of sheet1?.spec?.detailCells ?? []) {
+    console.log(`   frame ${cell.slot}: ${cell.subject}`);
+  }
+  console.log(`   send it back: ST20 (details too small), an edit of the previous sheet`);
+  await submitSheetReview({
+    sheetId: sheet1?.id ?? "",
+    userId,
+    decision: "rejected",
+    selections: [{ code: "ST20" }],
+  });
+  d = await waitFor(
+    "fixed sheet in review",
+    character.id,
+    userId,
+    (x) => x.stage === "sheet_review" && x.sheets[0]?.id !== sheet1?.id,
+  );
+  console.log(`   sheet v${d.sheets[0]?.versionNumber} (${d.sheets[0]?.spec?.editMode ?? ""})`);
   const characterStage = await submitSheetReview({
     sheetId: d.sheets[0]?.id ?? "",
     userId,
@@ -201,7 +279,7 @@ async function main(): Promise<void> {
   console.log(`   accepted the sheet: ${characterStage}`);
 
   // A location from an uploaded image, accepted with its sheet.
-  const location = firstWaiting(cards, "location").asset;
+  const location = await firstWaiting(cards, "location", projectId, userId);
   console.log(`4. ${location.name}: a PNG as the Hero photo`);
   const png = await sharp({
     create: { width: 640, height: 360, channels: 3, background: { r: 52, g: 84, b: 120 } },
@@ -230,13 +308,41 @@ async function main(): Promise<void> {
     decision: "accepted",
     confirmedFields: fieldsToConfirm(hero?.spec ?? null),
   });
-  d = await waitFor("sheet in review", location.id, userId, (x) => x.stage === "sheet_review");
-  const locationStage = await submitSheetReview({
-    sheetId: d.sheets[0]?.id ?? "",
-    userId,
-    decision: "accepted",
-  });
-  console.log(`   accepted the sheet: ${locationStage}`);
+  d = await waitFor("pack planned", location.id, userId, (x) => x.stage === "sheet_review");
+  console.log(`5. ${location.name}: approve every view, then lock`);
+  await approvePack(location.id, userId, d);
+
+  // A prop the designer designs alone, with its prop sheet.
+  const prop = await firstWaiting(cards, "prop", projectId, userId);
+  {
+    console.log(`6. ${prop.name}: design it for me`);
+    await startDesign({ assetId: prop.id, userId });
+    d = await waitFor("design", prop.id, userId, (x) =>
+      ["look_review", "needs_answer"].includes(x.stage),
+    );
+    if (d.stage === "needs_answer") {
+      const asked = d.looks[0];
+      const answers = Object.fromEntries(
+        (asked?.spec?.questions ?? []).map((q) => [q.id, AI_DECIDES]),
+      );
+      console.log(
+        `   the designer asked: ${Object.keys(answers).join(", ")}; answered I'm not sure`,
+      );
+      await answerLookQuestion({ lookId: asked?.id ?? "", userId, answers });
+      d = await waitFor("Hero in review", prop.id, userId, (x) => x.stage === "look_review");
+    }
+    const propHero = d.looks[0];
+    await submitLookReview({
+      lookId: propHero?.id ?? "",
+      userId,
+      decision: "accepted",
+      confirmedFields: fieldsToConfirm(propHero?.spec ?? null),
+    });
+    d = await waitFor("sheet planned", prop.id, userId, (x) => x.stage === "sheet_review");
+    const spec = d.sheets[0]?.spec;
+    console.log(`   level ${spec?.sheetLevel}; scale card: ${spec?.scaleCard?.text}`);
+    await approvePack(prop.id, userId, d);
+  }
 
   console.log("Assets at the end:");
   await printState(projectId, userId);

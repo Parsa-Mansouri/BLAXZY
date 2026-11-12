@@ -60,7 +60,7 @@ type BlockProductionStage =
 
 | Dami | Input | Output |
 |---|---|---|
-| `text-blocks` | `{ style, block: { title, scriptExcerpt, prompt, durationSeconds, assetRefs }, assets: { ref: "kind:slug", kind, name, description }[], previous?: { title, promptTail } }` | `{ prompt, assetRefs: string[], notes: string[] }` |
+| `text-blocks` | `{ style, block: { title, scriptExcerpt, prompt, durationSeconds, assetRefs }, assets: { ref: "kind:Name", kind, name, description }[], previous?: { title, promptTail } }` | `{ prompt, assetRefs: string[], notes: string[] }` |
 | `block-reviser` | `{ style, block: { title, scriptExcerpt, prompt, assetRefs }, assets, review: { issueCodes[], note? } }` | `{ prompt, assetRefs, changeSummary[] }` |
 | `take-fixer` | `{ style, block, previousPrompt, assetRefs, stage: "draft" | "final", review }` | `{ prompt, changeSummary[] }` |
 
@@ -147,7 +147,7 @@ Jobs (handlers in `worker/handlers/`):
 |---|---|---|
 | `production.prepare` | `{ blockId }`, block id | runDami(text-blocks) with the project's ready assets and the previous block's tail → production fields, state ready |
 | `block.revise` | `{ blockId }`, block id | runDami(block-reviser) on the parent version + its review → production fields |
-| `take.generate` | `{ takeId }`, take id | requestGeneration (draft or final; references = the sheets of `productionAssetRefs`, in order) |
+| `take.generate` | `{ takeId }`, take id | requestGeneration (draft or final; references = each `productionAssetRefs` asset's file, in order: a character's accepted sheet, a location's or prop's approved Hero; `ReferenceAsset.views` lists a locked pack's approved views for later use) |
 | `take.fix` | `{ takeId }`, take id | runDami(take-fixer) on the parent take's prompt + review → prompt → requestGeneration |
 | `export.build` | `{ exportId }`, export id | build and store the ZIP |
 

@@ -56,3 +56,18 @@ corrected Director arrives.
   `script_context` is sent as text, the location's as the owner's scene list; both come from the
   latest detection's scene index and the accepted script. A reference photo's note is sent as the
   location's `reference_instructions.preserve` and the prop's `preserve` text.
+- **Sheet makers.** The character sheet file names no temperature: it runs at `low` effort (it
+  translates an approved design and must not redesign). The location and prop sheets ask for 0.3:
+  `low`. Their `max_tokens` (5000 and 6000) are doubled for thinking headroom. The location pack
+  runs in `lock` mode only (the Wizard; concept mode is implemented in the dami but not offered).
+  A fix re-writes one view: the location dami gets `only_views`; the prop dami has no such field,
+  so it answers in its fix mode and the backend keeps the requested view. The prop catalog marks
+  edit-eligible codes itself; the character-sheet catalog states them in prose, so they are listed
+  in `sheet-generator-character/edit-eligible.ts`. The backend's lock rules: a location needs its
+  Hero and Reverse approved; a simple prop locks with the Hero alone, a standard prop needs its
+  non-detail and state views, a production prop every planned view. The contact sheet is composed
+  with sharp from the stored images and is never sent to a model.
+- **Design changes from a sheet.** SX01, LSX01 and ASX01 (and a `DESIGN_CHANGE_REQUESTED:`
+  warning the user follows) reject the accepted design with the request as a fix request and run
+  the designer's fix round; the whole sheet is rebuilt after the new design is accepted (not only
+  the affected views).

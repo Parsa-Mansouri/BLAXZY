@@ -11,7 +11,8 @@ ADR01 re-scans and the dami fixes run as `asset.detect.fix`.
 
 ## Pre-production (Output_030)
 
-Contract in `docs/M2_M3_CONTRACTS.md`. Owns `asset`, `asset_look` and `asset_sheet`.
+Contract in `docs/M2_M3_CONTRACTS.md`. Owns `asset`, `asset_look`, `asset_sheet` and
+`asset_sheet_view`.
 
 - `stage.ts`: `deriveAssetState(kind, latestLook, latestSheet)`, the one definition of an asset's
   stage (`needs_image` / `needs_recording` → `generating` → `look_review` → `building_sheet` →
@@ -31,12 +32,23 @@ Contract in `docs/M2_M3_CONTRACTS.md`. Owns `asset`, `asset_look` and `asset_she
   and (worker only) the script slice, excluded assets and linked characters and locations a
   designer reads.
 - `jobs.ts` (worker only): what the `asset.look.generate|fix` and `asset.sheet.generate|fix`
-  handlers need, and `applyGenerationResult`, the generation completion hook registered in
+  (character sheets) handlers need, and `applyGenerationResult`, the generation completion hook registered in
   `worker/index.ts`. A look job runs the asset's designer only when no prompt is stored and stores
   its prompt and spec (or a question, or the user's photo as the Hero), then requests the
-  generation with the designer's ratio and photos (sheets attach the accepted look's file); a
+  generation with the designer's ratio and photos (a character sheet attaches the files of its
+  reference order: the approved board, and the previous sheet in edit mode); a
   retry clears the failed generation and requests a new one. The hook only changes a `pending`
   row holding that generation, so it is safe to call any number of times.
+- `packs.ts`: location packs and prop sheets. A pack is one `asset_sheet` (its `spec` is the
+  plan) and append-only `asset_sheet_view` rows. The worker side stores the plan
+  (`asset.sheet.plan`), re-writes a rejected view, requests every planned view whose dependencies
+  are approved (`asset.sheet.views.advance`, after planning, a settled image and an approval) and
+  assembles the locked pack's contact sheet (`asset.sheet.assemble`, sharp). `packLockGate` is
+  the owner's lock rule; `dnaCardOf` the DNA card the screens show. View reviews, retries and the
+  lock are in `preproduction.ts` (`submitSheetViewReview`, `retrySheetView`, `lockSheet`).
+- `references.ts`: Production's references. A character is attached with its accepted sheet; a
+  location or prop with its approved Hero, and a locked pack's approved views are listed in
+  `ReferenceAsset.views`.
 - Merging rewrites the current blocks' `assetRefs` through `rewriteAssetRefs` in `@/server/blocks`
   (new block versions, old ones superseded).
 

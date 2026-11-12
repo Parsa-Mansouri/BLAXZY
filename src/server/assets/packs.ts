@@ -714,9 +714,9 @@ export async function composeContactSheet(input: {
   const card = input.card;
   const lines: { text: string; size: number; bold?: boolean }[] = [];
   if (card) {
-    lines.push({ text: cut(card.summary, 140), size: 26, bold: true });
-    for (const a of card.anchors.slice(0, 4)) lines.push({ text: cut(a, 150), size: 22 });
-    for (const c of card.constraints.slice(0, 3)) lines.push({ text: cut(c, 150), size: 22 });
+    lines.push({ text: cut(card.summary, 90), size: 26, bold: true });
+    for (const a of card.anchors.slice(0, 4)) lines.push({ text: cut(a, 110), size: 22 });
+    for (const c of card.constraints.slice(0, 3)) lines.push({ text: cut(c, 110), size: 22 });
   }
   if (input.scaleText)
     lines.push({ text: `Scale: ${cut(input.scaleText, 140)}`, size: 24, bold: true });

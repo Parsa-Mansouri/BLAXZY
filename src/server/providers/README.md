@@ -6,7 +6,8 @@ is the only module that knows which backend is active; everything else calls `ge
 
 - `policy.ts`: `MODEL_POLICY` and `pickModel(purpose, style, video?)`. **The single place to
   change model ids, resolutions and aspect ratios.** Looks and shots follow the project's
-  orientation (16:9 / 9:16); sheets are always 16:9. Video params also carry `durationSeconds`
+  orientation (16:9 / 9:16); sheets are 16:9 unless the caller overrides the ratio (a prop sheet
+  view follows the object). Video params also carry `durationSeconds`
   (whole seconds, clamped to 1..15, default 5), `resolution` (`480p` draft, `1080p` final) and
   `sound` (default false).
 - `types.ts`: `GenerationProvider` (`price`, `create`, `getStatus`, `fetchResult`). A running

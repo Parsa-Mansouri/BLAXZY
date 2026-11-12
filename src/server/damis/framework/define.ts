@@ -50,7 +50,7 @@ export type DamiConfig<I extends z.ZodType, O extends z.ZodType, R> = {
   build(input: z.output<I>): DamiPrompt;
   /**
    * Semantic checks the JSON schema cannot express (quotes exist in the script, ranges cover a
-   * segment, slugs are unique). Returned messages are treated like schema errors: fed back to the
+   * segment, names are unique). Returned messages are treated like schema errors: fed back to the
    * model once, then the run fails.
    */
   check?(output: z.output<O>, input: z.output<I>): string[];

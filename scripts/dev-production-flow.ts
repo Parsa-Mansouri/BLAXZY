@@ -2,9 +2,9 @@
  * Development only: runs Production through the real queue and a running worker.
  *
  *   pnpm worker                          # in another terminal (same JOBS_SCHEMA)
- *   pnpm dev:production-flow [email]     # default testuser@gmail.com
+ *   pnpm dev:production-flow [email] [project title]   # default testuser@gmail.com, "QA Run 14:03"
  *
- * On the user's project "QA Run 14:03" (already in production, with ready assets and blocks):
+ * On the user's project (default "QA Run 14:03"; already in production, with ready assets and blocks):
  * tops up credits if needed; prepares every block, approves them all, confirms the quote and starts
  * the drafts; rejects the first draft with one issue and waits for its fix; accepts every draft,
  * waits for the finals and accepts them, except the finals of the last two blocks, which stay in
@@ -32,7 +32,7 @@ import {
   type ProductionOverview,
 } from "../src/server/production";
 
-const PROJECT_TITLE = "QA Run 14:03";
+const PROJECT_TITLE = process.argv[3] ?? "QA Run 14:03";
 /** Seven drafts (20 each), one fixed draft, seven finals (60 each), plus room. */
 const CREDITS_NEEDED = 650;
 const TIMEOUT_MS = 10 * 60 * 1000;

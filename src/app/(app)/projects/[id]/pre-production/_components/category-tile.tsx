@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { fileSrc } from "@/lib/file-src";
-import { Button, StatusLine, cn, stagger } from "@/ui";
+import { Button, DemoHint, SilhouetteScene, StatusLine, cn, stagger } from "@/ui";
 import { assetHref, categoryHref } from "../../_lib/asset-kinds";
 import { ASSET_STATUS_LABELS } from "../../_lib/asset-status";
 import type { OverviewAsset, OverviewCategory } from "../_lib/load-categories";
@@ -31,6 +31,12 @@ function Thumb({ fileId }: { fileId: string }) {
 /** No picture or recording yet: the user still has to add one. */
 const needsUser = (asset: OverviewAsset) =>
   !asset.thumbnailFileId && (asset.stage === "needs_image" || asset.stage === "needs_recording");
+
+/** Milliseconds between one slot's silhouette starting and the next, capped so a long row stays calm. */
+const SILHOUETTE_STAGGER_MS = 350;
+const SILHOUETTE_MAX_STEPS = 5;
+const silhouetteDelay = (index: number) =>
+  Math.min(index, SILHOUETTE_MAX_STEPS) * SILHOUETTE_STAGGER_MS;
 
 /** The one thing to do next in a category, as the leading block's white button. */
 function nextStep(
@@ -113,13 +119,13 @@ export function CategoryFeature({
             className="flex max-w-56 min-w-0 flex-[1_1_96px] enter flex-col gap-2"
             style={stagger(i)}
           >
-            <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden rounded-tile bg-selected p-2 text-center text-meta text-label-2">
+            <div className="demo-host relative flex aspect-[4/5] items-center justify-center rounded-tile bg-selected p-2 text-center text-meta text-label-2">
               {asset.thumbnailFileId ? (
                 <Thumb fileId={asset.thumbnailFileId} />
               ) : needsUser(asset) ? (
-                <span>
-                  {asset.stage === "needs_recording" ? "No recording yet" : "No image yet"}
-                </span>
+                <DemoHint delay={silhouetteDelay(i)} mask="none">
+                  <SilhouetteScene kind={category.kind} className="[--demo-sil-bottom:34%]" />
+                </DemoHint>
               ) : isWorking(asset.stage) ? (
                 <span>{ASSET_STATUS_LABELS[asset.stage]}</span>
               ) : null}
@@ -165,12 +171,18 @@ export function CategoryTile({
           <span
             key={asset.id}
             className={cn(
-              "relative h-11 overflow-hidden bg-selected",
+              "demo-host relative h-11 bg-selected",
               aspect === "video" ? "w-17" : "w-11",
               voice ? "rounded-full" : "rounded-row",
             )}
           >
-            {asset.thumbnailFileId ? <Thumb fileId={asset.thumbnailFileId} /> : null}
+            {asset.thumbnailFileId ? (
+              <Thumb fileId={asset.thumbnailFileId} />
+            ) : needsUser(asset) ? (
+              <DemoHint trigger="hover" mask="none">
+                <SilhouetteScene kind={category.kind} className="[--demo-sil-top:18%]" />
+              </DemoHint>
+            ) : null}
           </span>
         ))}
       </span>

@@ -6,7 +6,7 @@ import { ScriptAccepted } from "./script-accepted";
 import { ScriptReview } from "./script-review";
 import { ScriptStart } from "./script-start";
 import { ScriptFailed, ScriptWorking } from "./script-status";
-import type { IssueChoice, VersionSummary, VersionView } from "./shared";
+import type { VersionSummary, VersionView } from "./shared";
 
 export interface ScriptScreenProps {
   projectId: string;
@@ -15,7 +15,6 @@ export interface ScriptScreenProps {
   previous: VersionView | null;
   versions: VersionSummary[];
   background: BackgroundStatus | null;
-  issues: IssueChoice[];
   maxBriefChars: number;
   sample: boolean;
 }
@@ -59,7 +58,6 @@ export function ScriptScreen(props: ScriptScreenProps) {
         fallbackTitle={props.projectTitle}
         version={current}
         versions={props.versions}
-        issues={props.issues}
         sample={props.sample}
       />
     );

@@ -19,10 +19,20 @@ export {
   ASSET_STAGES,
   deriveAssetStage,
   deriveAssetState,
+  stageNeedsUser,
   type AssetStage,
   type AssetState,
 } from "./stage";
 export type { LookView, SheetView } from "./looks";
+export {
+  DEFAULT_FINISHED_PAGE_SIZE,
+  finishedFeedCursorNow,
+  listFinishedAssetEvents,
+  MAX_FINISHED_PAGE_SIZE,
+  parseFinishedCursor,
+  type FinishedAssetEvent,
+  type FinishedFeedPage,
+} from "./finished-feed";
 export {
   addAsset,
   completePreProduction,
@@ -37,6 +47,7 @@ export {
   MAX_LOOK_PROMPT_LENGTH,
   MAX_REVIEW_NOTE_LENGTH,
   mergeAssets,
+  nextAssetNeedingInput,
   removeAsset,
   replaceLook,
   retryLook,
@@ -50,6 +61,7 @@ export {
   validateGuidedAnswers,
   type AssetCard,
   type AssetDetail,
+  type NextAsset,
   type PreProductionOverview,
 } from "./preproduction";
 /** For `@/server/production`: assets as block references (no ownership checks). */

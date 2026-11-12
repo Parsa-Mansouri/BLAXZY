@@ -92,3 +92,36 @@ export function deriveAssetStage(
 ): AssetStage {
   return deriveAssetState(kind, latestLook, latestSheet).stage;
 }
+
+/** True when the asset waits for the user: anything but ready or being worked on by a job. */
+export function stageNeedsUser(stage: AssetStage): boolean {
+  return stage !== "ready" && stage !== "generating" && stage !== "building_sheet";
+}
+
+export type OrderedAsset = { id: string; kind: AssetKind; displayOrder: number; stage: AssetStage };
+
+/**
+ * The asset to send the user to after `afterId`: the first one that waits for them, in the
+ * overview's order (kinds in `kindOrder`, then display order, then id), after `afterId` and
+ * wrapping around to the start. Never `afterId` itself; null when nothing else waits. Pure.
+ */
+export function pickNextAsset<T extends OrderedAsset>(
+  assets: readonly T[],
+  afterId: string,
+  kindOrder: readonly AssetKind[],
+): T | null {
+  const rank = (kind: AssetKind) => {
+    const i = kindOrder.indexOf(kind);
+    return i === -1 ? kindOrder.length : i;
+  };
+  const sorted = [...assets].sort(
+    (a, b) =>
+      rank(a.kind) - rank(b.kind) ||
+      a.displayOrder - b.displayOrder ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  const at = sorted.findIndex((a) => a.id === afterId);
+  // Not in the list (removed meanwhile): start from the beginning.
+  const ordered = at === -1 ? sorted : [...sorted.slice(at + 1), ...sorted.slice(0, at)];
+  return ordered.find((a) => a.id !== afterId && stageNeedsUser(a.stage)) ?? null;
+}

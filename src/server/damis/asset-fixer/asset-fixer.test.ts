@@ -4,7 +4,14 @@ import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
 import { assetFixer } from "./dami";
 import inputJson from "./fixtures/input.json";
 import outputJson from "./fixtures/model-output.json";
-import { LOOK_ISSUE_CODES, LOOK_ISSUE_LIST, LOOK_ISSUES } from "./issues";
+import {
+  LOOK_ISSUE_CODES,
+  LOOK_ISSUE_KINDS,
+  LOOK_ISSUE_LIST,
+  LOOK_ISSUES,
+  lookIssueFits,
+  lookIssuesFor,
+} from "./issues";
 import { buildAssetFixerPrompt } from "./prompt";
 import { assetFixerInputSchema, assetFixerOutputSchema, lookIssueCodeSchema } from "./schema";
 
@@ -84,5 +91,41 @@ describe("asset-fixer", () => {
       "wrong_clothing",
       "note",
     ]);
+  });
+});
+
+describe("look issues by kind", () => {
+  const codes = (kind: Parameters<typeof lookIssuesFor>[0]) =>
+    lookIssuesFor(kind).map((i) => i.code);
+
+  it("never offers a place a face, limbs, an age, clothing or a clean backdrop", () => {
+    const place = codes("location");
+    for (const code of [
+      "face_incomplete",
+      "anatomy_wrong",
+      "wrong_age",
+      "wrong_clothing",
+      "background_not_clean",
+    ] as const) {
+      expect(place).not.toContain(code);
+      expect(lookIssueFits(code, "location")).toBe(false);
+    }
+    expect(place).toEqual(expect.arrayContaining(["extra_subjects", "lighting_poor"]));
+  });
+
+  it("offers a character everything, a costume clothing but no face, a voice nothing", () => {
+    expect(codes("character")).toEqual([...LOOK_ISSUE_CODES]);
+    expect(codes("creature")).toContain("anatomy_wrong");
+    expect(codes("creature")).not.toContain("wrong_clothing");
+    expect(codes("costume")).toContain("wrong_clothing");
+    expect(codes("costume")).not.toContain("face_incomplete");
+    expect(codes("prop")).not.toContain("wrong_age");
+    expect(codes("voice")).toEqual([]);
+  });
+
+  it("keeps catalogue order and gives every code at least one kind", () => {
+    for (const code of LOOK_ISSUE_CODES) expect(LOOK_ISSUE_KINDS[code].length).toBeGreaterThan(0);
+    const prop = codes("prop");
+    expect(prop).toEqual(LOOK_ISSUE_CODES.filter((c) => prop.includes(c)));
   });
 });

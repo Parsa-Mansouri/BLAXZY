@@ -11,6 +11,8 @@ export type GuidedQuestion = {
   id: string;
   /** The question as the director reads it. */
   label: string;
+  /** What the answer is, in a word or two ("Face", "Era"): the field's name on the casting sheet. */
+  short: string;
   /** A hint in plain words under the question. */
   hint: string;
   kind: "choice" | "text";
@@ -19,6 +21,46 @@ export type GuidedQuestion = {
   /** True when the director may skip it. */
   optional?: boolean;
 };
+
+/**
+ * The short field names, by question id. An id means the same thing in every kind ("era",
+ * "size"), so one name serves them all. UI only: the prompt writer never sees these.
+ */
+const SHORT_LABELS: Readonly<Record<string, string>> = {
+  age: "Age",
+  build: "Build",
+  face: "Face",
+  hair: "Hair",
+  wardrobe: "Wardrobe",
+  defining_detail: "Signature",
+  demeanour: "Manner",
+  setting: "Setting",
+  era: "Era",
+  architecture: "Place",
+  time_of_day: "Time of day",
+  weather: "Weather",
+  mood: "Mood",
+  signature_detail: "Signature",
+  object: "Object",
+  material: "Material",
+  size: "Size",
+  condition: "Condition",
+  colour: "Colour",
+  markings: "Markings",
+  species: "Species",
+  body: "Body",
+  temperament: "Temper",
+  garment: "Outfit",
+  fabric: "Fabric",
+  colours: "Colours",
+  fit: "Fit",
+  details: "Details",
+  subject: "Subject",
+  shape: "Shape",
+};
+
+/** A question's short name; an id without one is shown in plain words. */
+const shortLabel = (id: string) => SHORT_LABELS[id] ?? id.replaceAll("_", " ");
 
 function choice(
   id: string,
@@ -30,6 +72,7 @@ function choice(
   return {
     id,
     label,
+    short: shortLabel(id),
     hint,
     kind: "choice",
     options: options.map((o) => ({ value: o, label: o })),
@@ -38,7 +81,14 @@ function choice(
 }
 
 function text(id: string, label: string, hint: string, optional = false): GuidedQuestion {
-  return { id, label, hint, kind: "text", ...(optional ? { optional } : {}) };
+  return {
+    id,
+    label,
+    short: shortLabel(id),
+    hint,
+    kind: "text",
+    ...(optional ? { optional } : {}),
+  };
 }
 
 const eraChoices = [

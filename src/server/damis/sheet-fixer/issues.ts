@@ -3,7 +3,8 @@
  * sheet. Each code maps to a concrete instruction for the sheet-fixer dami. Adding, removing or
  * rewording an entry changes the fixer's prompt: bump its version.
  */
-import type { ImageIssueDefinition } from "../shared/reference";
+import type { AssetKind } from "@/server/db/schema";
+import { IMAGE_ASSET_KINDS, type ImageIssueDefinition } from "../shared/reference";
 
 export const SHEET_ISSUE_CODES = [
   "face_incomplete",
@@ -130,3 +131,39 @@ export const SHEET_ISSUES: Readonly<Record<SheetIssueCode, SheetIssueDefinition>
 export const SHEET_ISSUE_LIST: readonly SheetIssueDefinition[] = SHEET_ISSUE_CODES.map(
   (code) => SHEET_ISSUES[code],
 );
+
+/** Living subjects with a face and a body. */
+const BEINGS: readonly AssetKind[] = ["character", "creature"];
+/** Everything with a sheet except a location, which is the background itself. */
+const NOT_PLACES: readonly AssetKind[] = IMAGE_ASSET_KINDS.filter((k) => k !== "location");
+
+/**
+ * Which kinds of asset each sheet issue applies to: the review UI offers only those and the
+ * service refuses the rest. Same reasoning as the look issues. Not part of the fixer's prompt.
+ */
+export const SHEET_ISSUE_KINDS: Readonly<Record<SheetIssueCode, readonly AssetKind[]>> = {
+  face_incomplete: BEINGS,
+  anatomy_wrong: BEINGS,
+  wrong_age: BEINGS,
+  wrong_clothing: ["character", "costume"],
+  wrong_era: IMAGE_ASSET_KINDS,
+  text_or_labels: IMAGE_ASSET_KINDS,
+  style_mismatch: IMAGE_ASSET_KINDS,
+  background_not_clean: NOT_PLACES,
+  inconsistent_views: IMAGE_ASSET_KINDS,
+  proportions_off: IMAGE_ASSET_KINDS,
+  missing_view: IMAGE_ASSET_KINDS,
+  wrong_framing: IMAGE_ASSET_KINDS,
+  differs_from_look: IMAGE_ASSET_KINDS,
+  layout_cluttered: IMAGE_ASSET_KINDS,
+};
+
+/** True when the sheet issue applies to this kind of asset. */
+export function sheetIssueFits(code: SheetIssueCode, kind: AssetKind): boolean {
+  return SHEET_ISSUE_KINDS[code].includes(kind);
+}
+
+/** The sheet issues offered for one kind of asset, in catalogue order (none for a voice). */
+export function sheetIssuesFor(kind: AssetKind): readonly SheetIssueDefinition[] {
+  return SHEET_ISSUE_LIST.filter((issue) => sheetIssueFits(issue.code, kind));
+}

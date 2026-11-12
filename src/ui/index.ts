@@ -97,7 +97,7 @@ export type { PopoverProps } from "./Popover";
 export { Tooltip, TooltipProvider } from "./Tooltip";
 export type { TooltipProps } from "./Tooltip";
 export { ToastProvider, useToast } from "./Toast";
-export type { ToastApi, ToastKind, ToastOptions } from "./Toast";
+export type { ToastApi, ToastKind, ToastMedia, ToastOptions } from "./Toast";
 
 // Status
 export { StatusLine, StatusDot } from "./StatusLine";
@@ -131,3 +131,24 @@ export { Tip } from "./Tip";
 export type { TipProps } from "./Tip";
 export { useDismissed } from "./useDismissed";
 export type { UseDismissed } from "./useDismissed";
+export { DemoHint } from "./DemoHint";
+export type { DemoHintProps } from "./DemoHint";
+export { AnimatedPlaceholder } from "./AnimatedPlaceholder";
+export type { AnimatedPlaceholderProps } from "./AnimatedPlaceholder";
+export { TypingScene, DropScene, SilhouetteScene, WaveformScene } from "./demo-scenes";
+export type {
+  TypingSceneProps,
+  DropSceneProps,
+  SilhouetteSceneProps,
+  WaveformSceneProps,
+} from "./demo-scenes";
+export {
+  LengthBarScene,
+  BlockSwapScene,
+  IssueDemo,
+  issueScene,
+  ISSUE_SCENE_CODES,
+} from "./demo-scenes";
+export type { LengthBarSceneProps, BlockSwapSceneProps, IssueDemoProps } from "./demo-scenes";
+export { samplePrompt, typingPlan, clipText } from "./demo-hint-text";
+export type { TypingOptions, TypingPlan } from "./demo-hint-text";

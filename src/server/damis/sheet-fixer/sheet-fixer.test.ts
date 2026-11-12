@@ -4,7 +4,14 @@ import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
 import { sheetFixer } from "./dami";
 import inputJson from "./fixtures/input.json";
 import outputJson from "./fixtures/model-output.json";
-import { SHEET_ISSUE_CODES, SHEET_ISSUE_LIST, SHEET_ISSUES } from "./issues";
+import {
+  SHEET_ISSUE_CODES,
+  SHEET_ISSUE_KINDS,
+  SHEET_ISSUE_LIST,
+  SHEET_ISSUES,
+  sheetIssueFits,
+  sheetIssuesFor,
+} from "./issues";
 import { buildSheetFixerPrompt } from "./prompt";
 import { sheetFixerInputSchema, sheetFixerOutputSchema, sheetIssueCodeSchema } from "./schema";
 
@@ -74,5 +81,33 @@ describe("sheet-fixer", () => {
     const client = new FakeClaudeClient([jsonResponse(outputJson)]);
     const result = await runDami(sheetFixer, input, {}, testDeps(client).deps);
     expect(result.output.prompt).toContain("back view complete");
+  });
+});
+
+describe("sheet issues by kind", () => {
+  const codes = (kind: Parameters<typeof sheetIssuesFor>[0]) =>
+    sheetIssuesFor(kind).map((i) => i.code);
+
+  it("never offers a place a face, limbs, an age, clothing or a clean backdrop", () => {
+    const place = codes("location");
+    for (const code of [
+      "face_incomplete",
+      "anatomy_wrong",
+      "wrong_age",
+      "wrong_clothing",
+      "background_not_clean",
+    ] as const) {
+      expect(place).not.toContain(code);
+      expect(sheetIssueFits(code, "location")).toBe(false);
+    }
+    expect(place).toEqual(expect.arrayContaining(["missing_view", "inconsistent_views"]));
+  });
+
+  it("offers a character everything and a voice nothing", () => {
+    expect(codes("character")).toEqual([...SHEET_ISSUE_CODES]);
+    expect(codes("costume")).toContain("wrong_clothing");
+    expect(codes("prop")).not.toContain("face_incomplete");
+    expect(codes("voice")).toEqual([]);
+    for (const code of SHEET_ISSUE_CODES) expect(SHEET_ISSUE_KINDS[code].length).toBeGreaterThan(0);
   });
 });

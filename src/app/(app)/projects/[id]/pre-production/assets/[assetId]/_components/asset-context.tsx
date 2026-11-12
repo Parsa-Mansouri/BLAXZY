@@ -9,10 +9,16 @@ import {
   type RefObject,
 } from "react";
 import { cn } from "@/ui";
+import type { MoveOn } from "../actions";
 
 export interface AssetScreenContextValue {
   /** Refreshes the page after an action, then checks twice that nothing was missed. */
   refresh: () => void;
+  /**
+   * After an action that started a job (or made the asset ready): with `MoveOn`, says what started
+   * and goes to the next asset that waits for the user (or the overview); with null, `refresh`.
+   */
+  moveOn: (data: MoveOn | null, started: string) => void;
   /**
    * False while the screen is first shown, true afterwards: a panel that mounts later was reached
    * by the user's action (or by a finished generation), so it takes focus. Read it in effects only.

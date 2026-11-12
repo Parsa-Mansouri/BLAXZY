@@ -1,0 +1,78 @@
+/* Ambient scenes: Silhouette and Waveform. Same rules as the "Demo hints" section in src/app/globals.css. */
+@layer components {
+  /* -- Silhouette: a faint sketch of an empty slot builds up, piece by piece. -- */
+  .demo-sil {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--demo-sil-top, 14%) 14% var(--demo-sil-bottom, 14%);
+  }
+  .demo-sil-art {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 7rem;
+    max-height: 7rem;
+    overflow: visible;
+  }
+  .demo-sil-piece {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: demo-sil-rise 700ms var(--ease-curve) calc(var(--demo-i, 0) * 220ms) both;
+  }
+  .demo-sil-fill {
+    fill: color-mix(in srgb, currentColor 10%, transparent);
+  }
+
+  /* -- Waveform: bars rise like someone speaking, then settle into a still waveform. -- */
+  .demo-wave {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 12px var(--demo-pad);
+  }
+  .demo-wave-end {
+    justify-content: flex-end;
+  }
+  .demo-wave-bar {
+    display: block;
+    flex: none;
+    width: 3px;
+    height: calc(var(--demo-h, 0.5) * 70%);
+    border-radius: var(--radius-capsule);
+    background: currentColor;
+    animation: demo-wave-speak 1500ms var(--ease-curve) calc(var(--demo-i, 0) * 45ms) both;
+  }
+
+  @keyframes demo-sil-rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes demo-wave-speak {
+    0% {
+      opacity: 0;
+      transform: scaleY(0.1);
+    }
+    30% {
+      opacity: 1;
+      transform: scaleY(1.3);
+    }
+    55% {
+      transform: scaleY(0.6);
+    }
+    80% {
+      transform: scaleY(1.1);
+    }
+    100% {
+      opacity: 1;
+      transform: scaleY(1);
+    }
+  }
+}

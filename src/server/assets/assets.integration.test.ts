@@ -11,7 +11,8 @@ const reachable = await databaseReachable();
 describe.skipIf(!reachable)("assets service (integration)", async () => {
   const assets = await import("@/server/assets");
   const { closeDb, getDb } = await import("@/server/db/client");
-  const { asset, damiRun, scriptVersion } = await import("@/server/db/schema");
+  const { asset, damiRun, project, scriptVersion } = await import("@/server/db/schema");
+  const { eq } = await import("drizzle-orm");
   const fixtures = createFixtures();
 
   afterAll(async () => {
@@ -156,5 +157,36 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     expect(page3?.nextCursor).toBeNull();
     expect(await assets.listAssets(projectId, other)).toBeNull();
     expect(await assets.countAssetsByKind(projectId, other)).toBeNull();
+  });
+
+  it("finds the next asset waiting for the user, in the overview's order", async () => {
+    const userId = await fixtures.newUser();
+    const other = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId);
+    await getDb().update(project).set({ stage: "pre_production" }).where(eq(project.id, projectId));
+    const v = await versionAndRun(projectId, 1);
+    await assets.applyDetection({
+      projectId,
+      scriptVersionId: v.versionId,
+      damiRunId: v.runId,
+      assets: [
+        detected("prop", "Lamp", "lamp"),
+        detected("character", "Ines", "ines"),
+        detected("location", "Lamp Room", "lamp-room"),
+        detected("character", "Tomas", "tomas"),
+      ],
+    });
+    const rows = await getDb()
+      .select({ id: asset.id, slug: asset.slug })
+      .from(asset)
+      .where(eq(asset.projectId, projectId));
+    const id = (slug: string) => rows.find((r) => r.slug === slug)?.id ?? "";
+    const next = async (slug: string) =>
+      (await assets.nextAssetNeedingInput(projectId, userId, id(slug)))?.name ?? null;
+    expect(await next("ines")).toBe("Tomas");
+    expect(await next("tomas")).toBe("Lamp Room");
+    expect(await next("lamp-room")).toBe("Lamp");
+    expect(await next("lamp")).toBe("Ines");
+    expect(await assets.nextAssetNeedingInput(projectId, other, id("ines"))).toBeNull();
   });
 });

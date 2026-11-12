@@ -20,9 +20,10 @@ import {
 import { refreshCredits } from "../../../../../_lib/credits";
 import { assetHref, type AssetKindKey } from "../../../_lib/asset-kinds";
 import { reviewSheetAction } from "../../assets/[assetId]/actions";
-import type { IssueChoice } from "../../assets/[assetId]/_components/shared";
+import { FitToImage, type IssueChoice } from "../../assets/[assetId]/_components/shared";
 import { ContinueToProduction } from "../../_components/continue-to-production";
 import { DrawnTick } from "../../_components/drawn-tick";
+import { MarkLayer, useMarking } from "../../_components/mark-layer";
 import { RequestChangesPanel } from "../../_components/request-changes-panel";
 import { FILL_PAGE, PICTURE_MAX_H } from "../../_lib/fill";
 import { loadReviewSheetAction, requestSheetChangesAction, type ReviewSheet } from "../actions";
@@ -88,7 +89,8 @@ export function SheetsReview({
   initialId: string | null;
   initialSheet: ReviewSheet | null;
   notReady: number;
-  issues: IssueChoice[];
+  /** The sheet issues that apply to each kind of asset. */
+  issues: Partial<Record<AssetKindKey, IssueChoice[]>>;
   maxNote: number;
   /** The project has moved on to Production already. */
   moved: boolean;
@@ -105,6 +107,8 @@ export function SheetsReview({
   const [panelError, setPanelError] = useState<string | null>(null);
   const [accepting, startAccepting] = useTransition();
   const [sending, startSending] = useTransition();
+  const marking = useMarking();
+  const imageRef = useRef<HTMLImageElement>(null);
 
   const index = Math.max(
     0,
@@ -135,6 +139,7 @@ export function SheetsReview({
     if (id === current?.id) return;
     setSelected(id);
     setAsking(false);
+    marking.clear();
     setError(null);
     setPanelError(null);
   }
@@ -174,6 +179,7 @@ export function SheetsReview({
       return rest;
     });
     setAsking(false);
+    marking.clear();
     for (let k = 1; k <= nextItems.length; k++) {
       const candidate = nextItems[(index + k) % nextItems.length];
       if (candidate.status === "todo") {
@@ -300,6 +306,7 @@ export function SheetsReview({
                 {sheet ? (
                   // eslint-disable-next-line @next/next/no-img-element -- user media from object storage, sized by the frame
                   <img
+                    ref={imageRef}
                     src={fileSrc(sheet.fileId)}
                     alt={`Reference sheet of ${current.name}`}
                     decoding="async"
@@ -319,17 +326,24 @@ export function SheetsReview({
                 ) : (
                   <Skeleton className="size-full rounded-none" />
                 )}
+                {sheet && asking ? (
+                  <FitToImage imageRef={imageRef}>
+                    <MarkLayer marking={marking} subject="sheet" disabled={sending} />
+                  </FitToImage>
+                ) : null}
               </div>
 
               {asking ? (
                 <RequestChangesPanel
                   subject="sheet"
-                  issues={issues}
+                  issues={issues[current.kind] ?? []}
                   maxNote={maxNote}
                   sending={sending}
                   serverError={panelError}
+                  marking={marking}
                   onSubmit={sendBack}
                   onCancel={() => {
+                    marking.clear();
                     setAsking(false);
                     setPanelError(null);
                   }}

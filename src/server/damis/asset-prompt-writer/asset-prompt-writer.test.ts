@@ -31,6 +31,9 @@ describe("guided questions", () => {
       for (const q of questions) {
         expect(q.label.length).toBeGreaterThan(3);
         expect(q.hint.length).toBeGreaterThan(3);
+        // Its own short field name, a word or two that fits the casting sheet's label column.
+        expect(q.short, `${kind}.${q.id}`).not.toContain("_");
+        expect(q.short.length, `${kind}.${q.id}`).toBeLessThanOrEqual(12);
         if (q.kind === "choice") {
           expect(q.options?.length ?? 0, `${kind}.${q.id}`).toBeGreaterThanOrEqual(2);
           const values = (q.options ?? []).map((o) => o.value);

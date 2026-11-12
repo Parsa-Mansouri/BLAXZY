@@ -22,7 +22,7 @@ export function requiredRequests(input: Input): string[] {
 
 export const scriptReviser = defineDami({
   key: "script-reviser",
-  version: "1.0.0",
+  version: "1.1.0",
   description:
     "Revises a screenplay from a review (issue codes, a note, anchored comments) with line edits, changing only what the review asks for.",
   input: scriptReviserInputSchema,

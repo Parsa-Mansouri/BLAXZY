@@ -11,7 +11,7 @@ import {
 } from "@/server/assets";
 import { requireUser } from "@/server/auth";
 import { getBalance } from "@/server/billing";
-import { ASSET_QUESTIONS, LOOK_ISSUE_LIST, SHEET_ISSUE_LIST } from "@/server/damis";
+import { ASSET_QUESTIONS, lookIssuesFor, sheetIssuesFor } from "@/server/damis";
 import { quoteGeneration } from "@/server/generation";
 import { ASSET_KIND_LABELS } from "../../../_lib/asset-kinds";
 import { loadProject } from "../../../_lib/load-project";
@@ -92,8 +92,12 @@ export default async function AssetPage({
       prices={{ look: lookPrice, sheet: sheetPrice }}
       balance={balance}
       questions={ASSET_QUESTIONS[asset.kind]}
-      lookIssues={LOOK_ISSUE_LIST.map(({ code, label, hint }) => ({ code, label, hint }))}
-      sheetIssues={SHEET_ISSUE_LIST.map(({ code, label, hint }) => ({ code, label, hint }))}
+      lookIssues={lookIssuesFor(asset.kind).map(({ code, label, hint }) => ({ code, label, hint }))}
+      sheetIssues={sheetIssuesFor(asset.kind).map(({ code, label, hint }) => ({
+        code,
+        label,
+        hint,
+      }))}
       limits={{
         prompt: MAX_LOOK_PROMPT_LENGTH,
         answer: MAX_GUIDED_ANSWER_LENGTH,

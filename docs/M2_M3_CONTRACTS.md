@@ -102,9 +102,14 @@ the job type's worker concurrency as the global cap.
 | `sheet-fixer` | `{ style, asset, previousPrompt, review }` | `{ prompt, changeSummary[] }` |
 
 Data exported for the UI: `ASSET_QUESTIONS: Record<AssetKind, GuidedQuestion[]>`
-(`{ id, label, hint, kind: "choice" | "text", options?: { value, label }[], optional? }`,
+(`{ id, label, short, hint, kind: "choice" | "text", options?: { value, label }[], optional? }`,
 five to eight questions per kind), `LOOK_ISSUE_LIST`, `SHEET_ISSUE_LIST` (same shape as
-`SCRIPT_ISSUE_LIST`: `code`, `label`, `hint`, plus the instruction for the fixer). Each dami has a
+`SCRIPT_ISSUE_LIST`: `code`, `label`, `hint`, plus the instruction for the fixer), and
+`lookIssuesFor(kind)` / `sheetIssuesFor(kind)`, the issues that apply to one asset kind
+(`LOOK_ISSUE_KINDS` / `SHEET_ISSUE_KINDS`; e.g. no face, limbs, age, clothing or clean backdrop for
+a location). `submitLookReview` / `submitSheetReview` refuse codes that do not apply to the asset's
+kind. Marks a reviewer drops on the picture are folded into the note as plain text ("Marked on the
+image: 1 (upper left): ..."), so the review contract is unchanged. Each dami has a
 sample generator in `src/server/damis/sample/`.
 
 ## Pre-production: `@/server/assets` (additions)

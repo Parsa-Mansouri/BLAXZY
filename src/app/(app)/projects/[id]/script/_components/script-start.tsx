@@ -3,7 +3,16 @@
 import { useId, useRef, useState, useTransition, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { FileText } from "lucide-react";
-import { Button, PageHeader, ProgressBar, Spinner, StatusDot, StatusLine, cn } from "@/ui";
+import {
+  AnimatedPlaceholder,
+  Button,
+  PageHeader,
+  ProgressBar,
+  Spinner,
+  StatusDot,
+  StatusLine,
+  cn,
+} from "@/ui";
 import {
   createScriptUploadAction,
   finishScriptUploadAction,
@@ -23,6 +32,13 @@ const UPLOAD_TYPES: Record<string, string> = {
 };
 
 const numberFormat = new Intl.NumberFormat("en-US");
+
+/** Premises the empty brief writes, one after another; it rests on the first. */
+const EXAMPLE_BRIEFS = [
+  "An old lighthouse keeper refuses to leave her post the night the lamp finally fails.",
+  "Two estranged brothers drive their father's ashes across the desert. Neither wants to arrive.",
+  "A night-shift translator hears her own name in a wiretap she was never meant to hear.",
+] as const;
 
 type UploadPhase =
   | { kind: "idle" }
@@ -202,33 +218,46 @@ export function ScriptStart({
           <label htmlFor={`${id}-brief`} className="sr-only">
             Your story
           </label>
-          <textarea
-            ref={area}
-            id={`${id}-brief`}
-            value={brief}
-            onChange={(e) => {
-              setBrief(e.target.value);
-              if (briefError) setBriefError(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                write();
-              }
-            }}
-            placeholder="An old lighthouse keeper refuses to leave her post the night the lamp finally fails."
-            aria-invalid={briefError ? true : undefined}
-            aria-describedby={describedBy || undefined}
+          {/* The wrapper takes the field's bleed; the overlay sits inside its 2px rule, 16px top
+              and 12px side padding, in its type and placeholder colour. */}
+          <AnimatedPlaceholder
+            lines={EXAMPLE_BRIEFS}
+            empty={brief.length === 0}
             disabled={busy}
-            className={cn(
-              // A line field on the white block (the kit has no field for a white surface): a
-              // black caret, and focus shown by its own underline turning solid black and the
-              // field taking a faint grey fill (no outline ring).
-              "-mx-3 field-sizing-content max-h-[60dvh] min-h-36 w-[calc(100%+1.5rem)] flex-1 resize-none rounded-t-paper border-t-2 border-on-accent/25 bg-transparent px-3 pt-4 text-section font-regular text-on-accent caret-on-accent outline-none",
-              "transition-colors duration-(--dur-press) placeholder:text-on-accent-2 focus:border-on-accent focus:bg-on-accent/5",
-              "selection:bg-on-accent/15 disabled:opacity-60",
-            )}
-          />
+            variant="custom"
+            multiline
+            className="-mx-3 flex w-[calc(100%+1.5rem)] flex-1 flex-col"
+            overlayClassName="inset-x-3 top-[calc(1rem+2px)] bottom-0 text-section font-regular text-on-accent-2"
+          >
+            <textarea
+              ref={area}
+              id={`${id}-brief`}
+              value={brief}
+              onChange={(e) => {
+                setBrief(e.target.value);
+                if (briefError) setBriefError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  write();
+                }
+              }}
+              placeholder={EXAMPLE_BRIEFS[0]}
+              aria-invalid={briefError ? true : undefined}
+              aria-describedby={describedBy || undefined}
+              disabled={busy}
+              className={cn(
+                // A line field on the white block (the kit has no field for a white surface): a
+                // black caret, and focus shown by its own underline turning solid black and the
+                // field taking a faint grey fill (no outline ring).
+                // The placeholder colour needs `!`: the global ::placeholder rule is unlayered.
+                "field-sizing-content max-h-[60dvh] min-h-36 w-full flex-1 resize-none rounded-t-paper border-t-2 border-on-accent/25 bg-transparent px-3 pt-4 text-section font-regular text-on-accent caret-on-accent outline-none",
+                "transition-colors duration-(--dur-press) placeholder:text-on-accent-2! focus:border-on-accent focus:bg-on-accent/5",
+                "selection:bg-on-accent/15 disabled:opacity-60",
+              )}
+            />
+          </AnimatedPlaceholder>
 
           {nearLimit || briefError ? (
             <div className="flex flex-col gap-2">

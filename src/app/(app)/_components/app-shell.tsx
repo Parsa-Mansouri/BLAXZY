@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { SplitView } from "@/ui";
 import { SIDEBAR_COOKIE } from "../_lib/sidebar-cookie";
+import { FinishedWatcher } from "./finished-watcher";
 
 export function AppShell({
   sidebar,
@@ -33,6 +34,7 @@ export function AppShell({
           {children}
         </main>
       </SplitView>
+      <FinishedWatcher />
     </>
   );
 }

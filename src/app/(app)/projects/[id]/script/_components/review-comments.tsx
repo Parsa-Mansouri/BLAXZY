@@ -13,7 +13,10 @@ export interface DraftComment {
 
 const STORAGE_PREFIX = "blaxzy:script-comments:";
 export const MAX_COMMENT_CHARS = 4000;
+/** The server takes quotes of at most 5,000 characters. */
 export const MAX_QUOTE_CHARS = 5000;
+/** The server takes at most 100 comments in one review. */
+export const MAX_REVIEW_COMMENTS = 100;
 
 function readStored(versionId: string): DraftComment[] {
   try {
@@ -40,8 +43,9 @@ export const isSendable = (c: DraftComment) =>
   c.note.trim().length > 0 && c.note.trim().length <= MAX_COMMENT_CHARS;
 
 /**
- * The review's pending comments. Kept in this browser until they are sent, so a reload does not
- * lose them.
+ * The review's pending comments, each on any passage of the script (`start`/`end` are offsets
+ * into the version's text, `quote` its exact characters). Kept in this browser until they are
+ * sent, so a reload does not lose them.
  */
 export function useDraftComments(versionId: string, content: string) {
   const [comments, setComments] = useState<DraftComment[]>([]);
@@ -70,16 +74,21 @@ export function useDraftComments(versionId: string, content: string) {
 
   return {
     comments,
-    /** A new, empty comment on the passage; it is dropped again if left empty. */
+    /** Room for another comment (the server takes at most 100). */
+    full: comments.length >= MAX_REVIEW_COMMENTS,
+    /**
+     * A new, empty comment on the passage; it is dropped again if left empty. The caller keeps
+     * the passage within MAX_QUOTE_CHARS (it tells the reader to select less).
+     */
     add: (range: { start: number; end: number; quote: string }) => {
       const comment: DraftComment = {
         id: crypto.randomUUID(),
-        quote: range.quote.slice(0, MAX_QUOTE_CHARS),
+        quote: range.quote,
         start: range.start,
-        end: Math.min(range.end, range.start + MAX_QUOTE_CHARS),
+        end: range.end,
         note: "",
       };
-      setComments((list) => [...list, comment].sort((a, b) => a.start - b.start));
+      setComments((list) => [...list, comment].sort((a, b) => a.start - b.start || a.end - b.end));
       return comment;
     },
     update: (id: string, note: string) =>
@@ -90,22 +99,27 @@ export function useDraftComments(versionId: string, content: string) {
 }
 
 /**
- * A comment beside its line: the note is edited in place (it is kept as you type), Remove takes
- * it away, and leaving it empty removes it.
+ * A comment beside its passage: the note is edited in place (it is kept as you type), Remove
+ * (or Escape on an empty note) takes it away, and leaving it empty discards it.
  */
 export function LineComment({
   comment,
-  autoFocus,
+  fieldId,
   describedBy,
   onChange,
   onRemove,
+  onDiscard,
 }: {
   comment: DraftComment;
-  autoFocus?: boolean;
-  /** id of the line the comment is about. */
+  /** id of the textarea, so the sheet can focus a new comment. */
+  fieldId?: string;
+  /** id of an element naming the passage the comment is about. */
   describedBy?: string;
   onChange: (note: string) => void;
+  /** Removed on purpose (Remove, Escape): the sheet moves focus somewhere sensible. */
   onRemove: () => void;
+  /** Left empty when focus moved elsewhere: removed without moving focus. */
+  onDiscard?: () => void;
 }) {
   const tooLong = comment.note.trim().length > MAX_COMMENT_CHARS;
   return (
@@ -113,12 +127,13 @@ export function LineComment({
       className="flex swap-in flex-col items-end gap-1.5"
       onBlur={(event) => {
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-        if (comment.note.trim() === "") onRemove();
+        if (comment.note.trim() === "") (onDiscard ?? onRemove)();
       }}
     >
       <Textarea
         className="w-full"
-        aria-label="Your comment on this line"
+        id={fieldId}
+        aria-label="Your comment on this passage"
         aria-describedby={describedBy}
         aria-invalid={tooLong ? true : undefined}
         value={comment.note}
@@ -132,7 +147,6 @@ export function LineComment({
         placeholder="What should change?"
         minRows={2}
         maxRows={8}
-        autoFocus={autoFocus}
       />
       {tooLong ? (
         <p role="alert" className="self-start text-meta text-red">

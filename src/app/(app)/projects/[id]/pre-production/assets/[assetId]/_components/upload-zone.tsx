@@ -1,11 +1,12 @@
 "use client";
 
-import { useId, useRef, useState, type DragEvent } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { AudioLines, ImageUp } from "lucide-react";
-import { Button, ProgressBar, cn } from "@/ui";
+import { Button, DemoHint, DropScene, ProgressBar, cn } from "@/ui";
 import { createAssetUploadAction, finishAssetUploadAction } from "../actions";
 import { useAssetScreen } from "./asset-context";
 import { ErrorLine } from "./shared";
+import { useFileDrop } from "./use-file-drop";
 
 const MB = 1024 * 1024;
 const MAX_BYTES = 25 * MB;
@@ -51,28 +52,33 @@ function putFile(
 
 /**
  * Drop or choose a file, upload it straight to storage with progress, then hand it to the asset.
- * `audio` takes a voice recording; otherwise a reference image.
+ * `audio` takes a voice recording; otherwise a reference image. `initialFile` (a file dropped
+ * elsewhere, e.g. on the Upload an Image tile) starts uploading as soon as the zone appears.
  */
 export function UploadZone({
   projectId,
   assetId,
+  assetName,
   audio = false,
   disabled = false,
   grow = false,
+  initialFile,
 }: {
   projectId: string;
   assetId: string;
+  assetName: string;
   audio?: boolean;
   disabled?: boolean;
   /** Let the drop area grow to fill the space it is given. */
   grow?: boolean;
+  /** Upload this file once, on mount. It goes through the same checks as a dropped file. */
+  initialFile?: File;
 }) {
-  const { refresh } = useAssetScreen();
+  const { moveOn } = useAssetScreen();
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [error, setError] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
   const busy = disabled || phase.kind !== "idle";
   const types = audio ? AUDIO_TYPES : IMAGE_TYPES;
   const formats = audio ? "MP3, WAV or M4A" : "PNG, JPEG or WebP";
@@ -124,36 +130,45 @@ export function UploadZone({
       setError(finished.error);
       return;
     }
-    refresh();
+    // A recording makes the voice ready, so the user moves on; an image stays here for review.
+    moveOn(finished.data, `${assetName}’s voice is ready`);
   }
 
-  function onDrop(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setDragging(false);
-    if (busy) return;
-    const file = event.dataTransfer.files[0];
-    if (file) void upload(file);
-  }
+  const { dragging, dropProps } = useFileDrop({
+    disabled: busy,
+    onFile: (file) => void upload(file),
+  });
+
+  // The file handed over on arrival is uploaded once (the ref also covers Strict Mode's second
+  // effect run in development).
+  const started = useRef<File | null>(null);
+  const startInitial = useEffectEvent((file: File) => void upload(file));
+  useEffect(() => {
+    if (!initialFile || started.current === initialFile) return;
+    started.current = initialFile;
+    startInitial(initialFile);
+  }, [initialFile]);
 
   const Icon = audio ? AudioLines : ImageUp;
 
   return (
     <div className={cn("flex flex-col gap-3", grow && "flex-1")}>
       <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (!busy) setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
+        {...dropProps}
         className={cn(
           grow && "flex-1",
+          phase.kind === "idle" && "demo-host",
           "flex min-h-52 flex-col items-center justify-center gap-3 rounded-block border border-dashed px-5 py-8 text-center transition-colors duration-(--dur-press)",
           dragging ? "border-brand bg-elevated-2" : "border-separator-opaque bg-elevated",
         )}
       >
         {phase.kind === "idle" ? (
           <>
+            {disabled ? null : (
+              <DemoHint delay={600} mask="none" className={cn(dragging && "invisible")}>
+                <DropScene variant={audio ? "audio" : "image"} />
+              </DemoHint>
+            )}
             <Icon aria-hidden="true" className="size-5 text-label-2" strokeWidth={1.5} />
             <p className="text-body text-label-2">
               {audio ? "Drop a recording here, or" : "Drop an image here, or"}

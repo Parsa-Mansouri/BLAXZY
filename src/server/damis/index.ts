@@ -152,6 +152,9 @@ export {
   LOOK_ISSUES,
   LOOK_ISSUE_CODES,
   LOOK_ISSUE_LIST,
+  LOOK_ISSUE_KINDS,
+  lookIssueFits,
+  lookIssuesFor,
   type LookIssueCode,
   type LookIssueDefinition,
 } from "./asset-fixer/issues";
@@ -173,6 +176,9 @@ export {
   SHEET_ISSUES,
   SHEET_ISSUE_CODES,
   SHEET_ISSUE_LIST,
+  SHEET_ISSUE_KINDS,
+  sheetIssueFits,
+  sheetIssuesFor,
   type SheetIssueCode,
   type SheetIssueDefinition,
 } from "./sheet-fixer/issues";

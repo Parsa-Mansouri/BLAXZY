@@ -1,8 +1,20 @@
 "use client";
 
-import { useId, useRef, useState, useTransition, type ReactNode } from "react";
+import { useId, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
-import { Button, FeatureBlock, PicturePlaceholder, QuietTile, Textarea, cn, stagger } from "@/ui";
+import {
+  Button,
+  DemoHint,
+  DropScene,
+  FeatureBlock,
+  QuietTile,
+  Textarea,
+  TypingScene,
+  cn,
+  samplePrompt,
+  clipText,
+  stagger,
+} from "@/ui";
 import { useGuidedDraft } from "../_lib/guided-draft";
 import { startFromPromptAction } from "../actions";
 import { StageHeading, useAssetScreen, useFocusOnArrival } from "./asset-context";
@@ -14,21 +26,13 @@ import {
   formatNumber,
   type AssetInfo,
   type GuidedQuestion,
-  type Orientation,
 } from "./shared";
 import { UploadZone } from "./upload-zone";
-import { PICTURE_MAX_H } from "../../../_lib/fill";
+import { useFileDrop } from "./use-file-drop";
 
-/** The empty frame on the leading side, the way of adding the image filling the rest. */
-function WithFrame({ orientation, children }: { orientation: Orientation; children: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-stretch gap-x-12 gap-y-10">
-      <div className="min-w-0 flex-[1_1_280px] in-2">
-        <EmptyFrame orientation={orientation} />
-      </div>
-      <div className="flex min-w-0 flex-[2_1_420px] flex-col gap-5">{children}</div>
-    </div>
-  );
+/** The way of adding the image, full width: no empty picture frame, since there is no image yet. */
+function MethodLayout({ children }: { children: ReactNode }) {
+  return <div className="flex min-w-0 flex-col gap-5">{children}</div>;
 }
 
 export type AddMethod = "chooser" | "guided" | "prompt" | "upload";
@@ -56,21 +60,6 @@ const PROMPT_HINTS: Partial<Record<AssetInfo["kind"], string>> = {
   other: "Show it whole and evenly lit. Name the shape, materials and colours.",
 };
 
-/** The empty frame where the image will stand, in the project's shape. */
-function EmptyFrame({ orientation }: { orientation: Orientation }) {
-  return (
-    <PicturePlaceholder
-      label="No image yet"
-      aspect="video"
-      className={cn(
-        "mx-auto rounded-card",
-        PICTURE_MAX_H,
-        orientation === "portrait" ? "aspect-[9/16]" : "aspect-video",
-      )}
-    />
-  );
-}
-
 export interface AddImageProps {
   projectId: string;
   asset: AssetInfo;
@@ -78,7 +67,6 @@ export interface AddImageProps {
   limits: { prompt: number; answer: number };
   price: number | null;
   balance: number;
-  orientation: Orientation;
   /** Open at this way of adding the image (a card's action led here). */
   initialMethod?: AddMethod;
   /** Shown above the choices, e.g. after a failure. */
@@ -96,6 +84,13 @@ export function AddImage(props: AddImageProps) {
   // Null until the user picks: a saved draft of answers then resumes the questions.
   const [picked, setPicked] = useState<AddMethod | null>(initial ?? null);
   const method: AddMethod = picked ?? (draft && hasQuestions ? "guided" : "chooser");
+  // A file dropped on the Upload an Image tile, uploaded as soon as the upload view opens.
+  const [dropped, setDropped] = useState<File | undefined>(undefined);
+
+  function pick(next: AddMethod, file?: File) {
+    setDropped(next === "upload" ? file : undefined);
+    setPicked(next);
+  }
 
   if (method === "guided") {
     return (
@@ -104,6 +99,7 @@ export function AddImage(props: AddImageProps) {
         projectId={props.projectId}
         assetId={asset.id}
         assetName={asset.name}
+        assetDescription={asset.description}
         questions={questions}
         maxAnswer={props.limits.answer}
         maxPrompt={props.limits.prompt}
@@ -112,7 +108,7 @@ export function AddImage(props: AddImageProps) {
         initial={draft}
         onSave={save}
         onClear={clear}
-        onMethod={setPicked}
+        onMethod={(next) => pick(next)}
       />
     );
   }
@@ -125,17 +121,16 @@ export function AddImage(props: AddImageProps) {
         maxLength={props.limits.prompt}
         price={props.price}
         balance={props.balance}
-        orientation={props.orientation}
-        onBack={() => setPicked("chooser")}
+        onBack={() => pick("chooser")}
       />
     );
   }
 
   if (method === "upload") {
     return (
-      <WithFrame orientation={props.orientation}>
+      <MethodLayout>
         <section aria-labelledby="upload-title" className="flex flex-1 in-2 flex-col gap-6">
-          <BackToChooser onClick={() => setPicked("chooser")} />
+          <BackToChooser onClick={() => pick("chooser")} />
           <div className="flex flex-col gap-3">
             <StageHeading id="upload-title" className="text-heading-sm">
               Upload an Image
@@ -144,9 +139,15 @@ export function AddImage(props: AddImageProps) {
               Use a photo, a drawing or a still you already have. No credits needed.
             </p>
           </div>
-          <UploadZone projectId={props.projectId} assetId={asset.id} grow />
+          <UploadZone
+            projectId={props.projectId}
+            assetId={asset.id}
+            assetName={asset.name}
+            grow
+            initialFile={dropped}
+          />
         </section>
-      </WithFrame>
+      </MethodLayout>
     );
   }
 
@@ -155,14 +156,13 @@ export function AddImage(props: AddImageProps) {
       {...props}
       hasQuestions={hasQuestions}
       resuming={Boolean(draft && Object.keys(draft.answers).length > 0)}
-      onPick={setPicked}
+      onPick={pick}
     />
   );
 }
 
 function Chooser({
   asset,
-  orientation,
   price,
   balance,
   title,
@@ -173,12 +173,20 @@ function Chooser({
 }: AddImageProps & {
   hasQuestions: boolean;
   resuming: boolean;
-  onPick: (method: AddMethod) => void;
+  /** `file`: one dropped on the Upload an Image tile, to upload straight away. */
+  onPick: (method: AddMethod, file?: File) => void;
 }) {
   const lead = useRef<HTMLElement>(null);
   useFocusOnArrival(() => lead.current);
+  const prompt = useMemo(
+    () => samplePrompt(asset.kind, asset.name, asset.description),
+    [asset.kind, asset.name, asset.description],
+  );
+  // The Upload an Image tile is a real drop target: a file let go on it opens the upload view
+  // and starts uploading. UploadZone checks the type and size.
+  const { dragging, dropProps } = useFileDrop({ onFile: (file) => onPick("upload", file) });
   return (
-    <WithFrame orientation={orientation}>
+    <MethodLayout>
       {title ? <StageHeading className="in-2 text-heading-sm">{title}</StageHeading> : null}
       <div className="flex flex-1 flex-wrap items-stretch gap-3">
         {hasQuestions ? (
@@ -200,6 +208,16 @@ function Chooser({
             description={`Describe how ${asset.name} should look, in your own words.`}
             cta="Start"
             onClick={() => onPick("prompt")}
+            demo={
+              // On the white block: its 32px padding, a lighter ink, and the prompt typed above the
+              // Start pill rather than under the title.
+              <DemoHint mask="none" className="[--demo-ink:var(--label-3)] [--demo-pad:2rem]">
+                <TypingScene
+                  lines={[clipText(prompt, 90)]}
+                  className="content-end pb-[calc(var(--demo-pad)+var(--btn-lg)+1.5rem)]"
+                />
+              </DemoHint>
+            }
           />
         )}
         <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-3">
@@ -209,13 +227,28 @@ function Chooser({
               style={stagger(1)}
               title="Write a Prompt"
               onClick={() => onPick("prompt")}
+              demo={
+                <DemoHint>
+                  <TypingScene lines={[prompt]} />
+                </DemoHint>
+              }
             />
           ) : null}
           <QuietTile
-            className="flex-1 enter"
+            {...dropProps}
+            className={cn(
+              "flex-1 enter",
+              dragging &&
+                "bg-elevated-2 outline-1 -outline-offset-1 outline-brand outline-dashed hover:bg-elevated-2",
+            )}
             style={stagger(2)}
             title="Upload an Image"
             onClick={() => onPick("upload")}
+            demo={
+              <DemoHint delay={750} mask="none" className={cn(dragging && "invisible")}>
+                <DropScene variant="image" />
+              </DemoHint>
+            }
           />
         </div>
       </div>
@@ -227,7 +260,7 @@ function Chooser({
           </Button>
         ) : null}
       </div>
-    </WithFrame>
+    </MethodLayout>
   );
 }
 
@@ -252,7 +285,6 @@ function PromptWriter({
   maxLength,
   price,
   balance,
-  orientation,
   onBack,
 }: {
   projectId: string;
@@ -260,10 +292,9 @@ function PromptWriter({
   maxLength: number;
   price: number | null;
   balance: number;
-  orientation: Orientation;
   onBack: () => void;
 }) {
-  const { refresh } = useAssetScreen();
+  const { moveOn } = useAssetScreen();
   const id = useId();
   const area = useRef<HTMLTextAreaElement>(null);
   const [prompt, setPrompt] = useState("");
@@ -292,12 +323,12 @@ function PromptWriter({
         setError(result.error);
         return;
       }
-      refresh();
+      moveOn(result.data, `Creating ${asset.name}’s image`);
     });
   }
 
   return (
-    <WithFrame orientation={orientation}>
+    <MethodLayout>
       <section aria-labelledby={`${id}-title`} className="flex flex-1 in-2 flex-col gap-6">
         <BackToChooser onClick={onBack} />
         <div className="flex flex-col gap-3">
@@ -385,6 +416,6 @@ function PromptWriter({
           <ErrorLine>{error}</ErrorLine>
         </div>
       </section>
-    </WithFrame>
+    </MethodLayout>
   );
 }

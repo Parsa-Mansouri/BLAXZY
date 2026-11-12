@@ -13,7 +13,18 @@ import {
   cleanTitles,
   type StyleReferenceInput,
 } from "@/lib/style-references";
-import { Button, IconButton, Input, ProgressBar, Textarea, cn, stagger } from "@/ui";
+import {
+  AnimatedPlaceholder,
+  Button,
+  DemoHint,
+  DropScene,
+  IconButton,
+  Input,
+  ProgressBar,
+  Textarea,
+  cn,
+  stagger,
+} from "@/ui";
 import { createStyleReferenceUploadAction, finishStyleReferenceUploadAction } from "../actions";
 
 /** PUTs the file to the presigned URL, reporting progress. */
@@ -42,6 +53,12 @@ interface Uploading {
   name: string;
   progress: number;
 }
+
+/** Titles the empty "Films or Shows Like It" field writes, by subject; it rests on the first. */
+const EXAMPLE_TITLES: Record<"look" | "genre", readonly string[]> = {
+  look: ["Blade Runner 2049", "In the Mood for Love", "The Grand Budapest Hotel", "Chernobyl"],
+  genre: ["Blade Runner 2049", "No Country for Old Men", "Arrival", "Severance"],
+};
 
 const ACCEPT = Object.keys(REFERENCE_IMAGE_TYPES)
   .map((ext) => `.${ext}`)
@@ -101,6 +118,7 @@ export function ReferencePanel({
   const [dragging, setDragging] = useState(false);
 
   const titlesFull = value.titles.length >= MAX_REFERENCE_TITLES;
+  const exampleTitles = subject === "genre" ? EXAMPLE_TITLES.genre : EXAMPLE_TITLES.look;
   const imageSlots = MAX_REFERENCE_IMAGES - value.fileIds.length - uploads.length;
 
   function addTitle() {
@@ -183,16 +201,22 @@ export function ReferencePanel({
             addTitle();
           }}
         >
-          <Input
-            className="min-w-0 flex-1"
-            aria-label={`A film or show with the ${subject} you want`}
-            placeholder="Blade Runner 2049"
-            value={title}
-            maxLength={MAX_REFERENCE_TITLE_CHARS}
-            onChange={(e) => setTitle(e.target.value)}
+          <AnimatedPlaceholder
+            lines={exampleTitles}
+            empty={title.length === 0}
             disabled={titlesFull}
-            autoComplete="off"
-          />
+            className="min-w-0 flex-1"
+          >
+            <Input
+              aria-label={`A film or show with the ${subject} you want`}
+              placeholder={exampleTitles[0]}
+              value={title}
+              maxLength={MAX_REFERENCE_TITLE_CHARS}
+              onChange={(e) => setTitle(e.target.value)}
+              disabled={titlesFull}
+              autoComplete="off"
+            />
+          </AnimatedPlaceholder>
           <Button type="submit" variant="outlined" disabled={titlesFull || !title.trim()}>
             Add
           </Button>
@@ -277,8 +301,13 @@ export function ReferencePanel({
             <button
               type="button"
               onClick={() => fileInput.current?.click()}
-              className="flex press flex-col items-center justify-center gap-2 rounded-tile border border-dashed border-outline p-4 text-center text-secondary text-label-2 focus-ring hover:bg-fill-4 hover:text-label"
+              className="demo-host flex press flex-col items-center justify-center gap-2 rounded-tile border border-dashed border-outline p-4 text-center text-secondary text-label-2 focus-ring [--demo-pad:1rem] [--demo-radius:var(--radius-tile)] [--demo-strength:0.5] hover:bg-fill-4 hover:text-label"
             >
+              {/* An image dropped on the tile; the zone flashes the grid's real drag edge (white,
+                  not brand). Faint, so the icon and words stay first. */}
+              <DemoHint mask="none" delay={900} className="[&_.demo-drop-zone]:border-label">
+                <DropScene variant="image" />
+              </DemoHint>
               <ImagePlus aria-hidden="true" className="size-5" strokeWidth={1.5} />
               <span>
                 Add a Screenshot

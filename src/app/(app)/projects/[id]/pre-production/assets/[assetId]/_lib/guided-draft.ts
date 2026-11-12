@@ -5,7 +5,7 @@ import { useCallback, useSyncExternalStore } from "react";
 /** Answers to the guided questions, kept in the browser until they are submitted. */
 export interface GuidedDraft {
   answers: Record<string, string>;
-  /** The question on screen; the question count means the summary. */
+  /** The question on screen (older drafts may hold the question count: the last question). */
   step: number;
 }
 

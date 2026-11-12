@@ -42,6 +42,9 @@ export function AssetHeader({
   return (
     <div data-asset-title className="scroll-mt-[calc(var(--toolbar-h)+1rem)]">
       <PageHeader
+        // While the guided questions show, the casting sheet carries the name and description: the
+        // title stays for screen readers only (the page's h1) and the menu keeps its place.
+        className="group-has-[[data-dossier]]/asset:mb-4 group-has-[[data-dossier]]/asset:justify-end group-has-[[data-dossier]]/asset:[&>div:first-child]:sr-only"
         keepCase
         title={asset.name}
         description={

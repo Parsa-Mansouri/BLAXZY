@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import {
   AssetInputError,
   getAssetDetail,
+  nextAssetNeedingInput,
   removeAsset,
   replaceLook,
   retryLook,
@@ -14,6 +15,7 @@ import {
   submitLookReview,
   submitSheetReview,
   updateAsset,
+  type AssetStage,
 } from "@/server/assets";
 import { requireUser } from "@/server/auth";
 import { confirmUpload, createUpload, StorageError } from "@/server/storage";
@@ -43,6 +45,44 @@ const done = (projectId: string): ActionResult => {
   return { ok: true, data: null };
 };
 
+/**
+ * After an action that leaves nothing for the user to do on this asset (a job started, or it is
+ * ready), where to go next: the next asset that waits for the user, or null when none does (the
+ * client then goes to the pre-production overview). `data: null` means stay on this asset.
+ */
+export type MoveOn = { next: { assetId: string; name: string } | null };
+
+/** Stages after which the user has nothing to do on the asset for now. */
+const MOVE_ON_STAGES: readonly AssetStage[] = ["generating", "building_sheet", "ready"];
+
+/** Refreshes like `done`, then finds the next asset; called after the job was enqueued. */
+async function movedOn(
+  projectId: string,
+  userId: string,
+  assetId: string,
+): Promise<ActionResult<MoveOn | null>> {
+  refreshPreProduction(projectId);
+  try {
+    const next = await nextAssetNeedingInput(projectId, userId, assetId);
+    return { ok: true, data: { next: next ? { assetId: next.id, name: next.name } : null } };
+  } catch (error) {
+    // The action itself succeeded: stay on the asset rather than report a failure.
+    console.error("[asset actions] next asset", error);
+    return { ok: true, data: null };
+  }
+}
+
+/** `movedOn` when `stage` leaves nothing to do here and the caller named the asset, else `done`. */
+async function afterStage(
+  projectId: string,
+  userId: string,
+  stage: AssetStage,
+  assetId: string | undefined,
+): Promise<ActionResult<MoveOn | null>> {
+  if (assetId && MOVE_ON_STAGES.includes(stage)) return movedOn(projectId, userId, assetId);
+  return done(projectId);
+}
+
 /** A fingerprint of the asset's state, polled while something is being produced. */
 export async function pollAssetAction(assetId: string): Promise<string | null> {
   const user = await requireUser();
@@ -59,11 +99,11 @@ export async function startFromPromptAction(
   projectId: string,
   assetId: string,
   prompt: string,
-): Promise<ActionResult> {
+): Promise<ActionResult<MoveOn | null>> {
   const user = await requireUser();
   try {
     const look = await startLookFromPrompt({ assetId, userId: user.id, prompt });
-    return look ? done(projectId) : { ok: false, error: MISSING };
+    return look ? await movedOn(projectId, user.id, assetId) : { ok: false, error: MISSING };
   } catch (error) {
     return failure(error);
   }
@@ -73,11 +113,11 @@ export async function startFromGuidedAction(
   projectId: string,
   assetId: string,
   answers: Record<string, string>,
-): Promise<ActionResult> {
+): Promise<ActionResult<MoveOn | null>> {
   const user = await requireUser();
   try {
     const look = await startLookFromGuided({ assetId, userId: user.id, answers });
-    return look ? done(projectId) : { ok: false, error: MISSING };
+    return look ? await movedOn(projectId, user.id, assetId) : { ok: false, error: MISSING };
   } catch (error) {
     return failure(error);
   }
@@ -133,12 +173,16 @@ export async function finishAssetUploadAction(
   projectId: string,
   assetId: string,
   fileId: string,
-): Promise<ActionResult> {
+): Promise<ActionResult<MoveOn | null>> {
   const user = await requireUser();
   try {
     await confirmUpload({ fileId, ownerId: user.id });
     const look = await startLookFromUpload({ assetId, userId: user.id, fileId });
-    return look ? done(projectId) : { ok: false, error: MISSING };
+    if (!look) return { ok: false, error: MISSING };
+    // A recording is accepted on upload: the voice is ready. An image goes to review: stay.
+    return look.status === "accepted"
+      ? await movedOn(projectId, user.id, assetId)
+      : done(projectId);
   } catch (error) {
     if (error instanceof StorageError) {
       return { ok: false, error: "The upload did not complete. Choose the file again." };
@@ -157,11 +201,15 @@ export async function reviewLookAction(
   projectId: string,
   lookId: string,
   review: ReviewInput,
-): Promise<ActionResult> {
+  /** The look's asset: when given, a decision that starts a job moves on (see `MoveOn`). */
+  assetId?: string,
+): Promise<ActionResult<MoveOn | null>> {
   const user = await requireUser();
   try {
     const stage = await submitLookReview({ lookId, userId: user.id, ...review });
-    return stage ? done(projectId) : { ok: false, error: MISSING };
+    return stage
+      ? await afterStage(projectId, user.id, stage, assetId)
+      : { ok: false, error: MISSING };
   } catch (error) {
     return failure(error);
   }
@@ -171,11 +219,15 @@ export async function reviewSheetAction(
   projectId: string,
   sheetId: string,
   review: ReviewInput,
-): Promise<ActionResult> {
+  /** The sheet's asset: when given, the decision moves on (see `MoveOn`). */
+  assetId?: string,
+): Promise<ActionResult<MoveOn | null>> {
   const user = await requireUser();
   try {
     const stage = await submitSheetReview({ sheetId, userId: user.id, ...review });
-    return stage ? done(projectId) : { ok: false, error: MISSING };
+    return stage
+      ? await afterStage(projectId, user.id, stage, assetId)
+      : { ok: false, error: MISSING };
   } catch (error) {
     return failure(error);
   }
@@ -184,14 +236,18 @@ export async function reviewSheetAction(
 export async function retryAction(
   projectId: string,
   target: { kind: "look" | "sheet"; id: string },
-): Promise<ActionResult> {
+  /** The asset tried again: when given, the restarted job moves on (see `MoveOn`). */
+  assetId?: string,
+): Promise<ActionResult<MoveOn | null>> {
   const user = await requireUser();
   try {
     const stage =
       target.kind === "look"
         ? await retryLook({ lookId: target.id, userId: user.id })
         : await retrySheet({ sheetId: target.id, userId: user.id });
-    return stage ? done(projectId) : { ok: false, error: MISSING };
+    return stage
+      ? await afterStage(projectId, user.id, stage, assetId)
+      : { ok: false, error: MISSING };
   } catch (error) {
     return failure(error);
   }

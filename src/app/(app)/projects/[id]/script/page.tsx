@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/server/auth";
-import { getDamiMode, SCRIPT_ISSUE_LIST } from "@/server/damis";
+import { getDamiMode } from "@/server/damis";
 import { getScriptState, getScriptVersion, MAX_BRIEF_CHARS } from "@/server/script";
 import { loadBackgroundStatus } from "../_lib/background-status";
 import { loadProjectForStage } from "../_lib/load-stage";
@@ -32,7 +32,6 @@ export default async function ScriptPage({ params }: { params: Promise<{ id: str
       previous={previous}
       versions={state.versions}
       background={background}
-      issues={SCRIPT_ISSUE_LIST.map(({ code, label, hint }) => ({ code, label, hint }))}
       maxBriefChars={MAX_BRIEF_CHARS}
       sample={getDamiMode() === "sample"}
     />

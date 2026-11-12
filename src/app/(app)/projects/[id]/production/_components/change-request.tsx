@@ -2,7 +2,16 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
-import { Button, Textarea, cn, stagger } from "@/ui";
+import {
+  BlockSwapScene,
+  Button,
+  DemoHint,
+  IssueDemo,
+  Textarea,
+  cn,
+  issueScene,
+  stagger,
+} from "@/ui";
 import { shake } from "./feedback";
 import { formatNumber } from "./format";
 
@@ -77,14 +86,22 @@ export function ChangeRequest({
 
   return (
     <div data-change-request="" className="flex swap-in flex-col gap-6">
-      <h3
-        ref={headingRef}
-        tabIndex={-1}
-        id={`${id}-title`}
-        className="text-heading-sm text-balance outline-none"
-      >
-        What should change?
-      </h3>
+      {/* The heading row is the demo's hover target: a block's card swapped for its next version. */}
+      <div className="demo-host flex items-center justify-between gap-6">
+        <h3
+          ref={headingRef}
+          tabIndex={-1}
+          id={`${id}-title`}
+          className="text-heading-sm text-balance outline-none"
+        >
+          What should change?
+        </h3>
+        <span className="demo-blockswap-slot">
+          <DemoHint mask="none">
+            <BlockSwapScene />
+          </DemoHint>
+        </span>
+      </div>
       <div ref={inputsRef} className="flex flex-col gap-6">
         <div role="group" aria-labelledby={`${id}-title`} className="flex flex-wrap gap-2">
           {issues.map((issue, i) => {
@@ -102,11 +119,14 @@ export function ChangeRequest({
                   on
                     ? "border-brand bg-selected pl-2.5 text-label"
                     : "border-outline pl-3.5 text-label-2 hover:bg-fill-4 hover:text-label",
+                  // A chip with a picture of its issue is the picture's hover/focus target.
+                  issueScene(issue.code) !== null && "demo-host pl-2.5",
                 )}
               >
                 {on ? (
                   <Check aria-hidden strokeWidth={1.5} className="size-(--icon) text-brand" />
                 ) : null}
+                <IssueDemo code={issue.code} />
                 {issue.label}
               </button>
             );

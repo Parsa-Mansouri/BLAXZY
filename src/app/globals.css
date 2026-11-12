@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* Demo hint scenes, one file per scene group (see the "Demo hints" section below). */
+@import "../ui/demo-scenes/issues.css";
+@import "../ui/demo-scenes/ambient.css";
+@import "../ui/demo-scenes/placeholder.css";
 
 /*
   BLAXZY design tokens.
@@ -618,6 +622,237 @@
 }
 @utility glow-b {
   animation: drift-b 21s ease-in-out infinite alternate;
+}
+
+/* ---------- Demo hints ---------- */
+/*
+  A quiet animation behind a card's label that shows what the card does (src/ui/DemoHint.tsx,
+  scenes in src/ui/demo-scenes/). Everything here is prefixed `demo-`:
+    .demo-host            the card: frame and hover/focus target
+    .demo-hint            the player (aria-hidden, behind the label); data-play = idle|still|run
+    .demo-scene           a scene's root, filling the card
+    .demo-<scene>-<part>  a scene's elements;  @keyframes demo-<scene>-<move>
+  Rules: transform and opacity only; a fixed number of iterations; fill `both`; the LAST keyframe
+  is the scene's still frame, because that is what reduced motion (the global rule near the end
+  of this file) and data-play="still" jump to. Colours are tokens; scenes draw in currentColor.
+  The mask uses black/transparent as alpha only, they are never painted.
+*/
+@layer components {
+  .demo-host {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .demo-hint {
+    --demo-pad: 1.5rem; /* the card's padding; a 32px block sets 2rem */
+    position: absolute;
+    inset: 0;
+    z-index: -1; /* above the card's fill, below its label */
+    overflow: hidden;
+    pointer-events: none;
+    user-select: none;
+    color: var(--demo-ink, var(--label-4));
+    opacity: var(--demo-strength, 0.8);
+    font-weight: 400;
+    letter-spacing: normal;
+    text-align: start;
+    text-wrap: wrap;
+    text-transform: none;
+  }
+  .demo-hint[data-mask="bottom"] {
+    mask-image: linear-gradient(to bottom, black 22%, transparent 70%);
+  }
+  .demo-hint[data-mask="left"] {
+    mask-image: linear-gradient(to left, black 40%, transparent 88%);
+  }
+  .demo-host:disabled .demo-hint,
+  .demo-host[aria-disabled="true"] .demo-hint {
+    display: none;
+  }
+  /* Waiting for its first sight, or scrolled away: hold the frame it is on. */
+  /* Pseudo-elements are listed outside :is(), which cannot match them (the typing caret is one). */
+  .demo-hint:is([data-play="idle"], [data-offscreen]) *,
+  .demo-hint:is([data-play="idle"], [data-offscreen]) *::before,
+  .demo-hint:is([data-play="idle"], [data-offscreen]) *::after {
+    animation-play-state: paused !important;
+  }
+  /* Resting before any pass (trigger="hover"): jump to the last frame, as reduced motion does. */
+  .demo-hint[data-play="still"] *,
+  .demo-hint[data-play="still"] *::before,
+  .demo-hint[data-play="still"] *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .demo-scene {
+    position: absolute;
+    inset: 0;
+    display: block;
+  }
+
+  /* -- Typing: characters appear behind a caret, wrapping like real text. -- */
+  .demo-type {
+    display: grid;
+    align-content: start;
+    padding: var(--demo-pad);
+  }
+  .demo-type-pass {
+    grid-area: 1 / 1;
+    max-width: 44ch;
+  }
+  /* Each character fades in over 80ms. Not shorter: an animation that starts and ends between
+     two frames is painted late by Chrome, and the typing falls behind its own clock. */
+  .demo-type-char {
+    position: relative;
+    animation: demo-type-in 80ms linear var(--demo-in, 0ms) both;
+  }
+  .demo-type-char[data-out] {
+    animation:
+      demo-type-in 80ms linear var(--demo-in, 0ms) both,
+      demo-type-out 80ms linear var(--demo-out, 0ms) forwards;
+  }
+  /* The caret stands behind the newest character until the next one lands. */
+  .demo-type-char::after {
+    content: "";
+    position: absolute;
+    left: 100%;
+    top: 0.15em;
+    bottom: 0.15em;
+    width: 1px;
+    background: currentColor;
+    opacity: 0;
+    animation: demo-type-caret var(--demo-caret, 40ms) steps(1, end) var(--demo-in, 0ms);
+  }
+  /* Behind a finished line it blinks a few times, then goes. */
+  .demo-type-char[data-last]::after {
+    animation: demo-type-blink 700ms steps(1, end) var(--demo-in, 0ms) var(--demo-blinks, 2);
+  }
+
+  /* -- Drop: a cursor carries a thumbnail in; the card shows its drop state; it settles. -- */
+  .demo-drop {
+    --demo-drop-dur: 2600ms;
+  }
+  .demo-drop-zone {
+    position: absolute;
+    inset: 6px;
+    border: 1px dashed var(--brand);
+    border-radius: calc(var(--demo-radius, var(--radius-block)) - 6px);
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    animation: demo-drop-zone var(--demo-drop-dur) var(--ease-curve) both;
+  }
+  .demo-drop-carrier {
+    position: absolute;
+    top: var(--demo-pad);
+    right: var(--demo-pad);
+    display: block;
+    animation: demo-drop-carry var(--demo-drop-dur) var(--ease-curve) both;
+  }
+  .demo-drop-thumb {
+    display: block;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-inset);
+    background: color-mix(in srgb, currentColor 14%, transparent);
+  }
+  .demo-drop-thumb-audio {
+    border-radius: var(--radius-capsule);
+  }
+  .demo-drop-thumb svg {
+    display: block;
+  }
+  .demo-drop-cursor {
+    position: absolute;
+    right: -7px;
+    bottom: -10px;
+    color: var(--label-3);
+    animation: demo-drop-cursor var(--demo-drop-dur) var(--ease-curve) both;
+  }
+}
+
+@keyframes demo-type-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes demo-type-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes demo-type-caret {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes demo-type-blink {
+  0% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes demo-drop-carry {
+  0% {
+    opacity: 0;
+    translate: 50% 300%;
+    rotate: -10deg;
+    scale: 1;
+  }
+  14% {
+    opacity: 1;
+  }
+  60%,
+  74% {
+    opacity: 1;
+    translate: -8% -10%;
+    rotate: -5deg;
+    scale: 1;
+  }
+  86% {
+    translate: 0 0;
+    rotate: 0deg;
+    scale: 0.95;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+    rotate: 0deg;
+    scale: 1;
+  }
+}
+@keyframes demo-drop-zone {
+  0%,
+  42% {
+    opacity: 0;
+  }
+  58%,
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes demo-drop-cursor {
+  0%,
+  76% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  100% {
+    opacity: 0;
+    translate: 6px 8px;
+  }
 }
 
 /* Fixed words in nav, stage and tab labels: 13px capitals. */

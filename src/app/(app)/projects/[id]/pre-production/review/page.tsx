@@ -8,7 +8,7 @@ import {
   type AssetStage,
 } from "@/server/assets";
 import { requireUser } from "@/server/auth";
-import { SHEET_ISSUE_LIST } from "@/server/damis";
+import { sheetIssuesFor } from "@/server/damis";
 import { ASSET_KIND_LABELS } from "../../_lib/asset-kinds";
 import { loadProjectForStage } from "../../_lib/load-stage";
 import type { ReviewSheet } from "./actions";
@@ -77,7 +77,12 @@ export default async function ReviewSheetsPage({ params }: { params: Promise<{ i
       initialId={first?.id ?? null}
       initialSheet={firstSheet}
       notReady={notReady}
-      issues={SHEET_ISSUE_LIST.map(({ code, label, hint }) => ({ code, label, hint }))}
+      issues={Object.fromEntries(
+        ASSET_KIND_LABELS.map(({ kind }) => [
+          kind,
+          sheetIssuesFor(kind).map(({ code, label, hint }) => ({ code, label, hint })),
+        ]),
+      )}
       maxNote={MAX_REVIEW_NOTE_LENGTH}
       moved={project.stage !== "pre_production"}
     />

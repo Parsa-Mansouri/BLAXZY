@@ -271,6 +271,47 @@ describe.skipIf(!reachable)(
       );
     });
 
+    it("refuses look and sheet issues that do not apply to the asset's kind", async () => {
+      const { userId, projectId } = await setup(200);
+      const cafe = await add(projectId, userId, "location", "Corner Cafe");
+      const look = await assets.startLookFromPrompt({
+        assetId: cafe.id,
+        userId,
+        prompt: "A small corner cafe at dawn",
+      });
+      const produced = await produceLook(look?.id ?? "");
+      await expect(
+        assets.submitLookReview({
+          lookId: produced.id,
+          userId,
+          decision: "rejected",
+          issueCodes: ["lighting_poor", "face_incomplete"],
+        }),
+      ).rejects.toThrow(/does not apply/);
+      expect(await reviewsOf(produced.id)).toHaveLength(0);
+      expect(
+        await assets.submitLookReview({ lookId: produced.id, userId, decision: "accepted" }),
+      ).toBe("building_sheet");
+      const sheet = (await detail(cafe.id, userId)).sheets[0];
+      const producedSheet = await produceSheet(sheet?.id ?? "");
+      await expect(
+        assets.submitSheetReview({
+          sheetId: producedSheet.id,
+          userId,
+          decision: "rejected",
+          issueCodes: ["wrong_age"],
+        }),
+      ).rejects.toThrow(/does not apply/);
+      expect(
+        await assets.submitSheetReview({
+          sheetId: producedSheet.id,
+          userId,
+          decision: "rejected",
+          issueCodes: ["missing_view"],
+        }),
+      ).toBe("building_sheet");
+    });
+
     it("guided answers are validated against the kind's questions", async () => {
       const { userId, projectId } = await setup(50);
       const place = await add(projectId, userId, "location", "The Lighthouse");

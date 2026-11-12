@@ -6,6 +6,7 @@ import { Alert, Button, ProgressBar, SwapFade, cn } from "@/ui";
 import { isCreditsFailure, lookOrigin, type HeldImage } from "../_lib/asset-view";
 import { retryAction, reviewLookAction, reviewSheetAction, startOverAction } from "../actions";
 import { DrawnTick } from "../../../_components/drawn-tick";
+import { MarkLayer, useMarking, type Marking } from "../../../_components/mark-layer";
 import { RequestChangesPanel } from "../../../_components/request-changes-panel";
 import { StageHeading, useAssetScreen } from "./asset-context";
 import {
@@ -124,8 +125,8 @@ export function WaitingStage({
           <ProgressBar value={null} aria-label={title} />
           <p className="text-body text-pretty text-label-2">
             {kind === "look"
-              ? "You can leave this page. The image appears here when it is ready."
-              : "You can leave this page and carry on with another asset."}
+              ? "This carries on while you work on other assets. The image appears here when it is ready."
+              : "This carries on while you work on other assets. The sheet appears here when it is ready."}
           </p>
         </div>
       }
@@ -133,9 +134,28 @@ export function WaitingStage({
   );
 }
 
-/** Accept or reject one look or sheet; reports errors in place. */
-function useReview(projectId: string, initialAsking: boolean) {
-  const { refresh } = useAssetScreen();
+/** What a decision started, for the line shown while moving on to the next asset. */
+function decisionWords(
+  kind: "look" | "sheet",
+  decision: "accepted" | "rejected",
+  assetName: string,
+): string {
+  if (kind === "look") {
+    return decision === "accepted"
+      ? `Building ${assetName}’s sheet`
+      : `Making a new image of ${assetName}`;
+  }
+  return decision === "accepted"
+    ? `${assetName} is ready`
+    : `Building a new sheet for ${assetName}`;
+}
+
+/**
+ * Accept or reject one look or sheet; reports errors in place. A decision that starts a job (or
+ * makes the asset ready) moves on to the next asset that waits for the user.
+ */
+function useReview(projectId: string, asset: { id: string; name: string }, initialAsking: boolean) {
+  const { moveOn } = useAssetScreen();
   const [accepting, startAccepting] = useTransition();
   const [sending, startSending] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -153,15 +173,15 @@ function useReview(projectId: string, initialAsking: boolean) {
     start(async () => {
       const result =
         target.kind === "look"
-          ? await reviewLookAction(projectId, target.id, review)
-          : await reviewSheetAction(projectId, target.id, review);
+          ? await reviewLookAction(projectId, target.id, review, asset.id)
+          : await reviewSheetAction(projectId, target.id, review, asset.id);
       if (!result.ok) {
         (fromPanel ? setPanelError : setError)(result.error);
         return;
       }
       if (review.decision === "accepted") setAccepted(true);
       setAsking(false);
-      refresh();
+      moveOn(result.data, decisionWords(target.kind, review.decision, asset.name));
     });
   }
 
@@ -197,6 +217,7 @@ function Decision({
   price,
   balance,
   onSend,
+  marking,
 }: {
   assetName: string;
   subject: "image" | "sheet";
@@ -214,6 +235,8 @@ function Decision({
   price: number | null;
   balance: number;
   onSend: (input: { issueCodes: string[]; note: string }) => void;
+  /** The marks on the picture beside the panel. */
+  marking: Marking;
 }) {
   const busy = review.accepting || review.sending;
   return (
@@ -227,8 +250,12 @@ function Decision({
           serverError={review.panelError}
           price={price}
           balance={balance}
+          marking={marking}
           onSubmit={onSend}
-          onCancel={() => review.setAsking(false)}
+          onCancel={() => {
+            marking.clear();
+            review.setAsking(false);
+          }}
           headingAs={StageHeading}
         />
       ) : (
@@ -257,7 +284,10 @@ function Decision({
                 variant="outlined"
                 size="large"
                 disabled={busy}
-                onClick={() => review.setAsking(true)}
+                onClick={() => {
+                  marking.clear();
+                  review.setAsking(true);
+                }}
               >
                 Request Changes
               </Button>
@@ -273,6 +303,7 @@ function Decision({
 
 export function LookReviewStage({
   projectId,
+  assetId,
   assetName,
   look,
   orientation,
@@ -283,6 +314,7 @@ export function LookReviewStage({
   initialAsking = false,
 }: {
   projectId: string;
+  assetId: string;
   assetName: string;
   look: LookView;
   orientation: Orientation;
@@ -294,13 +326,23 @@ export function LookReviewStage({
   initialAsking?: boolean;
 }) {
   const uploaded = look.source === "uploaded";
-  const review = useReview(projectId, initialAsking && !uploaded);
+  const review = useReview(projectId, { id: assetId, name: assetName }, initialAsking && !uploaded);
   const target = { kind: "look" as const, id: look.id };
   const busy = review.accepting || review.sending;
+  const marking = useMarking();
   return (
     <StageLayout
       frame={
-        <Artwork fileId={look.fileId} alt={`${assetName}, image to review`} shape={orientation} />
+        <Artwork
+          fileId={look.fileId}
+          alt={`${assetName}, image to review`}
+          shape={orientation}
+          overlay={
+            review.asking ? (
+              <MarkLayer marking={marking} subject="image" disabled={review.sending} />
+            ) : null
+          }
+        />
       }
       rail={
         <Decision
@@ -345,6 +387,7 @@ export function LookReviewStage({
           maxNote={maxNote}
           price={prices.look}
           balance={balance}
+          marking={marking}
           onSend={(input) => review.run(target, { decision: "rejected", ...input }, true)}
         />
       }
@@ -354,6 +397,7 @@ export function LookReviewStage({
 
 export function SheetReviewStage({
   projectId,
+  assetId,
   assetName,
   sheet,
   look,
@@ -365,6 +409,7 @@ export function SheetReviewStage({
   initialAsking = false,
 }: {
   projectId: string;
+  assetId: string;
   assetName: string;
   sheet: SheetView;
   look: LookView | null;
@@ -375,8 +420,9 @@ export function SheetReviewStage({
   balance: number;
   initialAsking?: boolean;
 }) {
-  const review = useReview(projectId, initialAsking);
+  const review = useReview(projectId, { id: assetId, name: assetName }, initialAsking);
   const target = { kind: "sheet" as const, id: sheet.id };
+  const marking = useMarking();
   return (
     <StageLayout
       frame={
@@ -384,6 +430,11 @@ export function SheetReviewStage({
           fileId={sheet.fileId}
           alt={`${assetName}, reference sheet to review`}
           shape="sheet"
+          overlay={
+            review.asking ? (
+              <MarkLayer marking={marking} subject="sheet" disabled={review.sending} />
+            ) : null
+          }
         />
       }
       rail={
@@ -415,6 +466,7 @@ export function SheetReviewStage({
           maxNote={maxNote}
           price={sheetPrice}
           balance={balance}
+          marking={marking}
           onSend={(input) => review.run(target, { decision: "rejected", ...input }, true)}
         />
       }
@@ -519,6 +571,7 @@ export function ReadyStage({
 
 export function FailedStage({
   projectId,
+  assetId,
   assetName,
   failed,
   held,
@@ -528,6 +581,7 @@ export function FailedStage({
   onAnotherWay,
 }: {
   projectId: string;
+  assetId: string;
   assetName: string;
   failed: { kind: "look" | "sheet"; id: string; failure: string | null };
   held: HeldImage | null;
@@ -536,7 +590,7 @@ export function FailedStage({
   balance: number;
   onAnotherWay: (() => void) | null;
 }) {
-  const { refresh } = useAssetScreen();
+  const { moveOn } = useAssetScreen();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const credits = isCreditsFailure(failed.failure);
@@ -548,12 +602,17 @@ export function FailedStage({
   function retry() {
     setError(null);
     startTransition(async () => {
-      const result = await retryAction(projectId, { kind: failed.kind, id: failed.id });
+      const result = await retryAction(projectId, { kind: failed.kind, id: failed.id }, assetId);
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      refresh();
+      moveOn(
+        result.data,
+        failed.kind === "look"
+          ? `Trying ${assetName}’s image again`
+          : `Trying ${assetName}’s sheet again`,
+      );
     });
   }
 

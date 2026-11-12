@@ -1,0 +1,54 @@
+/* Animated placeholders (src/ui/AnimatedPlaceholder.tsx): a TypingScene written over an empty
+   field in the field's own type and placeholder colour. Same rules as the "Demo hints" section
+   in src/app/globals.css. */
+@layer components {
+  .demo-placeholder-host {
+    position: relative;
+    isolation: isolate;
+  }
+  /* The text box over the field's text area; offsets, type and colour come from its classes. */
+  .demo-placeholder {
+    position: absolute;
+    z-index: 1; /* above an opaque field fill; it takes no pointer events */
+    overflow: hidden;
+    pointer-events: none;
+    user-select: none;
+  }
+  .demo-placeholder:not([data-on]) {
+    visibility: hidden; /* not display: none, which would restart the pass */
+  }
+  /* Written exactly like a placeholder: no watermark colour, weight or fade. */
+  .demo-placeholder .demo-hint {
+    color: inherit;
+    opacity: 1;
+    font-weight: inherit;
+    letter-spacing: inherit;
+  }
+  .demo-placeholder .demo-type {
+    padding: 0;
+    align-content: center;
+  }
+  .demo-placeholder .demo-type-pass {
+    max-width: none;
+    white-space: nowrap;
+  }
+  /* No caret: in an unfocused field it would read as focus. Dropping the pseudo-element also
+     keeps the field's letter-spacing and kerning, which Chrome loses at each character that
+     has one, so the still frame lines up with the native placeholder. */
+  .demo-placeholder .demo-type-char::after {
+    content: none;
+  }
+  .demo-placeholder[data-multiline] .demo-type {
+    align-content: start;
+  }
+  .demo-placeholder[data-multiline] .demo-type-pass {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+  /* Once the scene plays (JavaScript ran, the field is in view) it replaces the native
+     placeholder; before that, and while the field has focus, the native one shows. */
+  .demo-placeholder-host:has(> .demo-placeholder[data-on] .demo-hint[data-play="run"])
+    ::placeholder {
+    color: transparent !important;
+  }
+}

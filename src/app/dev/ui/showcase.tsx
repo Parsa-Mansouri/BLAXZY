@@ -4,6 +4,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { Clapperboard, House, LayoutGrid, Play, Plus, Trash2, Tv, Upload } from "lucide-react";
 import {
   Alert,
+  AnimatedPlaceholder,
   BackControl,
   Badge,
   Button,
@@ -22,6 +23,10 @@ import {
   Tick,
   useFlash,
   DatePicker,
+  DemoHint,
+  SilhouetteScene,
+  WaveformScene,
+  DropScene,
   DurationInput,
   FeatureBlock,
   Field,
@@ -70,13 +75,16 @@ import {
   TitleCard,
   Toolbar,
   Tooltip,
+  TypingScene,
   formatDurationLong,
+  samplePrompt,
   stagger,
   useDismissed,
   useToast,
   type SelectOption,
   type StageStripItem,
 } from "@/ui";
+import { IssueScenesDemo } from "./issue-scenes-demo";
 
 const SECTIONS = [
   { id: "colour", label: "Colour" },
@@ -88,6 +96,7 @@ const SECTIONS = [
   { id: "pictures", label: "Pictures" },
   { id: "options", label: "Options" },
   { id: "blocks", label: "Leading Option" },
+  { id: "demo", label: "Demo Hints" },
   { id: "paper", label: "Paper" },
   { id: "status", label: "Status" },
   { id: "feedback", label: "Feedback" },
@@ -98,6 +107,16 @@ const SECTIONS = [
   { id: "overlays", label: "Menus and Sheets" },
   { id: "help", label: "Help" },
 ] as const;
+
+/** What the "Write a Prompt" card types: the asset's own sample prompt, then a second idea. */
+const DEMO_PROMPT_LINES = [
+  samplePrompt(
+    "character",
+    "Ines",
+    "The keeper's daughter, thirty, wind-burnt, in a patched oilskin coat",
+  ),
+  "Ines at the lamp room window, grey morning light, hair tied back.",
+];
 
 const genres: SelectOption[] = [
   { value: "drama", label: "Drama", description: "Character-driven, grounded" },
@@ -203,10 +222,84 @@ function Row({ label, children }: { label?: string; children: ReactNode }) {
   );
 }
 
+/** Animated placeholders: a line title field and a form field, each with its own value. */
+function AnimatedPlaceholderDemo() {
+  const [title, setTitle] = useState("");
+  const [film, setFilm] = useState("");
+  const titles = ["Give it a working title", "The Lighthouse Keeper", "Night Ferry", "Salt"];
+  const films = ["Blade Runner 2049", "In the Mood for Love", "Chernobyl"];
+  return (
+    <div className="flex w-full max-w-170 flex-col gap-6">
+      <AnimatedPlaceholder lines={titles} empty={!title} variant="line">
+        <Input
+          variant="line"
+          aria-label="Working title"
+          placeholder={titles[0]}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </AnimatedPlaceholder>
+      <AnimatedPlaceholder lines={films} empty={!film} delay={600} className="w-80">
+        <Input
+          aria-label="A film like it"
+          placeholder={films[0]}
+          value={film}
+          onChange={(e) => setFilm(e.target.value)}
+        />
+      </AnimatedPlaceholder>
+    </div>
+  );
+}
+
+/** A stand-in picture of the given size for the media toasts. */
+function demoPicture(width: number, height: number): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#3a3a3c"/><circle cx="${width / 2}" cy="${height * 0.4}" r="${Math.min(width, height) * 0.18}" fill="#8e8e93"/><rect x="${width * 0.25}" y="${height * 0.66}" width="${width * 0.5}" height="${height * 0.34}" rx="${width * 0.06}" fill="#8e8e93"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 function ToastDemo() {
   const toast = useToast();
   return (
     <Row>
+      <Button
+        onClick={() =>
+          toast.show({
+            kind: "success",
+            title: "Ines's image is ready",
+            description: "In The Long Tide",
+            media: { src: demoPicture(540, 960), alt: "Ines", aspect: "portrait" },
+            href: "#toast-demo",
+            persistent: true,
+          })
+        }
+      >
+        Image Ready
+      </Button>
+      <Button
+        onClick={() =>
+          toast.show({
+            kind: "success",
+            title: "Harbour Pier's sheet is ready",
+            media: { src: demoPicture(1600, 900), alt: "Harbour Pier" },
+            href: "#toast-demo",
+            persistent: true,
+          })
+        }
+      >
+        Sheet Ready
+      </Button>
+      <Button
+        onClick={() =>
+          toast.show({
+            kind: "danger",
+            title: "Couldn't make Ines's image",
+            description: "Open it to try again.",
+            href: "#toast-demo",
+          })
+        }
+      >
+        Linked Failure
+      </Button>
       <Button onClick={() => toast.info("Saved to drafts", "Open it from Home at any time.")}>
         Info
       </Button>
@@ -712,6 +805,90 @@ function Content() {
             <QuietTile className="flex-1" title="Upload an Image" icon={<Upload />} />
           </div>
         </div>
+      </Section>
+
+      <Section
+        id="demo"
+        title="Demo Hints"
+        note="A quiet animation behind the label shows what the card does. It plays once when it comes into view, rests on its last frame, and plays again on hover or keyboard focus."
+      >
+        <div className="flex max-w-170 flex-wrap gap-3">
+          <FeatureBlock
+            className="flex-[2_1_300px]"
+            title="Answer a Few Questions"
+            description="We ask about her, one thing at a time, and write the prompt for you."
+            cta="Start"
+          />
+          <div className="flex flex-[1_1_200px] flex-col gap-3">
+            <QuietTile
+              className="flex-1"
+              title="Write a Prompt"
+              demo={
+                <DemoHint>
+                  <TypingScene lines={DEMO_PROMPT_LINES} />
+                </DemoHint>
+              }
+            />
+            <QuietTile
+              className="flex-1"
+              icon={<Upload />}
+              title="Upload an Image"
+              demo={
+                <DemoHint delay={600} mask="none">
+                  <DropScene variant="image" />
+                </DemoHint>
+              }
+            />
+          </div>
+        </div>
+        <Row label="Hover only: rests on its last frame until the card is hovered or focused">
+          <QuietTile
+            className="min-h-36 w-70"
+            title="Upload a Recording"
+            demo={
+              <DemoHint trigger="hover" mask="none">
+                <DropScene variant="audio" />
+              </DemoHint>
+            }
+          />
+          <QuietTile
+            className="min-h-36 w-70"
+            title="Describe the Place"
+            demo={
+              <DemoHint trigger="hover">
+                <TypingScene lines={[samplePrompt("location", "The Lamp Room", null)]} />
+              </DemoHint>
+            }
+          />
+        </Row>
+        <Row label="Silhouettes for empty asset slots, one per kind">
+          {["character", "location", "prop", "voice", "creature", "costume", "other"].map(
+            (kind, i) => (
+              <div
+                key={kind}
+                className="demo-host relative flex h-40 w-32 items-end justify-center rounded-tile bg-selected p-2 text-meta text-label-2"
+              >
+                <DemoHint delay={i * 250} mask="none">
+                  <SilhouetteScene kind={kind} className="[--demo-sil-bottom:30%]" />
+                </DemoHint>
+                <span>{kind}</span>
+              </div>
+            ),
+          )}
+        </Row>
+        <Row label="Waveform behind a heading">
+          <div className="demo-host relative w-96 rounded-card bg-elevated p-4">
+            <DemoHint mask="left" className="[--demo-pad:0rem]">
+              <WaveformScene align="end" bars={32} />
+            </DemoHint>
+            <p className="text-heading-sm">Add Ines’s Voice</p>
+            <p className="text-body text-label-2">It is used as is.</p>
+          </div>
+        </Row>
+        <Row label="Animated placeholder: examples typed into an empty field, ending on the real placeholder; focus brings the plain one back">
+          <AnimatedPlaceholderDemo />
+        </Row>
+        <IssueScenesDemo />
       </Section>
 
       <Section id="paper" title="Paper" note="Screenplay text: Courier Prime 16/24 on paper.">

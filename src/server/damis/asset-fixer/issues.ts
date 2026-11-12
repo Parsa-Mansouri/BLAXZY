@@ -3,7 +3,8 @@
  * image (the "look"). Each code maps to a concrete instruction for the asset-fixer dami. Adding,
  * removing or rewording an entry changes the fixer's prompt: bump its version.
  */
-import type { ImageIssueDefinition } from "../shared/reference";
+import type { AssetKind } from "@/server/db/schema";
+import { IMAGE_ASSET_KINDS, type ImageIssueDefinition } from "../shared/reference";
 
 export const LOOK_ISSUE_CODES = [
   "face_incomplete",
@@ -122,3 +123,39 @@ export const LOOK_ISSUES: Readonly<Record<LookIssueCode, LookIssueDefinition>> =
 export const LOOK_ISSUE_LIST: readonly LookIssueDefinition[] = LOOK_ISSUE_CODES.map(
   (code) => LOOK_ISSUES[code],
 );
+
+/** Living subjects with a face and a body. */
+const BEINGS: readonly AssetKind[] = ["character", "creature"];
+/** Everything with an image except a location, which is the background itself. */
+const NOT_PLACES: readonly AssetKind[] = IMAGE_ASSET_KINDS.filter((k) => k !== "location");
+
+/**
+ * Which kinds of asset each issue applies to: the review UI offers only those and the service
+ * refuses the rest. A face, limbs or an age only make sense for a being, clothing for a being or
+ * a costume, a clean backdrop for anything but a place. Not part of the fixer's prompt.
+ */
+export const LOOK_ISSUE_KINDS: Readonly<Record<LookIssueCode, readonly AssetKind[]>> = {
+  face_incomplete: BEINGS,
+  anatomy_wrong: BEINGS,
+  wrong_age: BEINGS,
+  wrong_clothing: ["character", "costume"],
+  wrong_era: IMAGE_ASSET_KINDS,
+  wrong_details: IMAGE_ASSET_KINDS,
+  wrong_colours: IMAGE_ASSET_KINDS,
+  text_or_watermark: IMAGE_ASSET_KINDS,
+  style_mismatch: IMAGE_ASSET_KINDS,
+  background_not_clean: NOT_PLACES,
+  wrong_framing: IMAGE_ASSET_KINDS,
+  extra_subjects: IMAGE_ASSET_KINDS,
+  lighting_poor: IMAGE_ASSET_KINDS,
+};
+
+/** True when the look issue applies to this kind of asset. */
+export function lookIssueFits(code: LookIssueCode, kind: AssetKind): boolean {
+  return LOOK_ISSUE_KINDS[code].includes(kind);
+}
+
+/** The look issues offered for one kind of asset, in catalogue order (none for a voice). */
+export function lookIssuesFor(kind: AssetKind): readonly LookIssueDefinition[] {
+  return LOOK_ISSUE_LIST.filter((issue) => lookIssueFits(issue.code, kind));
+}

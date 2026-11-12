@@ -33,6 +33,7 @@ const ISSUE_BEATS: Record<ScriptIssueCode, string> = {
   ending_weak: "A last image lingers: the light changes, and the choice is finally made.",
   dialogue_unnatural: "(beat, then simpler) Yeah. I know.",
   too_much_dialogue: "Instead of answering, a look says it all.",
+  too_little_dialogue: "(quietly) I should have said something sooner.",
   tone_off: "The light shifts to match the mood the story needs.",
   character_unclear: "What they want is plain now: they reach for it, then stop themselves.",
   plot_hole: "A small detail planted here explains what happens later.",

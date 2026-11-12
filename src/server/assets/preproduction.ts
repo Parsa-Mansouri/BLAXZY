@@ -17,6 +17,8 @@ import {
   ASSET_SLUG_PATTERN,
   LOOK_ISSUE_CODES,
   SHEET_ISSUE_CODES,
+  lookIssueFits,
+  sheetIssueFits,
 } from "@/server/damis";
 import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
 import {
@@ -55,7 +57,7 @@ import {
   type SheetView,
 } from "./looks";
 import { AssetInputError, listAssets, parse, type Asset } from "./service";
-import { deriveAssetState, type AssetStage } from "./stage";
+import { deriveAssetState, pickNextAsset, type AssetStage } from "./stage";
 
 export type AssetCard = { asset: Asset; stage: AssetStage; thumbnailFileId: string | null };
 
@@ -413,6 +415,38 @@ export async function getPreProductionOverview(
   return summarise(await readiness(db, projectId), owned.stage);
 }
 
+export type NextAsset = { id: string; name: string; kind: AssetKind; stage: AssetStage };
+
+/**
+ * The next active asset of the project that waits for the user (see `pickNextAsset`), after
+ * `afterAssetId` in the overview's order and wrapping around; null when no other asset waits (or
+ * the project is not the user's). Call it after starting a job, so the current asset is already in
+ * a working stage. Reads the project's active assets and their latest look and sheet: three
+ * queries, bounded by the project's asset count (as the overview's `readiness`).
+ */
+export async function nextAssetNeedingInput(
+  projectId: string,
+  userId: string,
+  afterAssetId: string,
+): Promise<NextAsset | null> {
+  const db = getDb();
+  if (!(await openProject(db, projectId, userId))) return null;
+  const active = await db
+    .select({ id: asset.id, name: asset.name, kind: asset.kind, displayOrder: asset.displayOrder })
+    .from(asset)
+    .where(and(eq(asset.projectId, projectId), eq(asset.status, "active")));
+  const { looks, sheets } = await latestByAsset(
+    db,
+    active.map((a) => a.id),
+  );
+  const staged = active.map((a) => ({
+    ...a,
+    stage: deriveAssetState(a.kind, looks.get(a.id) ?? null, sheets.get(a.id) ?? null).stage,
+  }));
+  const next = pickNextAsset(staged, afterAssetId, ASSET_KINDS);
+  return next ? { id: next.id, name: next.name, kind: next.kind, stage: next.stage } : null;
+}
+
 /**
  * One page of the active assets of a kind, in display order, each with its stage and a thumbnail:
  * the accepted sheet, else the accepted look, else the newest look in review.
@@ -625,6 +659,7 @@ export async function startLookFromGuided(input: {
 
 const NEEDS_REASON = "Say what is wrong: pick an issue or write a note.";
 const NOT_IN_REVIEW = "This is no longer waiting for review. Reload the page.";
+const ISSUE_NOT_FOR_KIND = "One of the issues does not apply to this kind of asset.";
 
 /**
  * Accepts or rejects a look in review (the asset's latest), recording the review with the dami
@@ -658,6 +693,9 @@ export async function submitLookReview(input: {
     if (!locked) return null;
     const { asset: row } = locked;
     assertActive(row);
+    if (issueCodes.some((code) => !lookIssueFits(code, row.kind))) {
+      throw new AssetInputError(ISSUE_NOT_FOR_KIND);
+    }
     const { look: latest } = await loadAssetState(tx, row);
     if (!latest || latest.id !== lookId || latest.status !== "in_review") {
       throw new AssetInputError(NOT_IN_REVIEW);
@@ -772,6 +810,9 @@ export async function submitSheetReview(input: {
     if (!locked) return null;
     const { asset: row } = locked;
     assertActive(row);
+    if (issueCodes.some((code) => !sheetIssueFits(code, row.kind))) {
+      throw new AssetInputError(ISSUE_NOT_FOR_KIND);
+    }
     const { look, sheet: latest } = await loadAssetState(tx, row);
     if (
       !latest ||

@@ -21,6 +21,8 @@ export interface FeatureBlockProps extends BlockBaseProps {
   description?: ReactNode;
   /** The pill at the bottom, e.g. "Start". Part of the block, not a separate button. */
   cta?: ReactNode;
+  /** A `<DemoHint>` that plays behind the label. The block becomes its `demo-host`. */
+  demo?: ReactNode;
 }
 
 /**
@@ -29,7 +31,7 @@ export interface FeatureBlockProps extends BlockBaseProps {
  * button or link; it counts as the screen's one white button.
  */
 export const FeatureBlock = forwardRef<HTMLElement, FeatureBlockProps>(function FeatureBlock(
-  { title, description, cta, render, className, type, ...rest },
+  { title, description, cta, demo, render, className, type, ...rest },
   ref,
 ) {
   const props = mergeProps<"button">(
@@ -38,10 +40,12 @@ export const FeatureBlock = forwardRef<HTMLElement, FeatureBlockProps>(function 
       className: cn(
         "press flex min-h-75 flex-col justify-between gap-8 rounded-block bg-accent p-8 text-left text-on-accent focus-ring",
         "hover:bg-accent/95 disabled:pointer-events-none disabled:bg-fill-2 disabled:text-label-3",
+        demo != null && "demo-host",
         className,
       ),
       children: (
         <>
+          {demo}
           <span className="flex flex-col gap-3">
             <span className="text-block-title text-balance">{title}</span>
             {description ? (
@@ -70,11 +74,13 @@ export interface QuietTileProps extends BlockBaseProps {
   icon?: ReactNode;
   /** Optional one sentence; leave it out when the title says enough. */
   description?: ReactNode;
+  /** A `<DemoHint>` that plays behind the label. The tile becomes its `demo-host`. */
+  demo?: ReactNode;
 }
 
 /** An alternative road, present but quieter: a dark tile with its title at the bottom. */
 export const QuietTile = forwardRef<HTMLElement, QuietTileProps>(function QuietTile(
-  { title, icon, description, render, className, type, ...rest },
+  { title, icon, description, demo, render, className, type, ...rest },
   ref,
 ) {
   const props = mergeProps<"button">(
@@ -84,10 +90,12 @@ export const QuietTile = forwardRef<HTMLElement, QuietTileProps>(function QuietT
         "press flex min-h-30 flex-col justify-between gap-4 rounded-block bg-elevated p-6 text-left text-label focus-ring",
         "hover:bg-fill-4 disabled:pointer-events-none disabled:text-label-3",
         !icon && "justify-end",
+        demo != null && "demo-host",
         className,
       ),
       children: (
         <>
+          {demo}
           {icon ? (
             <span className="flex text-label-2 [&_svg]:size-(--icon-lg)" aria-hidden="true">
               {icon}

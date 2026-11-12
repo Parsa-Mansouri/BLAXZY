@@ -6,6 +6,9 @@ import { ToolbarBack } from "@/app/(app)/projects/[id]/_components/project-chrom
 import { refreshCredits, useCreditWatch } from "../../../../../../_lib/credits";
 import { usePolling } from "../../../../_lib/use-polling";
 import type { AssetStage } from "@/server/assets";
+import { stageHref } from "@/lib/stages";
+import { useToast } from "@/ui";
+import { assetHref } from "../../../../_lib/asset-kinds";
 import {
   acceptedLook,
   failedVersion,
@@ -16,7 +19,7 @@ import {
 } from "../_lib/asset-view";
 import type { AssetIntent } from "../_lib/intent";
 import { FILL_PAGE } from "../../../_lib/fill";
-import { pollAssetAction } from "../actions";
+import { pollAssetAction, type MoveOn } from "../actions";
 import { AddImage, type AddMethod } from "./add-image";
 import { AssetScreenProvider } from "./asset-context";
 import { AssetHeader } from "./asset-header";
@@ -122,6 +125,39 @@ function useAssetSync(assetId: string, versions: DetailVersions) {
   return refresh;
 }
 
+/** How long the "Next: ..." line stays: long enough to read, short of the result toasts. */
+const MOVE_ON_TOAST_MS = 5000;
+
+/**
+ * Sends the user on once a job has everything it needs: a short line says what started and where
+ * they are going, then the next asset that waits for them opens (the overview when none does). The
+ * job's page keeps polling whenever the user comes back to it.
+ */
+function useMoveOn(projectId: string, refresh: () => void) {
+  const router = useRouter();
+  const toast = useToast();
+  return useCallback(
+    (data: MoveOn | null, started: string) => {
+      if (!data) {
+        refresh();
+        return;
+      }
+      refreshCredits();
+      const next = data.next;
+      toast.show({
+        kind: "success",
+        title: started,
+        description: next ? `Next: ${next.name}` : "Nothing else needs you right now.",
+        duration: MOVE_ON_TOAST_MS,
+      });
+      router.push(
+        next ? assetHref(projectId, next.assetId) : stageHref(projectId, "pre_production"),
+      );
+    },
+    [projectId, refresh, router, toast],
+  );
+}
+
 /** What a screen reader hears when the stage moves on (the visible panel is not a live region). */
 const ANNOUNCEMENTS: Record<AssetStage, string> = {
   needs_image: "Add an image.",
@@ -139,6 +175,7 @@ export function AssetScreen(props: AssetScreenProps) {
   const { projectId, asset, versions, orientation, prices, balance } = props;
   const { stage, looks, sheets } = versions;
   const refresh = useAssetSync(asset.id, versions);
+  const moveOn = useMoveOn(projectId, refresh);
   // The intent applies to the panel first shown; it is then dropped from the address, so a reload
   // or a later stage does not reopen it.
   const [intent] = useState(props.intent);
@@ -157,7 +194,7 @@ export function AssetScreen(props: AssetScreenProps) {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
-  const context = useMemo(() => ({ refresh, shown }), [refresh]);
+  const context = useMemo(() => ({ refresh, moveOn, shown }), [refresh, moveOn]);
   // Announce a stage change, but not the stage the page opened on.
   const [announcement, setAnnouncement] = useState("");
   const [announcedStage, setAnnouncedStage] = useState(stage);
@@ -206,7 +243,6 @@ export function AssetScreen(props: AssetScreenProps) {
             limits={props.limits}
             price={prices.look}
             balance={balance}
-            orientation={orientation}
             initialMethod={intent ? INTENT_METHODS[intent] : undefined}
           />
         );
@@ -224,6 +260,7 @@ export function AssetScreen(props: AssetScreenProps) {
         return (
           <LookReviewStage
             projectId={projectId}
+            assetId={asset.id}
             assetName={asset.name}
             look={look}
             orientation={orientation}
@@ -241,6 +278,7 @@ export function AssetScreen(props: AssetScreenProps) {
         return (
           <SheetReviewStage
             projectId={projectId}
+            assetId={asset.id}
             assetName={asset.name}
             sheet={sheet}
             look={acceptedLook(looks)}
@@ -276,7 +314,6 @@ export function AssetScreen(props: AssetScreenProps) {
               limits={props.limits}
               price={prices.look}
               balance={balance}
-              orientation={orientation}
               title="Add Image Another Way"
               onCancel={() => setAnotherWayFor(null)}
             />
@@ -285,6 +322,7 @@ export function AssetScreen(props: AssetScreenProps) {
         return (
           <FailedStage
             projectId={projectId}
+            assetId={asset.id}
             assetName={asset.name}
             failed={failed}
             held={held}
@@ -306,7 +344,8 @@ export function AssetScreen(props: AssetScreenProps) {
           {announcement}
         </p>
         {/* The header and the stage fill the screen; History follows below the fold. */}
-        <div className={FILL_PAGE}>
+        {/* `group/asset`: the header folds to its menu while the casting sheet shows the name. */}
+        <div className={`${FILL_PAGE} group/asset`}>
           <AssetHeader
             projectId={projectId}
             asset={asset}

@@ -10,12 +10,6 @@ export type VersionView = ScriptVersionView;
 export type VersionSummary = ScriptVersionSummary;
 export type Finding = NonNullable<VersionView["findings"]>[number];
 
-export interface IssueChoice {
-  code: string;
-  label: string;
-  hint: string;
-}
-
 export const SAMPLE_LINE = "Sample output. Add an API key to write real scripts.";
 
 const STATUS_LABELS: Record<VersionSummary["status"], string> = {
@@ -107,7 +101,27 @@ export function VersionTabs({
 /** Name of a scene in the list: its heading, or "Opening" for the text before the first one. */
 export const sceneName = (scene: Scene) => scene.heading ?? "Opening";
 
-/** The scene list on the left; it chooses which scene the sheet shows. */
+/** A scene row's count of comments and script checks; nothing when there are none. */
+function NoteCount({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <>
+      {/* Keyed by the count: a new comment makes the number settle in again. */}
+      <span key={count} aria-hidden="true" className="inline-block swap-in tabular-nums">
+        {count}
+      </span>
+      <span className="sr-only">
+        , {count} {count === 1 ? "note" : "notes"}
+      </span>
+    </>
+  );
+}
+
+/**
+ * The scene list on the left; it chooses which scene the sheet shows (the accepted script), or
+ * jumps to a scene on the one long sheet and marks the scene in view (the review). Selected rows
+ * get `aria-current`.
+ */
 export function SceneList({
   scenes,
   index,
@@ -131,23 +145,7 @@ export function SceneList({
             label={sceneName(scene)}
             active={i === index}
             onClick={() => onSelect(i)}
-            trailing={
-              count > 0 ? (
-                <>
-                  {/* Keyed by the count: a new comment makes the number settle in again. */}
-                  <span
-                    key={count}
-                    aria-hidden="true"
-                    className="inline-block swap-in tabular-nums"
-                  >
-                    {count}
-                  </span>
-                  <span className="sr-only">
-                    , {count} {count === 1 ? "note" : "notes"}
-                  </span>
-                </>
-              ) : undefined
-            }
+            trailing={count > 0 ? <NoteCount count={count} /> : undefined}
             className="enter"
             style={stagger(i)}
           />

@@ -12,6 +12,7 @@ export const SCRIPT_ISSUE_CODES = [
   "ending_weak",
   "dialogue_unnatural",
   "too_much_dialogue",
+  "too_little_dialogue",
   "tone_off",
   "character_unclear",
   "plot_hole",
@@ -90,6 +91,13 @@ export const SCRIPT_ISSUES: Readonly<Record<ScriptIssueCode, ScriptIssueDefiniti
     hint: "Characters explain what the picture could show.",
     instruction:
       "Replace dialogue with behaviour and images wherever the picture can carry the meaning; cut lines that repeat what we see or what characters already know.",
+  },
+  too_little_dialogue: {
+    code: "too_little_dialogue",
+    label: "Too little dialogue",
+    hint: "Characters stay silent where a few words would help.",
+    instruction:
+      "Let characters speak where action alone is unclear: add lines that reveal want and conflict, keep them short and filmable, and avoid exposition dumps or lines that repeat what we already see.",
   },
   tone_off: {
     code: "tone_off",

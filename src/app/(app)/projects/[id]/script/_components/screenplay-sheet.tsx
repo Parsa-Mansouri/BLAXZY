@@ -22,28 +22,49 @@ export function PaperLayers({ className }: { className?: string }) {
 
 /** Horizontal padding of text on the sheet (the kit PaperSheet's inset). */
 export const SHEET_X = "px-[clamp(20px,4vw,52px)]";
-/** The same inset as a margin, for a dark card set under a line on the sheet. */
+/** The same inset as a margin, for a dark card set under a block on the sheet. */
 export const SHEET_MX = "mx-[clamp(20px,4vw,52px)]";
-/** The same inset from the right, for the narrow comment button under a line. */
+/** The same inset from the right, for the keyboard comment button on a block. */
 export const SHEET_RIGHT = "right-[clamp(20px,4vw,52px)]";
 
 /** Ink-coloured text selection and focus rings for anything set on the paper. */
 export const ON_PAPER = "selection:bg-ink/20 selection:text-ink [&_:focus-visible]:outline-ink";
 
-function LineText({ line, className }: { line: ScreenplayLine; className?: string }) {
+/** Renders a line's text; the review splits it into marked segments. Default: the plain text. */
+export type RenderLineText = (line: ScreenplayLine) => ReactNode;
+
+function LineText({
+  line,
+  className,
+  render,
+}: {
+  line: ScreenplayLine;
+  className?: string;
+  render?: RenderLineText;
+}) {
   return (
-    <span className={cn("block break-words whitespace-pre-wrap", className)}>{line.text}</span>
+    <span className={cn("block break-words whitespace-pre-wrap", className)}>
+      {render ? render(line) : line.text}
+    </span>
   );
 }
 
 /** One block of the screenplay in Courier on paper: heading, paragraph, speech or transition. */
-export function BlockText({ block, id }: { block: ScreenplayBlock; id?: string }) {
+export function BlockText({
+  block,
+  id,
+  renderText,
+}: {
+  block: ScreenplayBlock;
+  id?: string;
+  renderText?: RenderLineText;
+}) {
   switch (block.kind) {
     case "heading":
       return (
         <h2 id={id} className="font-bold uppercase">
           {block.lines.map((l) => (
-            <LineText key={l.start} line={l} />
+            <LineText key={l.start} line={l} render={renderText} />
           ))}
         </h2>
       );
@@ -51,7 +72,7 @@ export function BlockText({ block, id }: { block: ScreenplayBlock; id?: string }
       return (
         <p id={id} className="font-bold uppercase">
           {block.lines.map((l) => (
-            <LineText key={l.start} line={l} />
+            <LineText key={l.start} line={l} render={renderText} />
           ))}
         </p>
       );
@@ -59,7 +80,7 @@ export function BlockText({ block, id }: { block: ScreenplayBlock; id?: string }
       return (
         <p id={id} className="text-right uppercase">
           {block.lines.map((l) => (
-            <LineText key={l.start} line={l} />
+            <LineText key={l.start} line={l} render={renderText} />
           ))}
         </p>
       );
@@ -70,6 +91,7 @@ export function BlockText({ block, id }: { block: ScreenplayBlock; id?: string }
             <LineText
               key={l.start}
               line={l}
+              render={renderText}
               className={
                 l.type === "character"
                   ? "pl-[30%] uppercase"
@@ -85,7 +107,7 @@ export function BlockText({ block, id }: { block: ScreenplayBlock; id?: string }
       return (
         <p id={id}>
           {block.lines.map((l) => (
-            <LineText key={l.start} line={l} />
+            <LineText key={l.start} line={l} render={renderText} />
           ))}
         </p>
       );

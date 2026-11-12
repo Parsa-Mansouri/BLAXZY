@@ -172,13 +172,97 @@ The owner's 20-point checklist, as kit rules. The kit already follows them; scre
   `toolbar`, `line`), `Textarea`, `Select`, `Menu`, `SegmentedControl`, `ChoiceCards`,
   `DatePicker`, `Calendar`, `DurationInput`.
 - Lists: `GroupedList`, `GroupedListRow`, `GroupedListField`, `GroupedListButton`.
-- Overlays: `Sheet` (also `Dialog`), `Alert`, `Popover`, `Tooltip`, toasts.
+- Overlays: `Sheet` (also `Dialog`), `Alert`, `Popover`, `Tooltip`, toasts (`useToast`; with `media` a
+  toast shows a large picture, with `href` all of it is a link, with `persistent` it stays).
 - Status: `StatusLine`, `StatusDot`, `Badge`, `Spinner`, `ProgressBar`, `StageList` (legacy
   vertical list).
 - Loading: `Skeleton`, `SkeletonRegion`, `SkeletonHeader`, `SkeletonText`, `SkeletonTile`,
   `SkeletonRows`, `SkeletonButton`.
 - Feedback: `Tick`, `Confirmation`, `useFlash`.
-- Help: `Hint`, `HelpTip`, `Tip`, `useDismissed`.
+- Help: `Hint`, `HelpTip`, `Tip`, `useDismissed`, `DemoHint` with its scenes `TypingScene` and
+  `DropScene` (see "Demo hints").
+
+## Demo hints
+
+A demo hint shows what a control does instead of explaining it: a quiet animation behind a card's
+label (a sample prompt being typed behind "Write a Prompt", a file being dropped on "Upload an
+Image"). It plays one pass when the card first comes into view, rests on its last frame, and
+plays again when the card is hovered or takes keyboard focus. It pauses while off-screen.
+
+```tsx
+<QuietTile
+  title="Write a Prompt"
+  demo={
+    <DemoHint>
+      <TypingScene lines={[samplePrompt(asset.kind, asset.name, asset.description)]} />
+    </DemoHint>
+  }
+/>
+```
+
+- `QuietTile` and `FeatureBlock` take the hint in their `demo` slot and become its `demo-host`:
+  the frame (relative, clipped) and the hover/focus target. Anywhere else, give the container
+  the `demo-host` class and put `DemoHint` inside it. No `group` class is needed.
+- `DemoHint` props: `delay` (ms before the ambient pass, to stagger sibling cards), `trigger`
+  (`"ambient-then-hover"` by default; `"hover"` rests on the last frame and plays only on
+  hover/focus), `mask` (`"bottom"` by default, `"left"`, `"none"`: where the scene fades out so
+  the label stays readable), `className`.
+- Card variables: `[--demo-pad:2rem]` on a hint inside a 32px-padded block (default 24px),
+  `--demo-ink` for the drawing colour (default `label-4`), `--demo-strength` for its opacity
+  (default 0.8), `--demo-radius` when the card is not `rounded-block`.
+- `samplePrompt(kind, name, description)` writes a believable prompt for one asset; pass it to
+  `TypingScene`. Several `lines` are typed and erased in turn, ending on the first.
+
+Animated placeholders: `AnimatedPlaceholder` wraps a text field and types example entries into
+it while it is empty and not focused, in the field's own type and placeholder colour. The first
+line is the field's real `placeholder` (keep both the same): the animation ends on it, reduced
+motion shows only it, and it is what shows before the pass starts and while the field has focus.
+`variant` lines the text up with an `Input` (`form`, `toolbar`, `line`); for any other field use
+`variant="custom"` and give the offsets and type in `overlayClassName`. `multiline` for a
+textarea, `disabled` to keep the plain placeholder.
+
+```tsx
+<AnimatedPlaceholder lines={["Blade Runner 2049", "Arrival"]} empty={!title}>
+  <Input placeholder="Blade Runner 2049" value={title} onChange={...} />
+</AnimatedPlaceholder>
+```
+
+Rules:
+
+1. The label always stays. A demo hint adds to the words, it never replaces them.
+2. The last frame is the still. Every scene's final keyframe is its meaningful picture (the
+   prompt typed, the thumbnail on the card): it is what the card rests on, what `trigger="hover"`
+   shows before a hover, and all that reduced motion shows. No separate reduced-motion code.
+3. Tokens only, and quiet: scenes draw in `currentColor` (label-4), like a watermark. The brand
+   colour only where the real control shows it (the drop border).
+4. Decoration only: the hint is `aria-hidden`, takes no pointer events and holds no information
+   that is not in the label.
+5. CSS and inline SVG only; animate transform and opacity; a fixed number of iterations, never
+   `infinite`. No video, no Lottie.
+
+`SilhouetteScene kind` sketches an empty asset slot (character, location, prop, voice, creature,
+costume, other; unknown kinds draw a box) and builds up piece by piece; `WaveformScene` raises
+bars like speech and settles. Put a `SilhouetteScene` in a `DemoHint` inside a `demo-host` slot,
+stagger siblings with `delay`, and use `trigger="hover"` for small thumbnails.
+
+Issue scenes: `<IssueDemo code={issue.code} />` puts a 24px pictogram of an issue in its chip
+or row in the fix pickers (a reserved box, hover-only, drawn in `label-3`). Give the chip
+`demo-host` when `issueScene(code)` is not null; codes without a scene render nothing and stay
+words only. Unlike other scenes, an issue scene rests on the problem, so the icon matches its
+label: a pass goes problem, fixed (held), back to the problem. The map is in
+`demo-scenes/issues.tsx` (plain code strings; shared codes share a scene), the drawings in
+`demo-scenes/IssueScene.tsx` and their CSS in `demo-scenes/issues.css`. Add a scene only if it
+reads without its label; the codes left out on purpose are listed in `issues.tsx`.
+`LengthBarScene over` is the too long / too short bar against its target mark; `BlockSwapScene`
+(a shot block's card replaced by its next version) sits in a `demo-blockswap-slot` beside "What
+should change?".
+
+Adding a scene: one server-safe component in `src/ui/demo-scenes/` (spans and inline SVG only,
+no hooks), root `<span className="demo-scene demo-<name>">`, classes `demo-<name>-<part>` and
+keyframes `demo-<name>-<move>` in the "Demo hints" section of `globals.css`, animations filled
+`both`, timing maths in a tested pure helper. Export it from `demo-scenes/index.ts` (the full
+pattern is in the comment there) and `src/ui/index.ts`, and show it under "Demo Hints" in
+`/dev/ui`.
 
 ## Filling the page
 

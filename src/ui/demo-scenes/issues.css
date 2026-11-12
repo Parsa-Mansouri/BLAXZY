@@ -1,0 +1,175 @@
+/* Issue scenes (wrong to fixed) for the fix pickers, plus LengthBar and BlockSwap. Same rules as the "Demo hints" section in src/app/globals.css. */
+/*
+  An issue scene is a 24x24 pictogram in a chip (src/ui/demo-scenes/IssueScene.tsx). Its LAST
+  keyframe, the still, is the PROBLEM: that is what names the chip at rest and under reduced
+  motion. A pass goes problem -> fixed (held) -> back to the problem, on one clock:
+    .demo-issue-slot   the reserved 24px box in the chip (holds the DemoHint)
+    .demo-issue-bad    only in the wrong state      .demo-issue-good   only in the fixed state
+    .demo-issue-move   displaced in the wrong state (--demo-issue-x/y/sx/sy/r), home when fixed
+    .demo-issue-fill   a soft solid area            .demo-issue-blink  the flicker's pulsing fill
+*/
+@layer components {
+  .demo-issue-slot {
+    --demo-ink: var(--label-3);
+    --demo-strength: 1;
+    position: relative;
+    display: inline-block;
+    flex: none;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+  .demo-host:is(:hover, :focus-visible, [aria-pressed="true"], [aria-checked="true"])
+    .demo-issue-slot {
+    --demo-ink: var(--label-2);
+  }
+  /* A disabled chip (while sending) keeps its problem picture; it only stops replaying. */
+  .demo-host:is(:disabled, [aria-disabled="true"]) .demo-issue-slot .demo-hint {
+    display: block;
+  }
+  .demo-issue {
+    --demo-issue-dur: 2400ms;
+  }
+  .demo-issue > svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .demo-issue-fill {
+    fill: currentColor;
+    fill-opacity: 0.5;
+  }
+  .demo-issue-bad {
+    animation: demo-issue-bad var(--demo-issue-dur) var(--ease-curve) both;
+  }
+  .demo-issue-good {
+    animation: demo-issue-good var(--demo-issue-dur) var(--ease-curve) both;
+  }
+  .demo-issue-move {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: demo-issue-move var(--demo-issue-dur) var(--ease-curve) both;
+  }
+  .demo-issue-blink {
+    fill: currentColor;
+    animation: demo-issue-blink var(--demo-issue-dur) linear both;
+  }
+
+  /* -- Block swap: a shot block's card slides out, its next version slides in. -- */
+  .demo-blockswap-slot {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 7rem;
+    height: 3.5rem;
+  }
+  .demo-blockswap {
+    --demo-blockswap-dur: 2200ms;
+  }
+  .demo-blockswap-card {
+    position: absolute;
+    inset: 0;
+    display: block;
+  }
+  .demo-blockswap-card > svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .demo-blockswap-old {
+    animation: demo-blockswap-out var(--demo-blockswap-dur) var(--ease-curve) both;
+  }
+  .demo-blockswap-new {
+    animation: demo-blockswap-in var(--demo-blockswap-dur) var(--ease-curve) both;
+  }
+}
+
+@keyframes demo-issue-bad {
+  0%,
+  12% {
+    opacity: 1;
+  }
+  32%,
+  78% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes demo-issue-good {
+  0%,
+  12% {
+    opacity: 0;
+  }
+  32%,
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes demo-issue-move {
+  0%,
+  12% {
+    translate: var(--demo-issue-x, 0px) var(--demo-issue-y, 0px);
+    scale: var(--demo-issue-sx, 1) var(--demo-issue-sy, 1);
+    rotate: var(--demo-issue-r, 0deg);
+  }
+  36%,
+  78% {
+    translate: 0px 0px;
+    scale: 1 1;
+    rotate: 0deg;
+  }
+  100% {
+    translate: var(--demo-issue-x, 0px) var(--demo-issue-y, 0px);
+    scale: var(--demo-issue-sx, 1) var(--demo-issue-sy, 1);
+    rotate: var(--demo-issue-r, 0deg);
+  }
+}
+@keyframes demo-issue-blink {
+  0%,
+  10%,
+  20%,
+  30% {
+    opacity: 0.5;
+  }
+  5%,
+  15%,
+  25% {
+    opacity: 0.05;
+  }
+  40%,
+  78% {
+    opacity: 0.18;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+@keyframes demo-blockswap-out {
+  0%,
+  18% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  52%,
+  100% {
+    opacity: 0;
+    translate: -45% 0;
+  }
+}
+@keyframes demo-blockswap-in {
+  0%,
+  34% {
+    opacity: 0;
+    translate: 45% 0;
+  }
+  72%,
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}

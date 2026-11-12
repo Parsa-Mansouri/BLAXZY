@@ -4,7 +4,7 @@ import { useId, useRef, useState, type CSSProperties } from "react";
 import { Pause, Play } from "lucide-react";
 import type { LookView } from "@/server/assets";
 import { fileSrc } from "@/lib/file-src";
-import { Button, IconButton, cn } from "@/ui";
+import { Button, DemoHint, IconButton, WaveformScene, cn } from "@/ui";
 import { StageHeading } from "./asset-context";
 import { UploadZone } from "./upload-zone";
 import { When } from "./shared";
@@ -145,7 +145,12 @@ export function VoiceStage({
 
   return (
     <section aria-labelledby="voice-title" className="flex flex-1 in-2 flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
+      <div className="demo-host flex flex-col gap-1.5 py-2">
+        {busy ? null : (
+          <DemoHint mask="left" className="[--demo-pad:0rem]">
+            <WaveformScene align="end" bars={32} />
+          </DemoHint>
+        )}
         <StageHeading id="voice-title" className="text-heading-sm">
           {replacing ? `Replace ${assetName}’s Recording` : `Add ${assetName}’s Voice`}
         </StageHeading>
@@ -153,7 +158,7 @@ export function VoiceStage({
           It is used as is: there is nothing to generate or review.
         </p>
       </div>
-      <UploadZone projectId={projectId} assetId={assetId} audio grow />
+      <UploadZone projectId={projectId} assetId={assetId} assetName={assetName} audio grow />
       {replacing ? (
         <div>
           <Button variant="plain" onClick={() => setReplacing(false)}>

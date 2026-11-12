@@ -4,6 +4,11 @@ import { assetDetectFixHandler } from "./asset-detect-fix";
 import { assetGenerationHook } from "./asset-generation-hook";
 import { assetLookFixHandler, assetLookGenerateHandler } from "./asset-look";
 import { assetSheetFixHandler, assetSheetGenerateHandler } from "./asset-sheet";
+import {
+  assetSheetAssembleHandler,
+  assetSheetPlanHandler,
+  assetSheetViewsAdvanceHandler,
+} from "./asset-sheet-pack";
 import { generationRunHandler } from "./generation-run";
 import { generationSweepHandler, generationSweepSchedule } from "./generation-sweep";
 import { exportBuildHandler } from "./production-export";
@@ -47,6 +52,9 @@ export const handlers: JobHandler[] = [
   assetLookFixHandler,
   assetSheetGenerateHandler,
   assetSheetFixHandler,
+  assetSheetPlanHandler,
+  assetSheetViewsAdvanceHandler,
+  assetSheetAssembleHandler,
   productionPrepareHandler,
   blockReviseHandler,
   takeGenerateHandler,

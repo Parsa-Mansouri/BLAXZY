@@ -14,6 +14,7 @@ import { CHARACTER_REVIEW_LABELS_EN } from "../character-generator/labels.en";
 import characterJson from "../character-generator/review-catalog.json";
 import locationJson from "../location-generator/review-catalog.json";
 import propJson from "../prop-generator/review-catalog.json";
+import { CHARACTER_SHEET_EDIT_CODES } from "../sheet-generator-character/edit-eligible";
 import { CHARACTER_SHEET_REVIEW_LABELS_EN } from "../sheet-generator-character/labels.en";
 import characterSheetJson from "../sheet-generator-character/review-catalog.json";
 import locationSheetJson from "../sheet-generator-location/review-catalog.json";
@@ -306,6 +307,8 @@ function normalizeFaCatalog(
   raw: unknown,
   key: ReviewCatalogKey,
   labels: CatalogLabelsEn,
+  /** Codes whose fix may edit the previous image (the catalog states this in prose rules). */
+  editEligible: readonly string[] = [],
 ): Omit<ReviewCatalog, "key"> {
   const c = parseShape(faCatalogSchema, raw, key);
   const suggestFirst = new Map<string, string>();
@@ -365,7 +368,7 @@ function normalizeFaCatalog(
           needsText: false,
           proOnly: false,
           callsClaude: true,
-          editEligible: false,
+          editEligible: editEligible.includes(t.code),
           ...(condition ? { availableWhen: parseAvailableWhen(condition) } : {}),
           ...(t.hide_when ? { hideWhen: parseHideWhen(t.hide_when) } : {}),
           ...(t.suggest_first || suggestFirst.has(t.code)
@@ -390,7 +393,7 @@ function normalizeFaCatalog(
           needsText: followup.type === "text",
           proOnly: p.available_in !== undefined && !p.available_in.includes("wizard"),
           callsClaude: true,
-          editEligible: false,
+          editEligible: editEligible.includes(p.code),
           ...(p.conflicts_with_reference
             ? { conflictsWithReference: p.conflicts_with_reference }
             : {}),
@@ -486,6 +489,7 @@ const LOADERS: Record<ReviewCatalogKey, () => Omit<ReviewCatalog, "key">> = {
       characterSheetJson,
       "sheet-generator-character",
       CHARACTER_SHEET_REVIEW_LABELS_EN,
+      CHARACTER_SHEET_EDIT_CODES,
     ),
   "sheet-generator-location": () => normalizeItems(locationSheetJson, "sheet-generator-location"),
   "sheet-generator-prop": () => normalizeItems(propSheetJson, "sheet-generator-prop"),

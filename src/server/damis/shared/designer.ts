@@ -140,6 +140,38 @@ export function appliedFixProblems(
   return problems;
 }
 
+/**
+ * Problems with a sheet maker's `applied_fixes`: the sheet makers never change the design, so a
+ * request they could not apply (a design change, a detail the asset does not have) is named in
+ * `warnings` instead. Every requested code is applied or explained there; only requested codes
+ * are listed as applied.
+ */
+export function sheetFixProblems(
+  applied: readonly string[],
+  warnings: readonly string[],
+  requests: readonly { code: string }[],
+): string[] {
+  const asked = new Set(requests.map((r) => r.code));
+  const done = new Set(applied);
+  const warned = warnings.join("\n");
+  const problems: string[] = [];
+  for (const code of asked) {
+    if (!done.has(code) && !warned.includes(code) && !/DESIGN_CHANGE_REQUESTED:/.test(warned)) {
+      problems.push(
+        `applied_fixes must list ${code}, or a warning must say why it was not applied`,
+      );
+    }
+  }
+  for (const code of done) {
+    if (!asked.has(code)) {
+      problems.push(
+        `applied_fixes lists ${code}, which was not requested: list only applied codes`,
+      );
+    }
+  }
+  return problems;
+}
+
 /** Words in a text. */
 export function wordCount(value: string): number {
   return value.trim().split(/\s+/).filter(Boolean).length;

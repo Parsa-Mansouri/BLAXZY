@@ -31,6 +31,8 @@ describe.skipIf(!reachable)(
     const { and, eq } = await import("drizzle-orm");
     const { assetLookFixHandler, assetLookGenerateHandler } = await import("./asset-look");
     const { assetSheetFixHandler, assetSheetGenerateHandler } = await import("./asset-sheet");
+    const { assetSheetAssembleHandler, assetSheetPlanHandler, assetSheetViewsAdvanceHandler } =
+      await import("./asset-sheet-pack");
     const { generationRunHandler } = await import("./generation-run");
     const { assetGenerationHook } = await import("./asset-generation-hook");
     const { createPreProductionFixtures } =
@@ -285,20 +287,28 @@ describe.skipIf(!reachable)(
           sheetId: producedSheet1.id,
           userId,
           decision: "rejected",
-          issueCodes: ["missing_view"],
+          selections: [{ code: "ST20" }],
         }),
       ).toBe("building_sheet");
       const [sheetReview] = await reviewsOf(producedSheet1.id);
       expect(sheetReview).toMatchObject({
         subjectType: "asset_sheet",
-        issueCodes: ["missing_view"],
+        issueCodes: ["ST20"],
         damiRunId: producedSheet1.damiRunId,
       });
+      expect(sheetReview?.fixRequests[0]).toMatchObject({ type: "technical", code: "ST20" });
+      expect(producedSheet1.spec).toMatchObject({
+        maker: "sheet-generator-character",
+        editMode: "full",
+      });
+      expect(producedSheet1.spec?.detailCells).toHaveLength(6);
       const sheet2 = (await detail(tomas.id, userId)).sheets[0];
       const producedSheet2 = await produceSheet(sheet2?.id ?? "");
       expect(producedSheet2).toMatchObject({ status: "in_review", parentId: producedSheet1.id });
+      // ST20 only touches the detail frames: the previous sheet is attached and edited.
+      expect(producedSheet2.spec?.editMode).toBe("edit_previous_sheet");
       const fixGen = await generationRow(producedSheet2.generationId ?? "");
-      expect(fixGen.referenceFileIds).toEqual([reroll.fileId]);
+      expect(fixGen.referenceFileIds).toEqual([reroll.fileId, producedSheet1.fileId]);
 
       expect(
         await assets.submitSheetReview({
@@ -360,23 +370,19 @@ describe.skipIf(!reachable)(
         }),
       ).toBe("building_sheet");
       const sheet = (await detail(cafe.id, userId)).sheets[0];
-      const producedSheet = await produceSheet(sheet?.id ?? "");
+      await assetSheetPlanHandler.run({ sheetId: sheet?.id ?? "" }, jobContext());
+      const planned = await detail(cafe.id, userId);
+      expect(planned.stage).toBe("sheet_review");
+      const reverse = planned.packViews.find((v) => v.viewId === "reverse_wide");
+      expect(reverse).toBeDefined();
       await expect(
-        assets.submitSheetReview({
-          sheetId: producedSheet.id,
+        assets.submitSheetViewReview({
+          viewRowId: reverse?.id ?? "",
           userId,
           decision: "rejected",
-          issueCodes: ["wrong_age"],
+          selections: [{ code: "ST01" }],
         }),
-      ).rejects.toThrow(/does not apply/);
-      expect(
-        await assets.submitSheetReview({
-          sheetId: producedSheet.id,
-          userId,
-          decision: "rejected",
-          issueCodes: ["missing_view"],
-        }),
-      ).toBe("building_sheet");
+      ).rejects.toThrow(/does not apply|no longer waiting/);
     });
 
     it("a spec-card edit is a fix round; the location's own photo can be the Hero", async () => {
@@ -969,6 +975,267 @@ describe.skipIf(!reachable)(
       expect(types).toEqual(expect.arrayContaining(["asset.removed"]));
       // Still viewable (an earlier stage), but no longer completable.
       expect((await assets.getPreProductionOverview(projectId, userId))?.canComplete).toBe(false);
+    });
+
+    /** Runs the pack's advance and every generation it requested. */
+    async function advancePack(sheetId: string) {
+      await assetSheetViewsAdvanceHandler.run({ sheetId }, jobContext());
+      const rows = await getDb()
+        .select()
+        .from(s.assetSheetView)
+        .where(and(eq(s.assetSheetView.sheetId, sheetId), eq(s.assetSheetView.status, "pending")));
+      for (const row of rows) {
+        if (row.generationId) {
+          await generationRunHandler.run({ generationId: row.generationId }, jobContext());
+        }
+      }
+    }
+
+    async function viewRow(id: string) {
+      const [row] = await getDb()
+        .select()
+        .from(s.assetSheetView)
+        .where(eq(s.assetSheetView.id, id));
+      if (!row) throw new Error("view missing");
+      return row;
+    }
+
+    async function acceptLocation(userId: string, projectId: string, name: string) {
+      const created = await add(projectId, userId, "location", name);
+      const look = await assets.startLookFromPrompt({
+        assetId: created.id,
+        userId,
+        prompt: "A cramped ferry cabin at night",
+      });
+      const produced = await produceLook(look?.id ?? "");
+      await assets.submitLookReview({
+        lookId: produced.id,
+        userId,
+        decision: "accepted",
+        confirmedFields: assets.fieldsToConfirm(produced.spec),
+      });
+      return { asset: created, look: produced };
+    }
+
+    it("location pack: plan, views in order, a fix that edits, a re-roll, lock, contact sheet", async () => {
+      const { userId, projectId } = await setup(400);
+      const { asset: cabin, look } = await acceptLocation(userId, projectId, "Ferry Cabin");
+      const sheetId = (await detail(cabin.id, userId)).sheets[0]?.id ?? "";
+      // A pack queued on the character job is handed to the plan job; nothing is generated.
+      await assetSheetGenerateHandler.run({ sheetId }, jobContext());
+      expect((await sheetRow(sheetId)).generationId).toBeNull();
+      await assetSheetPlanHandler.run({ sheetId }, jobContext());
+      const planned = await sheetRow(sheetId);
+      expect(planned.status).toBe("in_review");
+      expect(planned.spec?.maker).toBe("sheet-generator-location");
+      let d = await detail(cabin.id, userId);
+      expect(d.stage).toBe("sheet_review");
+      expect(d.packViews[0]?.viewId).toBe("reverse_wide");
+      expect(d.lockGate).toMatchObject({ canLock: false });
+      expect(d.dnaCard?.anchors.length).toBeGreaterThan(0);
+
+      // Only the reverse has no unapproved dependency: it is generated first.
+      await advancePack(sheetId);
+      d = await detail(cabin.id, userId);
+      const reverse = d.packViews.find((v) => v.viewId === "reverse_wide");
+      expect(reverse?.status).toBe("in_review");
+      expect(d.packViews.filter((v) => v.status === "planned")).toHaveLength(
+        d.packViews.length - 1,
+      );
+      const reverseRow = await viewRow(reverse?.id ?? "");
+      const reverseGen = await generationRow(reverseRow.generationId ?? "");
+      expect(reverseGen.referenceFileIds).toEqual([look.fileId]);
+      expect(reverseGen.params).toMatchObject({ aspectRatio: "16:9" });
+
+      // The proposed wall must be approved with the view.
+      await expect(
+        assets.submitSheetViewReview({
+          viewRowId: reverse?.id ?? "",
+          userId,
+          decision: "accepted",
+        }),
+      ).rejects.toThrow(/proposes/);
+      await assets.submitSheetViewReview({
+        viewRowId: reverse?.id ?? "",
+        userId,
+        decision: "accepted",
+        hypothesesApproved: true,
+      });
+      await advancePack(sheetId);
+      d = await detail(cabin.id, userId);
+      const corner = d.packViews.find((v) => v.viewId === "corner_a");
+      expect(corner?.status).toBe("in_review");
+      const cornerRow = await viewRow(corner?.id ?? "");
+      const cornerGen = await generationRow(cornerRow.generationId ?? "");
+      expect(cornerGen.referenceFileIds).toEqual([look.fileId, reverseRow.fileId]);
+
+      // LST05 is edit-eligible: the fix round re-writes only this view and edits its image.
+      expect(
+        await assets.submitSheetViewReview({
+          viewRowId: corner?.id ?? "",
+          userId,
+          decision: "rejected",
+          selections: [{ code: "LST05" }],
+        }),
+      ).toBe("sheet_review");
+      d = await detail(cabin.id, userId);
+      const fixVersion = d.packViews.find((v) => v.viewId === "corner_a");
+      expect(fixVersion).toMatchObject({ status: "planned", versionNumber: 2 });
+      await assetSheetPlanHandler.run({ sheetId, viewRowId: fixVersion?.id ?? "" }, jobContext());
+      await advancePack(sheetId);
+      d = await detail(cabin.id, userId);
+      const fixed = d.packViews.find((v) => v.viewId === "corner_a");
+      expect(fixed).toMatchObject({ status: "in_review", editMode: "edit_previous_view" });
+      const fixedRow = await viewRow(fixed?.id ?? "");
+      const fixedGen = await generationRow(fixedRow.generationId ?? "");
+      expect(fixedGen.referenceFileIds).toContain(cornerRow.fileId);
+
+      // LSR01 re-rolls: same prompt, a new seed, no dami call.
+      await assets.submitSheetViewReview({
+        viewRowId: fixed?.id ?? "",
+        userId,
+        decision: "rejected",
+        selections: [{ code: "LSR01" }],
+      });
+      await advancePack(sheetId);
+      d = await detail(cabin.id, userId);
+      const rerolled = d.packViews.find((v) => v.viewId === "corner_a");
+      expect(rerolled).toMatchObject({ status: "in_review", versionNumber: 3 });
+      const rerolledRow = await viewRow(rerolled?.id ?? "");
+      expect(rerolledRow.prompt).toBe(fixedRow.prompt);
+      expect(rerolledRow.damiRunId).toBe(fixedRow.damiRunId);
+
+      // Hero and Reverse approved: the pack locks, the rest is set aside, a contact sheet is made.
+      expect(d.lockGate).toMatchObject({ canLock: true });
+      expect(await assets.lockSheet({ sheetId, userId })).toBe("ready");
+      d = await detail(cabin.id, userId);
+      expect(d.stage).toBe("ready");
+      expect(d.packViews.find((v) => v.viewId === "corner_a")?.status).toBe("superseded");
+      await assetSheetAssembleHandler.run({ sheetId }, jobContext());
+      expect((await sheetRow(sheetId)).fileId).not.toBeNull();
+      // Production attaches the Hero and lists the approved views.
+      const refs = await assets.listReadyReferenceAssets(projectId);
+      const ref = refs.find((r) => r.assetId === cabin.id);
+      expect(ref).toMatchObject({ referenceFileId: look.fileId });
+      expect(ref?.views.map((v) => v.viewId)).toEqual(["reverse_wide"]);
+    });
+
+    it("design changes from a sheet go back to the designer; the sheet rebuilds after", async () => {
+      const { userId, projectId } = await setup(400);
+      const { asset: cabin, look } = await acceptLocation(userId, projectId, "Ferry Cabin");
+      const sheetId = (await detail(cabin.id, userId)).sheets[0]?.id ?? "";
+      await assetSheetPlanHandler.run({ sheetId }, jobContext());
+      await advancePack(sheetId);
+      const reverse = (await detail(cabin.id, userId)).packViews[0];
+      await expect(
+        assets.submitSheetViewReview({
+          viewRowId: reverse?.id ?? "",
+          userId,
+          decision: "rejected",
+          selections: [{ code: "LSX01" }],
+        }),
+      ).rejects.toThrow(/design/);
+      expect(
+        await assets.submitSheetViewReview({
+          viewRowId: reverse?.id ?? "",
+          userId,
+          decision: "rejected",
+          selections: [{ code: "LSX01", customText: "Put a second window on the east wall" }],
+        }),
+      ).toBe("generating");
+      let d = await detail(cabin.id, userId);
+      expect(d.stage).toBe("generating");
+      expect(d.looks[1]).toMatchObject({ id: look.id, status: "rejected" });
+      expect((await sheetRow(sheetId)).status).toBe("rejected");
+      const lookReviews = await reviewsOf(look.id);
+      expect(lookReviews.find((r) => r.decision === "rejected")?.fixRequests[0]).toMatchObject({
+        code: "LSX01",
+        customText: "Put a second window on the east wall",
+      });
+      // The designer's fix round; accepting it starts a new pack.
+      const next = await produceLook(d.looks[0]?.id ?? "");
+      expect(next.parentId).toBe(look.id);
+      expect(next.status).toBe("in_review");
+      await assets.submitLookReview({
+        lookId: next.id,
+        userId,
+        decision: "accepted",
+        confirmedFields: assets.fieldsToConfirm(next.spec),
+      });
+      d = await detail(cabin.id, userId);
+      expect(d.stage).toBe("building_sheet");
+      expect(d.sheets[0]?.lookId).toBe(next.id);
+
+      // A character: SR01 re-rolls the sheet; SX01 goes back to the Character Generator.
+      const tomas = await add(projectId, userId);
+      const started = await assets.startLookFromPrompt({
+        assetId: tomas.id,
+        userId,
+        prompt: "An old lighthouse keeper",
+      });
+      const tLook = await produceLook(started?.id ?? "");
+      await assets.submitLookReview({ lookId: tLook.id, userId, decision: "accepted" });
+      const s1 = await produceSheet((await detail(tomas.id, userId)).sheets[0]?.id ?? "");
+      await assets.submitSheetReview({
+        sheetId: s1.id,
+        userId,
+        decision: "rejected",
+        selections: [{ code: "SR01" }],
+      });
+      const s2 = await produceSheet((await detail(tomas.id, userId)).sheets[0]?.id ?? "");
+      expect(s2).toMatchObject({ prompt: s1.prompt, damiRunId: s1.damiRunId, status: "in_review" });
+      expect((await generationRow(s2.generationId ?? "")).params).toMatchObject({
+        variant: s2.id,
+      });
+      expect(
+        await assets.submitSheetReview({
+          sheetId: s2.id,
+          userId,
+          decision: "rejected",
+          selections: [{ code: "SX01", customText: "Give him a red scarf" }],
+        }),
+      ).toBe("generating");
+      const t = await detail(tomas.id, userId);
+      expect(t.looks[0]).toMatchObject({ status: "pending", parentId: tLook.id });
+      expect(t.sheets[0]?.status).toBe("rejected");
+    });
+
+    it("prop sheet: the level's views gate the lock; the scale card is kept", async () => {
+      const { userId, projectId } = await setup(600);
+      const box = await add(projectId, userId, "prop", "Music Box");
+      const started = await assets.startLookFromPrompt({
+        assetId: box.id,
+        userId,
+        prompt: "A hero music box with a lid that opens",
+      });
+      const look = await produceLook(started?.id ?? "");
+      expect(look.status).toBe("in_review");
+      await assets.submitLookReview({
+        lookId: look.id,
+        userId,
+        decision: "accepted",
+        confirmedFields: assets.fieldsToConfirm(look.spec),
+      });
+      const sheetId = (await detail(box.id, userId)).sheets[0]?.id ?? "";
+      await assetSheetPlanHandler.run({ sheetId }, jobContext());
+      const sheet = await sheetRow(sheetId);
+      expect(sheet.spec?.maker).toBe("sheet-generator-prop");
+      expect(sheet.spec?.scaleCard?.text.length).toBeGreaterThan(0);
+      let d = await detail(box.id, userId);
+      expect(d.packViews.length).toBeGreaterThan(0);
+      const first = d.packViews[0];
+      await advancePack(sheetId);
+      d = await detail(box.id, userId);
+      const firstNow = d.packViews.find((v) => v.viewId === first?.viewId);
+      expect(firstNow?.status).toBe("in_review");
+      const row = await viewRow(firstNow?.id ?? "");
+      const gen = await generationRow(row.generationId ?? "");
+      expect(gen.referenceFileIds[0]).toBe(look.fileId);
+      expect(gen.params).toMatchObject({ aspectRatio: row.aspectRatio });
+      if (sheet.spec?.sheetLevel !== "simple") {
+        expect(d.lockGate?.canLock).toBe(false);
+        await expect(assets.lockSheet({ sheetId, userId })).rejects.toThrow(/Approve these first/);
+      }
     });
   },
 );

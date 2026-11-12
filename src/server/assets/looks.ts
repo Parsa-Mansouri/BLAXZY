@@ -19,6 +19,7 @@ import {
   type LookSource,
   type LookSpec,
   type LookStatus,
+  type SheetSpec,
 } from "@/server/db/schema";
 import { isSampleProvider } from "@/server/providers";
 import { deriveAssetState, type AssetState } from "./stage";
@@ -67,12 +68,38 @@ function specView(spec: LookSpec | null): LookSpecView | null {
   return rest;
 }
 
+/** What the screens show of a sheet maker's spec (`SheetSpec` without the dami's raw answer). */
+export type SheetSpecView = Omit<SheetSpec, "output" | "referenceFileIds"> & {
+  /** The requests the sheet maker refused as design changes (`DESIGN_CHANGE_REQUESTED:`). */
+  designChanges: string[];
+};
+
+const DESIGN_CHANGE = "DESIGN_CHANGE_REQUESTED:";
+
+function sheetSpecView(spec: SheetSpec | null): SheetSpecView | null {
+  if (!spec) return null;
+  const { output: _output, referenceFileIds: _files, ...rest } = spec;
+  void _output;
+  void _files;
+  return {
+    ...rest,
+    designChanges: spec.warnings
+      .filter((w) => w.trim().startsWith(DESIGN_CHANGE))
+      .map((w) => w.trim().slice(DESIGN_CHANGE.length).trim()),
+  };
+}
+
 export type SheetView = {
   id: string;
   versionNumber: number;
   lookId: string;
   status: LookStatus;
+  /** A character sheet's image; a location pack's or prop sheet's contact sheet once locked. */
   fileId: string | null;
+  /** The sheet maker's spec (frames, warnings, scale card ...), once it has run. */
+  spec: SheetSpecView | null;
+  /** The sheet answers a rejected one (a fix or a re-roll). */
+  parentId: string | null;
   failure: string | null;
   isSample: boolean;
   createdAt: Date;
@@ -119,6 +146,8 @@ export function toSheetView(
     lookId: row.lookId,
     status: row.status,
     fileId: row.fileId,
+    spec: sheetSpecView(row.spec),
+    parentId: row.parentId,
     failure: row.failure,
     isSample: sampleFlag(provider, model),
     createdAt: row.createdAt,

@@ -1,5 +1,5 @@
 /**
- * Pieces shared by the reference-sheet damis (sheet-generator, sheet-fixer): the asset and review input schemas, the style and asset
+ * Pieces shared by the production fixers (block-reviser, take-fixer): the asset and review input schemas, the style and asset
  * renderers for the user message, and the image-prompt craft rules. Prompt text here is part of
  * each dami's stable base prompt: changing it means bumping their versions.
  */

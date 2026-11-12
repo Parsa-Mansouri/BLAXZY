@@ -1,0 +1,210 @@
+{
+  "asset_id": "Ferry Cabin",
+  "location_name": "Ferry Cabin",
+  "mode": "lock",
+  "concept_sheet": null,
+  "views": [
+    {
+      "view_id": "reverse_wide",
+      "name": "Reverse Wide",
+      "image_prompt": "Spatial brief: The camera stands at the north wall and looks south at the wall that was behind the Hero camera; the east wall is now on the left and the west wall on the right. Fixed anchors keep their places from the layout: Door, Window, Long table. Same architecture, materials, palette, wear, time of day and light logic as the first reference image (hero wide). Rendered in the Realistic noir look with hard-edged shadow shapes and a restrained palette. Same space as the reference images, no new doors or windows, empty of people, no text, 16:9, no borders.",
+      "aspect_ratio": "16:9",
+      "reference_order": [
+        {
+          "index": 1,
+          "source_view_id": "hero_wide"
+        }
+      ],
+      "depends_on": [],
+      "must_show": [
+        {
+          "anchor_id": "door_w",
+          "expected_position": "on the opposite side from where the Hero shows it"
+        },
+        {
+          "anchor_id": "window_n",
+          "expected_position": "on the opposite side from where the Hero shows it"
+        },
+        {
+          "anchor_id": "table",
+          "expected_position": "on the opposite side from where the Hero shows it"
+        }
+      ],
+      "must_not_show": ["people or figures", "readable text", "new doors or windows"],
+      "new_hypotheses": [
+        "The wall behind the Hero camera is proposed design: plain wall with the room's materials."
+      ],
+      "review_focus": [
+        "Something on the Hero's left wall must be on the RIGHT here",
+        "Not a mirror of the Hero"
+      ],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "corner_a",
+      "name": "Corner A",
+      "image_prompt": "Spatial brief: The camera stands in the south-west corner and looks north-east: the north wall on the left, the east wall on the right. Fixed anchors keep their places from the layout: Door, Window, Long table. Same architecture, materials, palette, wear, time of day and light logic as the first reference image (hero wide), the second reference image (reverse wide). Rendered in the Realistic noir look with hard-edged shadow shapes and a restrained palette. Same space as the reference images, no new doors or windows, empty of people, no text, 16:9, no borders.",
+      "aspect_ratio": "16:9",
+      "reference_order": [
+        {
+          "index": 1,
+          "source_view_id": "hero_wide"
+        },
+        {
+          "index": 2,
+          "source_view_id": "reverse_wide"
+        }
+      ],
+      "depends_on": ["reverse_wide"],
+      "must_show": [
+        {
+          "anchor_id": "door_w",
+          "expected_position": "where the layout places it, as seen from this camera"
+        },
+        {
+          "anchor_id": "window_n",
+          "expected_position": "where the layout places it, as seen from this camera"
+        },
+        {
+          "anchor_id": "table",
+          "expected_position": "where the layout places it, as seen from this camera"
+        }
+      ],
+      "must_not_show": ["people or figures", "readable text", "new doors or windows"],
+      "new_hypotheses": [],
+      "review_focus": [
+        "Anchors sit where the layout puts them",
+        "Same light and palette as the Hero"
+      ],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "corner_b",
+      "name": "Corner B",
+      "image_prompt": "Spatial brief: The camera stands in the south-east corner and looks north-west: the west wall on the left, the north wall on the right. Fixed anchors keep their places from the layout: Door, Window, Long table. Same architecture, materials, palette, wear, time of day and light logic as the first reference image (hero wide), the second reference image (reverse wide), the third reference image (corner a). Rendered in the Realistic noir look with hard-edged shadow shapes and a restrained palette. Same space as the reference images, no new doors or windows, empty of people, no text, 16:9, no borders.",
+      "aspect_ratio": "16:9",
+      "reference_order": [
+        {
+          "index": 1,
+          "source_view_id": "hero_wide"
+        },
+        {
+          "index": 2,
+          "source_view_id": "reverse_wide"
+        },
+        {
+          "index": 3,
+          "source_view_id": "corner_a"
+        }
+      ],
+      "depends_on": ["reverse_wide", "corner_a"],
+      "must_show": [
+        {
+          "anchor_id": "door_w",
+          "expected_position": "where the layout places it, as seen from this camera"
+        },
+        {
+          "anchor_id": "window_n",
+          "expected_position": "where the layout places it, as seen from this camera"
+        },
+        {
+          "anchor_id": "table",
+          "expected_position": "where the layout places it, as seen from this camera"
+        }
+      ],
+      "must_not_show": ["people or figures", "readable text", "new doors or windows"],
+      "new_hypotheses": [],
+      "review_focus": [
+        "Anchors sit where the layout puts them",
+        "Same light and palette as the Hero"
+      ],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "side_west",
+      "name": "Side West",
+      "image_prompt": "Spatial brief: The camera stands at the west wall and looks east at the east wall; north is on the left, south on the right. Fixed anchors keep their places from the layout: Door, Window, Long table. Same architecture, materials, palette, wear, time of day and light logic as the first reference image (hero wide), the second reference image (reverse wide). Rendered in the Realistic noir look with hard-edged shadow shapes and a restrained palette. Same space as the reference images, no new doors or windows, empty of people, no text, 16:9, no borders.",
+      "aspect_ratio": "16:9",
+      "reference_order": [
+        {
+          "index": 1,
+          "source_view_id": "hero_wide"
+        },
+        {
+          "index": 2,
+          "source_view_id": "reverse_wide"
+        }
+      ],
+      "depends_on": ["reverse_wide"],
+      "must_show": [
+        {
+          "anchor_id": "door_w",
+          "expected_position": "where the layout places it, as seen from this camera"
+        },
+        {
+          "anchor_id": "window_n",
+          "expected_position": "where the layout places it, as seen from this camera"
+        },
+        {
+          "anchor_id": "table",
+          "expected_position": "where the layout places it, as seen from this camera"
+        }
+      ],
+      "must_not_show": ["people or figures", "readable text", "new doors or windows"],
+      "new_hypotheses": [],
+      "review_focus": [
+        "Anchors sit where the layout puts them",
+        "Same light and palette as the Hero"
+      ],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "detail_1",
+      "name": "Door",
+      "image_prompt": "Spatial brief: A true close-up of door, sharp and in focus, with the same material and wear as the first reference image. Same architecture, materials, palette, wear, time of day and light logic as the first reference image (hero wide), the second reference image (reverse wide). Rendered in the Realistic noir look with hard-edged shadow shapes and a restrained palette. Same space as the reference images, no new doors or windows, empty of people, no text, 16:9, no borders.",
+      "aspect_ratio": "16:9",
+      "reference_order": [
+        {
+          "index": 1,
+          "source_view_id": "hero_wide"
+        },
+        {
+          "index": 2,
+          "source_view_id": "reverse_wide"
+        }
+      ],
+      "depends_on": ["reverse_wide"],
+      "must_show": [],
+      "must_not_show": ["people or figures", "readable text", "new doors or windows"],
+      "new_hypotheses": [],
+      "review_focus": ["A true close-up, sharp and in focus", "Same material and wear as the Hero"],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "detail_2",
+      "name": "Window",
+      "image_prompt": "Spatial brief: A true close-up of window, sharp and in focus, with the same material and wear as the first reference image. Same architecture, materials, palette, wear, time of day and light logic as the first reference image (hero wide), the second reference image (reverse wide). Rendered in the Realistic noir look with hard-edged shadow shapes and a restrained palette. Same space as the reference images, no new doors or windows, empty of people, no text, 16:9, no borders.",
+      "aspect_ratio": "16:9",
+      "reference_order": [
+        {
+          "index": 1,
+          "source_view_id": "hero_wide"
+        },
+        {
+          "index": 2,
+          "source_view_id": "reverse_wide"
+        }
+      ],
+      "depends_on": ["reverse_wide"],
+      "must_show": [],
+      "must_not_show": ["people or figures", "readable text", "new doors or windows"],
+      "new_hypotheses": [],
+      "review_focus": ["A true close-up, sharp and in focus", "Same material and wear as the Hero"],
+      "edit_mode": "full"
+    }
+  ],
+  "generation_order": ["reverse_wide", "corner_a", "corner_b", "side_west", "detail_1", "detail_2"],
+  "assumptions": ["Every view keeps the Hero's time of day and light direction."],
+  "warnings": [],
+  "applied_fixes": []
+}

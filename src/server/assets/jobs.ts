@@ -18,10 +18,12 @@ import {
   type ProjectStyle,
   type ReviewFixRequest,
   type ReviewSubject,
+  type SheetSpec,
 } from "@/server/db/schema";
 import { enqueueGeneration, requestGeneration, type FinishedGeneration } from "@/server/generation";
 import { wakeWaitingLooks } from "./designs";
 import { logEvent, type AssetRow, type LookRow, type SheetRow } from "./looks";
+import { applyViewGenerationResult, enqueueAdvance } from "./packs";
 
 export type AssetJobProject = { id: string; ownerId: string; style: ProjectStyle | null };
 export type AssetJobReview = {
@@ -239,14 +241,19 @@ export async function applyUploadedLook(input: {
   });
 }
 
-export async function storeSheetPrompt(input: {
+/**
+ * Stores a character sheet's prompt and spec (frames, edit mode, the files to attach) on a
+ * pending sheet that has no prompt yet. False when another run did.
+ */
+export async function storeCharacterSheet(input: {
   sheetId: string;
   prompt: string;
+  spec: SheetSpec;
   damiRunId: string;
 }): Promise<boolean> {
   const updated = await getDb()
     .update(assetSheet)
-    .set({ prompt: input.prompt, damiRunId: input.damiRunId })
+    .set({ prompt: input.prompt, spec: input.spec, damiRunId: input.damiRunId })
     .where(
       and(
         eq(assetSheet.id, input.sheetId),
@@ -309,8 +316,9 @@ export async function requestLookGeneration(lookId: string): Promise<RequestOutc
 }
 
 /**
- * Requests the sheet with its stored prompt, the accepted look's file attached as the reference
- * (label = "<name> sheet"); see `requestLookGeneration`.
+ * Requests a character sheet with its stored prompt and the files its spec names (the approved
+ * board first; the previous sheet in edit mode), else the accepted look's file (label = "<name>
+ * sheet"); see `requestLookGeneration`.
  */
 export async function requestSheetGeneration(sheetId: string): Promise<RequestOutcome> {
   const outcome = await getDb().transaction(async (tx: DbTx) => {
@@ -329,15 +337,18 @@ export async function requestSheetGeneration(sheetId: string): Promise<RequestOu
     if (!row.sheet.prompt) throw new Error(`sheet ${sheetId} has no prompt to generate from`);
     if (!row.project.style) throw new Error(`project ${row.project.id} has no style`);
     if (!row.look.fileId) throw new Error(`look ${row.look.id} has no file`);
+    const files = row.sheet.spec?.referenceFileIds ?? [];
     const { generationId } = await requestGeneration(
       {
         userId: row.project.ownerId,
         projectId: row.project.id,
         purpose: "asset_sheet",
         prompt: row.sheet.prompt,
-        referenceFileIds: [row.look.fileId],
+        referenceFileIds: files.length > 0 ? files : [row.look.fileId],
         label: `${row.asset.name} sheet`,
         style: row.project.style,
+        // A new version of a rejected sheet (a fix or a re-roll) gets its own seed.
+        ...(row.sheet.parentId ? { variant: row.sheet.id } : {}),
       },
       tx,
     );
@@ -406,8 +417,9 @@ export async function failSheet(
 }
 
 /**
- * The generation completion hook: moves the pending look or sheet that requested this generation
- * to `in_review` with its file, or to `failed` with the generation's user-readable error.
+ * The generation completion hook: moves the pending look, sheet or sheet view that requested this
+ * generation to `in_review` with its file, or to `failed` with the generation's user-readable
+ * error. A settled view advances its pack.
  * Idempotent (only a pending row with this generation changes), so it may be called any number of
  * times per generation. Generations of other purposes are ignored.
  */
@@ -426,7 +438,7 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
     .limit(1);
   if (!owner) return;
   const { projectId } = owner;
-  const failedLook = await getDb().transaction(async (tx) => {
+  const settled = await getDb().transaction(async (tx) => {
     if (g.purpose === "asset_look") {
       const [row] = await tx
         .update(assetLook)
@@ -446,7 +458,7 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
           generationId: g.id,
         });
       }
-      return row && !succeeded ? row.assetId : null;
+      return { failedLook: row && !succeeded ? row.assetId : null, advance: null };
     }
     const [row] = await tx
       .update(assetSheet)
@@ -465,8 +477,12 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
         sheetId: row.id,
         generationId: g.id,
       });
+      return { failedLook: null, advance: null };
     }
-    return null;
+    // Not a sheet: a view of a location pack or a prop sheet.
+    const advance = await applyViewGenerationResult(tx, projectId, g.id, values);
+    return { failedLook: null, advance };
   });
-  if (failedLook) await wakeAfterLocation(failedLook, projectId);
+  if (settled.failedLook) await wakeAfterLocation(settled.failedLook, projectId);
+  if (settled.advance) await enqueueAdvance(settled.advance);
 }

@@ -82,6 +82,7 @@ export function createFixtures() {
     const ids = owned.map((p) => p.id);
     if (ids.length > 0) {
       await db.delete(s.promptBlock).where(inArray(s.promptBlock.projectId, ids));
+      await db.delete(s.assetSheetView).where(inArray(s.assetSheetView.projectId, ids));
       await db.delete(s.assetSheet).where(inArray(s.assetSheet.projectId, ids));
       await db.delete(s.assetLook).where(inArray(s.assetLook.projectId, ids));
       await db.delete(s.assetDetection).where(inArray(s.assetDetection.projectId, ids));

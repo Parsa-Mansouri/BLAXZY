@@ -1,0 +1,56 @@
+{
+  "character_name": "Mara",
+  "asset_type": "character",
+  "image_prompt": "A 16:9 character sheet of Mara in three equal columns on one plain, seamless neutral light-grey studio background, rendered in the Realistic style read from the approved image. Use the first reference image as the exact character: keep the face, hair, body, outfit, colours and accessories identical. Ignore its background and its lighting colour. Read fine face details from the second reference image. Left third: a close-up of the head and upper shoulders facing the camera at eye level, the entire face fully visible and sharp, neutral expression, the hair fully visible. Middle third: two full-body figures of the same character on one ground line at the same scale. The front figure, at a slight three-quarter angle, is framed from the neckline down to the feet; its body ends cleanly at the base of the neck with plain grey background above it, collar and neckline details visible. No head, no face, no floating head on the front figure. The back figure, at a slight three-quarter angle, shows the back of the head, the hair and the back of the outfit. Right third: six equal square frames in two columns and three rows, each with a thin plain dark-grey outline; frame 1 shows main outfit fabric, weave and stitching; frame 2 shows footwear, clean side view; frame 3 shows A brass locket on a thin chain; frame 4 shows a tight crop of the eyes; frame 5 shows A long grey braid; frame 6 shows collar, cuffs and closures. Above each frame sits a small, plain, upright, legible dark-grey digit: 1 above the top-left frame, 2 top right, 3 middle left, 4 middle right, 5 bottom left, 6 bottom right, in reading order. Soft, even, diffused studio light with neutral white balance and true colours, at most a faint contact shadow under the feet. Constraints: the face appears only once, in the left third; the front figure has no head; no text other than the digits, no labels, no extra characters; same Realistic style read from the approved image throughout.",
+  "aspect_ratio": "16:9",
+  "style_used": "Realistic style read from the approved image",
+  "edit_mode": "full",
+  "reference_order": [
+    {
+      "index": 1,
+      "role": "approved"
+    },
+    {
+      "index": 2,
+      "role": "face"
+    }
+  ],
+  "detail_cells": [
+    {
+      "slot": 1,
+      "subject": "main outfit fabric, weave and stitching",
+      "reason": "Frame 1 default."
+    },
+    {
+      "slot": 2,
+      "subject": "footwear, clean side view",
+      "reason": "Frame 2 default."
+    },
+    {
+      "slot": 3,
+      "subject": "A brass locket on a thin chain",
+      "reason": "A worn accessory a video model can drop between shots."
+    },
+    {
+      "slot": 4,
+      "subject": "a tight crop of the eyes",
+      "reason": "An identity mark that must stay in place."
+    },
+    {
+      "slot": 5,
+      "subject": "A long grey braid",
+      "reason": "Hair detail drifts easily between shots."
+    },
+    {
+      "slot": 6,
+      "subject": "collar, cuffs and closures",
+      "reason": "Construction details of the outfit."
+    }
+  ],
+  "applied_fixes": [],
+  "assumptions": [
+    "Style taken from the approved image.",
+    "The back of the outfit is inferred from the front of the approved board."
+  ],
+  "warnings": []
+}

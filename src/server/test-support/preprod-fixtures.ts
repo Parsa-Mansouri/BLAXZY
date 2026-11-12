@@ -77,8 +77,9 @@ export function createPreProductionFixtures() {
   async function cleanup(): Promise<void> {
     if (projectIds.length > 0) {
       const { getDb } = await import("@/server/db/client");
-      const { assetLook, assetSheet } = await import("@/server/db/schema");
+      const { assetLook, assetSheet, assetSheetView } = await import("@/server/db/schema");
       const { inArray } = await import("drizzle-orm");
+      await getDb().delete(assetSheetView).where(inArray(assetSheetView.projectId, projectIds));
       await getDb().delete(assetSheet).where(inArray(assetSheet.projectId, projectIds));
       await getDb().delete(assetLook).where(inArray(assetLook.projectId, projectIds));
     }

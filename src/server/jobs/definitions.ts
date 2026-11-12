@@ -128,7 +128,7 @@ export const generationSweep = defineJob({
 const lookPayload = z.object({ lookId: z.string().uuid() });
 const sheetPayload = z.object({ sheetId: z.string().uuid() });
 
-/** Write a look's prompt (asset-prompt-writer) and request its image. */
+/** Design a look with the asset's designer (character, location or prop generator) and request its image. */
 export const assetLookGenerate = defineJob({
   name: "asset.look.generate",
   payload: lookPayload,
@@ -136,7 +136,7 @@ export const assetLookGenerate = defineJob({
   dedupeKey: (p) => p.lookId,
 });
 
-/** Fix a rejected look's prompt from its review (asset-fixer) and request the new image. */
+/** A rejected look's next version: the designer in fix mode (or a re-roll), then the new image. */
 export const assetLookFix = defineJob({
   name: "asset.look.fix",
   payload: lookPayload,
@@ -144,7 +144,7 @@ export const assetLookFix = defineJob({
   dedupeKey: (p) => p.lookId,
 });
 
-/** Write a sheet's prompt (sheet-generator) and request it with the accepted look attached. */
+/** A character sheet: sheet-generator-character writes its prompt, then the sheet is requested with the approved board attached. */
 export const assetSheetGenerate = defineJob({
   name: "asset.sheet.generate",
   payload: sheetPayload,
@@ -152,11 +152,44 @@ export const assetSheetGenerate = defineJob({
   dedupeKey: (p) => p.sheetId,
 });
 
-/** Fix a rejected sheet's prompt from its review (sheet-fixer) and request the new sheet. */
+/** A rejected character sheet's next version: sheet-generator-character in fix mode (or a re-roll), then the new sheet. */
 export const assetSheetFix = defineJob({
   name: "asset.sheet.fix",
   payload: sheetPayload,
   options: damiJob,
+  dedupeKey: (p) => p.sheetId,
+});
+
+/**
+ * A location pack or prop sheet: the sheet maker (sheet-generator-location or -prop) writes the
+ * views and they are stored as planned `asset_sheet_view` rows. With `viewRowId`: a fix round
+ * that re-writes that one view (only_views) from its review.
+ */
+export const assetSheetPlan = defineJob({
+  name: "asset.sheet.plan",
+  payload: sheetPayload.extend({ viewRowId: z.string().uuid().optional() }),
+  options: damiJob,
+  dedupeKey: (p) => `${p.sheetId}:${p.viewRowId ?? "plan"}`,
+});
+
+/**
+ * Requests every planned view of a pack whose dependencies are approved (at most four approved
+ * views attached). Enqueued after planning, after a view's image settles and after a view is
+ * approved; one run per sheet at a time, with one follow-up queued beside it.
+ */
+export const assetSheetViewsAdvance = defineJob({
+  name: "asset.sheet.views.advance",
+  payload: sheetPayload,
+  options: { retryLimit: 3, retryDelaySeconds: 5, retryBackoff: true, expireInSeconds: 10 * 60 },
+  dedupeKey: (p) => p.sheetId,
+  allowFollowUp: true,
+});
+
+/** Builds a locked pack's contact sheet (people only; never sent to a model) with sharp. */
+export const assetSheetAssemble = defineJob({
+  name: "asset.sheet.assemble",
+  payload: sheetPayload,
+  options: { retryLimit: 3, retryDelaySeconds: 10, retryBackoff: true, expireInSeconds: 10 * 60 },
   dedupeKey: (p) => p.sheetId,
 });
 

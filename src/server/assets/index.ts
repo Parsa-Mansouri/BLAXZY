@@ -48,7 +48,7 @@ export {
   type AssetStage,
   type AssetState,
 } from "./stage";
-export type { LookSpecView, LookView, SheetView } from "./looks";
+export type { LookSpecView, LookView, SheetSpecView, SheetView } from "./looks";
 export { MAX_REFERENCE_NOTE, type ReferenceInput } from "./designs";
 export {
   DEFAULT_FINISHED_PAGE_SIZE,
@@ -88,7 +88,10 @@ export {
   startLookFromUpload,
   startWithoutWaiting,
   submitLookReview,
+  lockSheet,
+  retrySheetView,
   submitSheetReview,
+  submitSheetViewReview,
   updateAsset,
   validateGuidedAnswers,
   type AssetCard,
@@ -115,12 +118,35 @@ export {
   requestLookGeneration,
   requestSheetGeneration,
   storeLookDesign,
-  storeSheetPrompt,
+  storeCharacterSheet,
   applyUploadedLook,
   type AssetJobReview,
   type LookJobContext,
   type SheetJobContext,
 } from "./jobs";
+/** Worker only: location packs and prop sheets. */
+export {
+  advanceSheetViews,
+  assemblePackSheet,
+  composeContactSheet,
+  enqueueAdvance,
+  failSheetView,
+  heroViewIdOf,
+  loadPackJob,
+  loadViewRejection,
+  loadViewRow,
+  packKindOf,
+  storePackPlan,
+  storeViewFix,
+  viewReferenceFiles,
+  type DnaCard,
+  type PackJobContext,
+  type PackKind,
+  type PackLockGate,
+  type PackView,
+  type PackViewRow,
+  type PlannedView,
+} from "./packs";
 export {
   loadDesignContext,
   type DesignContext,

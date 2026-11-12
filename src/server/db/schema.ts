@@ -107,6 +107,7 @@ export const REVIEW_SUBJECTS = [
   "asset_detection",
   "asset_look",
   "asset_sheet",
+  "asset_sheet_view",
   "prompt_block",
   "generation",
 ] as const;
@@ -251,6 +252,54 @@ export type LookSpec = {
   changesIdentity?: boolean;
   /** The dami's whole answer minus the image prompt, as the dami wrote it. */
   output: Record<string, unknown>;
+};
+
+/** One of the six numbered detail frames of a character sheet. */
+export type SheetDetailCell = { slot: number; subject: string; reason: string };
+
+/** The data of a prop sheet's scale card (drawn by the backend, never by the image model). */
+export type SheetScaleCard = {
+  dimensionsCm: { height: number; width: number; depth: number } | null;
+  dimensionsStatus: "confirmed" | "inferred" | "unknown";
+  relativeReference: string;
+  text: string;
+};
+
+/**
+ * What a sheet maker returned for a sheet, without the image prompts. A character sheet is one
+ * image (`prompt` on the sheet); a location pack or a prop sheet is a set of views
+ * (`asset_sheet_view`) and the sheet's file is the contact sheet the backend assembles.
+ */
+export type SheetSpec = {
+  maker: "sheet-generator-character" | "sheet-generator-location" | "sheet-generator-prop";
+  /** Files attached to the sheet's generation, in the order the prompt names them (character). */
+  referenceFileIds: string[];
+  /** The reference roles in attachment order (`approved`, `previous_sheet`, `face` ...). */
+  referenceOrder: { index: number; role: string }[];
+  /** Character: `full`, or `edit_previous_sheet` when the previous sheet is edited. */
+  editMode: "full" | "edit_previous_sheet";
+  /** Character: the six numbered detail frames. */
+  detailCells: SheetDetailCell[];
+  styleUsed: string;
+  assumptions: string[];
+  warnings: string[];
+  appliedFixes: { code: string; change: string; viewId?: string }[];
+  /** Location and prop: the views in the order they are generated. */
+  generationOrder: string[];
+  /** Prop: simple, standard or production. */
+  sheetLevel?: "simple" | "standard" | "production";
+  /** Prop: the scale card. */
+  scaleCard?: SheetScaleCard;
+  /** The dami's whole answer minus the image prompts, as the dami wrote it. */
+  output: Record<string, unknown>;
+};
+
+/** One reference image of a sheet view: where it comes from and its role in the prompt. */
+export type SheetViewReference = {
+  index: number;
+  /** `approved_hero`, `approved_view:<view_id>`, `previous:<view_id>`, `user_reference:<n>`. */
+  source: string;
+  role: string;
 };
 
 /** A fact the Asset Detector read from the script, with its verbatim evidence. */
@@ -994,6 +1043,8 @@ export const assetSheet = pgTable(
     status: text("status").$type<LookStatus>().notNull().default("pending"),
     fileId: uuid("file_id").references(() => file.id),
     prompt: text("prompt"),
+    /** What the sheet maker returned besides the prompt (see `SheetSpec`). */
+    spec: jsonb("spec").$type<SheetSpec>(),
     generationId: uuid("generation_id").references(() => generation.id),
     damiRunId: uuid("dami_run_id").references(() => damiRun.id),
     failure: text("failure"),
@@ -1003,6 +1054,90 @@ export const assetSheet = pgTable(
   (t) => [
     uniqueIndex("asset_sheet_asset_version_unique").on(t.assetId, t.versionNumber),
     index("asset_sheet_project_status_idx").on(t.projectId, t.status),
+  ],
+);
+
+/**
+ * planned: written, waiting for its dependencies (or its prompt, in a fix round) · then the look
+ * statuses: pending (generating), in_review, accepted, rejected, superseded, failed.
+ */
+export const SHEET_VIEW_STATUSES = ["planned", ...LOOK_STATUSES] as const;
+export type SheetViewStatus = (typeof SHEET_VIEW_STATUSES)[number];
+
+/**
+ * One view of a location pack or a prop sheet (reverse wide, corner A, front, detail 1 ...), each
+ * a separate image generated in dependency order with approved views as references and reviewed on
+ * its own. Append-only: a fix or a re-roll is a new version of the same `viewId`.
+ */
+export const assetSheetView = pgTable(
+  "asset_sheet_view",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sheetId: uuid("sheet_id")
+      .notNull()
+      .references(() => assetSheet.id),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => asset.id),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    /** The dami's view id (`reverse_wide`, `detail_1`, `state_open` ...). */
+    viewId: text("view_id").notNull(),
+    versionNumber: integer("version_number").notNull(),
+    parentId: uuid("parent_id").references((): AnyPgColumn => assetSheetView.id),
+    label: text("label").notNull(),
+    /** Its place in the generation order (also the display order). */
+    position: integer("position").notNull(),
+    status: text("status").$type<SheetViewStatus>().notNull().default("planned"),
+    /** What the view is for (props). */
+    purpose: text("purpose"),
+    /** Null while a fix round re-writes it. */
+    prompt: text("prompt"),
+    aspectRatio: text("aspect_ratio").$type<LookAspectRatio>().notNull().default("16:9"),
+    referenceOrder: jsonb("reference_order")
+      .$type<SheetViewReference[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    dependsOn: jsonb("depends_on")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** The reviewer's checklist: what must be visible (and where). */
+    mustShow: jsonb("must_show")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    mustNotShow: jsonb("must_not_show")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    reviewFocus: jsonb("review_focus")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** Parts this view shows that the spec does not define: proposed, approved by the reviewer. */
+    newHypotheses: jsonb("new_hypotheses")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    editMode: text("edit_mode").$type<"full" | "edit_previous_view">().notNull().default("full"),
+    /** The dami's warnings about this view (a `DESIGN_CHANGE_REQUESTED:` it refused). */
+    warnings: jsonb("warnings")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    generationId: uuid("generation_id").references(() => generation.id),
+    fileId: uuid("file_id").references(() => file.id),
+    damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    failure: text("failure"),
+    createdAt: createdAt(),
+    decidedAt: ts("decided_at"),
+  },
+  (t) => [
+    uniqueIndex("asset_sheet_view_version_unique").on(t.sheetId, t.viewId, t.versionNumber),
+    index("asset_sheet_view_sheet_idx").on(t.sheetId),
+    index("asset_sheet_view_project_status_idx").on(t.projectId, t.status),
   ],
 );
 

@@ -24,8 +24,6 @@ import {
   getReviewCatalog,
   MAX_ASSET_NAME,
   ReviewCatalogError,
-  SHEET_ISSUE_CODES,
-  sheetIssueFits,
   uniqueName,
   type FixSelection,
   type GuidedQuestion,
@@ -36,6 +34,7 @@ import {
   asset,
   assetLook,
   assetSheet,
+  assetSheetView,
   project,
   review,
   WIZARD_STAGES,
@@ -50,6 +49,7 @@ import {
   assetLookGenerate,
   assetSheetFix,
   assetSheetGenerate,
+  assetSheetPlan,
   enqueue,
 } from "@/server/jobs";
 import { advanceStage, canOpenStage } from "@/server/projects";
@@ -78,6 +78,19 @@ import {
   type SheetRow,
   type SheetView,
 } from "./looks";
+import {
+  dnaCardOf,
+  enqueueAdvance,
+  enqueueAssemble,
+  latestViewRows,
+  listPackViews,
+  packKindOf,
+  packLockGate,
+  type DnaCard,
+  type PackLockGate,
+  type PackView,
+  type PackViewRow,
+} from "./packs";
 import { AssetInputError, listAssets, parse, type Asset } from "./service";
 import { deriveAssetState, pickNextAsset, type AssetStage } from "./stage";
 
@@ -98,6 +111,12 @@ export type AssetDetail = {
   waitingFor: string[];
   /** Images sent back in a row since the last accepted one (for the "describe it" hint). */
   rejectedInARow: number;
+  /** Locations and props: the views of the latest sheet (latest version of each), in order. */
+  packViews: PackView[];
+  /** Locations and props: whether the latest pack can be locked, and what is missing. */
+  lockGate: PackLockGate | null;
+  /** Locations and props: the accepted design's DNA card. */
+  dnaCard: DnaCard | null;
 };
 
 export type PreProductionOverview = {
@@ -179,7 +198,11 @@ const fixSelectionSchema = z.object({
   code: z.string().trim().min(1).max(40),
   value: z.string().trim().max(1000).optional(),
   customText: z.string().trim().max(MAX_REVIEW_NOTE_LENGTH).optional(),
-  viewId: z.string().trim().max(40).optional(),
+  viewId: z.string().trim().max(60).optional(),
+  /** A character sheet's detail frame (SP01, SP02). */
+  slot: z
+    .object({ slot: z.number().int().min(1).max(6), subject: z.string().trim().min(1).max(300) })
+    .optional(),
 });
 
 const specEditSchema = z.object({
@@ -212,11 +235,19 @@ const sheetReviewInput = z.object({
   sheetId: z.string(),
   userId: userIdSchema,
   decision: z.enum(["accepted", "rejected"], { error: "Accept or reject the sheet." }),
-  issueCodes: z
-    .array(z.enum(SHEET_ISSUE_CODES, { error: "Pick issues from the list." }))
-    .max(SHEET_ISSUE_CODES.length)
-    .optional(),
+  /** Rejected: the catalog options picked (with chips, text and the frame they are about). */
+  selections: z.array(fixSelectionSchema).max(40).optional(),
   note: noteSchema,
+});
+
+const viewReviewInput = z.object({
+  viewRowId: z.string(),
+  userId: userIdSchema,
+  decision: z.enum(["accepted", "rejected"], { error: "Approve the view or ask for changes." }),
+  selections: z.array(fixSelectionSchema).max(40).optional(),
+  note: noteSchema,
+  /** Accepted: the reviewer approved the parts the view proposes (`new_hypotheses`). */
+  hypothesesApproved: z.boolean().optional(),
 });
 
 const nameSchema = z
@@ -381,8 +412,20 @@ async function enqueueLookJob(
   }
 }
 
-async function enqueueSheetJob(sheet: Pick<SheetRow, "id" | "parentId">): Promise<void> {
-  const job = sheet.parentId ? assetSheetFix : assetSheetGenerate;
+/**
+ * Enqueues the job that produces a pending sheet: a location pack or prop sheet is planned by its
+ * sheet maker (`asset.sheet.plan`); a character sheet is generated, or fixed when it answers a
+ * rejected one.
+ */
+async function enqueueSheetJob(
+  sheet: Pick<SheetRow, "id" | "parentId">,
+  kind: AssetKind,
+): Promise<void> {
+  const job = packKindOf(kind)
+    ? assetSheetPlan
+    : sheet.parentId
+      ? assetSheetFix
+      : assetSheetGenerate;
   try {
     await enqueue(job, { sheetId: sheet.id });
   } catch (error) {
@@ -582,6 +625,21 @@ export async function getAssetDetail(assetId: string, userId: string): Promise<A
       : [];
   const accepted = looks.findIndex((l) => l.status === "accepted");
   const since = accepted === -1 ? looks : looks.slice(0, accepted);
+  const pack = packKindOf(row.asset.kind);
+  const sheet = sheets[0];
+  const packViews = pack && sheet ? await listPackViews(db, sheet.id) : [];
+  const acceptedLook = looks.find((l) => l.status === "accepted");
+  let lockGate: PackLockGate | null = null;
+  let dnaCard: DnaCard | null = null;
+  if (pack && sheet) {
+    const rows = await latestViewRows(db, sheet.id);
+    const [sheetRow] = await db.select().from(assetSheet).where(eq(assetSheet.id, sheet.id));
+    lockGate = packLockGate(pack, sheetRow?.spec ?? null, rows);
+  }
+  if (pack && acceptedLook) {
+    const [lookRow] = await db.select().from(assetLook).where(eq(assetLook.id, acceptedLook.id));
+    dnaCard = dnaCardOf(pack, lookRow?.spec ?? null);
+  }
   return {
     asset: row.asset,
     stage: state.stage,
@@ -591,6 +649,9 @@ export async function getAssetDetail(assetId: string, userId: string): Promise<A
     questions: questionsFor(row.asset, row.project.style),
     waitingFor,
     rejectedInARow: since.filter((l) => l.status === "rejected").length,
+    packViews,
+    lockGate,
+    dnaCard,
   };
 }
 
@@ -1064,7 +1125,7 @@ export async function submitLookReview(input: {
   });
   if (!outcome) return null;
   if (outcome.job?.kind === "look") await enqueueLookJob(outcome.job.row);
-  if (outcome.job?.kind === "sheet") await enqueueSheetJob(outcome.job.row);
+  if (outcome.job?.kind === "sheet") await enqueueSheetJob(outcome.job.row, target.asset.kind);
   if (decision === "accepted" && designerFor(target.asset.kind) === "location") {
     await wakeWaitingLooks(target.asset.projectId);
   }
@@ -1146,24 +1207,161 @@ export async function answerLookQuestion(input: {
   return "generating";
 }
 
+/** The sheet maker's catalog of an asset kind. */
+function sheetCatalogFor(kind: AssetKind) {
+  const pack = packKindOf(kind);
+  return getReviewCatalog(
+    pack === "location"
+      ? "sheet-generator-location"
+      : pack === "prop"
+        ? "sheet-generator-prop"
+        : "sheet-generator-character",
+  );
+}
+
+type SheetReviewPlan = {
+  fixRequests: ReviewFixRequest[];
+  /** The re-roll option picked (no dami call). */
+  regenerate: string | null;
+  /** The design-change option picked (back to the designer), with the user's words. */
+  route: { code: string; text: string | null } | null;
+};
+
+/** The fix requests for a sheet's (or a view's) rejection, from the sheet maker's catalog. */
+function planSheetReview(kind: AssetKind, selections: readonly FixSelection[]): SheetReviewPlan {
+  const catalog = sheetCatalogFor(kind);
+  let regenerate: string | null = null;
+  let route: SheetReviewPlan["route"] = null;
+  for (const selection of selections) {
+    const option = findReviewOption(catalog, selection.code);
+    if (!option || option.proOnly) throw new AssetInputError(ISSUE_NOT_FOR_KIND);
+    if (option.kind === "regenerate") regenerate = option.code;
+    if (option.kind === "route") {
+      route = { code: option.code, text: selection.customText?.trim() || null };
+    }
+  }
+  try {
+    return { fixRequests: buildFixRequests(catalog, selections), regenerate, route };
+  } catch (error) {
+    if (error instanceof ReviewCatalogError) {
+      const code = selections.find((s) => error.message.includes(s.code))?.code;
+      const label = code ? findReviewOption(catalog, code)?.label : undefined;
+      throw new AssetInputError(
+        label ? `Say what you want for “${label}”.` : "Say what you want for each reason.",
+      );
+    }
+    throw error;
+  }
+}
+
 /**
- * Accepts or rejects a sheet in review (the asset's latest, built from its accepted look). Accepted:
- * the asset is ready. Rejected (needs an issue or a note): a fixed sheet is started
- * (`asset.sheet.fix`).
+ * Sends an asset back to its designer from the sheet step (the owner's SX01, LSX01, ASX01, or a
+ * `DESIGN_CHANGE_REQUESTED:` warning): the sheet is rejected, the accepted design is rejected with
+ * the request as a fix request, and the design's next version is started (a designer fix round).
+ * Once the new design is accepted, a new sheet is built automatically. Returns the new look.
+ */
+async function sendBackToDesigner(
+  tx: DbTx,
+  input: {
+    row: AssetRow;
+    look: LookRow;
+    sheet: SheetRow;
+    userId: string;
+    code: string;
+    text: string | null;
+    note: string | null;
+    viewLabel?: string;
+  },
+): Promise<LookRow> {
+  const { row, look, sheet, userId, code } = input;
+  const words = input.text ?? input.note;
+  if (!words) {
+    throw new AssetInputError("Say what should change in the design.");
+  }
+  const where = input.viewLabel ? ` (seen in the ${input.viewLabel} view)` : "";
+  const request: ReviewFixRequest = {
+    type: "preference",
+    code,
+    instruction: `At the sheet step the user asked for a design change${where}: ${words}. Apply it to the design and keep everything else.`,
+    customText: words,
+  };
+  const now = new Date();
+  await tx.insert(review).values({
+    projectId: row.projectId,
+    userId,
+    subjectType: "asset_sheet",
+    subjectId: sheet.id,
+    decision: "rejected",
+    issueCodes: [code],
+    fixRequests: [request],
+    note: input.note,
+    damiRunId: sheet.damiRunId,
+  });
+  await tx
+    .update(assetSheet)
+    .set({ status: "rejected", decidedAt: now })
+    .where(eq(assetSheet.id, sheet.id));
+  await tx.insert(review).values({
+    projectId: row.projectId,
+    userId,
+    subjectType: "asset_look",
+    subjectId: look.id,
+    decision: "rejected",
+    issueCodes: [code],
+    fixRequests: [request],
+    note: input.note,
+    damiRunId: look.damiRunId,
+  });
+  await tx
+    .update(assetLook)
+    .set({ status: "rejected", decidedAt: now })
+    .where(eq(assetLook.id, look.id));
+  const next = await insertLook(tx, {
+    assetId: row.id,
+    projectId: row.projectId,
+    parentId: look.id,
+    source: "generated",
+    status: "pending",
+    userPrompt: look.userPrompt,
+    guidedAnswers: look.guidedAnswers,
+    references: look.references,
+    clarifyAnswers: look.clarifyAnswers,
+    createdBy: userId,
+  });
+  await logEvent(tx, row.projectId, userId, "asset.sent_back_to_designer", {
+    assetId: row.id,
+    sheetId: sheet.id,
+    lookId: look.id,
+    nextLookId: next.id,
+    code,
+  });
+  return next;
+}
+
+/**
+ * Accepts or rejects a character sheet in review (the asset's latest, built from its accepted
+ * look); a ready asset's accepted sheet can also be sent back (the Review All pass).
+ *
+ * Accepted: the asset is ready. Rejected: the catalog picks become `fix_requests` (and
+ * `issue_codes`). SR01 alone re-rolls the image (same prompt, new seed, no dami call). SX01 sends
+ * the asset back to the Character Generator with the user's words (the sheet is rebuilt once the
+ * new board is accepted). Anything else is a fix round of the sheet maker (`asset.sheet.fix`).
+ * Location packs and prop sheets are reviewed view by view (`submitSheetViewReview`, `lockSheet`);
+ * only the design route applies to them here.
  */
 export async function submitSheetReview(input: {
   sheetId: string;
   userId: string;
   decision: "accepted" | "rejected";
-  issueCodes?: string[];
+  selections?: FixSelection[];
   note?: string;
 }): Promise<AssetStage | null> {
   const parsed = parse(sheetReviewInput, input);
   const { sheetId, userId, decision } = parsed;
-  const issueCodes = [...new Set(parsed.issueCodes ?? [])];
+  const selections = parsed.selections ?? [];
   const note = parsed.note ? parsed.note : null;
   if (!isUuid(sheetId)) return null;
-  if (decision === "rejected" && issueCodes.length === 0 && !note) {
+  if (decision === "rejected" && selections.length === 0 && !note) {
     throw new AssetInputError(NEEDS_REASON);
   }
   const outcome = await getDb().transaction(async (tx) => {
@@ -1177,9 +1375,10 @@ export async function submitSheetReview(input: {
     if (!locked) return null;
     const { asset: row } = locked;
     assertActive(row);
-    if (issueCodes.some((code) => !sheetIssueFits(code, row.kind))) {
-      throw new AssetInputError(ISSUE_NOT_FOR_KIND);
-    }
+    const plan =
+      decision === "rejected"
+        ? planSheetReview(row.kind, selections)
+        : { fixRequests: [], regenerate: null, route: null };
     const { look, sheet: latest } = await loadAssetState(tx, row);
     if (
       !latest ||
@@ -1194,7 +1393,31 @@ export async function submitSheetReview(input: {
     ) {
       throw new AssetInputError(NOT_IN_REVIEW);
     }
+    const pack = packKindOf(row.kind);
+    if (pack && !plan.route) {
+      throw new AssetInputError(
+        decision === "accepted"
+          ? "Approve the views one by one, then lock the sheet."
+          : "Ask for changes on the view itself, or change the design.",
+      );
+    }
+    if (plan.route) {
+      const next = await sendBackToDesigner(tx, {
+        row,
+        look,
+        sheet: latest,
+        userId,
+        code: plan.route.code,
+        text: plan.route.text,
+        note,
+      });
+      return { stage: "generating" as const, job: { kind: "look" as const, row: next } };
+    }
     const now = new Date();
+    const issueCodes = [
+      ...fixRequestCodes(plan.fixRequests),
+      ...(plan.regenerate ? [plan.regenerate] : []),
+    ];
     await tx.insert(review).values({
       projectId: row.projectId,
       userId,
@@ -1202,20 +1425,33 @@ export async function submitSheetReview(input: {
       subjectId: sheetId,
       decision,
       issueCodes: decision === "rejected" ? issueCodes : [],
+      fixRequests: decision === "rejected" ? plan.fixRequests : [],
       note,
       damiRunId: latest.damiRunId,
     });
     if (decision === "rejected") {
+      if (plan.fixRequests.length === 0 && !plan.regenerate && !note) {
+        throw new AssetInputError(NEEDS_REASON);
+      }
       await tx
         .update(assetSheet)
         .set({ status: "rejected", decidedAt: now })
         .where(eq(assetSheet.id, sheetId));
+      const reroll =
+        plan.regenerate !== null &&
+        plan.fixRequests.length === 0 &&
+        !note &&
+        latest.prompt !== null;
       const next = await insertSheet(tx, {
         assetId: row.id,
         projectId: row.projectId,
         lookId: latest.lookId,
         parentId: sheetId,
         status: "pending",
+        // A re-roll keeps the prompt, the spec and the dami run: only the seed changes.
+        ...(reroll
+          ? { prompt: latest.prompt, spec: latest.spec, damiRunId: latest.damiRunId }
+          : {}),
       });
       await logEvent(tx, row.projectId, userId, "asset.sheet_rejected", {
         assetId: row.id,
@@ -1223,7 +1459,7 @@ export async function submitSheetReview(input: {
         nextSheetId: next.id,
         issueCodes,
       });
-      return { stage: "building_sheet" as const, next };
+      return { stage: "building_sheet" as const, job: { kind: "sheet" as const, row: next } };
     }
     await tx
       .update(assetSheet)
@@ -1244,11 +1480,334 @@ export async function submitSheetReview(input: {
       sheetId,
       lookId: latest.lookId,
     });
-    return { stage: "ready" as const, next: null };
+    return { stage: "ready" as const, job: null };
   });
   if (!outcome) return null;
-  if (outcome.next) await enqueueSheetJob(outcome.next);
+  if (outcome.job?.kind === "sheet") await enqueueSheetJob(outcome.job.row, "character");
+  if (outcome.job?.kind === "look") await enqueueLookJob(outcome.job.row, "fix");
   return outcome.stage;
+}
+
+/** The view, its sheet and its asset, the asset locked, when the user owns it. */
+async function lockView(
+  tx: DbTx,
+  viewRowId: string,
+  userId: string,
+): Promise<{ view: PackViewRow; asset: AssetRow; look: LookRow; sheet: SheetRow } | null> {
+  if (!isUuid(viewRowId)) return null;
+  const [target] = await tx
+    .select({ assetId: assetSheetView.assetId })
+    .from(assetSheetView)
+    .where(eq(assetSheetView.id, viewRowId))
+    .limit(1);
+  if (!target) return null;
+  const locked = await lockAsset(tx, target.assetId, userId);
+  if (!locked) return null;
+  const { asset: row } = locked;
+  assertActive(row);
+  const { look, sheet } = await loadAssetState(tx, row);
+  const views = sheet ? await latestViewRows(tx, sheet.id) : [];
+  const view = views.find((v) => v.id === viewRowId);
+  if (!look || !sheet || !view || look.status !== "accepted" || sheet.lookId !== look.id) {
+    throw new AssetInputError(NOT_IN_REVIEW);
+  }
+  return { view, asset: row, look, sheet };
+}
+
+async function insertViewVersion(
+  tx: DbTx,
+  parent: PackViewRow,
+  values: Partial<typeof assetSheetView.$inferInsert>,
+): Promise<PackViewRow> {
+  const [last] = await tx
+    .select({ n: max(assetSheetView.versionNumber) })
+    .from(assetSheetView)
+    .where(
+      and(eq(assetSheetView.sheetId, parent.sheetId), eq(assetSheetView.viewId, parent.viewId)),
+    );
+  const [row] = await tx
+    .insert(assetSheetView)
+    .values({
+      sheetId: parent.sheetId,
+      assetId: parent.assetId,
+      projectId: parent.projectId,
+      viewId: parent.viewId,
+      versionNumber: (last?.n ?? 0) + 1,
+      parentId: parent.id,
+      label: parent.label,
+      position: parent.position,
+      status: "planned",
+      purpose: parent.purpose,
+      prompt: null,
+      aspectRatio: parent.aspectRatio,
+      referenceOrder: parent.referenceOrder,
+      dependsOn: parent.dependsOn,
+      mustShow: parent.mustShow,
+      mustNotShow: parent.mustNotShow,
+      reviewFocus: parent.reviewFocus,
+      newHypotheses: parent.newHypotheses,
+      editMode: "full",
+      ...values,
+    })
+    .returning();
+  if (!row) throw new Error("asset_sheet_view insert returned no row");
+  return row;
+}
+
+const HYPOTHESES_FIRST =
+  "Approve the parts this view proposes first, or send them back as a design change.";
+
+/**
+ * Approves a view of a location pack or prop sheet, or asks for changes.
+ *
+ * Accepted: the view's proposed parts (`new_hypotheses`) must be approved with it; the views that
+ * waited for it are requested. Rejected: the catalog picks become `fix_requests`. A re-roll alone
+ * (LSR01, ASR01) makes a new version with the same prompt and a new seed; a design change (LSX01,
+ * ASX01) sends the asset back to its designer; anything else is a fix round that re-writes only
+ * this view (`asset.sheet.plan` with the new version).
+ */
+export async function submitSheetViewReview(input: {
+  viewRowId: string;
+  userId: string;
+  decision: "accepted" | "rejected";
+  selections?: FixSelection[];
+  note?: string;
+  hypothesesApproved?: boolean;
+}): Promise<AssetStage | null> {
+  const parsed = parse(viewReviewInput, input);
+  const { viewRowId, userId, decision } = parsed;
+  const note = parsed.note ? parsed.note : null;
+  const selections = parsed.selections ?? [];
+  if (decision === "rejected" && selections.length === 0 && !note) {
+    throw new AssetInputError(NEEDS_REASON);
+  }
+  const outcome = await getDb().transaction(async (tx) => {
+    const found = await lockView(tx, viewRowId, userId);
+    if (!found) return null;
+    const { view, asset: row, look, sheet } = found;
+    if (sheet.status !== "in_review" || view.status !== "in_review") {
+      throw new AssetInputError(NOT_IN_REVIEW);
+    }
+    const now = new Date();
+    if (decision === "accepted") {
+      if (view.newHypotheses.length > 0 && !parsed.hypothesesApproved) {
+        throw new AssetInputError(HYPOTHESES_FIRST);
+      }
+      await tx.insert(review).values({
+        projectId: row.projectId,
+        userId,
+        subjectType: "asset_sheet_view",
+        subjectId: view.id,
+        decision,
+        note,
+        damiRunId: view.damiRunId,
+      });
+      await tx
+        .update(assetSheetView)
+        .set({ status: "accepted", decidedAt: now })
+        .where(eq(assetSheetView.id, view.id));
+      await logEvent(tx, row.projectId, userId, "asset.sheet_view_accepted", {
+        assetId: row.id,
+        sheetId: sheet.id,
+        viewRowId: view.id,
+        viewId: view.viewId,
+      });
+      return { stage: "sheet_review" as const, job: { kind: "advance" as const, id: sheet.id } };
+    }
+    const plan = planSheetReview(
+      row.kind,
+      selections.map((s) => ({ ...s, viewId: view.viewId })),
+    );
+    if (plan.route) {
+      const next = await sendBackToDesigner(tx, {
+        row,
+        look,
+        sheet,
+        userId,
+        code: plan.route.code,
+        text: plan.route.text,
+        note,
+        viewLabel: view.label,
+      });
+      return { stage: "generating" as const, job: { kind: "look" as const, row: next } };
+    }
+    const issueCodes = [
+      ...fixRequestCodes(plan.fixRequests),
+      ...(plan.regenerate ? [plan.regenerate] : []),
+    ];
+    await tx.insert(review).values({
+      projectId: row.projectId,
+      userId,
+      subjectType: "asset_sheet_view",
+      subjectId: view.id,
+      decision,
+      issueCodes,
+      fixRequests: plan.fixRequests,
+      note,
+      damiRunId: view.damiRunId,
+    });
+    await tx
+      .update(assetSheetView)
+      .set({ status: "rejected", decidedAt: now })
+      .where(eq(assetSheetView.id, view.id));
+    const reroll = plan.regenerate !== null && plan.fixRequests.length === 0 && !note;
+    const next = await insertViewVersion(
+      tx,
+      view,
+      reroll
+        ? { prompt: view.prompt, editMode: view.editMode, warnings: [], damiRunId: view.damiRunId }
+        : {},
+    );
+    await logEvent(tx, row.projectId, userId, "asset.sheet_view_rejected", {
+      assetId: row.id,
+      sheetId: sheet.id,
+      viewRowId: view.id,
+      nextViewRowId: next.id,
+      issueCodes,
+    });
+    return {
+      stage: "sheet_review" as const,
+      job: reroll
+        ? { kind: "advance" as const, id: sheet.id }
+        : { kind: "fix" as const, id: sheet.id, viewRowId: next.id },
+    };
+  });
+  if (!outcome) return null;
+  const job = outcome.job;
+  if (job.kind === "advance") await enqueueAdvance(job.id);
+  if (job.kind === "look") await enqueueLookJob(job.row, "fix");
+  if (job.kind === "fix") {
+    try {
+      await enqueue(assetSheetPlan, { sheetId: job.id, viewRowId: job.viewRowId });
+    } catch (error) {
+      console.error(`[assets] could not enqueue the fix of view ${job.viewRowId}:`, error);
+      await getDb()
+        .update(assetSheetView)
+        .set({ status: "failed", failure: ENQUEUE_FAILURE })
+        .where(and(eq(assetSheetView.id, job.viewRowId), eq(assetSheetView.status, "planned")));
+    }
+  }
+  return outcome.stage;
+}
+
+/** Runs a failed view (its latest version) again: back to planned, then the pack advances. */
+export async function retrySheetView(input: {
+  viewRowId: string;
+  userId: string;
+}): Promise<AssetStage | null> {
+  const { viewRowId, userId } = parse(
+    z.object({ viewRowId: z.string(), userId: userIdSchema }),
+    input,
+  );
+  const outcome = await getDb().transaction(async (tx) => {
+    const found = await lockView(tx, viewRowId, userId);
+    if (!found) return null;
+    const { view, asset: row, sheet } = found;
+    if (sheet.status !== "in_review" || view.status !== "failed") {
+      throw new AssetInputError("Only a view that could not be made can be tried again.");
+    }
+    // A fix round that failed before its prompt was written runs the sheet maker again.
+    const needsPrompt = view.prompt === null;
+    await tx
+      .update(assetSheetView)
+      .set({ status: "planned", failure: null, generationId: null })
+      .where(eq(assetSheetView.id, view.id));
+    await logEvent(tx, row.projectId, userId, "asset.sheet_view_retried", {
+      assetId: row.id,
+      sheetId: sheet.id,
+      viewRowId: view.id,
+    });
+    return { sheetId: sheet.id, needsPrompt };
+  });
+  if (!outcome) return null;
+  if (outcome.needsPrompt) {
+    await enqueue(assetSheetPlan, { sheetId: outcome.sheetId, viewRowId });
+  } else {
+    await enqueueAdvance(outcome.sheetId);
+  }
+  return "sheet_review";
+}
+
+/**
+ * Locks a location pack or prop sheet once its lock rules hold (`packLockGate`): the sheet is
+ * accepted (the asset is ready), views not approved by then are set aside (superseded), and the
+ * contact sheet is assembled for people.
+ */
+export async function lockSheet(input: {
+  sheetId: string;
+  userId: string;
+}): Promise<AssetStage | null> {
+  const { sheetId, userId } = parse(z.object({ sheetId: z.string(), userId: userIdSchema }), input);
+  if (!isUuid(sheetId)) return null;
+  const locked = await getDb().transaction(async (tx) => {
+    const [target] = await tx
+      .select({ assetId: assetSheet.assetId })
+      .from(assetSheet)
+      .where(eq(assetSheet.id, sheetId))
+      .limit(1);
+    if (!target) return null;
+    const found = await lockAsset(tx, target.assetId, userId);
+    if (!found) return null;
+    const { asset: row } = found;
+    assertActive(row);
+    const pack = packKindOf(row.kind);
+    const { look, sheet } = await loadAssetState(tx, row);
+    if (
+      !pack ||
+      !sheet ||
+      sheet.id !== sheetId ||
+      sheet.status !== "in_review" ||
+      look?.id !== sheet.lookId ||
+      look.status !== "accepted"
+    ) {
+      throw new AssetInputError(NOT_IN_REVIEW);
+    }
+    const views = await latestViewRows(tx, sheetId);
+    const gate = packLockGate(pack, sheet.spec, views);
+    if (!gate.canLock) {
+      throw new AssetInputError(`Approve these first: ${gate.missing.join(", ")}.`);
+    }
+    const now = new Date();
+    const setAside = views.filter((v) => v.status !== "accepted").map((v) => v.id);
+    if (setAside.length > 0) {
+      await tx
+        .update(assetSheetView)
+        .set({ status: "superseded" })
+        .where(inArray(assetSheetView.id, setAside));
+    }
+    await tx
+      .update(assetSheet)
+      .set({ status: "superseded" })
+      .where(
+        and(
+          eq(assetSheet.assetId, row.id),
+          eq(assetSheet.status, "accepted"),
+          ne(assetSheet.id, sheetId),
+        ),
+      );
+    await tx
+      .update(assetSheet)
+      .set({ status: "accepted", decidedAt: now })
+      .where(eq(assetSheet.id, sheetId));
+    await tx.insert(review).values({
+      projectId: row.projectId,
+      userId,
+      subjectType: "asset_sheet",
+      subjectId: sheetId,
+      decision: "accepted",
+      damiRunId: sheet.damiRunId,
+    });
+    await logEvent(tx, row.projectId, userId, "asset.sheet_accepted", {
+      assetId: row.id,
+      sheetId,
+      lookId: sheet.lookId,
+      views: views.filter((v) => v.status === "accepted").map((v) => v.viewId),
+    });
+    return true;
+  });
+  if (!locked) return null;
+  await enqueueAssemble(sheetId);
+  return "ready";
 }
 
 /* ------------------------------------------------------------------------------------------ */
@@ -1331,10 +1890,10 @@ export async function retrySheet(input: {
       assetId: row.id,
       sheetId,
     });
-    return updated ?? null;
+    return updated ? { row: updated, kind: row.kind } : null;
   });
   if (!sheet) return null;
-  await enqueueSheetJob(sheet);
+  await enqueueSheetJob(sheet.row, sheet.kind);
   return "building_sheet";
 }
 

@@ -13,8 +13,9 @@ import { scriptChecker } from "./script-checker/dami";
 import { scriptReviser } from "./script-reviser/dami";
 import { enhancer } from "./enhancer/dami";
 import { scriptOutliner, scriptWriter } from "./script-writer/dami";
-import { sheetFixer } from "./sheet-fixer/dami";
-import { sheetGenerator } from "./sheet-generator/dami";
+import { sheetGeneratorCharacter } from "./sheet-generator-character/dami";
+import { sheetGeneratorLocation } from "./sheet-generator-location/dami";
+import { sheetGeneratorProp } from "./sheet-generator-prop/dami";
 import { takeFixer } from "./take-fixer/dami";
 import { textBlocks } from "./text-blocks/dami";
 
@@ -295,32 +296,48 @@ export {
   type ReferenceRoleChoice,
 } from "./designers";
 
-// Reference sheets (pre-production; the owner's sheet makers replace these in Phase 5)
-export { sheetGenerator, sheetFixer };
+// Sheet makers (pre-production): the character sheet, the location pack and the prop sheet
+export { sheetGeneratorCharacter, sheetGeneratorLocation, sheetGeneratorProp };
 export {
-  sheetGeneratorInputSchema,
-  sheetGeneratorOutputSchema,
-  type SheetGeneratorInput,
-  type SheetGeneratorOutput,
-} from "./sheet-generator/schema";
+  CHARACTER_SHEET_REFERENCE_ROLES,
+  characterSheetInputSchema,
+  characterSheetOutputSchema,
+  DESIGN_CHANGE_PREFIX,
+  designChangeRequests,
+  type CharacterSheetInput,
+  type CharacterSheetOutput,
+  type DetailCell,
+} from "./sheet-generator-character/schema";
+export { CHARACTER_SHEET_EDIT_CODES } from "./sheet-generator-character/edit-eligible";
 export {
-  sheetFixerInputSchema,
-  sheetFixerOutputSchema,
-  sheetIssueCodeSchema,
-  sheetReviewSchema,
-  type SheetFixerInput,
-  type SheetFixerOutput,
-} from "./sheet-fixer/schema";
+  locationSheetInputSchema,
+  locationSheetOutputSchema,
+  type LocationSheetFixRequest,
+  type LocationSheetInput,
+  type LocationSheetOutput,
+  type LocationSheetView,
+} from "./sheet-generator-location/schema";
 export {
-  SHEET_ISSUES,
-  SHEET_ISSUE_CODES,
-  SHEET_ISSUE_LIST,
-  SHEET_ISSUE_KINDS,
-  sheetIssueFits,
-  sheetIssuesFor,
-  type SheetIssueCode,
-  type SheetIssueDefinition,
-} from "./sheet-fixer/issues";
+  isReverseView,
+  LOCATION_HERO_VIEWS,
+  MAX_VIEW_REFERENCES,
+} from "./sheet-generator-location/dami";
+export {
+  PROP_REVIEW_FOCUS,
+  propSheetInputSchema,
+  propSheetOutputSchema,
+  type PropScaleCard,
+  type PropSheetFixRequest,
+  type PropSheetInput,
+  type PropSheetOutput,
+  type PropSheetView,
+} from "./sheet-generator-prop/schema";
+export {
+  MAX_PROP_VIEW_REFERENCES,
+  minimumPropLevel,
+  nonDefaultStates,
+  PROP_LEVEL_MAX_IMAGES,
+} from "./sheet-generator-prop/dami";
 export {
   referenceAssetSchema,
   type ChangeSummaryItem,
@@ -387,8 +404,9 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [characterGenerator.key]: characterGenerator,
   [locationGenerator.key]: locationGenerator,
   [propGenerator.key]: propGenerator,
-  [sheetGenerator.key]: sheetGenerator,
-  [sheetFixer.key]: sheetFixer,
+  [sheetGeneratorCharacter.key]: sheetGeneratorCharacter,
+  [sheetGeneratorLocation.key]: sheetGeneratorLocation,
+  [sheetGeneratorProp.key]: sheetGeneratorProp,
   [textBlocks.key]: textBlocks,
   [blockReviser.key]: blockReviser,
   [takeFixer.key]: takeFixer,

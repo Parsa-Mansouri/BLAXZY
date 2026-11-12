@@ -146,6 +146,7 @@ export function createProductionFixtures() {
       const db = getDb();
       await db.delete(s.exportBundle).where(inArray(s.exportBundle.projectId, projectIds));
       await db.delete(s.blockTake).where(inArray(s.blockTake.projectId, projectIds));
+      await db.delete(s.assetSheetView).where(inArray(s.assetSheetView.projectId, projectIds));
       await db.delete(s.assetSheet).where(inArray(s.assetSheet.projectId, projectIds));
       await db.delete(s.assetLook).where(inArray(s.assetLook.projectId, projectIds));
     }

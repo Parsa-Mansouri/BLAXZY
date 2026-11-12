@@ -225,7 +225,8 @@ describe.skipIf(!hasFfmpeg)(
       expect(d1.prompt).toContain("Lighthouse <<<image_1>>>");
       expect(d1.prompt).toContain("Tomas <<<image_2>>>");
       expect(d1.assets.map((a) => a.ref)).toEqual(["location:Lighthouse", "character:Tomas"]);
-      expect(d1.assets[0]?.thumbnailFileId).toBe(lighthouse.sheetFileId);
+      // A location is attached with its approved Hero; a character with its sheet.
+      expect(d1.assets[0]?.thumbnailFileId).toBe(lighthouse.lookFileId);
       const d2 = await detail(l2, userId);
       expect(d2.prompt).toContain("CONTINUITY"); // the previous block's tail
       const prepareRuns = await getDb()
@@ -311,7 +312,7 @@ describe.skipIf(!hasFfmpeg)(
       expect(draft1).toMatchObject({ stage: "draft", status: "in_review", takeNumber: 1 });
       expect(draft1.fileId).not.toBeNull();
       expect(draft1.posterFileId).not.toBeNull();
-      expect(draft1.referenceFileIds).toEqual([lighthouse.sheetFileId, tomas.sheetFileId]);
+      expect(draft1.referenceFileIds).toEqual([lighthouse.lookFileId, tomas.sheetFileId]);
       const draftGen = await generationRow(draft1.generationId ?? "");
       expect(draftGen).toMatchObject({
         purpose: "block_draft",

@@ -1,13 +1,16 @@
 /**
  * Assets as Production references: which assets are ready to be attached to a block, and the file
- * each one is attached with (the accepted sheet, else the accepted look). Read-only; no ownership
- * checks (callers have checked the project).
+ * each one is attached with. Characters are attached with their accepted sheet; locations and props
+ * with their approved Hero (one image), and the approved views of their locked pack are listed in
+ * `views` for shots that need another angle. Read-only; no ownership checks (callers have checked
+ * the project).
  */
 import { and, asc, eq, inArray, ne, or } from "drizzle-orm";
 import { getDb, type DbExecutor } from "@/server/db/client";
 import { formatAssetRef, parseAssetRef, type ParsedAssetRef } from "@/server/damis";
 import { asset, type AssetKind } from "@/server/db/schema";
 import { latestByAsset, newestLookWithStatus, newestSheetWithStatus, type AssetRow } from "./looks";
+import { acceptedPackViews, packKindOf } from "./packs";
 import { deriveAssetState } from "./stage";
 
 /** An asset as a block reference. `ref` is `kind:Name`. */
@@ -19,10 +22,15 @@ export type ReferenceAsset = {
   description: string;
   /** Active (not removed) and ready in pre-production. */
   ready: boolean;
-  /** What generation attaches: the accepted sheet's file, else the accepted look's (null for voices or when not ready). */
+  /**
+   * What generation attaches (null for voices or when not ready): a character's accepted sheet
+   * (else its accepted look); a location's or prop's approved Hero.
+   */
   referenceFileId: string | null;
-  /** What the screens show: the accepted sheet, else the accepted look. */
+  /** What the screens show: the accepted sheet, else the accepted look (a location's or prop's Hero). */
   thumbnailFileId: string | null;
+  /** Locations and props: the approved views of the locked pack, in order (for later use per shot). */
+  views: { viewId: string; label: string; fileId: string }[];
 };
 
 /** The most assets one project hands to Production at once (the damis' input limit). */
@@ -35,6 +43,13 @@ async function describe(db: DbExecutor, rows: AssetRow[]): Promise<ReferenceAsse
   const { looks, sheets } = await latestByAsset(db, ids);
   const acceptedSheets = await newestSheetWithStatus(db, ids, "accepted");
   const acceptedLooks = await newestLookWithStatus(db, ids, "accepted");
+  const packViews = await acceptedPackViews(
+    db,
+    rows.flatMap((r) => {
+      const sheet = acceptedSheets.get(r.id);
+      return packKindOf(r.kind) && sheet ? [sheet.id] : [];
+    }),
+  );
   return rows.map((row) => {
     const ready =
       row.status === "active" &&
@@ -43,8 +58,14 @@ async function describe(db: DbExecutor, rows: AssetRow[]): Promise<ReferenceAsse
     const look = acceptedLooks.get(row.id) ?? null;
     // Only the sheet built from the accepted look counts.
     const sheet = acceptedSheets.get(row.id);
-    const sheetFileId = sheet && look && sheet.lookId === look.id ? sheet.fileId : null;
-    const imageFileId = row.kind === "voice" ? null : (sheetFileId ?? look?.fileId ?? null);
+    const ownSheet = sheet && look && sheet.lookId === look.id ? sheet : null;
+    const pack = packKindOf(row.kind) !== null;
+    const imageFileId =
+      row.kind === "voice"
+        ? null
+        : pack
+          ? (look?.fileId ?? null)
+          : (ownSheet?.fileId ?? look?.fileId ?? null);
     return {
       ref: formatAssetRef(row.kind, row.name),
       assetId: row.id,
@@ -54,6 +75,7 @@ async function describe(db: DbExecutor, rows: AssetRow[]): Promise<ReferenceAsse
       ready,
       referenceFileId: ready ? imageFileId : null,
       thumbnailFileId: imageFileId,
+      views: ready && pack && ownSheet ? (packViews.get(ownSheet.id) ?? []) : [],
     };
   });
 }

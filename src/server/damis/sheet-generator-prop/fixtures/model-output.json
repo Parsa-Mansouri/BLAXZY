@@ -1,0 +1,212 @@
+{
+  "asset_id": "brass locket",
+  "asset_name": "brass locket",
+  "sheet_level": "production",
+  "views": [
+    {
+      "view_id": "front",
+      "label": "Front",
+      "purpose": "The front face straight on.",
+      "state_id": "closed",
+      "image_prompt": "The first reference image is the exact object, brass locket. Keep its shape, proportions, parts, materials, colors and details identical; only the camera angle changes. Camera perpendicular to the front face at its center height, long lens, flat perspective, the object filling about 75 percent of the frame. Seamless neutral mid-grey studio background, soft even neutral light, no labels, numbers or arrows.",
+      "aspect_ratio": "1:1",
+      "reference_order": [
+        {
+          "index": 1,
+          "source": "approved_hero",
+          "role": "the exact object"
+        }
+      ],
+      "depends_on": [],
+      "must_show": ["The front face straight on, nothing mirrored"],
+      "must_not_show": ["labels or numbers", "a mirrored front on the back"],
+      "new_hypotheses": [],
+      "review_focus": ["shape", "material", "directional"],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "right",
+      "label": "Right",
+      "purpose": "The right side.",
+      "state_id": "closed",
+      "image_prompt": "The first reference image is the exact object, brass locket. Keep its shape, proportions, parts, materials, colors and details identical; only the camera angle changes. Camera perpendicular to the right face at its center height, long lens, flat perspective, the object filling about 75 percent of the frame. Seamless neutral mid-grey studio background, soft even neutral light, no labels, numbers or arrows.",
+      "aspect_ratio": "1:1",
+      "reference_order": [
+        {
+          "index": 1,
+          "source": "approved_hero",
+          "role": "the exact object"
+        }
+      ],
+      "depends_on": [],
+      "must_show": ["The right face straight on, nothing mirrored"],
+      "must_not_show": ["labels or numbers", "a mirrored front on the back"],
+      "new_hypotheses": [],
+      "review_focus": ["shape", "material", "directional"],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "back",
+      "label": "Back",
+      "purpose": "The back face, never a mirror of the front.",
+      "state_id": "closed",
+      "image_prompt": "The first reference image is the exact object, brass locket. Keep its shape, proportions, parts, materials, colors and details identical; only the camera angle changes. The second reference image shows the approved right view for orientation. Camera perpendicular to the back face at its center height, long lens, flat perspective, the object filling about 75 percent of the frame. Seamless neutral mid-grey studio background, soft even neutral light, no labels, numbers or arrows.",
+      "aspect_ratio": "1:1",
+      "reference_order": [
+        {
+          "index": 1,
+          "source": "approved_hero",
+          "role": "the exact object"
+        },
+        {
+          "index": 2,
+          "source": "approved_view:right",
+          "role": "the closest approved angle"
+        }
+      ],
+      "depends_on": ["right"],
+      "must_show": ["The back face straight on, nothing mirrored"],
+      "must_not_show": ["labels or numbers", "a mirrored front on the back"],
+      "new_hypotheses": [
+        {
+          "area": "the back side",
+          "proposal": "Plain, in the same material and wear as the front."
+        }
+      ],
+      "review_focus": ["shape", "material", "directional"],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "left",
+      "label": "Left",
+      "purpose": "The left side.",
+      "state_id": "closed",
+      "image_prompt": "The first reference image is the exact object, brass locket. Keep its shape, proportions, parts, materials, colors and details identical; only the camera angle changes. The second reference image shows the approved front view for orientation. Camera perpendicular to the left face at its center height, long lens, flat perspective, the object filling about 75 percent of the frame. Seamless neutral mid-grey studio background, soft even neutral light, no labels, numbers or arrows.",
+      "aspect_ratio": "1:1",
+      "reference_order": [
+        {
+          "index": 1,
+          "source": "approved_hero",
+          "role": "the exact object"
+        },
+        {
+          "index": 2,
+          "source": "approved_view:front",
+          "role": "the closest approved angle"
+        }
+      ],
+      "depends_on": ["front"],
+      "must_show": ["The left face straight on, nothing mirrored"],
+      "must_not_show": ["labels or numbers", "a mirrored front on the back"],
+      "new_hypotheses": [],
+      "review_focus": ["shape", "material", "directional"],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "detail_1",
+      "label": "Detail 1",
+      "purpose": "The clasp up close.",
+      "state_id": "closed",
+      "image_prompt": "The first reference image is the exact object, brass locket. Keep its shape, proportions, parts, materials, colors and details identical; only the camera angle changes. A true sharp macro close-up of one signature detail with a little surrounding form for context. Seamless neutral mid-grey studio background, soft even neutral light, no labels, numbers or arrows.",
+      "aspect_ratio": "1:1",
+      "reference_order": [
+        {
+          "index": 1,
+          "source": "approved_hero",
+          "role": "the exact object"
+        }
+      ],
+      "depends_on": [],
+      "must_show": ["Detail 1"],
+      "must_not_show": ["labels or numbers", "a mirrored front on the back"],
+      "new_hypotheses": [],
+      "review_focus": ["shape", "material"],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "detail_2",
+      "label": "Detail 2",
+      "purpose": "The hinge up close.",
+      "state_id": "closed",
+      "image_prompt": "The first reference image is the exact object, brass locket. Keep its shape, proportions, parts, materials, colors and details identical; only the camera angle changes. A true sharp macro close-up of one signature detail with a little surrounding form for context. Seamless neutral mid-grey studio background, soft even neutral light, no labels, numbers or arrows.",
+      "aspect_ratio": "1:1",
+      "reference_order": [
+        {
+          "index": 1,
+          "source": "approved_hero",
+          "role": "the exact object"
+        }
+      ],
+      "depends_on": [],
+      "must_show": ["Detail 2"],
+      "must_not_show": ["labels or numbers", "a mirrored front on the back"],
+      "new_hypotheses": [],
+      "review_focus": ["shape", "material"],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "state_open",
+      "label": "State: Open",
+      "purpose": "The object open.",
+      "state_id": "open",
+      "image_prompt": "The first reference image is the exact object, brass locket. Keep its shape, proportions, parts, materials, colors and details identical; only the camera angle changes. The hero_34 angle with the object Open; only the moving part changes. Seamless neutral mid-grey studio background, soft even neutral light, no labels, numbers or arrows.",
+      "aspect_ratio": "1:1",
+      "reference_order": [
+        {
+          "index": 1,
+          "source": "approved_hero",
+          "role": "the exact object"
+        }
+      ],
+      "depends_on": [],
+      "must_show": ["State: Open"],
+      "must_not_show": ["labels or numbers", "a mirrored front on the back"],
+      "new_hypotheses": [],
+      "review_focus": ["shape", "material", "functional"],
+      "edit_mode": "full"
+    },
+    {
+      "view_id": "scale_ref",
+      "label": "Scale",
+      "purpose": "True size beside a hand.",
+      "state_id": "closed",
+      "image_prompt": "The first reference image is the exact object, brass locket. Keep its shape, proportions, parts, materials, colors and details identical; only the camera angle changes. The object beside a plain neutral-grey mannequin hand, side by side, same light and distance, true relative size. Seamless neutral mid-grey studio background, soft even neutral light, no labels, numbers or arrows.",
+      "aspect_ratio": "1:1",
+      "reference_order": [
+        {
+          "index": 1,
+          "source": "approved_hero",
+          "role": "the exact object"
+        }
+      ],
+      "depends_on": [],
+      "must_show": ["Scale"],
+      "must_not_show": ["labels or numbers", "a mirrored front on the back"],
+      "new_hypotheses": [],
+      "review_focus": ["shape", "material", "scale"],
+      "edit_mode": "full"
+    }
+  ],
+  "generation_order": [
+    "front",
+    "right",
+    "back",
+    "left",
+    "detail_1",
+    "detail_2",
+    "state_open",
+    "scale_ref"
+  ],
+  "scale_card": {
+    "dimensions_cm": null,
+    "dimensions_status": "inferred",
+    "relative_reference": "small: fits in one hand",
+    "text": "small: fits in one hand"
+  },
+  "applied_fixes": [],
+  "assumptions": [
+    "Hidden sides follow the front's material and wear.",
+    "The scale card uses relative wording: the size is not confirmed."
+  ],
+  "warnings": []
+}

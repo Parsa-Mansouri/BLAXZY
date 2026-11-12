@@ -48,7 +48,8 @@ export {
   type AssetStage,
   type AssetState,
 } from "./stage";
-export type { LookView, SheetView } from "./looks";
+export type { LookSpecView, LookView, SheetView } from "./looks";
+export { MAX_REFERENCE_NOTE, type ReferenceInput } from "./designs";
 export {
   DEFAULT_FINISHED_PAGE_SIZE,
   finishedFeedCursorNow,
@@ -60,8 +61,10 @@ export {
 } from "./finished-feed";
 export {
   addAsset,
+  answerLookQuestion,
   completePreProduction,
   DEFAULT_CARD_PAGE_SIZE,
+  fieldsToConfirm,
   getAssetDetail,
   getPreProductionOverview,
   includeSkippedAsset,
@@ -78,9 +81,12 @@ export {
   replaceLook,
   retryLook,
   retrySheet,
+  SPEC_EDIT_CODE,
+  startDesign,
   startLookFromGuided,
   startLookFromPrompt,
   startLookFromUpload,
+  startWithoutWaiting,
   submitLookReview,
   submitSheetReview,
   updateAsset,
@@ -105,11 +111,19 @@ export {
   failSheet,
   loadLookJob,
   loadSheetJob,
+  markLookNeedsInput,
   requestLookGeneration,
   requestSheetGeneration,
-  storeLookPrompt,
+  storeLookDesign,
   storeSheetPrompt,
+  applyUploadedLook,
   type AssetJobReview,
   type LookJobContext,
   type SheetJobContext,
 } from "./jobs";
+export {
+  loadDesignContext,
+  type DesignContext,
+  type LinkedCharacter,
+  type LinkedLocation,
+} from "./design-context";

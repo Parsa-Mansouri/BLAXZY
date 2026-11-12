@@ -11,8 +11,7 @@ export const sheetFixer = defineDami({
     "Rewrites the prompt of a rejected reference sheet so the next one fixes what the review asks for, changing nothing else.",
   input: sheetFixerInputSchema,
   output: sheetFixerOutputSchema,
-  // Sonnet: a targeted rewrite of one short prompt against an explicit list of requests, like
-  // the asset-fixer. The check enforces one change-summary entry per request.
+  // Sonnet: a targeted rewrite of one short prompt against an explicit list of requests. The check enforces one change-summary entry per request.
   model: CLAUDE_MODELS.sonnet,
   effort: "low",
   maxOutputTokens: 8_000,

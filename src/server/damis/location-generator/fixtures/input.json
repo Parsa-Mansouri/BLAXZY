@@ -1,0 +1,33 @@
+{
+  "project": {
+    "style": "Noir",
+    "genre": "Thriller",
+    "format": "movie",
+    "orientation": "landscape",
+    "styleDescriptor": "Realistic noir look with hard-edged shadow shapes and a restrained palette"
+  },
+  "location": {
+    "name": "Ferry Cabin",
+    "interiorExterior": "interior",
+    "timeOfDay": "night",
+    "scriptDescription": "A cramped cabin on the night ferry.",
+    "sceneRefs": ["1"]
+  },
+  "scriptContext": {
+    "logline": "A lamp keeper meets the man who left her.",
+    "scenes": [
+      {
+        "sceneNumber": "1",
+        "heading": "INT. FERRY CABIN - NIGHT",
+        "action": "Mara holds a brass locket. Jonas stands by the door.",
+        "dialogueExcerpt": "",
+        "charactersPresent": ["Mara", "Jonas"]
+      }
+    ]
+  },
+  "guidedAnswers": {
+    "materials_colors": "Riveted steel painted cream, worn teak",
+    "light_atmosphere": "ai_decides"
+  },
+  "excludeAssets": ["Mara", "Jonas", "brass locket"]
+}

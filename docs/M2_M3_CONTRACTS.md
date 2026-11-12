@@ -96,21 +96,22 @@ the job type's worker concurrency as the global cap.
 
 | Dami | Input | Output |
 |---|---|---|
-| `asset-prompt-writer` | `{ style, asset: { kind, name, description }, userPrompt?: string, guidedAnswers?: Record<string,string> }` | `{ prompt, notes[] }` |
-| `asset-fixer` | `{ style, asset, previousPrompt, review: { issueCodes[], note? } }` | `{ prompt, changeSummary[] }` |
+| `character-generator` (v5) | `{ project, styleOverride?, environment?, character: { name, role?, description?, kind?, details, facts }, referenceImages: [{fileId, role: face\|outfit\|full_body\|other, note?}], userNotes?, previousPrompt?, fixRequests[] }` | the owner's board output (`image_prompt`, `aspect_ratio: "16:9"`, `style_used`, `reference_order`, `applied_fixes`, `assumptions`, `warnings`) |
+| `location-generator` (v1) | `{ project, location, scriptContext?, userPrompt?, guidedAnswers?, referenceImages (hero\|layout\|mood\|detail\|other), outputMode: "lock", excludeAssets, previousOutput?, fixRequests[], userNotes? }` | the owner's `submit_location_spec` (spec fields, DNA, layout, coverage plan, `hero_wide`) |
+| `prop-generator` (v1) | `{ asset, project, userPrompt?, guidedAnswers? (+ advanced), referenceImages (identity\|material\|detail\|mood\|other), scriptContext?, linkedCharacters, linkedLocations, clarifyAnswers?, previousOutput?, fixRequests[], userNotes? }` | the owner's `submit_asset_spec` (spec fields, clarifying questions, DNA, sheet plan, `hero_view` or null) |
 | `sheet-generator` | `{ style, asset }` (the accepted look is attached as a reference by the caller) | `{ prompt, layout: string }` |
 | `sheet-fixer` | `{ style, asset, previousPrompt, review }` | `{ prompt, changeSummary[] }` |
 
-Data exported for the UI: `ASSET_QUESTIONS: Record<AssetKind, GuidedQuestion[]>`
-(`{ id, label, short, hint, kind: "choice" | "text", options?: { value, label }[], optional? }`,
-five to eight questions per kind), `LOOK_ISSUE_LIST`, `SHEET_ISSUE_LIST` (same shape as
-`SCRIPT_ISSUE_LIST`: `code`, `label`, `hint`, plus the instruction for the fixer), and
-`lookIssuesFor(kind)` / `sheetIssuesFor(kind)`, the issues that apply to one asset kind
-(`LOOK_ISSUE_KINDS` / `SHEET_ISSUE_KINDS`; e.g. no face, limbs, age, clothing or clean backdrop for
-a location). `submitLookReview` / `submitSheetReview` refuse codes that do not apply to the asset's
-kind. Marks a reviewer drops on the picture are folded into the note as plain text ("Marked on the
-image: 1 (upper left): ..."), so the review contract is unchanged. Each dami has a
-sample generator in `src/server/damis/sample/`.
+The three designers replaced the draft `asset-prompt-writer` and `asset-fixer` (Phase 4). Data
+exported for the UI: `designerQuestions(kind, context)` (each generator's `questions.ts`, with its
+skip logic; `GuidedQuestion` gains `advanced?` and `prefill?`; every question also takes the
+user's own words or `ai_decides`), `REFERENCE_ROLES`, `REFERENCE_CONFLICTS`, `LOOK_FRAMES` and the
+designers' review catalogs (`getReviewCatalog(DESIGNER_CATALOGS[designer])`). Look reviews send
+catalog `selections` (stored as `review.fix_requests`, codes in `issue_codes`), spec-card edits,
+answers to the designer's questions and a changed photo list; a `regenerate` option alone re-rolls
+with the same prompt and a new variant (no dami call). Sheets keep `SHEET_ISSUE_LIST` /
+`sheetIssuesFor(kind)` until Phase 5. Marks a reviewer drops on the picture are folded into the
+note as plain text. Each dami has a sample generator in `src/server/damis/sample/`.
 
 ## Pre-production: `@/server/assets` (additions)
 
@@ -168,8 +169,8 @@ Jobs (handlers in `worker/handlers/`), each `{ lookId }` or `{ sheetId }`, dedup
 
 | Job | Does |
 |---|---|
-| `asset.look.generate` | runDami(asset-prompt-writer) → store prompt → `requestGeneration` (asset_look) |
-| `asset.look.fix` | runDami(asset-fixer) on the parent look's prompt + its review → `requestGeneration` |
+| `asset.look.generate` | the asset's designer in create mode → store prompt and spec → `requestGeneration` (asset_look, the designer's ratio and photos); or `needs_input` (a blocking question), or the user's photo as the Hero (`use_uploaded`, no generation) |
+| `asset.look.fix` | the designer in fix mode on the parent look's answer + its review's fix requests (or, for a re-roll, the stored prompt with a new variant) → `requestGeneration` |
 | `asset.sheet.generate` | runDami(sheet-generator) → `requestGeneration` (asset_sheet, reference = the look's file) |
 | `asset.sheet.fix` | runDami(sheet-fixer) → `requestGeneration` |
 

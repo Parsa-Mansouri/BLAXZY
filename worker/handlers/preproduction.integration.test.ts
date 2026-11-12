@@ -171,13 +171,37 @@ describe.skipIf(!reachable)(
         thumbnailFileId: produced1.fileId,
       });
 
-      // Reject with codes: a fixed look, from the asset-fixer.
+      // The Character Generator drew a 16:9 board; the first character resolves the style.
+      expect(produced1.spec).toMatchObject({
+        generator: "character-generator",
+        aspectRatio: "16:9",
+      });
+      expect(gen1.params).toMatchObject({ aspectRatio: "16:9" });
+      const [styled] = await getDb()
+        .select({ style: s.project.style })
+        .from(s.project)
+        .where(eq(s.project.id, projectId));
+      expect(styled?.style?.styleDescriptor).toBe(produced1.spec?.styleUsed);
+
+      // Reject with catalog picks: a fix round of the Character Generator.
+      await expect(
+        assets.submitLookReview({
+          lookId: produced1.id,
+          userId,
+          decision: "rejected",
+          selections: [{ code: "P05" }],
+        }),
+      ).rejects.toThrow(/Say what you want/);
       expect(
         await assets.submitLookReview({
           lookId: produced1.id,
           userId,
           decision: "rejected",
-          issueCodes: ["wrong_age", "lighting_poor"],
+          selections: [
+            { code: "T14" },
+            { code: "P01", value: "noticeably older" },
+            { code: "T01", viewId: "closeup" },
+          ],
           note: "Older, please.",
         }),
       ).toBe("generating");
@@ -185,38 +209,69 @@ describe.skipIf(!reachable)(
       expect(review1).toMatchObject({
         subjectType: "asset_look",
         decision: "rejected",
-        issueCodes: ["wrong_age", "lighting_poor"],
+        issueCodes: ["T14", "P01", "T01"],
         note: "Older, please.",
         damiRunId: produced1.damiRunId,
+      });
+      expect(review1?.fixRequests[1]).toMatchObject({
+        type: "preference",
+        code: "P01",
+        instruction: expect.stringContaining("noticeably older"),
       });
       const d1 = await detail(tomas.id, userId);
       const look2 = d1.looks[0];
       expect(look2).toMatchObject({ versionNumber: 2, status: "pending" });
       const produced2 = await produceLook(look2?.id ?? "");
       expect(produced2).toMatchObject({ status: "in_review", parentId: produced1.id });
-      expect(produced2.prompt).toContain("Revised:");
+      expect(produced2.prompt).toContain("noticeably older");
+      expect(produced2.prompt).toContain("close-up");
+      expect(produced2.spec?.appliedFixes.map((f) => f.code)).toEqual(["T14", "P01", "T01"]);
       const [fixRun] = await getDb()
-        .select({ damiKey: s.damiRun.damiKey })
+        .select({ damiKey: s.damiRun.damiKey, input: s.damiRun.input })
         .from(s.damiRun)
         .where(eq(s.damiRun.id, produced2.damiRunId ?? ""));
-      expect(fixRun?.damiKey).toBe("asset-fixer");
+      expect(fixRun?.damiKey).toBe("character-generator");
+      expect(fixRun?.input).toMatchObject({ previousPrompt: produced1.prompt });
+      expect((await generationRow(produced2.generationId ?? "")).params).toMatchObject({
+        variant: produced2.id,
+      });
+
+      // A re-roll (R01) alone keeps the prompt and the dami run: only the seed changes.
+      expect(
+        await assets.submitLookReview({
+          lookId: produced2.id,
+          userId,
+          decision: "rejected",
+          selections: [{ code: "R01" }],
+        }),
+      ).toBe("generating");
+      const reroll = await produceLook((await detail(tomas.id, userId)).looks[0]?.id ?? "");
+      expect(reroll).toMatchObject({
+        status: "in_review",
+        prompt: produced2.prompt,
+        damiRunId: produced2.damiRunId,
+      });
+      expect((await generationRow(reroll.generationId ?? "")).params).toMatchObject({
+        variant: reroll.id,
+      });
+      expect((await detail(tomas.id, userId)).rejectedInARow).toBe(2);
 
       // Accept: a sheet is started with the look attached.
       expect(
-        await assets.submitLookReview({ lookId: produced2.id, userId, decision: "accepted" }),
+        await assets.submitLookReview({ lookId: reroll.id, userId, decision: "accepted" }),
       ).toBe("building_sheet");
-      const [acceptReview] = await reviewsOf(produced2.id);
-      expect(acceptReview).toMatchObject({ decision: "accepted", damiRunId: produced2.damiRunId });
+      const [acceptReview] = await reviewsOf(reroll.id);
+      expect(acceptReview).toMatchObject({ decision: "accepted", damiRunId: reroll.damiRunId });
       const d2 = await detail(tomas.id, userId);
       expect(d2.stage).toBe("building_sheet");
       const sheet1 = d2.sheets[0];
-      expect(sheet1).toMatchObject({ status: "pending", lookId: produced2.id });
+      expect(sheet1).toMatchObject({ status: "pending", lookId: reroll.id });
       const producedSheet1 = await produceSheet(sheet1?.id ?? "");
       expect(producedSheet1.status).toBe("in_review");
       const sheetGen = await generationRow(producedSheet1.generationId ?? "");
       expect(sheetGen).toMatchObject({
         purpose: "asset_sheet",
-        referenceFileIds: [produced2.fileId],
+        referenceFileIds: [reroll.fileId],
       });
       expect(sheetGen.params).toMatchObject({ label: "Tomas sheet" });
       expect((await detail(tomas.id, userId)).stage).toBe("sheet_review");
@@ -224,7 +279,7 @@ describe.skipIf(!reachable)(
       // Reject the sheet: a fixed one.
       await expect(
         assets.submitSheetReview({ sheetId: producedSheet1.id, userId, decision: "rejected" }),
-      ).rejects.toThrow(/pick an issue/);
+      ).rejects.toThrow(/Say what is wrong/);
       expect(
         await assets.submitSheetReview({
           sheetId: producedSheet1.id,
@@ -243,7 +298,7 @@ describe.skipIf(!reachable)(
       const producedSheet2 = await produceSheet(sheet2?.id ?? "");
       expect(producedSheet2).toMatchObject({ status: "in_review", parentId: producedSheet1.id });
       const fixGen = await generationRow(producedSheet2.generationId ?? "");
-      expect(fixGen.referenceFileIds).toEqual([produced2.fileId]);
+      expect(fixGen.referenceFileIds).toEqual([reroll.fileId]);
 
       expect(
         await assets.submitSheetReview({
@@ -254,7 +309,7 @@ describe.skipIf(!reachable)(
       ).toBe("ready");
       const final = await detail(tomas.id, userId);
       expect(final).toMatchObject({ stage: "ready", busy: false });
-      expect(final.looks.map((l) => l.status)).toEqual(["accepted", "rejected"]);
+      expect(final.looks.map((l) => l.status)).toEqual(["accepted", "rejected", "rejected"]);
       expect(final.sheets.map((sh) => sh.status)).toEqual(["accepted", "rejected"]);
       expect(final.looks[0]?.isSample).toBe(true);
       const readyCards = await assets.listAssetCards(projectId, userId, { kind: "character" });
@@ -263,15 +318,15 @@ describe.skipIf(!reachable)(
         thumbnailFileId: producedSheet2.fileId,
       });
 
-      // 4 + 4 + 6 + 6 credits, each charged once.
-      expect(await billing.getBalance(userId)).toBe(200 - 20);
+      // Three looks (4 each) and two sheets (6 each), each charged once.
+      expect(await billing.getBalance(userId)).toBe(200 - 24);
       const types = await events(projectId);
       expect(types).toEqual(
         expect.arrayContaining(["asset.added", "asset.look_accepted", "asset.sheet_accepted"]),
       );
     });
 
-    it("refuses look and sheet issues that do not apply to the asset's kind", async () => {
+    it("refuses catalog picks of another designer; a location's critical fields are checked before lock", async () => {
       const { userId, projectId } = await setup(200);
       const cafe = await add(projectId, userId, "location", "Corner Cafe");
       const look = await assets.startLookFromPrompt({
@@ -280,17 +335,29 @@ describe.skipIf(!reachable)(
         prompt: "A small corner cafe at dawn",
       });
       const produced = await produceLook(look?.id ?? "");
+      expect(produced.spec).toMatchObject({ generator: "location-generator", aspectRatio: "16:9" });
+      expect(produced.spec?.fields.length).toBeGreaterThan(0);
       await expect(
         assets.submitLookReview({
           lookId: produced.id,
           userId,
           decision: "rejected",
-          issueCodes: ["lighting_poor", "face_incomplete"],
+          selections: [{ code: "T01" }],
         }),
       ).rejects.toThrow(/does not apply/);
       expect(await reviewsOf(produced.id)).toHaveLength(0);
+      await expect(
+        assets.submitLookReview({ lookId: produced.id, userId, decision: "accepted" }),
+      ).rejects.toThrow(/highlighted fields/);
+      const confirmedFields = assets.fieldsToConfirm(produced.spec);
+      expect(confirmedFields.length).toBeGreaterThan(0);
       expect(
-        await assets.submitLookReview({ lookId: produced.id, userId, decision: "accepted" }),
+        await assets.submitLookReview({
+          lookId: produced.id,
+          userId,
+          decision: "accepted",
+          confirmedFields,
+        }),
       ).toBe("building_sheet");
       const sheet = (await detail(cafe.id, userId)).sheets[0];
       const producedSheet = await produceSheet(sheet?.id ?? "");
@@ -312,49 +379,90 @@ describe.skipIf(!reachable)(
       ).toBe("building_sheet");
     });
 
-    it("guided answers are validated against the kind's questions", async () => {
+    it("a spec-card edit is a fix round; the location's own photo can be the Hero", async () => {
+      const { userId, projectId } = await setup(50);
+      const pier = await add(projectId, userId, "location", "Harbour Pier");
+      const image = await fixtures.storedImage(userId, projectId);
+      const look = await assets.startDesign({
+        assetId: pier.id,
+        userId,
+        references: [{ fileId: image, role: "hero" }],
+      });
+      // The designer took the photo as it is: in review at once, no generation, no credits.
+      const produced = await produceLook(look?.id ?? "");
+      expect(produced).toMatchObject({ status: "in_review", fileId: image, generationId: null });
+      expect(produced.spec?.heroMode).toBe("use_uploaded");
+      expect(await billing.getBalance(userId)).toBe(50);
+
+      const field = assets.fieldsToConfirm(produced.spec)[0] ?? "";
+      expect(
+        await assets.submitLookReview({
+          lookId: produced.id,
+          userId,
+          decision: "rejected",
+          specEdits: [{ field, value: "A narrow stone pier, 40 m long" }],
+        }),
+      ).toBe("generating");
+      const [edit] = await reviewsOf(produced.id);
+      expect(edit?.fixRequests[0]).toMatchObject({ code: assets.SPEC_EDIT_CODE });
+      const fixed = await produceLook((await detail(pier.id, userId)).looks[0]?.id ?? "");
+      expect(fixed.status).toBe("in_review");
+      expect(fixed.spec?.heroMode).toBe("restyle_uploaded");
+      expect(fixed.spec?.appliedFixes.map((f) => f.code)).toEqual([assets.SPEC_EDIT_CODE]);
+      expect((await generationRow(fixed.generationId ?? "")).referenceFileIds).toEqual([image]);
+    });
+
+    it("guided answers are checked against the asset's remaining questions", async () => {
       const { userId, projectId } = await setup(50);
       const place = await add(projectId, userId, "location", "The Lighthouse");
-      const valid = {
-        setting: "Exterior",
-        era: "Early 20th century (1900-1945)",
-        architecture: "A white stone tower on a cliff",
-        time_of_day: "Dusk",
-        weather: "Fog or mist",
-        mood: "Lonely and empty",
-      };
+      const { questions } = await detail(place.id, userId);
+      // The script describes it, so "what is it" is skipped; shape, materials and light are asked.
+      expect(questions.map((q) => q.id)).not.toContain("what_is_it");
+      expect(questions.map((q) => q.id)).toEqual(
+        expect.arrayContaining(["shape_size", "materials_colors", "light_atmosphere"]),
+      );
+      const valid: Record<string, string> = {};
+      for (const q of questions) {
+        if (!q.optional) valid[q.id] = q.options?.[0]?.value ?? "Whitewashed stone";
+      }
+      valid.light_atmosphere = "ai_decides";
+      valid.shape_size = "A tall round tower, narrow inside"; // own words for a choice
       const start = (answers: Record<string, string>) =>
         assets.startLookFromGuided({ assetId: place.id, userId, answers });
       await expect(start({ ...valid, colour: "red" })).rejects.toThrow(
         /does not match any question/,
       );
-      const { mood: _mood, ...missing } = valid;
-      void _mood;
-      await expect(start(missing)).rejects.toThrow(/What is the mood/);
-      await expect(start({ ...valid, weather: "Hail" })).rejects.toThrow(/offered answers/);
-      await expect(start({ ...valid, architecture: "x".repeat(1001) })).rejects.toThrow(
-        /under 1000/,
-      );
+      const { materials_colors: _m, ...missing } = valid;
+      void _m;
+      await expect(start(missing)).rejects.toThrow(/main materials/);
+      await expect(start({ ...valid, shape_size: "x".repeat(1001) })).rejects.toThrow(/under 1000/);
 
-      const look = await start({ ...valid, signature_detail: "  " });
+      const look = await start({ ...valid, fixed_elements: "  " });
       expect(look).toMatchObject({ status: "pending", userPrompt: null, guidedAnswers: valid });
       const produced = await produceLook(look?.id ?? "");
       expect(produced.status).toBe("in_review");
-      expect(produced.prompt).toContain("Fog or mist");
+      expect(produced.prompt).toContain("Whitewashed stone");
+      const [run] = await getDb()
+        .select({ input: s.damiRun.input })
+        .from(s.damiRun)
+        .where(eq(s.damiRun.id, produced.damiRunId ?? ""));
+      expect(run?.input).toMatchObject({ guidedAnswers: { light_atmosphere: "ai_decides" } });
     });
 
-    it("uploads: ready, owned, right purpose; rejecting an upload goes back to needs_image", async () => {
+    it("photos are references with a role; dropping a photo is part of a fix round", async () => {
       const { userId, projectId } = await setup(50);
       const prop = await add(projectId, userId, "prop", "Brass lantern");
       const other = await fixtures.newUser();
       const othersImage = await fixtures.storedImage(other);
       const audio = await fixtures.storedAudio(userId);
-      await expect(
-        assets.startLookFromUpload({ assetId: prop.id, userId, fileId: othersImage }),
-      ).rejects.toThrow(/not available/);
-      await expect(
-        assets.startLookFromUpload({ assetId: prop.id, userId, fileId: audio }),
-      ).rejects.toThrow(/png/);
+      const image = await fixtures.storedImage(userId, projectId);
+      const design = (references: { fileId: string; role: string; note?: string }[]) =>
+        assets.startDesign({ assetId: prop.id, userId, references });
+      await expect(design([{ fileId: othersImage, role: "identity" }])).rejects.toThrow(
+        /not available/,
+      );
+      await expect(design([{ fileId: audio, role: "identity" }])).rejects.toThrow(/png/);
+      await expect(design([{ fileId: image, role: "face" }])).rejects.toThrow(/what each photo/);
       // A file that was never confirmed (pending).
       const [pending] = await getDb()
         .insert(s.file)
@@ -365,37 +473,131 @@ describe.skipIf(!reachable)(
           status: "pending",
         })
         .returning({ id: s.file.id });
+      await expect(design([{ fileId: pending?.id ?? "", role: "identity" }])).rejects.toThrow(
+        /not available/,
+      );
+      // An image upload no longer becomes the look.
       await expect(
-        assets.startLookFromUpload({ assetId: prop.id, userId, fileId: pending?.id ?? "" }),
-      ).rejects.toThrow(/not available/);
+        assets.startLookFromUpload({ assetId: prop.id, userId, fileId: image }),
+      ).rejects.toThrow(/role/);
 
-      const image = await fixtures.storedImage(userId, projectId);
-      const uploaded = await assets.startLookFromUpload({
-        assetId: prop.id,
-        userId,
-        fileId: image,
-      });
-      expect(uploaded).toMatchObject({ status: "in_review", source: "uploaded", fileId: image });
+      const look = await design([{ fileId: image, role: "identity", note: "the red handle" }]);
+      expect(look?.references).toEqual([
+        { fileId: image, role: "identity", note: "the red handle" },
+      ]);
+      const produced = await produceLook(look?.id ?? "");
+      expect(produced.spec).toMatchObject({ generator: "prop-generator", aspectRatio: "3:4" });
+      const gen = await generationRow(produced.generationId ?? "");
+      expect(gen.referenceFileIds).toEqual([image]);
+      expect(gen.params).toMatchObject({ aspectRatio: "3:4" });
+
+      // "Drop the photo": the change is made from words alone.
       expect(
         await assets.submitLookReview({
-          lookId: uploaded?.id ?? "",
+          lookId: produced.id,
           userId,
           decision: "rejected",
-          note: "Wrong lantern.",
+          selections: [{ code: "AP02", customText: "dark green" }],
+          references: [],
         }),
-      ).toBe("needs_image");
-      expect((await detail(prop.id, userId)).stage).toBe("needs_image");
+      ).toBe("generating");
+      const fixed = await produceLook((await detail(prop.id, userId)).looks[0]?.id ?? "");
+      expect(fixed.references).toEqual([]);
+      expect(fixed.spec?.changesIdentity).toBe(true);
+      expect((await generationRow(fixed.generationId ?? "")).referenceFileIds).toEqual([]);
+      expect(await billing.getBalance(userId)).toBe(50 - 8);
+    });
 
-      const image2 = await fixtures.storedImage(userId);
-      const again = await assets.startLookFromUpload({ assetId: prop.id, userId, fileId: image2 });
+    it("a prop the designer cannot place asks one question; the answer designs it", async () => {
+      const { userId, projectId } = await setup(50);
+      const device = await assets.addAsset({ projectId, userId, kind: "prop", name: "The device" });
+      const look = await assets.startDesign({ assetId: device?.id ?? "", userId });
+      const asked = await produceLook(look?.id ?? "");
+      expect(asked.status).toBe("needs_input");
+      expect(asked.generationId).toBeNull();
+      const d = await detail(device?.id ?? "", userId);
+      expect(d.stage).toBe("needs_answer");
+      const question = d.looks[0]?.spec?.questions.find((q) => q.blocking);
+      expect(question).toBeDefined();
+      await expect(
+        assets.startDesign({ assetId: device?.id ?? "", userId, prompt: "A radio" }),
+      ).rejects.toThrow(/question first/);
+      await expect(
+        assets.answerLookQuestion({ lookId: asked.id, userId, answers: {} }),
+      ).rejects.toThrow(/I’m not sure/);
       expect(
-        await assets.submitLookReview({ lookId: again?.id ?? "", userId, decision: "accepted" }),
-      ).toBe("building_sheet");
-      const sheet = (await detail(prop.id, userId)).sheets[0];
-      const produced = await produceSheet(sheet?.id ?? "");
-      expect(produced.status).toBe("in_review");
-      expect((await generationRow(produced.generationId ?? "")).referenceFileIds).toEqual([image2]);
-      expect(await billing.getBalance(userId)).toBe(50 - 6);
+        await assets.answerLookQuestion({
+          lookId: asked.id,
+          userId,
+          answers: { [question?.id ?? ""]: "ai_decides" },
+        }),
+      ).toBe("generating");
+      const next = (await detail(device?.id ?? "", userId)).looks[0];
+      expect(next).toMatchObject({
+        parentId: asked.id,
+        clarifyAnswers: { [question?.id ?? ""]: question?.default },
+      });
+      expect((await lookRow(asked.id)).status).toBe("superseded");
+      const designed = await produceLook(next?.id ?? "");
+      expect(designed.status).toBe("in_review");
+      expect(designed.prompt).toContain(question?.default ?? "");
+    });
+
+    it("a prop standing in a location waits for its Hero, then is designed with it", async () => {
+      const { userId, projectId } = await setup(100);
+      const cabin = await add(projectId, userId, "location", "Ferry Cabin");
+      const locket = await add(projectId, userId, "prop", "Brass locket");
+      await getDb()
+        .update(s.asset)
+        .set({ details: { locationIds: ["ferry cabin"] } })
+        .where(eq(s.asset.id, locket.id));
+      const cabinLook = await assets.startLookFromPrompt({
+        assetId: cabin.id,
+        userId,
+        prompt: "A cramped cabin",
+      });
+      const propLook = await assets.startLookFromPrompt({
+        assetId: locket.id,
+        userId,
+        prompt: "A small locket",
+      });
+      expect(propLook).toMatchObject({ status: "pending", started: false });
+      expect((await detail(locket.id, userId)).waitingFor).toEqual(["Ferry Cabin"]);
+      const cabinDone = await produceLook(cabinLook?.id ?? "");
+      expect((await detail(locket.id, userId)).waitingFor).toEqual(["Ferry Cabin"]);
+      // Waiting can be skipped: that prop is designed without the Hero.
+      const lantern = await add(projectId, userId, "prop", "Lantern");
+      await getDb()
+        .update(s.asset)
+        .set({ details: { locationIds: ["Ferry Cabin"] } })
+        .where(eq(s.asset.id, lantern.id));
+      const lanternLook = await assets.startLookFromPrompt({
+        assetId: lantern.id,
+        userId,
+        prompt: "An oil lantern",
+      });
+      expect(await assets.startWithoutWaiting({ assetId: lantern.id, userId })).toBe("generating");
+      expect((await produceLook(lanternLook?.id ?? "")).status).toBe("in_review");
+      await expect(assets.startWithoutWaiting({ assetId: lantern.id, userId })).rejects.toThrow(
+        /already started/,
+      );
+      await assets.submitLookReview({
+        lookId: cabinDone.id,
+        userId,
+        decision: "accepted",
+        confirmedFields: assets.fieldsToConfirm(cabinDone.spec),
+      });
+      expect((await detail(locket.id, userId)).waitingFor).toEqual([]);
+      // Accepting the cabin queued the prop's job (here it is run by hand).
+      const designed = await produceLook(propLook?.id ?? "");
+      expect(designed.status).toBe("in_review");
+      const [run] = await getDb()
+        .select({ input: s.damiRun.input })
+        .from(s.damiRun)
+        .where(eq(s.damiRun.id, designed.damiRunId ?? ""));
+      expect(run?.input).toMatchObject({
+        linkedLocations: [{ name: "Ferry Cabin", heroFileId: cabinDone.fileId }],
+      });
     });
 
     it("voices: a recording is accepted on upload, needs no sheet, and is never generated", async () => {
@@ -453,7 +655,7 @@ describe.skipIf(!reachable)(
         .select({ id: s.damiRun.id })
         .from(s.damiRun)
         .where(
-          and(eq(s.damiRun.projectId, projectId), eq(s.damiRun.damiKey, "asset-prompt-writer")),
+          and(eq(s.damiRun.projectId, projectId), eq(s.damiRun.damiKey, "character-generator")),
         );
       expect(runs).toHaveLength(1); // the stored prompt was reused
       expect(await billing.getBalance(userId)).toBe(6);
@@ -517,10 +719,6 @@ describe.skipIf(!reachable)(
       await expect(
         assets.startLookFromPrompt({ assetId: tomas.id, userId, prompt: "Another man" }),
       ).rejects.toThrow(/still being worked on/);
-      const image = await fixtures.storedImage(userId);
-      await expect(
-        assets.startLookFromUpload({ assetId: tomas.id, userId, fileId: image }),
-      ).rejects.toThrow(/still being worked on/);
 
       await assetLookGenerateHandler.run({ lookId: look?.id ?? "" }, jobContext());
       await assetLookGenerateHandler.run({ lookId: look?.id ?? "" }, jobContext());
@@ -532,7 +730,7 @@ describe.skipIf(!reachable)(
       expect(await billing.getBalance(userId)).toBe(46);
       await generationRunHandler.run({ generationId: gens[0]?.id ?? "" }, jobContext());
       await expect(
-        assets.startLookFromUpload({ assetId: tomas.id, userId, fileId: image }),
+        assets.startLookFromPrompt({ assetId: tomas.id, userId, prompt: "Another man" }),
       ).rejects.toThrow(/Review the current image/);
 
       await assets.submitLookReview({ lookId: look?.id ?? "", userId, decision: "accepted" });
@@ -543,7 +741,7 @@ describe.skipIf(!reachable)(
       await produceSheet(sheet?.id ?? "");
       await assets.submitSheetReview({ sheetId: sheet?.id ?? "", userId, decision: "accepted" });
       await expect(
-        assets.startLookFromUpload({ assetId: tomas.id, userId, fileId: image }),
+        assets.startLookFromPrompt({ assetId: tomas.id, userId, prompt: "Another man" }),
       ).rejects.toThrow(/Replace it/);
 
       // Replace: start over.
@@ -551,7 +749,10 @@ describe.skipIf(!reachable)(
       const replaced = await detail(tomas.id, userId);
       expect(replaced.looks[0]?.status).toBe("superseded");
       expect(replaced.sheets[0]?.status).toBe("superseded");
-      const fresh = await assets.startLookFromUpload({ assetId: tomas.id, userId, fileId: image });
+      const fresh = await produceLook(
+        (await assets.startLookFromPrompt({ assetId: tomas.id, userId, prompt: "A man" }))?.id ??
+          "",
+      );
       expect(fresh).toMatchObject({ status: "in_review", versionNumber: 2 });
 
       // Removed assets cannot be worked on.
@@ -727,8 +928,10 @@ describe.skipIf(!reachable)(
         /0 of 3 are ready/,
       );
 
-      const image = await fixtures.storedImage(userId);
-      const look = await assets.startLookFromUpload({ assetId: tomas.id, userId, fileId: image });
+      const look = await produceLook(
+        (await assets.startLookFromPrompt({ assetId: tomas.id, userId, prompt: "A man" }))?.id ??
+          "",
+      );
       await assets.submitLookReview({ lookId: look?.id ?? "", userId, decision: "accepted" });
       const sheet = (await detail(tomas.id, userId)).sheets[0];
       await produceSheet(sheet?.id ?? "");

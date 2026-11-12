@@ -1,0 +1,22 @@
+{
+  "project": {
+    "style": "Realistic",
+    "genre": "Drama",
+    "format": "movie",
+    "orientation": "landscape",
+    "eraSetting": "A Baltic harbour town in the 1970s"
+  },
+  "character": {
+    "name": "Mara",
+    "role": "lead",
+    "description": "MARA (60s), a grey braid, keeps the ferry's lamp.",
+    "details": {
+      "age": "In their fifties or sixties",
+      "hair": "A long grey braid",
+      "outfit": "A navy wool coat over a fisherman's sweater"
+    },
+    "facts": ["age: 60s"]
+  },
+  "referenceImages": [{ "fileId": "00000000-0000-4000-8000-000000000101", "role": "face" }],
+  "userNotes": "She should look tired but proud."
+}

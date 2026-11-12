@@ -3,15 +3,17 @@
  * the one definition every service (cards, detail, overview, completion) uses.
  *
  * Image assets: needs_image → generating → look_review → building_sheet → sheet_review → ready,
- * plus failed (the look or the sheet could not be produced). Voices: needs_recording → ready (a
+ * plus needs_answer (the designer asked a question it cannot design without) and failed (the look
+ * or the sheet could not be produced). Voices: needs_recording → ready (a
  * recording is accepted on upload and has no sheet).
  */
-import type { AssetKind, LookSource, LookStatus } from "@/server/db/schema";
+import type { AssetKind, AssetLookStatus, LookSource, LookStatus } from "@/server/db/schema";
 
 export const ASSET_STAGES = [
   "needs_image",
   "needs_recording",
   "generating",
+  "needs_answer",
   "look_review",
   "building_sheet",
   "sheet_review",
@@ -20,7 +22,7 @@ export const ASSET_STAGES = [
 ] as const;
 export type AssetStage = (typeof ASSET_STAGES)[number];
 
-export type StageLook = { id: string; status: LookStatus; source: LookSource };
+export type StageLook = { id: string; status: AssetLookStatus; source: LookSource };
 export type StageSheet = { lookId: string; status: LookStatus };
 
 export type AssetState = {
@@ -54,6 +56,8 @@ export function deriveAssetState(
   switch (latestLook.status) {
     case "pending":
       return state("generating");
+    case "needs_input":
+      return state("needs_answer");
     case "in_review":
       return state("look_review");
     case "failed":

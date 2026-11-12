@@ -227,7 +227,14 @@ export type DamiStylePatch = Partial<Pick<ProjectStyle, "lookLine" | "styleDescr
  * with the whole style (the event log keeps every version). Returns false when the project has no
  * style or is gone.
  */
-export async function mergeDamiStyle(projectId: string, patch: DamiStylePatch): Promise<boolean> {
+export async function mergeDamiStyle(
+  projectId: string,
+  patch: DamiStylePatch,
+  options: {
+    /** Only fill fields the style does not have yet (the first character's descriptor). */
+    onlyMissing?: boolean;
+  } = {},
+): Promise<boolean> {
   if (!uuidSchema.safeParse(projectId).success) return false;
   return getDb().transaction(async (tx) => {
     const [existing] = await tx
@@ -236,6 +243,12 @@ export async function mergeDamiStyle(projectId: string, patch: DamiStylePatch): 
       .where(and(eq(project.id, projectId), notArchived))
       .for("update");
     if (!existing?.style) return false;
+    const current = existing.style;
+    const fields = options.onlyMissing
+      ? (Object.keys(patch) as (keyof DamiStylePatch)[]).filter((k) => current[k] === undefined)
+      : (Object.keys(patch) as (keyof DamiStylePatch)[]);
+    if (fields.length === 0) return false;
+    patch = Object.fromEntries(fields.map((k) => [k, patch[k]])) as DamiStylePatch;
     const style = validateStyle({ ...existing.style, ...patch });
     await tx.update(project).set({ style }).where(eq(project.id, existing.id));
     await tx.insert(projectEvent).values({

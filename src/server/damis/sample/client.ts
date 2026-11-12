@@ -11,12 +11,10 @@ import type {
 } from "../framework/client";
 import { SAMPLE_MODEL } from "../framework/mode";
 import { sampleAssetDetector } from "./asset-detector";
-import {
-  sampleAssetFixer,
-  sampleAssetPromptWriter,
-  sampleSheetFixer,
-  sampleSheetGenerator,
-} from "./reference";
+import { sampleCharacterGenerator } from "./character-generator";
+import { sampleLocationGenerator } from "./location-generator";
+import { samplePropGenerator } from "./prop-generator";
+import { sampleSheetFixer, sampleSheetGenerator } from "./reference";
 import { sampleBlockReviser, sampleTakeFixer, sampleTextBlocks } from "./production";
 import { samplePromptSectioner } from "./prompt-sectioner";
 import { sampleScriptChecker } from "./script-checker";
@@ -33,8 +31,9 @@ export const SAMPLE_GENERATORS: Readonly<Record<string, (input: unknown) => unkn
   "script-reviser": sampleScriptReviser,
   "asset-detector": sampleAssetDetector,
   "prompt-sectioner": samplePromptSectioner,
-  "asset-prompt-writer": sampleAssetPromptWriter,
-  "asset-fixer": sampleAssetFixer,
+  "character-generator": sampleCharacterGenerator,
+  "location-generator": sampleLocationGenerator,
+  "prop-generator": samplePropGenerator,
   "sheet-generator": sampleSheetGenerator,
   "sheet-fixer": sampleSheetFixer,
   "text-blocks": sampleTextBlocks,

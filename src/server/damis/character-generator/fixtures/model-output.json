@@ -1,0 +1,23 @@
+{
+  "character_name": "Mara",
+  "mode": "reference",
+  "image_prompt": "A realistic live-action look with natural proportions, real skin texture and photographic depth character reference board of Mara on one 16:9 landscape canvas, set in a quiet, characteristic corner of the story's world (A Baltic harbour town in the 1970s), in soft daylight. The left third holds a close-up portrait of the face and upper shoulders, facing the camera, the entire face fully visible and sharp. The right two thirds hold two full-body views of the same character side by side, head to toe with both feet in frame: a front view at a slight three-quarter angle and a back view at a slight three-quarter angle, in a neutral standing pose with relaxed arms. The character: In their fifties or sixties, presenting as the script implies, hair: A long grey braid, an average build, wearing A navy wool coat over a fisherman's sweater, a calm, attentive manner. From the script: MARA (60s), a grey braid, keeps the ferry's lamp.. Use the first reference image as the exact facial identity of the character, keeping its face shape, skin tone and hairstyle in all three views. One continuous backdrop of a quiet, characteristic corner of the story's world (A Baltic harbour town in the 1970s), in soft daylight behind all three views, lit softly so the face, outfit and colours stay readable, uncluttered where the character stands. Rendered entirely as realistic live-action look with natural proportions, real skin texture and photographic depth. No text, labels, borders, grid lines, watermarks or extra people.",
+  "aspect_ratio": "16:9",
+  "environment_used": "a quiet, characteristic corner of the story's world (A Baltic harbour town in the 1970s), in soft daylight",
+  "style_used": "realistic live-action look with natural proportions, real skin texture and photographic depth",
+  "style_source": "project",
+  "reference_order": [
+    {
+      "index": 1,
+      "role": "face"
+    }
+  ],
+  "applied_fixes": [],
+  "assumptions": [
+    "Chose presenting as the script implies for the gender.",
+    "Chose an average build for the body.",
+    "Chose a calm, attentive manner for the personality.",
+    "Placed the character in a quiet, characteristic corner of the story's world (A Baltic harbour town in the 1970s), in soft daylight."
+  ],
+  "warnings": ["The face photo shows the hair; it wins over the written hair description."]
+}

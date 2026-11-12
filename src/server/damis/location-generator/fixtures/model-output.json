@@ -1,0 +1,291 @@
+{
+  "asset_id": "Ferry Cabin",
+  "location_name": "Ferry Cabin",
+  "source_mode": "prompt_only",
+  "narrative_analysis": {
+    "dramatic_core": "Ferry Cabin holds the scene's turning point.",
+    "location_role": "It stages the confrontation.",
+    "events": [
+      {
+        "scene_number": 1,
+        "what_happens": "Mara holds a brass locket. Jonas stands by the door.",
+        "characters_present": 2
+      }
+    ],
+    "spatial_demands": [
+      {
+        "demand": "A clear entrance on the left",
+        "serves": "Entrances and exits"
+      }
+    ],
+    "movement_paths": ["From the door to the table"],
+    "emotional_arc": "From quiet to tense",
+    "mood_target": "night"
+  },
+  "spec_fields": [
+    {
+      "group": "Identity",
+      "field": "Type",
+      "value": "A cramped cabin on the night ferry.",
+      "status": "confirmed",
+      "source": "script",
+      "critical": false
+    },
+    {
+      "group": "Identity",
+      "field": "Inside or outside",
+      "value": "Interior",
+      "status": "confirmed",
+      "source": "script",
+      "critical": false
+    },
+    {
+      "group": "Identity",
+      "field": "Narrative role",
+      "value": "Where the scene's turn happens",
+      "status": "confirmed",
+      "source": "script",
+      "critical": false
+    },
+    {
+      "group": "Spatial",
+      "field": "Form and size",
+      "value": "Rectangular, about 6 m wide, 5 m deep, 3 m high",
+      "status": "inferred",
+      "source": "design",
+      "critical": true
+    },
+    {
+      "group": "Spatial",
+      "field": "Openings",
+      "value": "Door in the west wall, window in the north wall",
+      "status": "inferred",
+      "source": "design",
+      "critical": true
+    },
+    {
+      "group": "Visual",
+      "field": "Era",
+      "value": "Contemporary",
+      "status": "inferred",
+      "source": "genre_style",
+      "critical": false
+    },
+    {
+      "group": "Visual",
+      "field": "Materials and colours",
+      "value": "Riveted steel painted cream, worn teak",
+      "status": "confirmed",
+      "source": "user",
+      "critical": false
+    },
+    {
+      "group": "Environment",
+      "field": "Base light",
+      "value": "night",
+      "status": "confirmed",
+      "source": "script",
+      "critical": false
+    },
+    {
+      "group": "Continuity",
+      "field": "Fixed anchors",
+      "value": "The door, the window and the long table",
+      "status": "inferred",
+      "source": "design",
+      "critical": true
+    }
+  ],
+  "dna": {
+    "geometry": "Rectangular room, flat ceiling",
+    "fixed_anchors": [
+      {
+        "id": "door_w",
+        "name": "Door",
+        "where": "W wall, position 30%",
+        "status": "inferred"
+      },
+      {
+        "id": "window_n",
+        "name": "Window",
+        "where": "N wall, position 50%",
+        "status": "inferred"
+      },
+      {
+        "id": "table",
+        "name": "Long table",
+        "where": "Centre of the room",
+        "status": "inferred"
+      }
+    ],
+    "visual_identity": {
+      "era": "Contemporary",
+      "architectural_style": "Plain vernacular",
+      "materials": ["Riveted steel painted cream", "worn teak"],
+      "base_palette": ["warm grey", "umber", "off-white"],
+      "wear_level": "Lived in",
+      "scale": "Human scale, one room"
+    },
+    "continuity_constraints": [
+      "No additional doors, windows or fixed structures may be invented in later views."
+    ],
+    "mutable_elements": ["Time of day", "Light intensity", "Weather", "Movable objects"]
+  },
+  "layout": {
+    "space_kind": "interior",
+    "shape": "rectangle",
+    "approx_size": {
+      "width_m": 6,
+      "depth_m": 5,
+      "height_m": 3
+    },
+    "zones": [
+      {
+        "id": "centre",
+        "name": "Centre",
+        "area": "Middle of the room"
+      }
+    ],
+    "openings": [
+      {
+        "id": "door_w",
+        "type": "door",
+        "side": "W",
+        "position_pct": 30,
+        "size": "0.9 x 2.1 m",
+        "state": "closed",
+        "status": "inferred"
+      },
+      {
+        "id": "window_n",
+        "type": "window",
+        "side": "N",
+        "position_pct": 50,
+        "size": "1.4 x 1.6 m",
+        "state": "closed",
+        "status": "inferred"
+      }
+    ],
+    "key_objects": [
+      {
+        "id": "table",
+        "name": "Long table",
+        "side_or_zone": "centre",
+        "position_pct": null,
+        "size": "2.4 x 0.9 m",
+        "fixed": true,
+        "status": "inferred"
+      }
+    ],
+    "cameras": [
+      {
+        "id": "hero_wide",
+        "view": "hero_wide",
+        "stands_at": "S",
+        "looks_toward": "N"
+      },
+      {
+        "id": "reverse_wide",
+        "view": "reverse_wide",
+        "stands_at": "N",
+        "looks_toward": "S"
+      },
+      {
+        "id": "corner_a",
+        "view": "corner_a",
+        "stands_at": "SW",
+        "looks_toward": "NE"
+      },
+      {
+        "id": "corner_b",
+        "view": "corner_b",
+        "stands_at": "SE",
+        "looks_toward": "NW"
+      },
+      {
+        "id": "side_west",
+        "view": "side_west",
+        "stands_at": "W",
+        "looks_toward": "E"
+      }
+    ],
+    "paths": [
+      {
+        "from": "door_w",
+        "to": "centre",
+        "note": "The way in"
+      }
+    ]
+  },
+  "coverage_plan": {
+    "mode": "lock",
+    "views": [
+      {
+        "view_id": "hero_wide",
+        "name": "Hero Wide",
+        "camera_id": "hero_wide",
+        "purpose": "The master view of the room.",
+        "required": true
+      },
+      {
+        "view_id": "reverse_wide",
+        "name": "Reverse Wide",
+        "camera_id": "reverse_wide",
+        "purpose": "The wall behind the Hero camera.",
+        "required": true
+      },
+      {
+        "view_id": "corner_a",
+        "name": "Corner A",
+        "camera_id": "corner_a",
+        "purpose": "North and east walls together.",
+        "required": false
+      },
+      {
+        "view_id": "corner_b",
+        "name": "Corner B",
+        "camera_id": "corner_b",
+        "purpose": "West and north walls together.",
+        "required": false
+      },
+      {
+        "view_id": "side_west",
+        "name": "Side West",
+        "camera_id": "side_west",
+        "purpose": "The east wall straight on.",
+        "required": false
+      },
+      {
+        "view_id": "detail_1",
+        "name": "Door",
+        "camera_id": "hero_wide",
+        "purpose": "The way in, which the story uses.",
+        "required": false
+      },
+      {
+        "view_id": "detail_2",
+        "name": "Window",
+        "camera_id": "hero_wide",
+        "purpose": "The main light source.",
+        "required": false
+      }
+    ]
+  },
+  "hero_wide": {
+    "mode": "generate",
+    "image_prompt": "Hero wide view of Ferry Cabin from the middle of the south wall looking north, one continuous 16:9 frame. A cramped cabin on the night ferry.. The north wall fills the centre with a tall window at its middle; the west wall on the left has a wooden door in its near third; the east wall on the right is plain plaster; a long table stands in the centre. Materials and colours: Riveted steel painted cream, worn teak. Light and atmosphere: night, structure clear of deep shadow. Rendered as Realistic noir look with hard-edged shadow shapes and a restrained palette. Empty of people and animals; no text, labels, panels or watermarks.",
+    "aspect_ratio": "16:9",
+    "reference_order": [],
+    "visible_anchor_ids": ["door_w", "window_n", "table"],
+    "hidden_anchor_ids": []
+  },
+  "location_summary": "Ferry Cabin: A cramped cabin on the night ferry., Riveted steel painted cream, worn teak, night.",
+  "assumptions": [
+    "Designed it as one rectangular room about 6 by 5 metres.",
+    "The wall behind the Hero camera is proposed design: no source shows it."
+  ],
+  "warnings": [],
+  "style_used": "Realistic noir look with hard-edged shadow shapes and a restrained palette",
+  "style_source": "project_style",
+  "applied_fixes": []
+}

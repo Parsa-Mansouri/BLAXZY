@@ -13,15 +13,22 @@ import { and, asc, eq, inArray, isNull, max, ne } from "drizzle-orm";
 import { z } from "zod";
 import { rewriteAssetRefs } from "@/server/blocks";
 import {
-  ASSET_QUESTIONS,
-  formatAssetRef,
-  uniqueName,
+  AI_DECIDES,
+  buildFixRequests,
   cleanAssetName,
+  DESIGNER_CATALOGS,
+  designerFor,
+  findReviewOption,
+  fixRequestCodes,
+  formatAssetRef,
+  getReviewCatalog,
   MAX_ASSET_NAME,
-  LOOK_ISSUE_CODES,
+  ReviewCatalogError,
   SHEET_ISSUE_CODES,
-  lookIssueFits,
   sheetIssueFits,
+  uniqueName,
+  type FixSelection,
+  type GuidedQuestion,
 } from "@/server/damis";
 import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
 import {
@@ -33,6 +40,9 @@ import {
   review,
   WIZARD_STAGES,
   type AssetKind,
+  type LookReference,
+  type LookSpecField,
+  type ReviewFixRequest,
   type WizardStage,
 } from "@/server/db/schema";
 import {
@@ -44,6 +54,15 @@ import {
 } from "@/server/jobs";
 import { advanceStage, canOpenStage } from "@/server/projects";
 import { FILE_PURPOSES, getOwnedFileInfo, type FilePurpose } from "@/server/storage";
+import {
+  checkReferences,
+  locationsInFlight,
+  questionsFor,
+  referenceInputSchema,
+  untouched,
+  wakeWaitingLooks,
+  type ReferenceInput,
+} from "./designs";
 import {
   latestByAsset,
   listLookViews,
@@ -73,6 +92,12 @@ export type AssetDetail = {
   sheets: SheetView[];
   /** A look or sheet is being produced; nothing new can be started. */
   busy: boolean;
+  /** The guided questions still to ask (the designer's skip logic applied). */
+  questions: GuidedQuestion[];
+  /** A prop waiting for these locations' Heroes before it is designed (by name). */
+  waitingFor: string[];
+  /** Images sent back in a row since the last accepted one (for the "describe it" hint). */
+  rejectedInARow: number;
 };
 
 export type PreProductionOverview = {
@@ -84,9 +109,9 @@ export type PreProductionOverview = {
   canComplete: boolean;
 };
 
-/** Longest prompt a user may write for a look (the asset-prompt-writer's limit). */
+/** Longest prompt a user may write for a look (the designers' limit). */
 export const MAX_LOOK_PROMPT_LENGTH = 4000;
-/** Longest answer to one guided question (the asset-prompt-writer's limit). */
+/** Longest answer to one guided question (the designers' limit). */
 export const MAX_GUIDED_ANSWER_LENGTH = 1000;
 export const MAX_REVIEW_NOTE_LENGTH = 2000;
 export const MAX_ASSET_NAME_LENGTH = MAX_ASSET_NAME;
@@ -111,28 +136,37 @@ const assetRefInput = z.object({ assetId: z.string(), userId: userIdSchema });
 
 const uploadInput = assetRefInput.extend({ fileId: z.string() });
 
-const promptInput = assetRefInput.extend({
-  prompt: z
-    .string({ error: "Describe the image you want." })
-    .trim()
-    .min(3, "Describe the image you want.")
-    .max(
-      MAX_LOOK_PROMPT_LENGTH,
-      `Keep the description under ${MAX_LOOK_PROMPT_LENGTH} characters.`,
-    ),
-});
+const promptSchema = z
+  .string({ error: "Describe the image you want." })
+  .trim()
+  .min(3, "Describe the image you want.")
+  .max(MAX_LOOK_PROMPT_LENGTH, `Keep the description under ${MAX_LOOK_PROMPT_LENGTH} characters.`);
 
-const guidedInput = assetRefInput.extend({
-  answers: z.record(
-    z.string().max(64, "That is not one of the questions."),
-    z
-      .string({ error: "Answers must be text." })
-      .max(
-        MAX_GUIDED_ANSWER_LENGTH,
-        `Keep each answer under ${MAX_GUIDED_ANSWER_LENGTH} characters.`,
-      ),
-    { error: "Answer the questions first." },
-  ),
+const promptInput = assetRefInput.extend({ prompt: promptSchema });
+
+const answersSchema = z.record(
+  z.string().max(64, "That is not one of the questions."),
+  z
+    .string({ error: "Answers must be text." })
+    .max(
+      MAX_GUIDED_ANSWER_LENGTH,
+      `Keep each answer under ${MAX_GUIDED_ANSWER_LENGTH} characters.`,
+    ),
+  { error: "Answer the questions first." },
+);
+
+const guidedInput = assetRefInput.extend({ answers: answersSchema });
+
+const referencesSchema = z.array(referenceInputSchema).max(20);
+
+/**
+ * A new design: any mix of the user's words, guided answers and reference photos. With none of
+ * them it is "Design it for me" (the designer works from the script and the project).
+ */
+const designInput = assetRefInput.extend({
+  prompt: promptSchema.optional(),
+  answers: answersSchema.optional(),
+  references: referencesSchema.optional(),
 });
 
 const noteSchema = z
@@ -141,15 +175,37 @@ const noteSchema = z
   .max(MAX_REVIEW_NOTE_LENGTH, `Keep the note under ${MAX_REVIEW_NOTE_LENGTH} characters.`)
   .optional();
 
+const fixSelectionSchema = z.object({
+  code: z.string().trim().min(1).max(40),
+  value: z.string().trim().max(1000).optional(),
+  customText: z.string().trim().max(MAX_REVIEW_NOTE_LENGTH).optional(),
+  viewId: z.string().trim().max(40).optional(),
+});
+
+const specEditSchema = z.object({
+  field: z.string().trim().min(1).max(200),
+  value: z
+    .string()
+    .trim()
+    .min(1, "Write the new value, or leave the field as it is.")
+    .max(MAX_GUIDED_ANSWER_LENGTH, `Keep each value under ${MAX_GUIDED_ANSWER_LENGTH} characters.`),
+});
+
 const lookReviewInput = z.object({
   lookId: z.string(),
   userId: userIdSchema,
   decision: z.enum(["accepted", "rejected"], { error: "Accept or reject the image." }),
-  issueCodes: z
-    .array(z.enum(LOOK_ISSUE_CODES, { error: "Pick issues from the list." }))
-    .max(LOOK_ISSUE_CODES.length)
-    .optional(),
+  /** Rejected: the catalog options picked (with chips, text and the view they are about). */
+  selections: z.array(fixSelectionSchema).max(40).optional(),
   note: noteSchema,
+  /** Rejected: the next version's photos (a photo replaced or dropped); default: the same. */
+  references: referencesSchema.optional(),
+  /** Rejected: values the user wrote on the spec card. */
+  specEdits: z.array(specEditSchema).max(40).optional(),
+  /** Rejected: answers to the designer's non-blocking questions. */
+  clarifyAnswers: answersSchema.optional(),
+  /** Accepted: the critical inferred spec fields the user checked. */
+  confirmedFields: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
 });
 
 const sheetReviewInput = z.object({
@@ -308,9 +364,15 @@ async function markEnqueueFailed(kind: "look" | "sheet", id: string): Promise<vo
   }
 }
 
-/** Enqueues the job that produces a pending look (a fix when it answers a rejected parent). */
-async function enqueueLookJob(look: Pick<LookRow, "id" | "parentId">): Promise<void> {
-  const job = look.parentId ? assetLookFix : assetLookGenerate;
+/**
+ * Enqueues the job that produces a pending look: a fix when it answers a rejected parent (the
+ * handler reads the parent and its review either way; the job name is for the logs).
+ */
+async function enqueueLookJob(
+  look: Pick<LookRow, "id" | "parentId">,
+  mode: "generate" | "fix" = look.parentId ? "fix" : "generate",
+): Promise<void> {
+  const job = mode === "fix" ? assetLookFix : assetLookGenerate;
   try {
     await enqueue(job, { lookId: look.id });
   } catch (error) {
@@ -329,14 +391,18 @@ async function enqueueSheetJob(sheet: Pick<SheetRow, "id" | "parentId">): Promis
   }
 }
 
-/** Checks guided answers against the asset kind's questions; returns the trimmed, non-empty ones. */
+/**
+ * Checks guided answers against the questions still asked for this asset (`questions`); returns
+ * the trimmed, non-empty ones. A choice may be answered in the user's own words ("Not what you
+ * have in mind?"), and any question with `ai_decides` ("I'm not sure"); only optional questions
+ * may be left empty.
+ */
 export function validateGuidedAnswers(
-  kind: AssetKind,
+  questions: readonly GuidedQuestion[],
   answers: Record<string, string>,
 ): Record<string, string> {
-  const questions = ASSET_QUESTIONS[kind];
   if (questions.length === 0) {
-    throw new AssetInputError("This kind of asset has no questions. Upload a file instead.");
+    throw new AssetInputError("This asset has no questions. Describe it or add photos instead.");
   }
   const byId = new Map(questions.map((q) => [q.id, q]));
   for (const id of Object.keys(answers)) {
@@ -346,16 +412,12 @@ export function validateGuidedAnswers(
   for (const question of questions) {
     const value = (answers[question.id] ?? "").trim();
     if (value.length === 0) {
-      if (!question.optional) throw new AssetInputError(`Answer “${question.label}”.`);
+      if (!question.optional) {
+        throw new AssetInputError(`Answer “${question.label}”, or choose I’m not sure.`);
+      }
       continue;
     }
-    if (
-      question.kind === "choice" &&
-      !(question.options ?? []).some((option) => option.value === value)
-    ) {
-      throw new AssetInputError(`Pick one of the offered answers for “${question.label}”.`);
-    }
-    result[question.id] = value;
+    result[question.id] = value === AI_DECIDES ? AI_DECIDES : value;
   }
   return result;
 }
@@ -513,7 +575,23 @@ export async function getAssetDetail(assetId: string, userId: string): Promise<A
   const looks = await listLookViews(db, assetId);
   const sheets = await listSheetViews(db, assetId);
   const state = deriveAssetState(row.asset.kind, looks[0] ?? null, sheets[0] ?? null);
-  return { asset: row.asset, stage: state.stage, looks, sheets, busy: state.busy };
+  const latest = looks[0];
+  const waitingFor =
+    latest && latest.status === "pending" && !latest.started
+      ? await locationsInFlight(db, row.asset)
+      : [];
+  const accepted = looks.findIndex((l) => l.status === "accepted");
+  const since = accepted === -1 ? looks : looks.slice(0, accepted);
+  return {
+    asset: row.asset,
+    stage: state.stage,
+    looks,
+    sheets,
+    busy: state.busy,
+    questions: questionsFor(row.asset, row.project.style),
+    waitingFor,
+    rejectedInARow: since.filter((l) => l.status === "rejected").length,
+  };
 }
 
 /* ------------------------------------------------------------------------------------------ */
@@ -534,6 +612,8 @@ async function assertCanStartLook(tx: DbTx, row: AssetRow): Promise<void> {
       break;
     case "look_review":
       throw new AssetInputError("Review the current image first, then try another one.");
+    case "needs_answer":
+      throw new AssetInputError("Answer the designer’s question first.");
     default:
       break;
   }
@@ -541,9 +621,9 @@ async function assertCanStartLook(tx: DbTx, row: AssetRow): Promise<void> {
 }
 
 /**
- * Uses an uploaded file as the asset's look. Image assets: a ready image the user owns, put in
- * review at once. Voices: a ready audio file, accepted at once (no sheet); it replaces any
- * previous recording.
+ * Uses an uploaded recording as a voice's look: a ready audio file, accepted at once (no sheet);
+ * it replaces any previous recording. Image assets take photos as references of a design
+ * (`startDesign`) instead: the designers read them, they never become the look directly.
  */
 export async function startLookFromUpload(input: {
   assetId: string;
@@ -561,6 +641,11 @@ export async function startLookFromUpload(input: {
     const locked = await lockAsset(tx, assetId, userId);
     if (!locked) return null;
     const { asset: row } = locked;
+    if (row.kind !== "voice") {
+      throw new AssetInputError(
+        "Photos are references for the design: add them with a role, then create the image.",
+      );
+    }
     if (file.projectId !== null && file.projectId !== row.projectId) throw notUsable;
     const rule = uploadRule(row.kind);
     const allowed: Readonly<Record<string, readonly string[]>> = FILE_PURPOSES[rule.purpose].types;
@@ -571,37 +656,20 @@ export async function startLookFromUpload(input: {
       throw new AssetInputError(rule.message);
     }
     await assertCanStartLook(tx, row);
-    const now = new Date();
-    if (row.kind === "voice") {
-      await tx
-        .update(assetLook)
-        .set({ status: "superseded" })
-        .where(and(eq(assetLook.assetId, row.id), eq(assetLook.status, "accepted")));
-      const look = await insertLook(tx, {
-        assetId: row.id,
-        projectId: row.projectId,
-        source: "uploaded",
-        status: "accepted",
-        fileId,
-        createdBy: userId,
-        decidedAt: now,
-      });
-      await logEvent(tx, row.projectId, userId, "asset.look_accepted", {
-        assetId: row.id,
-        lookId: look.id,
-        source: "uploaded",
-      });
-      return look;
-    }
+    await tx
+      .update(assetLook)
+      .set({ status: "superseded" })
+      .where(and(eq(assetLook.assetId, row.id), eq(assetLook.status, "accepted")));
     const look = await insertLook(tx, {
       assetId: row.id,
       projectId: row.projectId,
       source: "uploaded",
-      status: "in_review",
+      status: "accepted",
       fileId,
       createdBy: userId,
+      decidedAt: new Date(),
     });
-    await logEvent(tx, row.projectId, userId, "asset.look_started", {
+    await logEvent(tx, row.projectId, userId, "asset.look_accepted", {
       assetId: row.id,
       lookId: look.id,
       source: "uploaded",
@@ -612,41 +680,67 @@ export async function startLookFromUpload(input: {
   return loadLookView(getDb(), created.id);
 }
 
+/**
+ * Starts a design: a pending look with what the user gave, then the designer's job. A prop that
+ * stands in a location still being designed waits for it (no job yet): the location's accepted
+ * Hero wakes it (`wakeWaitingLooks`), so the prop can match it.
+ */
 async function startGeneratedLook(
   assetId: string,
   userId: string,
-  values: { userPrompt?: string; guidedAnswers?: Record<string, string> },
-  answersFor?: (kind: AssetKind) => Record<string, string>,
+  values: {
+    userPrompt?: string;
+    answers?: Record<string, string>;
+    references?: ReferenceInput[];
+  },
 ): Promise<LookView | null> {
   if (!isUuid(assetId)) return null;
-  const created = await getDb().transaction(async (tx) => {
+  const db = getDb();
+  // Photos are checked before the transaction (each reads the file table).
+  const [preview] = await db.select().from(asset).where(eq(asset.id, assetId)).limit(1);
+  const references =
+    preview && values.references ? await checkReferences(preview, userId, values.references) : [];
+  const created = await db.transaction(async (tx) => {
     const locked = await lockAsset(tx, assetId, userId);
     if (!locked) return null;
-    const { asset: row } = locked;
+    const { asset: row, project: owner } = locked;
     if (row.kind === "voice") {
       throw new AssetInputError("Voices are recorded, not generated. Upload a recording.");
     }
-    const guidedAnswers = answersFor ? answersFor(row.kind) : values.guidedAnswers;
+    const guidedAnswers = values.answers
+      ? validateGuidedAnswers(questionsFor(row, owner.style), values.answers)
+      : null;
     await assertCanStartLook(tx, row);
+    const waitingFor = await locationsInFlight(tx, row);
     const look = await insertLook(tx, {
       assetId: row.id,
       projectId: row.projectId,
       source: "generated",
       status: "pending",
       userPrompt: values.userPrompt ?? null,
-      guidedAnswers: guidedAnswers ?? null,
+      guidedAnswers,
+      references,
       createdBy: userId,
     });
+    const source = guidedAnswers
+      ? "guided"
+      : values.userPrompt
+        ? "prompt"
+        : references.length > 0
+          ? "references"
+          : "auto";
     await logEvent(tx, row.projectId, userId, "asset.look_started", {
       assetId: row.id,
       lookId: look.id,
-      source: guidedAnswers ? "guided" : "prompt",
+      source,
+      references: references.length,
+      ...(waitingFor.length > 0 ? { waitingFor } : {}),
     });
-    return look;
+    return { look, waiting: waitingFor.length > 0 };
   });
   if (!created) return null;
-  await enqueueLookJob(created);
-  return loadLookView(getDb(), created.id);
+  if (!created.waiting) await enqueueLookJob(created.look);
+  return loadLookView(getDb(), created.look.id);
 }
 
 /** Generates a look from the user's own description: look pending, `asset.look.generate`. */
@@ -660,8 +754,8 @@ export async function startLookFromPrompt(input: {
 }
 
 /**
- * Generates a look from answers to `ASSET_QUESTIONS[kind]` (keyed by question id; a choice answer
- * is the option's value): look pending, `asset.look.generate`.
+ * Generates a look from answers to the asset's guided questions (keyed by question id; a choice
+ * may be answered in the user's own words, any question with `ai_decides`).
  */
 export async function startLookFromGuided(input: {
   assetId: string;
@@ -669,57 +763,213 @@ export async function startLookFromGuided(input: {
   answers: Record<string, string>;
 }): Promise<LookView | null> {
   const { assetId, userId, answers } = parse(guidedInput, input);
-  return startGeneratedLook(assetId, userId, {}, (kind) => validateGuidedAnswers(kind, answers));
+  return startGeneratedLook(assetId, userId, { answers });
+}
+
+/**
+ * Starts a design from any mix of the user's words, guided answers and reference photos (each
+ * with a role). With none of them it is "Design it for me": the designer works from the script
+ * and the project alone.
+ */
+export async function startDesign(input: {
+  assetId: string;
+  userId: string;
+  prompt?: string;
+  answers?: Record<string, string>;
+  references?: ReferenceInput[];
+}): Promise<LookView | null> {
+  const { assetId, userId, prompt, answers, references } = parse(designInput, input);
+  return startGeneratedLook(assetId, userId, {
+    ...(prompt ? { userPrompt: prompt } : {}),
+    ...(answers && Object.keys(answers).length > 0 ? { answers } : {}),
+    ...(references ? { references } : {}),
+  });
+}
+
+/**
+ * Starts a prop that waits for its locations without waiting any longer (it is then designed
+ * without their Heroes). Returns the stage, or null when the asset is not the user's.
+ */
+export async function startWithoutWaiting(input: {
+  assetId: string;
+  userId: string;
+}): Promise<AssetStage | null> {
+  const { assetId, userId } = parse(assetRefInput, input);
+  if (!isUuid(assetId)) return null;
+  const look = await getDb().transaction(async (tx) => {
+    const locked = await lockAsset(tx, assetId, userId);
+    if (!locked) return null;
+    const { look: latest } = await loadAssetState(tx, locked.asset);
+    if (!latest || !untouched(latest)) {
+      throw new AssetInputError("This design has already started. Reload the page.");
+    }
+    await logEvent(tx, locked.asset.projectId, userId, "asset.look_wait_skipped", {
+      assetId,
+      lookId: latest.id,
+    });
+    return latest;
+  });
+  if (!look) return null;
+  await enqueueLookJob(look);
+  return "generating";
 }
 
 /* ------------------------------------------------------------------------------------------ */
 /* Reviews                                                                                     */
 /* ------------------------------------------------------------------------------------------ */
 
-const NEEDS_REASON = "Say what is wrong: pick an issue or write a note.";
+const NEEDS_REASON = "Say what is wrong: pick a reason, write a note or change a field.";
 const NOT_IN_REVIEW = "This is no longer waiting for review. Reload the page.";
 const ISSUE_NOT_FOR_KIND = "One of the issues does not apply to this kind of asset.";
+const CHECK_FIELDS =
+  "Check the highlighted fields on the spec card first: confirm each one or change it.";
+
+/** The code of a spec-card edit sent to the designer as a fix request. */
+export const SPEC_EDIT_CODE = "SPEC_EDIT";
+
+/**
+ * The critical spec fields the designer filled in itself (inferred). The owner: they are reviewed
+ * by the user before the design is locked, even when the user let the designer decide.
+ */
+export function fieldsToConfirm(spec: { fields: readonly LookSpecField[] } | null): string[] {
+  return (spec?.fields ?? [])
+    .filter((f) => f.critical && f.status === "inferred")
+    .map((f) => f.field);
+}
+
+type LookReviewPlan = {
+  fixRequests: ReviewFixRequest[];
+  /** The re-roll option picked (no dami call), when it is the only thing asked. */
+  regenerate: string | null;
+};
+
+/**
+ * The fix requests for a rejection, from the designer's catalog (the Wizard hides Pro-only
+ * options) and the spec card's edits. A re-roll option (`regenerate`) makes no request.
+ */
+function planLookReview(
+  kind: AssetKind,
+  selections: readonly FixSelection[],
+  specEdits: readonly { field: string; value: string }[],
+): LookReviewPlan {
+  const designer = designerFor(kind);
+  if (!designer) throw new AssetInputError(ISSUE_NOT_FOR_KIND);
+  const catalog = getReviewCatalog(DESIGNER_CATALOGS[designer]);
+  let regenerate: string | null = null;
+  for (const selection of selections) {
+    const option = findReviewOption(catalog, selection.code);
+    if (!option || option.proOnly) throw new AssetInputError(ISSUE_NOT_FOR_KIND);
+    if (option.kind === "regenerate") regenerate = option.code;
+  }
+  let fixRequests: ReviewFixRequest[];
+  try {
+    fixRequests = buildFixRequests(catalog, selections);
+  } catch (error) {
+    if (error instanceof ReviewCatalogError) {
+      const code = selections.find((s) => error.message.includes(s.code))?.code;
+      const label = code ? findReviewOption(catalog, code)?.label : undefined;
+      throw new AssetInputError(
+        label ? `Say what you want for “${label}”.` : "Say what you want for each reason.",
+      );
+    }
+    throw error;
+  }
+  for (const edit of specEdits) {
+    fixRequests.push({
+      type: "preference",
+      code: SPEC_EDIT_CODE,
+      instruction: `Set the spec field "${edit.field}" to: ${edit.value}. The user confirmed it (status confirmed, source user): keep the rest of the spec, the DNA and the prompt consistent with it.`,
+    });
+  }
+  return { fixRequests, regenerate };
+}
+
+function sameReferences(a: readonly LookReference[], b: readonly LookReference[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((r, i) => r.fileId === b[i]?.fileId && r.role === b[i]?.role && r.note === b[i]?.note)
+  );
+}
 
 /**
  * Accepts or rejects a look in review (the asset's latest), recording the review with the dami
- * run that wrote its prompt. Accepted: any earlier accepted look and sheet are superseded and a
- * sheet is started (`asset.sheet.generate`). Rejected (needs an issue or a note): an uploaded
- * look sends the asset back to needs_image; a generated one gets a fixed look (`asset.look.fix`).
+ * run that wrote its prompt.
+ *
+ * Accepted: a location's or prop's critical inferred spec fields must be in `confirmedFields`;
+ * any earlier accepted look and sheet are superseded and a sheet is started. A location that is
+ * accepted wakes the props waiting for it.
+ *
+ * Rejected: the catalog picks become `fix_requests` (and `issue_codes`); spec-card edits, answers
+ * to the designer's questions and changed photos go with them. A re-roll picked alone makes a new
+ * version with the same prompt and a new seed (no dami call); anything else is a fix round
+ * (`asset.look.fix`). An uploaded look (older projects) sends the asset back to needs_image.
  */
 export async function submitLookReview(input: {
   lookId: string;
   userId: string;
   decision: "accepted" | "rejected";
-  issueCodes?: string[];
+  selections?: FixSelection[];
   note?: string;
+  references?: ReferenceInput[];
+  specEdits?: { field: string; value: string }[];
+  clarifyAnswers?: Record<string, string>;
+  confirmedFields?: string[];
 }): Promise<AssetStage | null> {
   const parsed = parse(lookReviewInput, input);
   const { lookId, userId, decision } = parsed;
-  const issueCodes = [...new Set(parsed.issueCodes ?? [])];
   const note = parsed.note ? parsed.note : null;
+  const selections = parsed.selections ?? [];
+  const specEdits = parsed.specEdits ?? [];
+  const clarify = parsed.clarifyAnswers ?? {};
   if (!isUuid(lookId)) return null;
-  if (decision === "rejected" && issueCodes.length === 0 && !note) {
-    throw new AssetInputError(NEEDS_REASON);
-  }
-  const outcome = await getDb().transaction(async (tx) => {
-    const [target] = await tx
-      .select({ assetId: assetLook.assetId })
-      .from(assetLook)
-      .where(eq(assetLook.id, lookId))
-      .limit(1);
-    if (!target) return null;
-    const locked = await lockAsset(tx, target.assetId, userId);
+  const db = getDb();
+  const [target] = await db
+    .select({ asset })
+    .from(assetLook)
+    .innerJoin(asset, eq(asset.id, assetLook.assetId))
+    .where(eq(assetLook.id, lookId))
+    .limit(1);
+  if (!target) return null;
+  const newReferences =
+    decision === "rejected" && parsed.references
+      ? await checkReferences(target.asset, userId, parsed.references)
+      : null;
+  const outcome = await db.transaction(async (tx) => {
+    const locked = await lockAsset(tx, target.asset.id, userId);
     if (!locked) return null;
     const { asset: row } = locked;
     assertActive(row);
-    if (issueCodes.some((code) => !lookIssueFits(code, row.kind))) {
-      throw new AssetInputError(ISSUE_NOT_FOR_KIND);
-    }
+    const plan =
+      decision === "rejected"
+        ? planLookReview(row.kind, selections, specEdits)
+        : { fixRequests: [], regenerate: null };
     const { look: latest } = await loadAssetState(tx, row);
     if (!latest || latest.id !== lookId || latest.status !== "in_review") {
       throw new AssetInputError(NOT_IN_REVIEW);
     }
+    const referencesChanged =
+      newReferences !== null && !sameReferences(newReferences, latest.references);
+    const clarifyGiven = Object.keys(clarify).length > 0;
+    if (
+      decision === "rejected" &&
+      plan.fixRequests.length === 0 &&
+      !plan.regenerate &&
+      !note &&
+      !clarifyGiven &&
+      !referencesChanged
+    ) {
+      throw new AssetInputError(NEEDS_REASON);
+    }
+    const confirmed = [...new Set(parsed.confirmedFields ?? [])];
+    if (decision === "accepted") {
+      const missing = fieldsToConfirm(latest.spec).filter((f) => !confirmed.includes(f));
+      if (missing.length > 0) throw new AssetInputError(CHECK_FIELDS);
+    }
     const now = new Date();
+    const issueCodes = [
+      ...fixRequestCodes(plan.fixRequests),
+      ...(plan.regenerate ? [plan.regenerate] : []),
+    ];
     await tx.insert(review).values({
       projectId: row.projectId,
       userId,
@@ -727,6 +977,7 @@ export async function submitLookReview(input: {
       subjectId: lookId,
       decision,
       issueCodes: decision === "rejected" ? issueCodes : [],
+      fixRequests: decision === "rejected" ? plan.fixRequests : [],
       note,
       damiRunId: latest.damiRunId,
     });
@@ -740,8 +991,17 @@ export async function submitLookReview(input: {
         assetId: row.id,
         lookId,
         issueCodes,
+        ...(referencesChanged ? { referencesChanged: true } : {}),
+        ...(specEdits.length > 0 ? { specEdits: specEdits.map((e) => e.field) } : {}),
       });
       if (latest.source === "uploaded") return { stage: "needs_image" as const, job: null };
+      const reroll =
+        plan.regenerate !== null &&
+        plan.fixRequests.length === 0 &&
+        !note &&
+        !clarifyGiven &&
+        !referencesChanged &&
+        latest.prompt !== null;
       const next = await insertLook(tx, {
         assetId: row.id,
         projectId: row.projectId,
@@ -750,6 +1010,15 @@ export async function submitLookReview(input: {
         status: "pending",
         userPrompt: latest.userPrompt,
         guidedAnswers: latest.guidedAnswers,
+        references: newReferences ?? latest.references,
+        clarifyAnswers:
+          clarifyGiven || latest.clarifyAnswers
+            ? { ...(latest.clarifyAnswers ?? {}), ...clarify }
+            : null,
+        // A re-roll keeps the prompt, the spec and the dami run: only the seed changes.
+        ...(reroll
+          ? { prompt: latest.prompt, spec: latest.spec, damiRunId: latest.damiRunId }
+          : {}),
         createdBy: userId,
       });
       return { stage: "generating" as const, job: { kind: "look" as const, row: next } };
@@ -789,13 +1058,92 @@ export async function submitLookReview(input: {
       lookId,
       source: latest.source,
       sheetId: sheet.id,
+      ...(confirmed.length > 0 ? { confirmedFields: confirmed } : {}),
     });
     return { stage: "building_sheet" as const, job: { kind: "sheet" as const, row: sheet } };
   });
   if (!outcome) return null;
   if (outcome.job?.kind === "look") await enqueueLookJob(outcome.job.row);
   if (outcome.job?.kind === "sheet") await enqueueSheetJob(outcome.job.row);
+  if (decision === "accepted" && designerFor(target.asset.kind) === "location") {
+    await wakeWaitingLooks(target.asset.projectId);
+  }
   return outcome.stage;
+}
+
+/**
+ * Answers the designer's questions on a look that waits for them (`needs_input`, the prop
+ * designer's blocking question). The look is superseded and a new version is designed with the
+ * answers (`clarify_answers`). An answer of `ai_decides` takes the question's default; blocking
+ * questions must be answered.
+ */
+export async function answerLookQuestion(input: {
+  lookId: string;
+  userId: string;
+  answers: Record<string, string>;
+}): Promise<AssetStage | null> {
+  const { lookId, userId, answers } = parse(
+    z.object({ lookId: z.string(), userId: userIdSchema, answers: answersSchema }),
+    input,
+  );
+  if (!isUuid(lookId)) return null;
+  const next = await getDb().transaction(async (tx) => {
+    const [target] = await tx
+      .select({ assetId: assetLook.assetId })
+      .from(assetLook)
+      .where(eq(assetLook.id, lookId))
+      .limit(1);
+    if (!target) return null;
+    const locked = await lockAsset(tx, target.assetId, userId);
+    if (!locked) return null;
+    const { asset: row } = locked;
+    assertActive(row);
+    const { look: latest } = await loadAssetState(tx, row);
+    if (!latest || latest.id !== lookId || latest.status !== "needs_input") {
+      throw new AssetInputError("There is no question waiting here. Reload the page.");
+    }
+    const questions = latest.spec?.questions ?? [];
+    const byId = new Map(questions.map((q) => [q.id, q]));
+    const clarify: Record<string, string> = { ...(latest.clarifyAnswers ?? {}) };
+    for (const [id, raw] of Object.entries(answers)) {
+      const question = byId.get(id);
+      if (!question) throw new AssetInputError("One answer does not match any question.");
+      const value = raw.trim();
+      if (value) clarify[id] = value === AI_DECIDES ? question.default : value;
+    }
+    for (const q of questions) {
+      if (q.blocking && !clarify[q.id]) {
+        throw new AssetInputError(`Answer “${q.question}”, or choose I’m not sure.`);
+      }
+    }
+    const now = new Date();
+    await tx
+      .update(assetLook)
+      .set({ status: "superseded", decidedAt: now })
+      .where(eq(assetLook.id, lookId));
+    const look = await insertLook(tx, {
+      assetId: row.id,
+      projectId: row.projectId,
+      parentId: lookId,
+      source: "generated",
+      status: "pending",
+      userPrompt: latest.userPrompt,
+      guidedAnswers: latest.guidedAnswers,
+      references: latest.references,
+      clarifyAnswers: clarify,
+      createdBy: userId,
+    });
+    await logEvent(tx, row.projectId, userId, "asset.look_answered", {
+      assetId: row.id,
+      lookId,
+      nextLookId: look.id,
+      questions: Object.keys(answers),
+    });
+    return look;
+  });
+  if (!next) return null;
+  await enqueueLookJob(next, "generate");
+  return "generating";
 }
 
 /**
@@ -1190,19 +1538,25 @@ export async function includeSkippedAsset(input: {
 export async function removeAsset(input: { assetId: string; userId: string }): Promise<boolean> {
   const { assetId, userId } = parse(assetRefInput, input);
   if (!isUuid(assetId)) return false;
-  return getDb().transaction(async (tx) => {
+  const removed = await getDb().transaction(async (tx) => {
     const locked = await lockAsset(tx, assetId, userId);
-    if (!locked) return false;
+    if (!locked) return null;
     const { asset: row } = locked;
-    if (row.status === "removed") return true;
+    if (row.status === "removed") return { row, changed: false };
     await tx.update(asset).set({ status: "removed" }).where(eq(asset.id, assetId));
     await logEvent(tx, row.projectId, userId, "asset.removed", {
       assetId,
       kind: row.kind,
       name: row.name,
     });
-    return true;
+    return { row, changed: true };
   });
+  if (!removed) return false;
+  // Props waiting for a removed location go ahead without it.
+  if (removed.changed && removed.row.kind === "location") {
+    await wakeWaitingLooks(removed.row.projectId);
+  }
+  return true;
 }
 
 /**

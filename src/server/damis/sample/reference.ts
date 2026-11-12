@@ -1,13 +1,9 @@
 /**
- * Sample-mode generators for the four reference-image damis. Each derives its output from the
+ * Sample-mode generators for the two reference-sheet damis (the sheet maker and its fixer). Each derives its output from the
  * input alone (deterministic, no randomness) and validates the input with the dami's own schema.
  */
 import type { z } from "zod";
 import type { ProjectStyle } from "@/server/db/schema";
-import { assetFixerInputSchema } from "../asset-fixer/schema";
-import { LOOK_ISSUES, type LookIssueCode } from "../asset-fixer/issues";
-import { renderGuidedAnswers } from "../asset-prompt-writer/prompt";
-import { assetPromptWriterInputSchema } from "../asset-prompt-writer/schema";
 import type { ReferenceAsset } from "../shared/reference";
 import type { ImageAssetKind } from "../shared/reference-rules";
 import { SHEET_ISSUES, type SheetIssueCode } from "../sheet-fixer/issues";
@@ -29,20 +25,6 @@ function kindOf(asset: ReferenceAsset): ImageAssetKind {
 function styleLead(style: ProjectStyle, what: string): string {
   return `${style.visualStyle} ${what} (${style.genre} film)`;
 }
-
-const LOOK_FRAMING: Record<ImageAssetKind, string> = {
-  character:
-    "full figure from head to toe, relaxed neutral pose facing the camera, calm neutral expression, face clearly visible, plain seamless light-grey background, even soft light",
-  location:
-    "wide establishing view of the whole place, signature feature in view, natural light for the time of day, no people",
-  prop: "the object alone, centred, three-quarter angle, on a plain seamless light-grey background, soft even light with a faint contact shadow",
-  creature:
-    "full body in three-quarter view, standing naturally, plain seamless light-grey background, even soft light",
-  costume:
-    "the full outfit on a faceless mannequin, front view, plain seamless light-grey background, even soft light",
-  other:
-    "the single subject, whole and centred, plain seamless light-grey background, even soft light",
-};
 
 const SHEET_VIEWS: Record<ImageAssetKind, { views: string; layout: string }> = {
   character: {
@@ -81,56 +63,9 @@ const SHEET_VIEWS: Record<ImageAssetKind, { views: string; layout: string }> = {
   },
 };
 
-export function sampleAssetPromptWriter(raw: unknown): { prompt: string; notes: string[] } {
-  const input = assetPromptWriterInputSchema.parse(raw);
-  const kind = kindOf(input.asset);
-  const description = truncate(input.asset.description, 500);
-  const userPrompt = truncate(input.userPrompt ?? "", 800);
-  const answers = renderGuidedAnswers(input.asset.kind, input.guidedAnswers).map((line) =>
-    line.replace(/^- /, ""),
-  );
-  const parts = [
-    `${styleLead(input.style, "reference image")} of the ${kind} "${input.asset.name}"`,
-    LOOK_FRAMING[kind],
-  ];
-  if (userPrompt) parts.push(`director's description: ${userPrompt}`);
-  if (answers.length > 0) parts.push(`chosen details: ${truncate(answers.join("; "), 900)}`);
-  if (description) parts.push(`from the script: ${description}`);
-  parts.push("no text, no watermark, no logo");
-  const notes: string[] = [];
-  if (userPrompt && description) {
-    notes.push("Your own prompt wins where it differs from the script description.");
-  }
-  if (answers.length > 0) {
-    notes.push(`Folded in ${answers.length} guided answer${answers.length === 1 ? "" : "s"}.`);
-  }
-  if (!description) notes.push("The script states nothing visual about this asset.");
-  return { prompt: fit(parts.join(", ")), notes };
-}
-
 function notePart(note: string | undefined): string[] {
   return note ? [`director's note: ${truncate(note, 300)}`] : [];
 }
-
-const LOOK_FIX_TEXT: Record<LookIssueCode, string> = {
-  face_incomplete:
-    "the whole face is visible and sharp, both eyes, nose and mouth clearly drawn, head fully inside the frame",
-  anatomy_wrong: "two arms, two legs, two hands with five fingers each, relaxed and fully visible",
-  wrong_age: "the age shows clearly in skin texture, lines, hair and posture",
-  wrong_clothing:
-    "the outfit is described garment by garment, head to toe, in exact fabric and colour",
-  wrong_era: "every garment, object and building belongs strictly to the stated era and place",
-  wrong_details: "every fact from the script description is shown exactly as written",
-  wrong_colours: "each key colour is exactly as named, next to the item it belongs to",
-  text_or_watermark: "no text, no letters, no logo, no watermark, no signature anywhere",
-  style_mismatch: "rendered strictly in the project's visual style, nothing from another style",
-  background_not_clean:
-    "one plain seamless light-grey background, no objects, no horizon line, no clutter",
-  wrong_framing:
-    "the whole subject centred inside the frame with margin on every side, camera at mid-height",
-  extra_subjects: "the subject is alone in the picture, nothing and nobody else",
-  lighting_poor: "even, soft, neutral light from the front and slightly above, open shadows",
-};
 
 const SHEET_FIX_TEXT: Record<SheetIssueCode, string> = {
   face_incomplete: "every face is fully visible and sharp, both eyes, nose and mouth clearly drawn",
@@ -183,11 +118,6 @@ function fixPrompt<C extends string>(
     });
   }
   return { prompt: `${base}. Revised: ${addition}.`, changeSummary };
-}
-
-export function sampleAssetFixer(raw: unknown) {
-  const input: z.output<typeof assetFixerInputSchema> = assetFixerInputSchema.parse(raw);
-  return fixPrompt(input, LOOK_FIX_TEXT, (code) => LOOK_ISSUES[code].label);
 }
 
 export function sampleSheetFixer(raw: unknown) {

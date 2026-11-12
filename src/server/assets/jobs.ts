@@ -5,6 +5,7 @@
  */
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { designerFor } from "@/server/damis";
 import { getDb, type DbTx } from "@/server/db/client";
 import {
   asset,
@@ -13,14 +14,22 @@ import {
   generation,
   project,
   review,
+  type LookSpec,
   type ProjectStyle,
+  type ReviewFixRequest,
   type ReviewSubject,
 } from "@/server/db/schema";
 import { enqueueGeneration, requestGeneration, type FinishedGeneration } from "@/server/generation";
+import { wakeWaitingLooks } from "./designs";
 import { logEvent, type AssetRow, type LookRow, type SheetRow } from "./looks";
 
 export type AssetJobProject = { id: string; ownerId: string; style: ProjectStyle | null };
-export type AssetJobReview = { issueCodes: string[]; note: string | null };
+export type AssetJobReview = {
+  issueCodes: string[];
+  /** The catalog's fix requests (empty for older reviews, which have issue codes only). */
+  fixRequests: ReviewFixRequest[];
+  note: string | null;
+};
 
 export type LookJobContext = {
   look: LookRow;
@@ -51,7 +60,7 @@ async function loadRejection(
   subjectId: string,
 ): Promise<AssetJobReview | null> {
   const [row] = await getDb()
-    .select({ issueCodes: review.issueCodes, note: review.note })
+    .select({ issueCodes: review.issueCodes, fixRequests: review.fixRequests, note: review.note })
     .from(review)
     .where(
       and(
@@ -135,15 +144,19 @@ export async function loadSheetJob(sheetId: string): Promise<SheetJobContext | n
   };
 }
 
-/** Stores the dami's prompt on a pending look that has none yet. False when another run did. */
-export async function storeLookPrompt(input: {
+/**
+ * Stores a designer's answer on a pending look that has no prompt yet: the image prompt and the
+ * spec (ratio, photos to attach, the spec card). False when another run did.
+ */
+export async function storeLookDesign(input: {
   lookId: string;
   prompt: string;
+  spec: LookSpec;
   damiRunId: string;
 }): Promise<boolean> {
   const updated = await getDb()
     .update(assetLook)
-    .set({ prompt: input.prompt, damiRunId: input.damiRunId })
+    .set({ prompt: input.prompt, spec: input.spec, damiRunId: input.damiRunId })
     .where(
       and(
         eq(assetLook.id, input.lookId),
@@ -153,6 +166,77 @@ export async function storeLookPrompt(input: {
     )
     .returning({ id: assetLook.id });
   return updated.length > 0;
+}
+
+/**
+ * pending → needs_input: the designer asked a question it cannot design without (the prop's
+ * blocking question). The spec carries the questions. False when the look moved on meanwhile.
+ */
+export async function markLookNeedsInput(input: {
+  lookId: string;
+  spec: LookSpec;
+  damiRunId: string;
+}): Promise<boolean> {
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .update(assetLook)
+      .set({ status: "needs_input", spec: input.spec, damiRunId: input.damiRunId })
+      .where(
+        and(
+          eq(assetLook.id, input.lookId),
+          eq(assetLook.status, "pending"),
+          isNull(assetLook.prompt),
+        ),
+      )
+      .returning();
+    if (!row) return false;
+    await logEvent(tx, row.projectId, null, "asset.look_question", {
+      assetId: row.assetId,
+      lookId: row.id,
+      questions: input.spec.questions.filter((q) => q.blocking).map((q) => q.id),
+    });
+    return true;
+  });
+}
+
+/**
+ * pending → in_review with the user's own photo as the image (a location Hero the designer took
+ * as it is, `use_uploaded`): no generation, no credits. False when the look moved on meanwhile.
+ */
+export async function applyUploadedLook(input: {
+  lookId: string;
+  fileId: string;
+  spec: LookSpec;
+  damiRunId: string;
+}): Promise<boolean> {
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .update(assetLook)
+      .set({
+        status: "in_review",
+        fileId: input.fileId,
+        spec: input.spec,
+        prompt: null,
+        damiRunId: input.damiRunId,
+        failure: null,
+      })
+      .where(
+        and(
+          eq(assetLook.id, input.lookId),
+          eq(assetLook.status, "pending"),
+          isNull(assetLook.prompt),
+          isNull(assetLook.generationId),
+        ),
+      )
+      .returning();
+    if (!row) return false;
+    await logEvent(tx, row.projectId, null, "asset.look_ready", {
+      assetId: row.assetId,
+      lookId: row.id,
+      usedUpload: input.fileId,
+    });
+    return true;
+  });
 }
 
 export async function storeSheetPrompt(input: {
@@ -197,6 +281,7 @@ export async function requestLookGeneration(lookId: string): Promise<RequestOutc
     }
     if (!row.look.prompt) throw new Error(`look ${lookId} has no prompt to generate from`);
     if (!row.project.style) throw new Error(`project ${row.project.id} has no style`);
+    const spec = row.look.spec;
     const { generationId } = await requestGeneration(
       {
         userId: row.project.ownerId,
@@ -205,6 +290,13 @@ export async function requestLookGeneration(lookId: string): Promise<RequestOutc
         prompt: row.look.prompt,
         label: row.asset.name,
         style: row.project.style,
+        // The designer chose the ratio and the photos its prompt names, in that order.
+        ...(spec ? { aspectRatio: spec.aspectRatio } : {}),
+        ...(spec && spec.referenceFileIds.length > 0
+          ? { referenceFileIds: spec.referenceFileIds }
+          : {}),
+        // A new version of a rejected look (a fix or a re-roll) gets its own seed.
+        ...(row.look.parentId ? { variant: row.look.id } : {}),
       },
       tx,
     );
@@ -257,26 +349,39 @@ export async function requestSheetGeneration(sheetId: string): Promise<RequestOu
   return outcome.kind;
 }
 
+/** A location's look settled without a Hero: props waiting for it go ahead without it. */
+async function wakeAfterLocation(assetId: string, projectId: string): Promise<void> {
+  const [row] = await getDb()
+    .select({ kind: asset.kind })
+    .from(asset)
+    .where(eq(asset.id, assetId))
+    .limit(1);
+  if (row && designerFor(row.kind) === "location") await wakeWaitingLooks(projectId);
+}
+
 /** pending → failed with a user-readable reason. Returns whether this call changed it. */
 export async function failLook(
   lookId: string,
   failure: string,
   damiRunId?: string | null,
 ): Promise<boolean> {
-  return getDb().transaction(async (tx) => {
+  const failed = await getDb().transaction(async (tx) => {
     const [row] = await tx
       .update(assetLook)
       .set({ status: "failed", failure, ...(damiRunId ? { damiRunId } : {}) })
       .where(and(eq(assetLook.id, lookId), eq(assetLook.status, "pending")))
       .returning();
-    if (!row) return false;
+    if (!row) return null;
     await logEvent(tx, row.projectId, null, "asset.look_failed", {
       assetId: row.assetId,
       lookId,
       failure,
     });
-    return true;
+    return row;
   });
+  if (!failed) return false;
+  await wakeAfterLocation(failed.assetId, failed.projectId);
+  return true;
 }
 
 export async function failSheet(
@@ -321,7 +426,7 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
     .limit(1);
   if (!owner) return;
   const { projectId } = owner;
-  await getDb().transaction(async (tx) => {
+  const failedLook = await getDb().transaction(async (tx) => {
     if (g.purpose === "asset_look") {
       const [row] = await tx
         .update(assetLook)
@@ -341,7 +446,7 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
           generationId: g.id,
         });
       }
-      return;
+      return row && !succeeded ? row.assetId : null;
     }
     const [row] = await tx
       .update(assetSheet)
@@ -361,5 +466,7 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
         generationId: g.id,
       });
     }
+    return null;
   });
+  if (failedLook) await wakeAfterLocation(failedLook, projectId);
 }

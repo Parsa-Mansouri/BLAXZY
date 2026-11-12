@@ -49,3 +49,10 @@ corrected Director arrives.
   ("Mara", "Mara (2)") inside the worker. They never reach the database or the UI.
 - **Sample mode.** During testing every dami runs in sample mode (`DAMI_MODE=sample`). Each one has
   a deterministic sample generator in `src/server/damis/sample/`, and every wait takes 3 seconds.
+- **Designers.** The character, location and prop generators take their reference photos as file
+  ids (attached in index order) and name assets by their real names. The location and prop files
+  ask for temperature 0.5 on a first run and 0.3 in fix mode: first runs use `medium` effort and
+  fix rounds `low`. `max_tokens` is the owner's 6000 doubled for thinking headroom. The prop's
+  `script_context` is sent as text, the location's as the owner's scene list; both come from the
+  latest detection's scene index and the accepted script. A reference photo's note is sent as the
+  location's `reference_instructions.preserve` and the prop's `preserve` text.

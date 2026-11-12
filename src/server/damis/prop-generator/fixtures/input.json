@@ -1,0 +1,40 @@
+{
+  "asset": {
+    "name": "brass locket",
+    "categoryHint": "hand_prop",
+    "scriptDescription": "A small tarnished brass locket that opens on a photo.",
+    "sceneRefs": ["1"]
+  },
+  "project": {
+    "style": "Realistic",
+    "genre": "Drama",
+    "format": "movie",
+    "orientation": "landscape"
+  },
+  "guidedAnswers": {
+    "importance": "hero",
+    "usage": "multi_state",
+    "scale": "small: fits in one hand"
+  },
+  "scriptContext": {
+    "logline": "",
+    "scenes": [
+      {
+        "sceneNumber": "1",
+        "heading": "INT. FERRY CABIN - NIGHT",
+        "action": "Mara opens the brass locket.",
+        "dialogueExcerpt": "",
+        "charactersPresent": ["Mara"]
+      }
+    ]
+  },
+  "linkedCharacters": [
+    {
+      "name": "Mara",
+      "ageGroup": "60s",
+      "build": "slight",
+      "handedness": "right",
+      "usageNote": "Opens it."
+    }
+  ]
+}

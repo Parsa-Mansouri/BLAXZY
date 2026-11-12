@@ -185,6 +185,74 @@ export type ReviewFixRequest = {
   viewId?: string;
 };
 
+/**
+ * A reference photo of a look, with the role the user picked for it (character: face, outfit,
+ * full_body, other; location: hero, layout, mood, detail, other; prop: identity, material,
+ * detail, mood, other) and what to keep from it.
+ */
+export type LookReference = { fileId: string; role: string; note?: string };
+
+/** One field of a designer's specification card (locations and props). */
+export type LookSpecField = {
+  /** Identity, Spatial, Visual, Environment or Continuity (locations); absent for props. */
+  group?: string;
+  field: string;
+  value: string;
+  status: "confirmed" | "inferred" | "unknown";
+  source: string;
+  /** A wrong value would break identity, geometry, scale or function: reviewed before lock. */
+  critical: boolean;
+};
+
+/** A question the prop designer asks; `blocking` ones stop the image until answered. */
+export type LookClarifyingQuestion = {
+  id: string;
+  field: string;
+  question: string;
+  options: string[];
+  default: string;
+  blocking: boolean;
+};
+
+export const LOOK_GENERATORS = [
+  "character-generator",
+  "location-generator",
+  "prop-generator",
+] as const;
+export type LookGenerator = (typeof LOOK_GENERATORS)[number];
+
+/** Image ratios a look may take (characters and locations are 16:9; props follow their shape). */
+export type LookAspectRatio = "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
+
+/**
+ * What a designer dami returned for a look, without the image prompt (stored in `prompt`): how
+ * to generate the image, the specification the user reviews, and the dami's own answer (`output`,
+ * in the owner's shape) that a fix round sends back as `previous_output`.
+ */
+export type LookSpec = {
+  generator: LookGenerator;
+  aspectRatio: LookAspectRatio;
+  /** Files attached to the generation, in the order the prompt names them. */
+  referenceFileIds: string[];
+  /** Locations: `use_uploaded` (the user's photo is the Hero), `restyle_uploaded` or `generate`. */
+  heroMode?: "generate" | "use_uploaded" | "restyle_uploaded";
+  styleUsed: string;
+  styleSource: string;
+  /** Locations: the reusable one-line summary; characters: the environment shown. */
+  summary: string;
+  assumptions: string[];
+  warnings: string[];
+  appliedFixes: { code: string; change: string }[];
+  /** Locations and props: the specification card. */
+  fields: LookSpecField[];
+  /** Props: the designer's questions (a blocking one sets the look to `needs_input`). */
+  questions: LookClarifyingQuestion[];
+  /** Props: a fix changed the object's identity (shape, materials, colours, states, scale). */
+  changesIdentity?: boolean;
+  /** The dami's whole answer minus the image prompt, as the dami wrote it. */
+  output: Record<string, unknown>;
+};
+
 /** A fact the Asset Detector read from the script, with its verbatim evidence. */
 export type AssetFact = {
   field: string;
@@ -844,7 +912,7 @@ export type LookSource = (typeof LOOK_SOURCES)[number];
 /**
  * pending: a dami or the provider is still working · in_review: waiting for the user ·
  * accepted / rejected: the user decided · superseded: an older accepted one was replaced ·
- * failed: could not be produced (see `failure`).
+ * failed: could not be produced (see `failure`). Shared by looks, sheets and takes.
  */
 export const LOOK_STATUSES = [
   "pending",
@@ -855,6 +923,13 @@ export const LOOK_STATUSES = [
   "failed",
 ] as const;
 export type LookStatus = (typeof LOOK_STATUSES)[number];
+
+/**
+ * The statuses of a look: `LOOK_STATUSES` plus needs_input, when the designer asked a question it
+ * cannot design without (the answer starts a new version and this one is superseded).
+ */
+export const ASSET_LOOK_STATUSES = [...LOOK_STATUSES, "needs_input"] as const;
+export type AssetLookStatus = (typeof ASSET_LOOK_STATUSES)[number];
 
 /** One candidate image (or voice recording) of an asset. Immutable once decided. */
 export const assetLook = pgTable(
@@ -870,7 +945,7 @@ export const assetLook = pgTable(
     versionNumber: integer("version_number").notNull(),
     parentId: uuid("parent_id").references((): AnyPgColumn => assetLook.id),
     source: text("source").$type<LookSource>().notNull(),
-    status: text("status").$type<LookStatus>().notNull().default("pending"),
+    status: text("status").$type<AssetLookStatus>().notNull().default("pending"),
     fileId: uuid("file_id").references(() => file.id),
     /** The prompt the user wrote, when they wrote one. */
     userPrompt: text("user_prompt"),
@@ -878,6 +953,15 @@ export const assetLook = pgTable(
     guidedAnswers: jsonb("guided_answers").$type<Record<string, string>>(),
     /** The prompt actually sent to the provider (written by a dami). */
     prompt: text("prompt"),
+    /** What the designer dami returned besides the prompt (see `LookSpec`). */
+    spec: jsonb("spec").$type<LookSpec>(),
+    /** The user's reference photos with their roles, in the order given. */
+    references: jsonb("references")
+      .$type<LookReference[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** Answers to the designer's clarifying questions, keyed by question id. */
+    clarifyAnswers: jsonb("clarify_answers").$type<Record<string, string>>(),
     generationId: uuid("generation_id").references(() => generation.id),
     damiRunId: uuid("dami_run_id").references(() => damiRun.id),
     failure: text("failure"),

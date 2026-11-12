@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ASSET_KINDS, type LookStatus } from "@/server/db/schema";
+import { ASSET_KINDS, type AssetLookStatus, type LookStatus } from "@/server/db/schema";
 import {
   deriveAssetState,
   deriveAssetStage,
@@ -8,7 +8,7 @@ import {
   type StageLook,
 } from "./stage";
 
-const look = (status: LookStatus, source: StageLook["source"] = "generated"): StageLook => ({
+const look = (status: AssetLookStatus, source: StageLook["source"] = "generated"): StageLook => ({
   id: "look-1",
   status,
   source,
@@ -49,6 +49,13 @@ describe("deriveAssetStage", () => {
     expect(deriveAssetStage("creature", look("accepted"), sheet("accepted", "old-look"))).toBe(
       "building_sheet",
     );
+  });
+
+  it("waits for an answer when the designer asked a blocking question", () => {
+    expect(deriveAssetState("prop", look("needs_input"), null)).toMatchObject({
+      stage: "needs_answer",
+      busy: false,
+    });
   });
 
   it("is busy while a look or a sheet is pending", () => {

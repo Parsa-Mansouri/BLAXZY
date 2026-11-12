@@ -18,15 +18,16 @@ import {
   getAssetDetail,
   getPreProductionOverview,
   listAssetCards,
+  fieldsToConfirm,
+  startDesign,
   startLookFromGuided,
-  startLookFromUpload,
   submitLookReview,
   submitSheetReview,
   type AssetCard,
   type AssetDetail,
 } from "../src/server/assets";
 import { getBalance, grantCredits } from "../src/server/billing";
-import { ASSET_QUESTIONS, getDamiMode, type GuidedQuestion } from "../src/server/damis";
+import { getDamiMode, type GuidedQuestion } from "../src/server/damis";
 import { closeDb, getDb } from "../src/server/db/client";
 import { ASSET_KINDS, project, user, type AssetKind } from "../src/server/db/schema";
 import { closeJobQueue } from "../src/server/jobs";
@@ -68,7 +69,7 @@ function sampleAnswers(questions: GuidedQuestion[]): Record<string, string> {
   const texts: Record<string, string> = {
     face: "Weathered oval face, olive skin, deep-set grey eyes, a thin scar over the left brow",
     hair: "Short salt-and-pepper hair, a close-trimmed grey beard",
-    wardrobe: "Navy wool pea coat, cream fisherman's sweater, dark canvas trousers, black boots",
+    outfit: "Navy wool pea coat, cream fisherman's sweater, dark canvas trousers, black boots",
   };
   const answers: Record<string, string> = {};
   for (const q of questions) {
@@ -164,7 +165,8 @@ async function main(): Promise<void> {
   // A character from guided answers, rejected once, then accepted with its sheet.
   const character = firstWaiting(cards, "character").asset;
   console.log(`1. ${character.name}: guided answers`);
-  const answers = sampleAnswers(ASSET_QUESTIONS.character);
+  const questions = (await getAssetDetail(character.id, userId))?.questions ?? [];
+  const answers = sampleAnswers(questions);
   for (const [id, value] of Object.entries(answers)) console.log(`   ${id}: ${value}`);
   const look1 = await startLookFromGuided({ assetId: character.id, userId, answers });
   if (!look1) throw new Error("startLookFromGuided returned null");
@@ -172,12 +174,12 @@ async function main(): Promise<void> {
   console.log(
     `   look v${d.looks[0]?.versionNumber} file ${d.looks[0]?.fileId} (sample: ${d.looks[0]?.isSample})`,
   );
-  console.log(`2. ${character.name}: reject the look (wrong_age)`);
+  console.log(`2. ${character.name}: reject the look (P01 older)`);
   await submitLookReview({
     lookId: look1.id,
     userId,
     decision: "rejected",
-    issueCodes: ["wrong_age"],
+    selections: [{ code: "P01", value: "noticeably older" }],
   });
   d = await waitFor(
     "fixed look in review",
@@ -200,7 +202,7 @@ async function main(): Promise<void> {
 
   // A location from an uploaded image, accepted with its sheet.
   const location = firstWaiting(cards, "location").asset;
-  console.log(`4. ${location.name}: upload a PNG`);
+  console.log(`4. ${location.name}: a PNG as the Hero photo`);
   const png = await sharp({
     create: { width: 640, height: 360, channels: 3, background: { r: 52, g: 84, b: 120 } },
   })
@@ -214,9 +216,20 @@ async function main(): Promise<void> {
     purpose: "asset_image",
     bytes: new Uint8Array(png),
   });
-  const uploaded = await startLookFromUpload({ assetId: location.id, userId, fileId: file.id });
-  console.log(`   look v${uploaded?.versionNumber} ${uploaded?.status}`);
-  await submitLookReview({ lookId: uploaded?.id ?? "", userId, decision: "accepted" });
+  await startDesign({
+    assetId: location.id,
+    userId,
+    references: [{ fileId: file.id, role: "hero" }],
+  });
+  d = await waitFor("Hero in review", location.id, userId, (x) => x.stage === "look_review");
+  const hero = d.looks[0];
+  console.log(`   look v${hero?.versionNumber} ${hero?.status} (${hero?.spec?.heroMode ?? ""})`);
+  await submitLookReview({
+    lookId: hero?.id ?? "",
+    userId,
+    decision: "accepted",
+    confirmedFields: fieldsToConfirm(hero?.spec ?? null),
+  });
   d = await waitFor("sheet in review", location.id, userId, (x) => x.stage === "sheet_review");
   const locationStage = await submitSheetReview({
     sheetId: d.sheets[0]?.id ?? "",

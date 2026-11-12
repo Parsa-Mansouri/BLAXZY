@@ -13,7 +13,11 @@ import {
   damiRun,
   generation,
   projectEvent,
+  type AssetLookStatus,
+  type LookAspectRatio,
+  type LookReference,
   type LookSource,
+  type LookSpec,
   type LookStatus,
 } from "@/server/db/schema";
 import { isSampleProvider } from "@/server/providers";
@@ -23,15 +27,30 @@ export type AssetRow = typeof asset.$inferSelect;
 export type LookRow = typeof assetLook.$inferSelect;
 export type SheetRow = typeof assetSheet.$inferSelect;
 
+/** What the screens show of a designer's spec (`LookSpec` without the dami's raw answer). */
+export type LookSpecView = Omit<LookSpec, "output" | "referenceFileIds">;
+
 export type LookView = {
   id: string;
   versionNumber: number;
   source: LookSource;
-  status: LookStatus;
+  status: AssetLookStatus;
   /** The image (or, for a voice, the recording). Null until produced. */
   fileId: string | null;
   userPrompt: string | null;
   guidedAnswers: Record<string, string> | null;
+  /** The user's reference photos with their roles. */
+  references: LookReference[];
+  /** Answers to the designer's questions. */
+  clarifyAnswers: Record<string, string> | null;
+  /** The designer's spec, once its dami has run. */
+  spec: LookSpecView | null;
+  /** The image's ratio, when the designer chose one (else the project's orientation). */
+  aspectRatio: LookAspectRatio | null;
+  /** The look answers a rejected one (a fix or a re-roll) or an answered question. */
+  parentId: string | null;
+  /** A job has worked on it (a dami ran or a generation was requested). */
+  started: boolean;
   /** User-readable reason when failed. */
   failure: string | null;
   /** Placeholder output (sample provider) or a prompt written in sample mode. */
@@ -39,6 +58,14 @@ export type LookView = {
   createdAt: Date;
   decidedAt: Date | null;
 };
+
+function specView(spec: LookSpec | null): LookSpecView | null {
+  if (!spec) return null;
+  const { output: _output, referenceFileIds: _files, ...rest } = spec;
+  void _output;
+  void _files;
+  return rest;
+}
 
 export type SheetView = {
   id: string;
@@ -68,6 +95,12 @@ export function toLookView(row: LookRow, provider: string | null, model: string 
     fileId: row.fileId,
     userPrompt: row.userPrompt,
     guidedAnswers: row.guidedAnswers,
+    references: row.references,
+    clarifyAnswers: row.clarifyAnswers,
+    spec: specView(row.spec),
+    aspectRatio: row.spec?.aspectRatio ?? null,
+    parentId: row.parentId,
+    started: row.prompt !== null || row.damiRunId !== null || row.generationId !== null,
     failure: row.failure,
     isSample: sampleFlag(provider, model),
     createdAt: row.createdAt,
@@ -193,7 +226,7 @@ export async function latestByAsset(
 export async function newestLookWithStatus(
   db: DbExecutor,
   assetIds: string[],
-  status: LookStatus,
+  status: AssetLookStatus,
 ): Promise<Map<string, LookRow>> {
   if (assetIds.length === 0) return new Map();
   const rows = await db

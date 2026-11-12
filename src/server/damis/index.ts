@@ -3,9 +3,10 @@
  * Nothing here touches Claude or the database at import time.
  */
 import { assetDetector } from "./asset-detector/dami";
-import { assetFixer } from "./asset-fixer/dami";
+import { characterGenerator } from "./character-generator/dami";
 import { blockReviser } from "./block-reviser/dami";
-import { assetPromptWriter } from "./asset-prompt-writer/dami";
+import { locationGenerator } from "./location-generator/dami";
+import { propGenerator } from "./prop-generator/dami";
 import type { AnyDami } from "./framework/define";
 import { promptSectioner } from "./prompt-sectioner/dami";
 import { scriptChecker } from "./script-checker/dami";
@@ -241,33 +242,61 @@ export {
   type SectionedBlock,
 } from "./prompt-sectioner/section-script";
 
-// Reference images and sheets (pre-production)
-export { assetPromptWriter, assetFixer, sheetGenerator, sheetFixer };
+// Designers (pre-production): character, location and prop generators
+export { characterGenerator, locationGenerator, propGenerator };
 export {
-  assetPromptWriterInputSchema,
-  assetPromptWriterOutputSchema,
-  type AssetPromptWriterInput,
-  type AssetPromptWriterOutput,
-} from "./asset-prompt-writer/schema";
-export { ASSET_QUESTIONS, type GuidedQuestion } from "./asset-prompt-writer/questions";
+  CHARACTER_DETAIL_FIELDS,
+  CHARACTER_REFERENCE_ROLES,
+  characterGeneratorInputSchema,
+  characterGeneratorOutputSchema,
+  type CharacterDetailField,
+  type CharacterGeneratorInput,
+  type CharacterGeneratorOutput,
+} from "./character-generator/schema";
 export {
-  assetFixerInputSchema,
-  assetFixerOutputSchema,
-  lookIssueCodeSchema,
-  lookReviewSchema,
-  type AssetFixerInput,
-  type AssetFixerOutput,
-} from "./asset-fixer/schema";
+  LOCATION_REFERENCE_ROLES,
+  locationGeneratorInputSchema,
+  locationGeneratorOutputSchema,
+  type LocationGeneratorInput,
+  type LocationGeneratorOutput,
+} from "./location-generator/schema";
+export { LOCATION_FIX_EFFORT, isLocationFix } from "./location-generator/dami";
 export {
-  LOOK_ISSUES,
-  LOOK_ISSUE_CODES,
-  LOOK_ISSUE_LIST,
-  LOOK_ISSUE_KINDS,
-  lookIssueFits,
-  lookIssuesFor,
-  type LookIssueCode,
-  type LookIssueDefinition,
-} from "./asset-fixer/issues";
+  PROP_ADVANCED_FIELDS,
+  PROP_REFERENCE_ROLES,
+  propGeneratorInputSchema,
+  propGeneratorOutputSchema,
+  type PropAdvancedField,
+  type PropGeneratorInput,
+  type PropGeneratorOutput,
+} from "./prop-generator/schema";
+export { PROP_FIX_EFFORT, isPropFix, notAProp } from "./prop-generator/dami";
+export { ADVANCED_PREFIX } from "./prop-generator/questions";
+export {
+  AI_DECIDES,
+  designerProject,
+  MAX_DESIGN_REFERENCES,
+  type DesignerFixRequest,
+  type DesignerProject,
+  type DesignerScene,
+  type DesignerScript,
+} from "./shared/designer";
+export {
+  DESIGNER_CATALOGS,
+  DESIGNER_DAMI_KEYS,
+  designerFor,
+  designerQuestions,
+  LOOK_FRAMES,
+  REFERENCE_CONFLICTS,
+  REFERENCE_ROLES,
+  type DesignerKey,
+  type GuidedQuestion,
+  type QuestionContext,
+  type ReferenceRoleChoice,
+} from "./designers";
+
+// Reference sheets (pre-production; the owner's sheet makers replace these in Phase 5)
+export { sheetGenerator, sheetFixer };
 export {
   sheetGeneratorInputSchema,
   sheetGeneratorOutputSchema,
@@ -355,8 +384,9 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [scriptReviser.key]: scriptReviser,
   [assetDetector.key]: assetDetector,
   [promptSectioner.key]: promptSectioner,
-  [assetPromptWriter.key]: assetPromptWriter,
-  [assetFixer.key]: assetFixer,
+  [characterGenerator.key]: characterGenerator,
+  [locationGenerator.key]: locationGenerator,
+  [propGenerator.key]: propGenerator,
   [sheetGenerator.key]: sheetGenerator,
   [sheetFixer.key]: sheetFixer,
   [textBlocks.key]: textBlocks,

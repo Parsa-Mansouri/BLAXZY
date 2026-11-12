@@ -1,0 +1,214 @@
+{
+  "asset_id": "brass locket",
+  "asset_name": "brass locket",
+  "source_mode": "prompt_only",
+  "script_analysis": {
+    "role_in_story": "brass locket is handled in the scene.",
+    "actions_on_object": ["Scene 1: Mara opens the brass locket."],
+    "required_features": [],
+    "required_states": ["Open"],
+    "dramatic_weight": "It should be noticed."
+  },
+  "classification": {
+    "families": ["hero_prop", "functional_prop"],
+    "importance": "hero",
+    "interaction": "multi_state",
+    "complexity": "medium"
+  },
+  "spec_fields": [
+    {
+      "field": "what_is_it",
+      "value": "A small tarnished brass locket that opens on a photo.",
+      "status": "confirmed",
+      "source": "script",
+      "critical": true
+    },
+    {
+      "field": "silhouette",
+      "value": "Compact box with a rounded lid",
+      "status": "inferred",
+      "source": "dami",
+      "critical": true
+    },
+    {
+      "field": "proportions",
+      "value": "1 : 1.2 : 0.8 (height : width : depth)",
+      "status": "inferred",
+      "source": "dami",
+      "critical": true
+    },
+    {
+      "field": "scale",
+      "value": "small: fits in one hand",
+      "status": "confirmed",
+      "source": "guided_answer",
+      "critical": true
+    },
+    {
+      "field": "materials",
+      "value": "aged brass with a dark wooden body",
+      "status": "inferred",
+      "source": "dami",
+      "critical": true
+    },
+    {
+      "field": "front_definition",
+      "value": "The face with the clasp",
+      "status": "inferred",
+      "source": "dami",
+      "critical": true
+    },
+    {
+      "field": "wear",
+      "value": "Light, honest wear on the edges",
+      "status": "inferred",
+      "source": "dami",
+      "critical": false
+    }
+  ],
+  "clarifying_questions": [],
+  "dna": {
+    "object_type": "A small tarnished brass locket that opens on a photo.",
+    "front_definition": "The face with the clasp",
+    "geometry": {
+      "silhouette": "Compact box with a rounded lid",
+      "proportions": "1 : 1.2 : 0.8 (height : width : depth)",
+      "rest_orientation": "Rests on its flat base, lid up",
+      "parts": [
+        {
+          "part_id": "body",
+          "name": "Body",
+          "attaches_to": "none",
+          "face": "whole",
+          "description": "The main box."
+        },
+        {
+          "part_id": "lid",
+          "name": "Lid",
+          "attaches_to": "body",
+          "face": "T",
+          "description": "Rounded, hinged at the back."
+        }
+      ]
+    },
+    "scale": {
+      "size_class": "hand_held",
+      "dimensions_cm": null,
+      "dimensions_status": "inferred",
+      "relative_reference": "small: fits in one hand",
+      "scale_reference_type": "hand"
+    },
+    "materials": [
+      {
+        "part_id": "body",
+        "material": "aged brass with a dark wooden body",
+        "finish": "satin",
+        "color": "warm brown",
+        "wear": "light"
+      }
+    ],
+    "palette": ["warm brown", "dull brass"],
+    "signature_details": [
+      {
+        "detail_id": "clasp",
+        "description": "A small brass clasp",
+        "face": "F",
+        "position": "upper-left of FRONT",
+        "asymmetric": true,
+        "is_text": false,
+        "text_content": null,
+        "render_as": "as_designed"
+      }
+    ],
+    "states": [
+      {
+        "state_id": "closed",
+        "name": "Closed",
+        "description": "At rest.",
+        "is_default": true
+      },
+      {
+        "state_id": "open",
+        "name": "Open",
+        "description": "Lid lifted, the inside visible.",
+        "is_default": false
+      }
+    ],
+    "mechanics": [
+      {
+        "mechanism_id": "hinge",
+        "type": "hinge",
+        "part_id": "lid",
+        "how": "Hinged along the back edge, opens up to 100 degrees."
+      }
+    ],
+    "must_keep": [],
+    "must_not": ["No real brand names or logos"],
+    "mutable": ["Dust", "Contents"]
+  },
+  "project_links": {
+    "scene_refs": ["1"],
+    "character_links": [
+      {
+        "character_id": "Mara",
+        "usage": "Opens it.",
+        "hand": "right"
+      }
+    ],
+    "location_links": []
+  },
+  "sheet_plan": {
+    "level": "production",
+    "level_reason": "hero importance, multi state use.",
+    "views": [
+      {
+        "view_id": "front",
+        "purpose": "The front face straight on."
+      },
+      {
+        "view_id": "right",
+        "purpose": "The right side."
+      },
+      {
+        "view_id": "back",
+        "purpose": "The back face, never a mirror of the front."
+      },
+      {
+        "view_id": "left",
+        "purpose": "The left side."
+      },
+      {
+        "view_id": "detail_1",
+        "purpose": "The clasp up close."
+      },
+      {
+        "view_id": "detail_2",
+        "purpose": "The hinge up close."
+      },
+      {
+        "view_id": "state_open",
+        "purpose": "The object open."
+      },
+      {
+        "view_id": "scale_ref",
+        "purpose": "True size beside a hand."
+      }
+    ]
+  },
+  "hero_view": {
+    "view_id": "hero_34",
+    "hero_source": "generate",
+    "state_id": "closed",
+    "image_prompt": "A small tarnished brass locket that opens on a photo., rendered as Realistic rendering. Hero three-quarter view between the front and right faces, camera 15 to 20 degrees above the object's centre, the whole object in frame with a comfortable margin. A compact box with a rounded lid, proportions 1 : 1.2 : 0.8, made of aged brass with a dark wooden body. The clasp sits on the front face, on the viewer's left half; the right face is on the viewer's right. Default state: closed. Seamless neutral mid-grey background, soft even studio light, long-lens perspective. No hands, people, other objects, labels or text.",
+    "aspect_ratio": "1:1",
+    "reference_order": [],
+    "must_show": ["The clasp on the front face"],
+    "must_not_show": ["Hands", "Text"]
+  },
+  "changes_identity": false,
+  "style_used": "Realistic rendering",
+  "style_source": "project_style",
+  "applied_fixes": [],
+  "assumptions": ["Chose aged brass with a dark wooden body as the materials."],
+  "warnings": []
+}

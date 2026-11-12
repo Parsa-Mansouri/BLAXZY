@@ -27,6 +27,20 @@ code that calls the Claude API and the only writer of `dami_run`.
   text stored in `script_version.content` and flattens it for the Asset Detector.
 - `enhancer/` rewrites a quick idea (genre and style blocks verbatim from the owner's file).
 
+## Designers (pre-production)
+
+- `character-generator/` (v5, the whole owner file is the system prompt), `location-generator/`
+  (v1, core + `location-shared/` orientation and one genre and one style lens) and
+  `prop-generator/` (v1, core + the four `prop-shared/` modules). Prompt text is generated
+  verbatim into `prompt-text.ts` / `modules.ts`; each test checks it against `source/`.
+- Each has `questions.ts` (guided questions and their skip logic) and reads reference photos by
+  file id, attached in index order before the input JSON. `designers.ts` maps asset kinds to a
+  designer (legacy creature → character; costume and other → prop), its catalog, photo roles and
+  the preference codes that contradict a photo. `shared/designer.ts` holds the project block and
+  fix-request shape they share.
+- Fix rounds of locations and props run at `low` effort (the owner's temperature 0.3).
+- The draft `asset-prompt-writer` and `asset-fixer` were retired.
+
 ## Images
 
 A message part may be `{ image: { fileId } }`: the dami input keeps only file ids. In live mode

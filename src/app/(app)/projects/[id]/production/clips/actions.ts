@@ -30,9 +30,14 @@ function failure(error: unknown): { ok: false; error: string } {
   return { ok: false, error: SERVER_PROBLEM };
 }
 
-/** The sidebar shows the credit balance, so a change refreshes the whole project. */
+/** Finishing the film changes the stage shown around every page of the project. */
 function refreshProject(projectId: string) {
   revalidatePath(`/projects/${projectId}`, "layout");
+}
+
+/** A clip decision shows in Production's screens; the sidebar's balance refreshes itself. */
+function refreshProduction(projectId: string) {
+  revalidatePath(`/projects/${projectId}/production`, "layout");
 }
 
 /** The next page of the board. */
@@ -109,7 +114,7 @@ export async function reviewTakeAction(
   try {
     const stage = await submitTakeReview({ takeId, userId: user.id, ...review });
     if (!stage) return { ok: false, error: MISSING };
-    refreshProject(projectId);
+    refreshProduction(projectId);
     const next = await findNextToReview(projectId, user.id, shot.orderIndex, shot.lineageId).catch(
       (error: unknown) => {
         console.error("[clip actions] next shot", error);
@@ -127,7 +132,7 @@ export async function retryTakeAction(projectId: string, takeId: string): Promis
   try {
     const stage = await retryTake({ takeId, userId: user.id });
     if (!stage) return { ok: false, error: MISSING };
-    refreshProject(projectId);
+    refreshProduction(projectId);
     return { ok: true, data: null };
   } catch (error) {
     return failure(error);

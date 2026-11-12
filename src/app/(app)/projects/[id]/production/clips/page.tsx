@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/server/auth";
+import { loadProduction } from "../../_lib/load-production";
 import { loadProject } from "../../_lib/load-project";
-import { loadProjectForStage } from "../../_lib/load-stage";
+import { clipsHref } from "../../_lib/production-routes";
 import { ClipsBoard } from "./_components/clips-board";
 import { BOARD_PAGE_SIZE, readBoard } from "./_lib/clip-data";
 
@@ -17,8 +17,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 /** Every shot of the film as a poster tile, in story order, with the one next step. */
 export default async function ClipsPage({ params }: { params: Params }) {
   const { id } = await params;
-  const project = await loadProjectForStage(id, "production");
-  const user = await requireUser();
+  const { project, user } = await loadProduction(id, { screen: "clips", href: clipsHref });
   const board = await readBoard(project.id, user.id, null, BOARD_PAGE_SIZE);
   if (!board) notFound();
 

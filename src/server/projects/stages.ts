@@ -61,6 +61,35 @@ export async function advanceStage(input: AdvanceStageInput, tx?: DbTransaction)
   return tx ? run(tx) : getDb().transaction(run);
 }
 
+/**
+ * The one way back in the stage machine: a finished film whose shots changed (a script edit sent
+ * some back through preparation) is in production again. Compare-and-set `done → production`,
+ * logged as `stage.reopened` with the reason; false (and nothing logged) when the project is not
+ * done, so calling it again is harmless. Pass `tx` to run inside the caller's transaction.
+ */
+export async function reopenProduction(
+  input: { projectId: string; reason: string; userId?: string | null },
+  tx?: DbTransaction,
+): Promise<boolean> {
+  const run = async (db: DbTransaction): Promise<boolean> => {
+    const changed = await db
+      .update(project)
+      .set({ stage: "production" })
+      .where(and(eq(project.id, input.projectId), eq(project.stage, "done")))
+      .returning({ id: project.id });
+    if (changed.length === 0) return false;
+    await db.insert(projectEvent).values({
+      projectId: input.projectId,
+      userId: input.userId ?? null,
+      type: "stage.reopened",
+      payload: { from: "done", to: "production", reason: input.reason },
+    });
+    console.info(`[projects] production reopened for ${input.projectId}: ${input.reason}`);
+    return true;
+  };
+  return tx ? run(tx) : getDb().transaction(run);
+}
+
 function validateStyle(style: unknown) {
   const parsed = projectStyleSchema.safeParse(style);
   if (!parsed.success) {

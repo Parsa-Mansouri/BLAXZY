@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button, StatusLine } from "@/ui";
 import type { BackgroundStatus } from "../../_lib/background-status";
+import { productionHref } from "../../_lib/production-routes";
 import { usePolling } from "../../_lib/use-polling";
 import { backgroundStatusAction, retrySectioningAction } from "../actions";
 
@@ -19,9 +22,13 @@ export function useBackgroundStatus(
     setSeen(initial);
     setStatus(initial);
   }
+  const router = useRouter();
   usePolling(async (isActive) => {
     const next = await backgroundStatusAction(projectId, acceptedId);
-    if (isActive() && next) setStatus(next);
+    if (!isActive() || !next) return;
+    setStatus(next);
+    // Cutting the shots can reopen a finished film: show the stage as it is now.
+    if (next.state !== "running") router.refresh();
   }, status?.state === "running");
   return [status, setStatus] as const;
 }
@@ -62,6 +69,32 @@ export function BackgroundFailure({
         Try Again
       </Button>
       {error ? <p className="text-secondary text-red">{error}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * After a script edit: how many shots it changed, with the way to Production where they are
+ * prepared again. Nothing when the edit changed none.
+ */
+export function EditChangedNotice({
+  projectId,
+  status,
+}: {
+  projectId: string;
+  status: BackgroundStatus;
+}) {
+  if (status.state !== "done" || status.resetBlocks <= 0) return null;
+  return (
+    <div role="status" aria-live="polite" className="flex flex-col items-start gap-2">
+      <p className="text-secondary text-label-2">
+        {status.resetBlocks === 1
+          ? "The edit changed 1 shot. It is prepared again in Production."
+          : `The edit changed ${status.resetBlocks} shots. They are prepared again in Production.`}
+      </p>
+      <Button variant="outlined" size="small" render={<Link href={productionHref(projectId)} />}>
+        Open Production
+      </Button>
     </div>
   );
 }

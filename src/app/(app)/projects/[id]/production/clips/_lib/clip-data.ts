@@ -29,6 +29,8 @@ export interface BoardSummary {
   canComplete: boolean;
   /** Every shot is final (also once the project is done). */
   allFinal: boolean;
+  /** The project is finished (every shot final and the film completed). */
+  finished: boolean;
   /** The first shot in story order waiting for review, for "Review Next". */
   firstToReview: string | null;
 }
@@ -70,6 +72,7 @@ export async function readBoard(
       counts: overview.counts,
       canComplete: overview.canComplete,
       allFinal: overview.blockCount > 0 && overview.counts.done === overview.blockCount,
+      finished: overview.projectStage === "done",
       firstToReview: review.items[0]?.lineageId ?? null,
     },
   };

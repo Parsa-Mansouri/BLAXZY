@@ -3,7 +3,7 @@
  * thumbnail, and the per-stage counts of a project. Not exported from the module index.
  */
 import { describeAssetRefs } from "@/server/assets";
-import { listCurrentBlockStates, type PromptBlock } from "@/server/blocks";
+import { listCurrentBlockStates, listScriptResetBlocks, type PromptBlock } from "@/server/blocks";
 import type { DbExecutor } from "@/server/db/client";
 import type { AssetKind } from "@/server/db/schema";
 import { deriveBlockStage, emptyCounts, isBusy, type BlockProductionStage } from "./stage";
@@ -36,7 +36,18 @@ export type ProductionBlock = {
   posterFileId: string | null;
   /** Why preparation failed (stage `prepare_failed`), or why the block waits (`preparing` after a script edit). */
   failure: string | null;
+  /**
+   * A script edit changed this shot and sent it back through preparation; true until the new
+   * version is approved (stages `preparing`, `prepare_failed` and `block_review` only).
+   */
+  scriptChanged: boolean;
 };
+
+const SCRIPT_CHANGE_STAGES: readonly BlockProductionStage[] = [
+  "preparing",
+  "prepare_failed",
+  "block_review",
+];
 
 export function stageOf(block: PromptBlock, take: TakeRow | null): BlockProductionStage {
   return deriveBlockStage(block, take);
@@ -66,7 +77,12 @@ export async function toProductionBlocks(
   const latest = takes ?? (await latestLiveTakes(db, projectId, lineageIds));
   const posters = await newestPosters(db, projectId, lineageIds);
   const refs = await describeAssetRefs(projectId, blocks.flatMap(refsOf), db);
+  const reset = await listScriptResetBlocks(
+    blocks.map((b) => b.id),
+    db,
+  );
   return blocks.map((block) => {
+    const stage = stageOf(block, latest.get(block.lineageId) ?? null);
     const assets: ProductionBlockAsset[] = [];
     for (const ref of refsOf(block)) {
       const found = refs.get(ref);
@@ -86,7 +102,7 @@ export async function toProductionBlocks(
       title: block.title,
       durationSeconds: block.durationSeconds,
       scriptExcerpt: block.scriptExcerpt,
-      stage: stageOf(block, latest.get(block.lineageId) ?? null),
+      stage,
       prompt: block.productionState === "ready" ? block.productionPrompt : null,
       assets,
       notes: block.productionNotes ?? [],
@@ -96,6 +112,7 @@ export async function toProductionBlocks(
         : block.productionState === "failed"
           ? block.productionFailure
           : null,
+      scriptChanged: !block.stale && reset.has(block.id) && SCRIPT_CHANGE_STAGES.includes(stage),
     };
   });
 }

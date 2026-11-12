@@ -1,10 +1,13 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { Download } from "lucide-react";
+import type { ProductionPhase } from "@/server/production";
 import { Button, PageHeader, ProgressBar, StatusLine, cn, formatDurationLong, stagger } from "@/ui";
 import { FillPage } from "../../_components/fill-page";
 import { PosterTile } from "../../_components/poster-tile";
+import { phaseHref } from "../../../_lib/production-routes";
 import { usePolling } from "../../../_lib/use-polling";
 import {
   clipDownloadAction,
@@ -85,18 +88,27 @@ function useExport(projectId: string) {
 
 /**
  * The finished film as a shelf: every final clip in story order as a poster card. Hovering or
- * focusing a card slides up Play and Download; Download All packs every clip into one ZIP.
+ * focusing a card slides up Play and Download; Download All packs every clip into one ZIP. While
+ * some shots are made again (a script edit reopened the film), the final ones stay here and
+ * Download All waits until every shot is final.
  */
 export function FinishedScreen({
   projectId,
   initial,
   initialCursor,
   portrait,
+  complete,
+  projectStage,
+  phase,
 }: {
   projectId: string;
   initial: FinishedClip[];
   initialCursor: string | null;
   portrait: boolean;
+  /** Every shot is final. */
+  complete: boolean;
+  projectStage: "production" | "done";
+  phase: ProductionPhase;
 }) {
   const [clips, setClips] = useState(initial);
   const [cursor, setCursor] = useState(initialCursor);
@@ -142,17 +154,31 @@ export function FinishedScreen({
     <FillPage>
       <PageHeader
         title="Finished"
-        description="Every shot of this film, ready for your editor."
+        description={
+          complete
+            ? "Every shot of this film, ready for your editor."
+            : "Some shots are not final yet. Their final clips can be watched and downloaded here, and Download All opens once every shot is final."
+        }
         actions={
-          <Button
-            variant="primary"
-            size="large"
-            leadingIcon={<Download aria-hidden />}
-            loading={exporting.starting || working}
-            onClick={exporting.start}
-          >
-            Download All
-          </Button>
+          complete ? (
+            <Button
+              variant="primary"
+              size="large"
+              leadingIcon={<Download aria-hidden />}
+              loading={exporting.starting || working}
+              onClick={exporting.start}
+            >
+              Download All
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              size="large"
+              render={<Link href={phaseHref(projectId, phase, projectStage)} />}
+            >
+              {phase === "preparing" || phase === "block_review" ? "Review Shots" : "Open Clips"}
+            </Button>
+          )
         }
       />
 

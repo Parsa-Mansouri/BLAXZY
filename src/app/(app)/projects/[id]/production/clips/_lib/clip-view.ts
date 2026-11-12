@@ -3,6 +3,7 @@
  * labels, the take shown in the player and the fingerprint the pages poll. No React, no server.
  */
 import type { BlockProductionStage, TakeView } from "@/server/production";
+import { SHOT_STATUS_LABELS } from "../../../_lib/shot-status";
 
 export type Orientation = "landscape" | "portrait";
 
@@ -15,19 +16,8 @@ export interface ClipTileData {
   posterFileId: string | null;
 }
 
-/** Where a shot is, as the board and the clip page say it. */
-export const CLIP_STATE_LABELS: Record<BlockProductionStage, string> = {
-  preparing: "Preparing",
-  prepare_failed: "Needs Attention",
-  block_review: "Shot Review",
-  approved: "Waiting for Draft",
-  draft_generating: "Rendering Draft",
-  draft_review: "Review Draft",
-  final_generating: "Finishing in Full Quality",
-  final_review: "Review Final",
-  done: "Final",
-  failed: "Needs Attention",
-};
+/** Where a shot is, as the board and the clip page say it (the shared Production vocabulary). */
+export const CLIP_STATE_LABELS: Record<BlockProductionStage, string> = SHOT_STATUS_LABELS;
 
 /** Status colours of the kit's StatusLine / StatusDot. */
 export type ClipTone = "done" | "waiting" | "working" | "failed";
@@ -83,7 +73,6 @@ export function statusLine(counts: StageCounts): string {
   const review = counts.draft_review + counts.final_review;
   const rendering = counts.draft_generating + counts.final_generating;
   const failed = counts.failed + counts.prepare_failed;
-  const before = counts.preparing + counts.block_review + counts.approved;
   const all = Object.values(counts).reduce((sum, n) => sum + n, 0);
   if (all === 0) return "No shots yet";
   if (counts.done === all) return "Every shot is final";
@@ -91,7 +80,9 @@ export function statusLine(counts: StageCounts): string {
   if (review > 0) parts.push(`${review} to review`);
   if (failed > 0) parts.push(`${failed} failed`);
   if (rendering > 0) parts.push(`${rendering} rendering`);
-  if (before > 0) parts.push(`${before} in shot review`);
+  if (counts.preparing > 0) parts.push(`${counts.preparing} preparing`);
+  if (counts.block_review > 0) parts.push(`${counts.block_review} to review in Shots`);
+  if (counts.approved > 0) parts.push(`${counts.approved} waiting for drafts`);
   if (parts.length === 0) return "Nothing to review right now";
   return parts.join(" · ");
 }
@@ -103,6 +94,25 @@ export function statusTone(counts: StageCounts): ClipTone {
   const all = Object.values(counts).reduce((sum, n) => sum + n, 0);
   if (all > 0 && counts.done === all) return "done";
   return "working";
+}
+
+/**
+ * What the user should do in Shots for the shots that wait there (review them, or start their
+ * drafts), or null when no shot waits for the user in Shots.
+ */
+export function shotsHint(counts: StageCounts): string | null {
+  const review = counts.block_review + counts.prepare_failed;
+  if (review > 0) {
+    return review === 1
+      ? "1 shot waits for its review in Shots. Review it, then generate its draft."
+      : `${review} shots wait for their review in Shots. Review them, then generate their drafts.`;
+  }
+  if (counts.approved > 0 && counts.preparing === 0) {
+    return counts.approved === 1
+      ? "1 approved shot waits for its draft. Generate it in Shots."
+      : `${counts.approved} approved shots wait for their drafts. Generate them in Shots.`;
+  }
+  return null;
 }
 
 /** "Draft 2", "Final", "Final 2": each take named by its kind and its place among that kind. */

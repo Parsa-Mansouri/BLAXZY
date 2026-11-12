@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -22,6 +22,7 @@ import {
   refreshBlocksAction,
   type BlocksSnapshot,
 } from "../actions";
+import { takeArrival } from "../_lib/arrival";
 import { attentionTone, attentionWords, needsReview } from "../_lib/block-state";
 import { BlockRow } from "./block-row";
 import { GenerateSheet } from "./generate-sheet";
@@ -44,6 +45,19 @@ export function BlocksScreen({
 }) {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState(initial);
+  const [seen, setSeen] = useState(initial);
+  // A fresh server render (a refresh, coming back to the list) replaces the local copy, so the
+  // status line says where the shots stand now.
+  if (seen !== initial) {
+    setSeen(initial);
+    setSnapshot(initial);
+  }
+  const statusRef = useRef<HTMLDivElement>(null);
+  // Arriving from Approve on the last shot to review: focus starts at the status line under the
+  // title (the page heading itself is not focusable).
+  useEffect(() => {
+    if (takeArrival()) statusRef.current?.focus({ preventScroll: true });
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
   const [approveOpen, setApproveOpen] = useState(false);
@@ -51,7 +65,6 @@ export function BlocksScreen({
   const [approveError, setApproveError] = useState<string | undefined>();
   const [generateOpen, setGenerateOpen] = useState(false);
   const busyRef = useRef(false);
-  const statusRef = useRef<HTMLDivElement>(null);
 
   const { items, nextCursor, counts } = snapshot;
   const preparing = counts.preparing > 0;
@@ -60,7 +73,7 @@ export function BlocksScreen({
   /** Takes a fresh snapshot; leaves the screen when the shots moved on to clips. */
   function adopt(next: BlocksSnapshot) {
     if (next.phase === "generating" || next.phase === "finished") {
-      router.push(phaseHref(projectId, next.phase));
+      router.push(phaseHref(projectId, next.phase, next.projectStage));
       return;
     }
     setSnapshot(next);

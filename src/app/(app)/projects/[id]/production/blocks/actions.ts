@@ -31,6 +31,7 @@ export interface BlocksSnapshot {
   nextCursor: string | null;
   counts: Record<BlockProductionStage, number>;
   phase: ProductionPhase;
+  projectStage: "production" | "done";
   canStartDrafts: boolean;
 }
 
@@ -58,9 +59,9 @@ function failure(error: unknown): { ok: false; error: string } {
   return { ok: false, error: SERVER_PROBLEM };
 }
 
-/** The sidebar shows the credit balance, so a change refreshes the whole project. */
-function refreshProject(projectId: string) {
-  revalidatePath(`/projects/${projectId}`, "layout");
+/** Starting the drafts shows in Production's screens; the sidebar's balance refreshes itself. */
+function refreshProduction(projectId: string) {
+  revalidatePath(`/projects/${projectId}/production`, "layout");
 }
 
 async function readSnapshot(
@@ -87,6 +88,7 @@ async function readSnapshot(
     nextCursor: next,
     counts: overview.counts,
     phase: overview.phase,
+    projectStage: overview.projectStage,
     canStartDrafts: overview.canStartDrafts,
   };
 }
@@ -172,7 +174,7 @@ export async function startDraftsAction(
   const user = await requireUser();
   try {
     await startDrafts({ projectId, userId: user.id, expectedCredits });
-    refreshProject(projectId);
+    refreshProduction(projectId);
     return { ok: true, data: null };
   } catch (error) {
     const result = failure(error);

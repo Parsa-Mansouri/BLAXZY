@@ -9,6 +9,8 @@ export interface BackgroundStatus {
   detected: boolean;
   blockCount: number;
   failure: string | null;
+  /** Shots the last script edit sent back through Production's preparation. */
+  resetBlocks: number;
   counts: Record<AssetKindKey, number>;
 }
 
@@ -30,6 +32,7 @@ export async function loadBackgroundStatus(
     detected,
     blockCount: status.blockCount,
     failure: status.failure,
+    resetBlocks: status.resetBlocks,
     counts,
   };
 }

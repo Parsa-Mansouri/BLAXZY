@@ -1,7 +1,7 @@
 import { Readable } from "node:stream";
 import { unzipSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import { promptForChosenAssets } from "./jobs";
+import { promptForChosenAssets, promptTail } from "./jobs";
 import { clipDownloadName, exportDownloadName, fileSlug, shotsCsv } from "./names";
 import { assertZipFits, crc32Of, storedZipSize, storedZipStream, ZipLimitError } from "./zip";
 
@@ -12,23 +12,52 @@ async function collect(stream: Readable): Promise<Uint8Array> {
 }
 
 describe("download names", () => {
-  it("builds organised clip names", () => {
+  it("builds organised clip names: no episode part in a movie, E01 in a series", () => {
     expect(
       clipDownloadName({
         projectTitle: "QA Run 14:03",
-        episodeNumber: 1,
+        episodeNumber: null,
         orderIndex: 11,
         title: "Sc 1 · Harbour Pier. A single warm lamp…",
       }),
-    ).toBe("qa-run-14-03_E01_B012_sc-1-harbour-pier-a-single-warm-lamp.mp4");
+    ).toBe("qa-run-14-03_B012_sc-1-harbour-pier-a-single-warm-lamp.mp4");
     expect(
       clipDownloadName({ projectTitle: "Ünïcode", episodeNumber: 12, orderIndex: 0, title: null }),
     ).toBe("unicode_E12_B001_shot.mp4");
     expect(exportDownloadName("!!!")).toBe("film_clips.zip");
-    expect(fileSlug("a".repeat(60), "x")).toHaveLength(40);
   });
 
-  it("writes shots.csv with quoting", () => {
+  it("cuts a long slug after its last whole word", () => {
+    expect(fileSlug("Sc 1 · Harbour Pier. Rain streaks the air silver under", "x")).toBe(
+      "sc-1-harbour-pier-rain-streaks-the-air",
+    );
+    expect(fileSlug("Sc 2 · TOMAS (50s), silver-rimmed glasses, cardigan", "x")).toBe(
+      "sc-2-tomas-50s-silver-rimmed-glasses",
+    );
+    // One word longer than the limit is cut hard.
+    expect(fileSlug("a".repeat(60), "x")).toHaveLength(40);
+    expect(fileSlug("short title", "x")).toBe("short-title");
+  });
+
+  it("writes shots.csv for a movie without the episode column, titles in full", () => {
+    expect(
+      shotsCsv([
+        {
+          order: 2,
+          episode: null,
+          title: "Sc 1 · Harbour Pier. Rain streaks the air silver under…",
+          durationSeconds: 14,
+          fileName: "b.mp4",
+          scriptExcerpt: "Rain.",
+        },
+      ]),
+    ).toBe(
+      "﻿order,title,duration_seconds,file_name,script_excerpt\r\n" +
+        "2,Sc 1 · Harbour Pier. Rain streaks the air silver under,14,b.mp4,Rain.\r\n",
+    );
+  });
+
+  it("writes shots.csv for a series with quoting", () => {
     const csv = shotsCsv([
       {
         order: 1,
@@ -43,6 +72,32 @@ describe("download names", () => {
       csv.startsWith("\uFEFForder,episode,title,duration_seconds,file_name,script_excerpt\r\n"),
     ).toBe(true);
     expect(csv).toContain('1,1,"He said ""go"", then left",5,a.mp4,"LINE ONE\nLINE, TWO"\r\n');
+  });
+});
+
+describe("promptTail", () => {
+  it("passes a short prompt whole", () => {
+    expect(promptTail("Tomas climbs the stairs.  He stops.")).toBe(
+      "Tomas climbs the stairs. He stops.",
+    );
+  });
+
+  it("caps a long prompt and starts it at a sentence", () => {
+    const sentences = Array.from(
+      { length: 30 },
+      (_, i) => `Sentence number ${i + 1} describes the light on the water.`,
+    );
+    const tail = promptTail(sentences.join(" "));
+    expect(tail.length).toBeLessThanOrEqual(300);
+    expect(tail).toMatch(/^Sentence number \d+ describes/);
+    expect(tail.endsWith("Sentence number 30 describes the light on the water.")).toBe(true);
+  });
+
+  it("starts at a word when there is no sentence end to cut at", () => {
+    const tail = promptTail(`${"word ".repeat(100)}end`, 50);
+    expect(tail.length).toBeLessThanOrEqual(50);
+    expect(tail.startsWith("word")).toBe(true);
+    expect(tail.endsWith("end")).toBe(true);
   });
 });
 

@@ -8,7 +8,7 @@ import { Button, PageHeader, StatusLine, SwapFade, cn } from "@/ui";
 import type { BackgroundStatus } from "../../_lib/background-status";
 import { splitScenes } from "../_lib/scenes";
 import { editAcceptedAction } from "../actions";
-import { BackgroundFailure, useBackgroundStatus } from "./background-status";
+import { BackgroundFailure, EditChangedNotice, useBackgroundStatus } from "./background-status";
 import { ON_PAPER, PaperLayers, ReadingSheet, SHEET_X, TitlePage } from "./screenplay-sheet";
 import {
   SAMPLE_LINE,
@@ -137,6 +137,7 @@ export function ScriptAccepted({
           }}
         />
       ) : null}
+      {!readOnly && status ? <EditChangedNotice projectId={projectId} status={status} /> : null}
     </div>
   );
 

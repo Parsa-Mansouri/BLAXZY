@@ -1,21 +1,11 @@
 import type { BlockProductionStage } from "@/server/production";
+import { shotStatusLabel } from "../../../_lib/shot-status";
 
 /** Status colours of the kit's StatusLine / StatusDot. */
 export type Tone = "done" | "waiting" | "working" | "failed";
 
-/** The one vocabulary for a shot's state in the review screens. */
-export const BLOCK_STATE_LABELS: Record<BlockProductionStage, string> = {
-  preparing: "Preparing",
-  prepare_failed: "Failed",
-  block_review: "To Review",
-  approved: "Approved",
-  draft_generating: "Making Draft",
-  draft_review: "Review Draft",
-  final_generating: "Making Final",
-  final_review: "Review Final",
-  done: "Finished",
-  failed: "Failed",
-};
+/** A shot's state in words: the vocabulary shared by every Production screen. */
+export const blockStateLabel = (stage: BlockProductionStage) => shotStatusLabel(stage);
 
 /** Colour of a shot's state: amber waits for the user, grey works, green is done, red failed. */
 export const BLOCK_STATE_TONES: Record<BlockProductionStage, Tone> = {
@@ -31,7 +21,16 @@ export const BLOCK_STATE_TONES: Record<BlockProductionStage, Tone> = {
   failed: "failed",
 };
 
-export const blockStateLabel = (stage: BlockProductionStage) => BLOCK_STATE_LABELS[stage];
+/** The plain notice on a shot a script edit sent back through preparation, or null. */
+export function scriptChangeNotice(block: {
+  scriptChanged: boolean;
+  stage: BlockProductionStage;
+}): string | null {
+  if (!block.scriptChanged) return null;
+  return block.stage === "block_review"
+    ? "The script changed. Review this shot again."
+    : "The script changed. This shot is being prepared again.";
+}
 
 /** Shots that wait for the user to decide before drafts can start. */
 export function needsReview(stage: BlockProductionStage): boolean {

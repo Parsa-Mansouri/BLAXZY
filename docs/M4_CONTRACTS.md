@@ -82,12 +82,17 @@ type ProductionBlock = {
   assets: { ref: string; assetId: string; name: string; kind: AssetKind; thumbnailFileId: string | null }[];
   notes: string[];
   posterFileId: string | null;               // of the newest take with a file
+  scriptChanged: boolean;                    // a script edit sent it back (until approved again)
 };
 
-ensurePrepared(projectId, userId): Promise<void>
+ensurePrepared(projectId, userId): Promise<{ reopened: boolean }>
   // enqueue production.prepare for current blocks whose productionState is none
-  // (called when the stage is opened); no-op when everything is prepared or pending
+  // (called whenever any Production page is entered, whatever the stage); no-op when everything
+  // is prepared or pending. A done project whose current blocks are not all done (and none stale)
+  // is reopened (`reopenProduction`): it heals films stranded by an earlier script edit
+reopenProductionAfterScriptEdit(projectId): Promise<boolean>   // worker, after re-sectioning
 getProductionOverview(projectId, userId): Promise<{
+  projectStage: "production" | "done";
   phase: "preparing" | "block_review" | "generating" | "finished";
   counts: Record<BlockProductionStage, number>;
   blockCount: number;
@@ -129,10 +134,12 @@ getExport(exportId, userId): Promise<ExportView | null>
   // ExportView = { id; status; clipCount; failure; downloadUrl: string | null }
 ```
 
-Download names: `<project-slug>_E01_B012_<title-slug>.mp4` (episode number, 1-based block order,
-zero-padded). The ZIP holds the clips under those names plus `shots.csv` (order, episode, title,
-duration seconds, file name, script excerpt), is written by streaming (no whole film in memory),
-and is stored with purpose `export_zip`.
+Download names: a movie `<project-slug>_B012_<title-slug>.mp4`, a series
+`<project-slug>_E01_B012_<title-slug>.mp4` (episode number, 1-based block order, zero-padded;
+slugs cut at a word). The ZIP holds the clips under those names plus `shots.csv` (order, episode
+for a series only, title, duration seconds, file name, script excerpt; UTF-8 with a BOM for
+Excel), is written by streaming (no whole film in memory), and is stored with purpose
+`export_zip`.
 
 Jobs (handlers in `worker/handlers/`):
 
@@ -149,5 +156,10 @@ The generation completion hook moves a take to `in_review` (with `fileId` and `p
 Reviews go to `review` with `subjectType` `prompt_block` or `generation` (subject id = the block
 version id / the take id) and the `damiRunId` that produced the prompt.
 
-Entering Production requires stage `production`; a script edit that marks blocks stale sends
-them back through preparation (stale blocks cannot be approved or generated).
+Entering Production requires stage `production` or `done`; a script edit that marks blocks stale
+sends them back through preparation (stale blocks cannot be approved or generated). When
+re-sectioning leaves any current block not done, a finished project returns to `production`
+(`reopenProduction` in `@/server/projects`, logged `stage.reopened`); `completeProduction`
+finishes it again. The pages route through one pure function (`productionDestination` /
+`productionRedirect` in `src/app/(app)/projects/[id]/_lib/production-routes.ts`), loop-free by
+construction: a redirect always lands on a page that can be shown.

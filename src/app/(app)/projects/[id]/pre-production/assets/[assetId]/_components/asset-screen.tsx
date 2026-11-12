@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ToolbarBack } from "@/app/(app)/projects/[id]/_components/project-chrome";
+import { refreshCredits, useCreditWatch } from "../../../../../../_lib/credits";
 import { usePolling } from "../../../../_lib/use-polling";
 import type { AssetStage } from "@/server/assets";
 import {
@@ -72,7 +73,8 @@ function useAssetSync(assetId: string, versions: DetailVersions) {
   const key = versionsKey(versions);
   const keyRef = useRef(key);
   const alive = useRef(true);
-  const timers = useRef<number[]>([]);
+  // One set for the component's life, so the unmount cleanup clears the timers set last.
+  const timers = useRef(new Set<number>());
   useEffect(() => {
     keyRef.current = key;
   });
@@ -82,11 +84,14 @@ function useAssetSync(assetId: string, versions: DetailVersions) {
     return () => {
       alive.current = false;
       pending.forEach(clearTimeout);
+      pending.clear();
     };
   }, []);
 
   const check = useCallback(
     async (isActive: () => boolean) => {
+      // Never after the page was left: the action would be posted from another page.
+      if (!isActive() || !alive.current) return;
       const next = await pollAssetAction(assetId);
       if (isActive() && alive.current && next !== keyRef.current) router.refresh();
     },
@@ -95,14 +100,23 @@ function useAssetSync(assetId: string, versions: DetailVersions) {
 
   const unsettled = versions.busy || WORKING_STAGES.includes(versions.stage);
   usePolling(check, true, unsettled ? FAST_POLL_MS : SETTLED_POLL_MS);
+  // A generation in flight reserves or returns credits when it settles.
+  useCreditWatch(unsettled);
 
   const refresh = useCallback(() => {
     if (!alive.current) return;
+    refreshCredits();
     router.refresh();
-    timers.current.forEach(clearTimeout);
-    timers.current = RECHECK_MS.map((ms) =>
-      window.setTimeout(() => void check(() => alive.current).catch(() => {}), ms),
-    );
+    const pending = timers.current;
+    pending.forEach(clearTimeout);
+    pending.clear();
+    for (const ms of RECHECK_MS) {
+      const timer = window.setTimeout(() => {
+        pending.delete(timer);
+        void check(() => alive.current).catch(() => {});
+      }, ms);
+      pending.add(timer);
+    }
   }, [check, router]);
 
   return refresh;

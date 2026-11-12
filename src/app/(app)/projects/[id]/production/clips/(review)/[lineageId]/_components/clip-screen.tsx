@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { BlockDetail, BlockProductionStage, TakeView } from "@/server/production";
 import { Button, IconButton, StatusLine, cn, useToast } from "@/ui";
+import { refreshCredits, useCreditWatch } from "../../../../../../../_lib/credits";
 import { useRefreshReviewList } from "../../../../_components/review-list-context";
 import { usePolling } from "../../../../../_lib/use-polling";
 import {
@@ -69,7 +70,8 @@ function useClipSync(lineageId: string, key: string, unsettled: boolean) {
   const router = useRouter();
   const keyRef = useRef(key);
   const alive = useRef(true);
-  const timers = useRef<number[]>([]);
+  // One set for the component's life, so the unmount cleanup clears the timers set last.
+  const timers = useRef(new Set<number>());
   useEffect(() => {
     keyRef.current = key;
   });
@@ -79,11 +81,14 @@ function useClipSync(lineageId: string, key: string, unsettled: boolean) {
     return () => {
       alive.current = false;
       pending.forEach(clearTimeout);
+      pending.clear();
     };
   }, []);
 
   const check = useCallback(
     async (isActive: () => boolean) => {
+      // Never after the page was left: the action would be posted from another page.
+      if (!isActive() || !alive.current) return;
       const next = await pollClipAction(lineageId);
       if (isActive() && alive.current && next !== null && next !== keyRef.current) {
         router.refresh();
@@ -97,10 +102,16 @@ function useClipSync(lineageId: string, key: string, unsettled: boolean) {
   return useCallback(() => {
     if (!alive.current) return;
     router.refresh();
-    timers.current.forEach(clearTimeout);
-    timers.current = RECHECK_MS.map((ms) =>
-      window.setTimeout(() => void check(() => alive.current).catch(() => {}), ms),
-    );
+    const pending = timers.current;
+    pending.forEach(clearTimeout);
+    pending.clear();
+    for (const ms of RECHECK_MS) {
+      const timer = window.setTimeout(() => {
+        pending.delete(timer);
+        void check(() => alive.current).catch(() => {});
+      }, ms);
+      pending.add(timer);
+    }
   }, [check, router]);
 }
 
@@ -115,10 +126,21 @@ function isTyping(target: EventTarget | null): boolean {
   );
 }
 
-function decisionWords(stage: TakeView["stage"], decision: ReviewRequest["decision"]): string {
-  if (decision === "rejected") return "Changes requested. A new draft is rendering.";
-  return stage === "draft" ? "Draft accepted. The final is rendering." : "The shot is final.";
+function decisionWords(
+  stage: TakeView["stage"],
+  decision: ReviewRequest["decision"],
+  shot: number,
+): string {
+  if (decision === "rejected") {
+    return `Changes requested for Shot ${shot}. A new draft of it is rendering.`;
+  }
+  return stage === "draft"
+    ? `Draft of Shot ${shot} accepted. The final is rendering.`
+    : `Shot ${shot} is final.`;
 }
+
+/** How long the confirmation stays: long enough to read after the screen moved on. */
+const DECISION_TOAST_MS = 8000;
 
 /** The caption under the player when it shows an older take than the latest. */
 function heldCaption(stage: BlockProductionStage, label: string): string {
@@ -156,7 +178,9 @@ export function ClipScreen(props: ClipScreenProps) {
   const { announce, markArrival } = useClips();
   const shown = useShown();
   const refreshList = useRefreshReviewList();
-  const refresh = useClipSync(shot.lineageId, detailKey(shot), isUnsettled(shot.stage, shot.busy));
+  const unsettled = isUnsettled(shot.stage, shot.busy);
+  const refresh = useClipSync(shot.lineageId, detailKey(shot), unsettled);
+  useCreditWatch(unsettled);
 
   // Announce a stage change, but not the stage the page opened on.
   const announcedStage = useRef(shot.stage);
@@ -202,19 +226,22 @@ export function ClipScreen(props: ClipScreenProps) {
         }
         setAsking(false);
         refreshList();
-        const words = decisionWords(take.stage, review.decision);
+        refreshCredits();
+        const words = decisionWords(take.stage, review.decision, shotNumber(shot.orderIndex));
         const next = result.data.next;
+        const after = next
+          ? `Next to review: Shot ${shotNumber(next.orderIndex)}, ${shotTitle(next).replace(/[.…]+$/u, "")}.`
+          : "No other shot is waiting for review.";
         markArrival();
-        if (next) {
-          toast.success(
-            words,
-            `Next to review: Shot ${shotNumber(next.orderIndex)}, ${shotTitle(next)}.`,
-          );
-          router.push(clipHref(projectId, next.lineageId));
-        } else {
-          toast.success(words, "No other shot is waiting for review.");
-          router.push(boardHref(projectId));
-        }
+        toast.show({
+          kind: "success",
+          title: words,
+          description: after,
+          duration: DECISION_TOAST_MS,
+        });
+        // The clips' live region outlives the move to the next screen.
+        announce(`${words} ${after}`);
+        router.push(next ? clipHref(projectId, next.lineageId) : boardHref(projectId));
       } finally {
         setDeciding(null);
       }
@@ -282,6 +309,7 @@ export function ClipScreen(props: ClipScreenProps) {
           prices={prices}
           balance={balance}
           onDone={() => {
+            refreshCredits();
             refresh();
             refreshList();
           }}

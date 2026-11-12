@@ -69,7 +69,7 @@ export const TAKE_FAILED =
   "The clip could not be generated. Your credits were returned; try again.";
 
 /** Longest tail of the previous block's prompt handed over for continuity. */
-const PREVIOUS_TAIL = 600;
+export const PROMPT_TAIL_LENGTH = 300;
 const LABEL_LENGTH = 120;
 
 const TAG_PATTERN = new RegExp(
@@ -80,6 +80,24 @@ const TAG_PATTERN = new RegExp(
 function clip(text: string, max: number): string {
   const trimmed = text.trim();
   return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
+}
+
+/**
+ * The end of the previous shot's prompt for continuity: at most `max` characters, starting at a
+ * sentence (or, failing that, a word) so it never begins mid-word. The whole prompt when short.
+ */
+export function promptTail(prompt: string, max = PROMPT_TAIL_LENGTH): string {
+  const text = prompt.replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  const window = text.slice(-max);
+  // The first sentence end in the window (a full stop, maybe closing a quote or bracket).
+  const sentence = window.search(/[.!?]["'”’)\]]*\s+(?=\S)/);
+  if (sentence >= 0) {
+    const rest = window.slice(sentence + 1).replace(/^["'”’)\]]*\s+/, "");
+    if (rest.length >= max / 4) return rest;
+  }
+  const space = window.indexOf(" ");
+  return space >= 0 && space < max / 2 ? window.slice(space + 1) : window;
 }
 
 export function blockTitle(block: Pick<PromptBlock, "title" | "orderIndex">): string {
@@ -194,7 +212,7 @@ export function textBlocksInput(job: PreparationJob, style: ProjectStyle): TextB
     },
     assets: available.map(asBlockAsset),
     previous: previous
-      ? { title: blockTitle(previous), promptTail: previous.prompt.slice(-PREVIOUS_TAIL).trim() }
+      ? { title: blockTitle(previous), promptTail: promptTail(previous.prompt) }
       : undefined,
   };
 }

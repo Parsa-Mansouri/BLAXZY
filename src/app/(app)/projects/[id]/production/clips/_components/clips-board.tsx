@@ -7,8 +7,15 @@ import { Button, FeatureBlock, PageHeader, StatusLine, stagger } from "@/ui";
 import { usePolling } from "../../../_lib/use-polling";
 import { finishProductionAction, loadBoardAction, refreshBoardAction } from "../actions";
 import type { BoardPage } from "../_lib/clip-data";
-import { isUnsettled, statusLine, statusTone, type Orientation } from "../_lib/clip-view";
-import { clipHref, finishedHref } from "../_lib/routes";
+import {
+  isUnsettled,
+  shotsHint,
+  statusLine,
+  statusTone,
+  type Orientation,
+} from "../_lib/clip-view";
+import { blocksHref, clipHref, finishedHref } from "../_lib/routes";
+import { useCreditWatch } from "../../../../../_lib/credits";
 import { ClipTile, BoardGrid, FEW_POSTERS } from "./clip-tile";
 import { FillPage } from "../../_components/fill-page";
 import { useClips } from "./clips-context";
@@ -48,6 +55,8 @@ export function ClipsBoard({
   const { tiles, nextCursor, summary } = board;
   const line = statusLine(summary.counts);
   const rendering = tiles.some((t) => isUnsettled(t.stage));
+  // Drafts and finals reserve their credits as their jobs start, and refund them if they fail.
+  useCreditWatch(rendering);
 
   // Reached by moving on automatically (no other shot waits): start at the status line.
   useEffect(() => {
@@ -113,7 +122,7 @@ export function ClipsBoard({
     if (summary.allFinal) {
       return (
         <Button variant="primary" size="large" render={<Link href={finishedHref(projectId)} />}>
-          Continue
+          {summary.finished ? "View Finished Film" : "Continue"}
         </Button>
       );
     }
@@ -134,6 +143,9 @@ export function ClipsBoard({
   const anyRendering =
     summary.counts.draft_generating + summary.counts.final_generating + summary.counts.preparing >
     0;
+  const hint = shotsHint(summary.counts);
+  // Some clips are final while others are still made (a reopened film, or on the way).
+  const someFinal = summary.counts.done > 0 && !summary.allFinal;
 
   return (
     <FillPage>
@@ -142,6 +154,17 @@ export function ClipsBoard({
         description={
           <div ref={statusRef} tabIndex={-1} className="flex flex-col gap-2 outline-none">
             <StatusLine tone={statusTone(summary.counts)}>{line}</StatusLine>
+            {hint ? (
+              <p className="max-w-(--measure) text-body text-pretty text-label-2">
+                {hint}{" "}
+                <Link
+                  href={blocksHref(projectId)}
+                  className="rounded-row text-label underline underline-offset-2 focus-ring"
+                >
+                  Open Shots
+                </Link>
+              </p>
+            ) : null}
             {anyRendering ? (
               <p className="max-w-(--measure) text-body text-label-2">
                 Clips appear here as they finish. You can leave this page.
@@ -149,7 +172,18 @@ export function ClipsBoard({
             ) : null}
           </div>
         }
-        actions={headerAction()}
+        actions={
+          someFinal || headerAction() ? (
+            <>
+              {someFinal ? (
+                <Button size="large" render={<Link href={finishedHref(projectId)} />}>
+                  Final Clips
+                </Button>
+              ) : null}
+              {headerAction()}
+            </>
+          ) : undefined
+        }
       />
 
       {summary.canComplete ? (

@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { SectionedBlock } from "@/server/damis";
 import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
@@ -15,12 +15,16 @@ export type SectioningRecord = {
   state: "running" | "done" | "failed";
   scriptVersionId: string;
   failure: string | null;
+  /** Done: how many shots this version sent back through Production's preparation. */
+  resetBlocks?: number;
 };
 
 export type SectioningStatus = {
   state: SectioningState;
   blockCount: number;
   failure: string | null;
+  /** Shots the last script edit sent back through Production's preparation (0 when none). */
+  resetBlocks: number;
 };
 
 export const DEFAULT_BLOCK_PAGE_SIZE = 50;
@@ -78,19 +82,123 @@ function sameAssets(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((ref, i) => ref === b[i]);
 }
 
+/** How close two excerpts are (Dice coefficient over their words, 0 to 1). */
+export function excerptSimilarity(a: string, b: string): number {
+  const words = (text: string) =>
+    normalizeExcerpt(text)
+      .toLowerCase()
+      .match(/[\p{L}\p{N}']+/gu) ?? [];
+  const left = words(a);
+  const right = words(b);
+  if (left.length === 0 || right.length === 0) return 0;
+  const counts = new Map<string, number>();
+  for (const word of left) counts.set(word, (counts.get(word) ?? 0) + 1);
+  let common = 0;
+  for (const word of right) {
+    const n = counts.get(word) ?? 0;
+    if (n > 0) {
+      common++;
+      counts.set(word, n - 1);
+    }
+  }
+  return (2 * common) / (left.length + right.length);
+}
+
+/** An edited shot (same place in the story, mostly the same words) continues its lineage. */
+const EDITED_SIMILARITY = 0.6;
+/** How far (in story positions) an edited shot may have moved. */
+const EDITED_WINDOW = 3;
+
+/**
+ * The previous block each new block continues: first an identical excerpt (whitespace-
+ * normalised), then, among the blocks left, an edited version of the same shot (a similar excerpt
+ * near the same position). Unmatched new blocks start a new lineage.
+ */
+function matchPrevious(
+  previous: PromptBlock[],
+  blocks: readonly { scriptExcerpt: string; orderIndex: number }[],
+): (PromptBlock | null)[] {
+  const byExcerpt = new Map<string, PromptBlock[]>();
+  for (const row of previous) {
+    const key = normalizeExcerpt(row.scriptExcerpt);
+    byExcerpt.set(key, [...(byExcerpt.get(key) ?? []), row]);
+  }
+  const matches = blocks.map(
+    (block) => byExcerpt.get(normalizeExcerpt(block.scriptExcerpt))?.shift() ?? null,
+  );
+  const taken = new Set(matches.flatMap((m) => (m ? [m.id] : [])));
+  const left = previous.filter((row) => !taken.has(row.id));
+  blocks.forEach((block, i) => {
+    if (matches[i]) return;
+    let best: { row: PromptBlock; score: number; distance: number } | null = null;
+    for (const row of left) {
+      if (taken.has(row.id)) continue;
+      const distance = Math.abs(row.orderIndex - block.orderIndex);
+      if (distance > EDITED_WINDOW) continue;
+      const score = excerptSimilarity(row.scriptExcerpt, block.scriptExcerpt);
+      if (score < EDITED_SIMILARITY) continue;
+      if (!best || score > best.score || (score === best.score && distance < best.distance)) {
+        best = { row, score, distance };
+      }
+    }
+    if (best) {
+      matches[i] = best.row;
+      taken.add(best.row.id);
+    }
+  });
+  return matches;
+}
+
+/**
+ * The asset refs sectioning gave each lineage for the script version its current row was cut from
+ * (its first version of that script version, which holds sectioning's refs). A later version may
+ * hold the user's own choice (`setBlockAssets`), which is not a change of the script.
+ */
+async function sectionedAssetRefs(
+  tx: DbTx,
+  rows: readonly PromptBlock[],
+): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  // Grouped by script version (normally one): one query each, on the (lineage, version) index.
+  const byVersion = new Map<string, string[]>();
+  for (const row of rows) {
+    if (row.versionNumber === 1) continue;
+    byVersion.set(row.scriptVersionId, [
+      ...(byVersion.get(row.scriptVersionId) ?? []),
+      row.lineageId,
+    ]);
+  }
+  for (const [versionId, lineageIds] of byVersion) {
+    const origins = await tx
+      .selectDistinctOn([promptBlock.lineageId], {
+        lineageId: promptBlock.lineageId,
+        assetRefs: promptBlock.assetRefs,
+      })
+      .from(promptBlock)
+      .where(
+        and(inArray(promptBlock.lineageId, lineageIds), eq(promptBlock.scriptVersionId, versionId)),
+      )
+      .orderBy(promptBlock.lineageId, asc(promptBlock.versionNumber));
+    for (const origin of origins) map.set(origin.lineageId, origin.assetRefs);
+  }
+  return map;
+}
+
 /**
  * Replaces the project's current blocks with a new set, in one transaction. A current block whose
- * excerpt (whitespace-normalised) equals a new block's keeps its lineage: a new row with the next
- * version number (identical content when prompt and assets are unchanged; an identical, prepared
- * block also keeps its production preparation and approval). Other blocks start a new lineage.
- * Every previous current row gets `supersededAt`.
+ * excerpt (whitespace-normalised) equals a new block's keeps its lineage, and so does an edited
+ * shot (a similar excerpt near the same position): a new row with the next version number. A
+ * block whose prompt and sectioned assets are unchanged is carried as it was: identical content,
+ * the user's own choice of assets, and (when prepared) its production preparation and approval.
+ * Other blocks start a new lineage. Every previous current row gets `supersededAt`. `reset` counts
+ * the new blocks that must be prepared again while the previous ones had been in production.
  */
 export async function replaceBlocks(input: {
   projectId: string;
   scriptVersionId: string;
   blocks: Array<SectionedBlock & { damiRunId?: string }>;
   damiRunIds: string[];
-}): Promise<{ created: number; carried: number; superseded: number }> {
+}): Promise<{ created: number; carried: number; superseded: number; reset: number }> {
   const { projectId, scriptVersionId, blocks, damiRunIds } = parse(replaceBlocksSchema, input);
   return getDb().transaction(async (tx) => {
     // Serialise replacements per project.
@@ -105,11 +213,12 @@ export async function replaceBlocks(input: {
       .where(and(eq(promptBlock.projectId, projectId), current))
       .orderBy(asc(promptBlock.orderIndex));
 
-    const byExcerpt = new Map<string, PromptBlock[]>();
-    for (const row of previous) {
-      const key = normalizeExcerpt(row.scriptExcerpt);
-      byExcerpt.set(key, [...(byExcerpt.get(key) ?? []), row]);
-    }
+    const matches = matchPrevious(previous, blocks);
+    const sectioned = await sectionedAssetRefs(
+      tx,
+      matches.flatMap((m) => (m ? [m] : [])),
+    );
+    const inProduction = previous.some((row) => row.productionState !== "none");
 
     const now = new Date();
     if (previous.length > 0) {
@@ -120,8 +229,9 @@ export async function replaceBlocks(input: {
     }
 
     let carried = 0;
-    const rows = blocks.map((block) => {
-      const match = byExcerpt.get(normalizeExcerpt(block.scriptExcerpt))?.shift();
+    let reset = 0;
+    const rows = blocks.map((block, i) => {
+      const match = matches[i] ?? null;
       const fields = {
         projectId,
         episodeId: null,
@@ -132,6 +242,7 @@ export async function replaceBlocks(input: {
         damiRunId: block.damiRunId ?? damiRunIds[0] ?? null,
       };
       if (!match) {
+        if (inProduction) reset++;
         return {
           ...fields,
           prompt: block.prompt,
@@ -140,18 +251,27 @@ export async function replaceBlocks(input: {
         };
       }
       carried++;
+      // What sectioning said about this shot last time; the current row may hold the user's own
+      // choice of assets on top of it, which survives an unrelated script edit.
+      const origin = sectioned.get(match.lineageId) ?? match.assetRefs;
+      const userChoice = !sameAssets(origin, match.assetRefs);
       const unchanged =
-        match.prompt === block.prompt && sameAssets(match.assetRefs, block.assetRefs);
+        normalizeExcerpt(match.scriptExcerpt) === normalizeExcerpt(block.scriptExcerpt) &&
+        match.prompt === block.prompt &&
+        (sameAssets(match.assetRefs, block.assetRefs) || sameAssets(origin, block.assetRefs));
       // An identical block keeps its finished preparation (and its approval), so Production
       // keeps its takes; anything else is prepared again.
       const keepProduction = unchanged && match.productionState === "ready";
+      if (!keepProduction && match.productionState !== "none") reset++;
       return {
         ...fields,
         lineageId: match.lineageId,
         versionNumber: match.versionNumber + 1,
         prompt: unchanged ? match.prompt : block.prompt,
         durationSeconds: unchanged ? match.durationSeconds : block.durationSeconds,
-        assetRefs: unchanged ? match.assetRefs : block.assetRefs,
+        // What sectioning said; a user's choice lives on in the production refs below, so the
+        // next edit compares against sectioning again.
+        assetRefs: block.assetRefs,
         // An identical carry keeps pointing at the run that wrote the prompt.
         damiRunId: unchanged ? match.damiRunId : fields.damiRunId,
         ...(keepProduction
@@ -163,11 +283,14 @@ export async function replaceBlocks(input: {
               productionDamiRunId: match.productionDamiRunId,
               approvedAt: match.approvedAt,
             }
-          : {}),
+          : unchanged && userChoice
+            ? // Prepared again with the user's choice of references.
+              { productionAssetRefs: match.assetRefs.filter((r) => !r.startsWith("voice:")) }
+            : {}),
       };
     });
     await tx.insert(promptBlock).values(rows);
-    return { created: rows.length - carried, carried, superseded: previous.length };
+    return { created: rows.length - carried, carried, superseded: previous.length, reset };
   });
 }
 
@@ -323,6 +446,7 @@ const sectioningRecordSchema = z.object({
   state: z.enum(["running", "done", "failed"]),
   scriptVersionId: z.string(),
   failure: z.string().nullable(),
+  resetBlocks: z.number().int().min(0).optional(),
 });
 
 export function readSectioningRecord(stageState: Record<string, unknown>): SectioningRecord | null {
@@ -347,12 +471,15 @@ export async function getSectioningStatus(
     .where(and(eq(promptBlock.projectId, projectId), current));
   const blockCount = counts?.total ?? 0;
   const anyStale = (counts?.stale ?? 0) > 0;
-  if (record?.state === "running") return { state: "running", blockCount, failure: null };
-  if (record?.state === "failed") return { state: "failed", blockCount, failure: record.failure };
-  if (anyStale) return { state: "stale", blockCount, failure: null };
+  const resetBlocks = record?.state === "done" ? (record.resetBlocks ?? 0) : 0;
+  if (record?.state === "running")
+    return { state: "running", blockCount, failure: null, resetBlocks };
+  if (record?.state === "failed")
+    return { state: "failed", blockCount, failure: record.failure, resetBlocks };
+  if (anyStale) return { state: "stale", blockCount, failure: null, resetBlocks };
   if (record?.state === "done" || blockCount > 0)
-    return { state: "done", blockCount, failure: null };
-  return { state: "idle", blockCount, failure: null };
+    return { state: "done", blockCount, failure: null, resetBlocks };
+  return { state: "idle", blockCount, failure: null, resetBlocks };
 }
 
 /**
@@ -368,6 +495,7 @@ export async function setSectioningState(
     state: input.state,
     scriptVersionId: input.scriptVersionId,
     failure: input.failure,
+    ...(input.resetBlocks !== undefined ? { resetBlocks: input.resetBlocks } : {}),
   };
   const updated = await executor
     .update(project)

@@ -88,11 +88,14 @@ countAssetsByKind(projectId, userId): Promise<Record<AssetKind, number> | null>
 
 ```ts
 replaceBlocks(input: { projectId; scriptVersionId; blocks: SectionedBlock[]; damiRunIds: string[] }):
-  Promise<{ created: number; carried: number; superseded: number }>
+  Promise<{ created: number; carried: number; superseded: number; reset: number }>
 // A current block whose scriptExcerpt (whitespace-normalised) equals a new block's keeps its
 // lineageId (new row, versionNumber + 1 only if prompt/assets differ, else the row is re-pointed by
-// inserting an identical next version); others get a new lineage. Previous current rows get
-// supersededAt. One transaction.
+// inserting an identical next version), and so does an edited shot (a similar excerpt, word Dice
+// ≥ 0.6, within 3 positions); others get a new lineage. Assets are compared with what sectioning
+// gave the block last time, so a user's own choice (setBlockAssets) survives an unrelated edit.
+// `reset`: blocks that must be prepared again while the project was in production (stored as
+// `stageState.sectioning.resetBlocks`). Previous current rows get supersededAt. One transaction.
 markBlocksStale(input: { projectId; reason: string }): Promise<number>   // current blocks only
 listBlocks(projectId, userId, opts?: { limit?; cursor? }): Promise<{ items: PromptBlock[]; nextCursor } | null>
 getSectioningStatus(projectId, userId): Promise<{

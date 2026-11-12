@@ -8,6 +8,7 @@ import {
   newestPlayable,
   promptParts,
   shotTitle,
+  shotsHint,
   statusLine,
   statusTone,
   takeLabels,
@@ -61,7 +62,10 @@ describe("statusLine", () => {
   it("says when every shot is final, and when there is nothing to do", () => {
     expect(statusLine(counts({ done: 7 }))).toBe("Every shot is final");
     expect(statusLine(counts({}))).toBe("No shots yet");
-    expect(statusLine(counts({ block_review: 2, done: 1 }))).toBe("2 in shot review");
+    expect(statusLine(counts({ block_review: 2, done: 1 }))).toBe("2 to review in Shots");
+    expect(statusLine(counts({ preparing: 1, approved: 3 }))).toBe(
+      "1 preparing · 3 waiting for drafts",
+    );
   });
 });
 
@@ -71,6 +75,23 @@ describe("statusTone", () => {
     expect(statusTone(counts({ draft_review: 1, draft_generating: 2 }))).toBe("waiting");
     expect(statusTone(counts({ done: 3 }))).toBe("done");
     expect(statusTone(counts({ draft_generating: 1, done: 3 }))).toBe("working");
+  });
+});
+
+describe("shotsHint", () => {
+  it("says what to do in Shots for the shots that wait there", () => {
+    expect(shotsHint(counts({ block_review: 2, done: 1 }))).toBe(
+      "2 shots wait for their review in Shots. Review them, then generate their drafts.",
+    );
+    expect(shotsHint(counts({ prepare_failed: 1 }))).toBe(
+      "1 shot waits for its review in Shots. Review it, then generate its draft.",
+    );
+    expect(shotsHint(counts({ approved: 2, draft_review: 1 }))).toBe(
+      "2 approved shots wait for their drafts. Generate them in Shots.",
+    );
+    // Nothing for the user in Shots while shots are prepared or clips are made.
+    expect(shotsHint(counts({ approved: 2, preparing: 1 }))).toBeNull();
+    expect(shotsHint(counts({ draft_generating: 3, done: 2 }))).toBeNull();
   });
 });
 

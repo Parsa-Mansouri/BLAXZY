@@ -17,6 +17,7 @@ import {
   stagger,
   type StatusTone,
 } from "@/ui";
+import { refreshCredits } from "../../../../../_lib/credits";
 import { assetHref, type AssetKindKey } from "../../../_lib/asset-kinds";
 import { reviewSheetAction } from "../../assets/[assetId]/actions";
 import type { IssueChoice } from "../../assets/[assetId]/_components/shared";
@@ -203,6 +204,7 @@ export function SheetsReview({
         setPanelError(result.error);
         return;
       }
+      refreshCredits();
       decided("back");
     });
   }

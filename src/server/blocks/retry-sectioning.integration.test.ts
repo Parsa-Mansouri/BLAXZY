@@ -67,7 +67,7 @@ describe.skipIf(!reachable)("retrySectioning (integration)", async () => {
     expect((await blocks.getSectioningStatus(projectId, userId))?.state).toBe("failed");
 
     const status = await blocks.retrySectioning({ projectId, userId });
-    expect(status).toEqual({ state: "running", blockCount: 0, failure: null });
+    expect(status).toEqual({ state: "running", blockCount: 0, failure: null, resetBlocks: 0 });
 
     const [row] = await getDb()
       .select({ stageState: project.stageState })

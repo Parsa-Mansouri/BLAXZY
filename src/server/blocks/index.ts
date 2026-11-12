@@ -6,6 +6,7 @@
  */
 export {
   BlocksInputError,
+  excerptSimilarity,
   DEFAULT_BLOCK_PAGE_SIZE,
   getSectioningStatus,
   hasCurrentBlocksFor,
@@ -36,6 +37,7 @@ export {
   getPreviousCurrentBlock,
   getPreviousVersion,
   listCurrentBlockStates,
+  listScriptResetBlocks,
   MAX_PRODUCTION_BLOCKS,
   pageCurrentBlocks,
   restartBlockPreparation,

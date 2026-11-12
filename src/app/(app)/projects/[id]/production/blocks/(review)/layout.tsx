@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { requireUser } from "@/server/auth";
 import {
   DEFAULT_BLOCK_PAGE_SIZE,
@@ -6,7 +6,6 @@ import {
   listProductionBlocks,
 } from "@/server/production";
 import { loadProjectForStage } from "../../../_lib/load-stage";
-import { finishedHref } from "../../../_lib/production-routes";
 import { BlockReviewFrame } from "../_components/block-review-frame";
 
 /**
@@ -22,7 +21,6 @@ export default async function BlockReviewLayout({
 }) {
   const { id } = await params;
   const project = await loadProjectForStage(id, "production");
-  if (project.stage === "done") redirect(finishedHref(project.id));
   const user = await requireUser();
   const [overview, page] = await Promise.all([
     getProductionOverview(project.id, user.id),
@@ -38,6 +36,7 @@ export default async function BlockReviewLayout({
         nextCursor: page.nextCursor,
         counts: overview.counts,
         phase: overview.phase,
+        projectStage: overview.projectStage,
         canStartDrafts: overview.canStartDrafts,
       }}
     >

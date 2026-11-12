@@ -6,6 +6,7 @@ import { Button, Sheet, Skeleton } from "@/ui";
 import { creditsWords, formatNumber, shotsWords } from "../../_components/format";
 import { clipsHref } from "../../../_lib/production-routes";
 import { quoteAction, startDraftsAction, type Quote } from "../actions";
+import { refreshCredits } from "../../../../../_lib/credits";
 
 /**
  * What the drafts will cost, in plain words, then the confirmation. The price is read when the
@@ -48,6 +49,7 @@ export function GenerateSheet({
     startStarting(async () => {
       const result = await startDraftsAction(projectId, quote.credits);
       if (result.ok) {
+        refreshCredits();
         router.push(clipsHref(projectId));
         return;
       }
@@ -100,7 +102,13 @@ export function GenerateSheet({
               </p>
               <p className="text-secondary text-label-2 tabular-nums">
                 Each shot you accept is then finished in full quality for{" "}
-                {creditsWords(quote.finalsEach)}.
+                {creditsWords(quote.finalsEach)}. Finishing{" "}
+                {quote.count === 1
+                  ? "this shot"
+                  : quote.count === 2
+                    ? "both shots"
+                    : `all ${shotsWords(quote.count)}`}{" "}
+                in full quality would cost {creditsWords(quote.count * quote.finalsEach)} more.
               </p>
               {short ? (
                 <p role="status" className="text-secondary text-label tabular-nums">

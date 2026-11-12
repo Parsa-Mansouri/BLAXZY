@@ -16,6 +16,7 @@ export {
   advanceStage,
   canOpenStage,
   listEpisodes,
+  reopenProduction,
   saveStyle,
   type AdvanceStageInput,
   type DbTransaction,

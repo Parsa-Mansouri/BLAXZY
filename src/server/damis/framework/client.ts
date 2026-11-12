@@ -31,8 +31,14 @@ export interface ClaudeClient {
 const REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
 
 /** Wraps the official SDK. SDK retries are disabled: the runner owns retries and counts attempts. */
-export function createAnthropicClaudeClient(apiKey: string): ClaudeClient {
-  const sdk = new Anthropic({ apiKey, maxRetries: 0, timeout: REQUEST_TIMEOUT_MS });
+export function createAnthropicClaudeClient(apiKey: string, workspaceId?: string): ClaudeClient {
+  const sdk = new Anthropic({
+    apiKey,
+    maxRetries: 0,
+    timeout: REQUEST_TIMEOUT_MS,
+    // A key that is not scoped to a workspace must name the workspace on every request.
+    defaultHeaders: workspaceId ? { "anthropic-workspace-id": workspaceId } : undefined,
+  });
   return {
     createMessage: (request, options) => sdk.messages.create(request, { signal: options?.signal }),
     streamMessage: async (request, options) =>
@@ -40,13 +46,20 @@ export function createAnthropicClaudeClient(apiKey: string): ClaudeClient {
   };
 }
 
-let defaultClient: { apiKey: string; client: ClaudeClient } | undefined;
+let defaultClient: { apiKey: string; workspaceId?: string; client: ClaudeClient } | undefined;
 
 /** Lazily created process-wide client; null when no API key is configured. */
-export function getDefaultClaudeClient(apiKey: string | undefined): ClaudeClient | null {
+export function getDefaultClaudeClient(
+  apiKey: string | undefined,
+  workspaceId?: string,
+): ClaudeClient | null {
   if (!apiKey) return null;
-  if (defaultClient?.apiKey !== apiKey) {
-    defaultClient = { apiKey, client: createAnthropicClaudeClient(apiKey) };
+  if (defaultClient?.apiKey !== apiKey || defaultClient.workspaceId !== workspaceId) {
+    defaultClient = {
+      apiKey,
+      workspaceId,
+      client: createAnthropicClaudeClient(apiKey, workspaceId),
+    };
   }
   return defaultClient.client;
 }

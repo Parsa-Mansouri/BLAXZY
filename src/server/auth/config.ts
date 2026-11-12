@@ -67,7 +67,11 @@ function createAuth() {
     baseURL: env.BETTER_AUTH_URL,
     basePath: AUTH_BASE_PATH,
     secret: env.BETTER_AUTH_SECRET,
-    trustedOrigins: [new URL(env.BETTER_AUTH_URL).origin],
+    // In development the dev server may start on another port (3001 when 3000 is taken), so any
+    // localhost port is trusted there. Production trusts only the configured origin.
+    trustedOrigins: isProduction
+      ? [new URL(env.BETTER_AUTH_URL).origin]
+      : [new URL(env.BETTER_AUTH_URL).origin, "http://localhost:*", "http://127.0.0.1:*"],
     database: drizzleAdapter(getDb(), {
       provider: "pg",
       schema: { user, session, account, verification, rateLimit },

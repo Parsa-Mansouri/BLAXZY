@@ -135,7 +135,7 @@ export async function addAssetAction(
   projectId: string,
   kind: string,
   input: { name: string; description: string },
-): Promise<ActionResult> {
+): Promise<ActionResult<{ name: string }>> {
   const user = await requireUser();
   const key = asKind(kind);
   if (!key) return { ok: false, error: "This kind of asset does not exist." };
@@ -149,7 +149,7 @@ export async function addAssetAction(
     });
     if (!created) return { ok: false, error: MISSING };
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");
-    return { ok: true, data: null };
+    return { ok: true, data: { name: created.name } };
   } catch (error) {
     return failure(error);
   }

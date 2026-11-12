@@ -46,6 +46,7 @@ import {
   defineHandler,
   type JobContext,
 } from "../../src/server/jobs";
+import { z } from "zod";
 import { classifyAssetFailure } from "./asset-failure";
 import { handleFailure } from "./script-failure";
 
@@ -58,7 +59,23 @@ const CATALOG = {
 /* The dami's answer as stored views                                                           */
 /* ------------------------------------------------------------------------------------------ */
 
-function locationViews(output: LocationSheetOutput, heroViewId: string): PlannedView[] {
+const designAnchorsSchema = z.object({
+  dna: z.object({
+    fixed_anchors: z.array(z.object({ id: z.string(), name: z.string() })),
+  }),
+});
+
+/** The location design's anchor names by id ("entrance_s" → "Entrance"), for the checklist. */
+export function anchorNames(designOutput: unknown): Map<string, string> {
+  const parsed = designAnchorsSchema.safeParse(designOutput);
+  return new Map(parsed.success ? parsed.data.dna.fixed_anchors.map((a) => [a.id, a.name]) : []);
+}
+
+export function locationViews(
+  output: LocationSheetOutput,
+  heroViewId: string,
+  anchors: ReadonlyMap<string, string> = new Map(),
+): PlannedView[] {
   const order = output.generation_order;
   const sorted = [...output.views].sort(
     (a, b) => order.indexOf(a.view_id) - order.indexOf(b.view_id),
@@ -80,7 +97,10 @@ function locationViews(output: LocationSheetOutput, heroViewId: string): Planned
       role: r.source_view_id,
     })),
     dependsOn: v.depends_on.filter((d) => d !== heroViewId),
-    mustShow: v.must_show.map((m) => `${m.anchor_id.replace(/_/g, " ")}: ${m.expected_position}`),
+    mustShow: v.must_show.map(
+      (m) =>
+        `${anchors.get(m.anchor_id) ?? m.anchor_id.replace(/_/g, " ")}: ${m.expected_position}`,
+    ),
     mustNotShow: v.must_not_show,
     reviewFocus: v.review_focus,
     newHypotheses: v.new_hypotheses,
@@ -189,7 +209,7 @@ async function runMaker(
     const { views: _views, ...rest } = output;
     void _views;
     return {
-      views: locationViews(output, heroViewId),
+      views: locationViews(output, heroViewId, anchorNames(lookOutput)),
       runId: result.runId,
       warnings: output.warnings,
       spec: {

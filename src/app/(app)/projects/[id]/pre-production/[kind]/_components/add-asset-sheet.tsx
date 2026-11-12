@@ -53,7 +53,7 @@ export function AddAssetSheet({
         setError(result.error);
         return;
       }
-      toast.success(`${trimmed} added.`);
+      toast.success(`${result.data.name} added.`);
       changeOpen(false);
       onAdded();
     });

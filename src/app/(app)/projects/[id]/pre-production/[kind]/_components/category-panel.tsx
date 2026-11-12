@@ -441,7 +441,7 @@ export function CategoryPanel({
       ) : null}
 
       <AddAssetSheet
-        key={addKey}
+        key={`add-${addKey}`}
         open={addOpen}
         onOpenChange={setAddOpen}
         projectId={projectId}
@@ -451,7 +451,7 @@ export function CategoryPanel({
       />
       {panel ? (
         <DetectionReviewSheet
-          key={review.key}
+          key={`review-${review.key}`}
           open={review.open}
           onOpenChange={(open) => setReview((r) => ({ ...r, open }))}
           projectId={projectId}

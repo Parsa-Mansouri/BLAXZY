@@ -88,7 +88,14 @@ export function detectorView(
   sceneIndex: readonly DetectionSceneIndexEntry[],
   mode: AssetDetectorOutput["mode"] = "fix",
 ): DetectorView {
-  const active = rows.filter((r) => r.asset.status === "active" && isDetectedKind(r.asset.kind));
+  // An asset added by hand with no scenes cannot pass the detector's checks (every asset needs a
+  // scene), so the detector never sees it; a fix round leaves it untouched.
+  const active = rows.filter(
+    (r) =>
+      r.asset.status === "active" &&
+      isDetectedKind(r.asset.kind) &&
+      (r.asset.origin !== "manual" || (r.asset.details?.sceneRefs?.length ?? 0) > 0),
+  );
   const counters: Record<string, number> = { char: 0, loc: 0, prop: 0, voice: 0 };
   const byTemp = new Map<string, Asset>();
   const tempByName = new Map<string, string>();

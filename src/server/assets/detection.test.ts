@@ -108,6 +108,28 @@ describe("the detector boundary", () => {
     expect(again.assets.every((a) => a.existing !== null)).toBe(true);
   });
 
+  it("leaves out assets added by hand with no scenes, so a fix round still passes its checks", () => {
+    const rows = plan.assets.map(row);
+    const manual: Asset = {
+      ...row({ ...plan.assets[0]!, name: "Mara (2)", details: {} }),
+      kind: "character",
+      origin: "manual",
+    };
+    const view = detectorView(
+      [...rows, manual].map((a) => ({ asset: a, status: "detected" as const })),
+      plan.sceneIndex,
+    );
+    expect(view.known.length).toBe(rows.length);
+    expect([...view.byTemp.values()]).not.toContain(manual);
+    const entries = [
+      ...view.previousOutput.characters,
+      ...view.previousOutput.locations,
+      ...view.previousOutput.props,
+      ...view.previousOutput.voices,
+    ];
+    expect(entries.every((e) => e.scene_refs.length > 0)).toBe(true);
+  });
+
   it("hides MINOR_PRESENT from the user", () => {
     expect(visibleWarnings(["MINOR_PRESENT: Leyla", "MERGE_CHECK: A and B"])).toEqual([
       "MERGE_CHECK: A and B",

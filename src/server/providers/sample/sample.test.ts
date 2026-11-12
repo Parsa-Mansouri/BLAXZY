@@ -84,6 +84,17 @@ describe("sample image", () => {
     for (const caption of ["FRONT", "SIDE", "BACK", "PALETTE"]) expect(sheet).toContain(caption);
   });
 
+  it("draws one view of a location or prop pack as a single picture, not a character sheet", () => {
+    const view = sampleImageSvg({
+      ...spec,
+      purpose: "asset_sheet",
+      label: "Harbour Pier: Reverse",
+    });
+    expect(view).toContain("Harbour Pier: Reverse");
+    expect(view).toContain("VIEW");
+    expect(view).not.toContain("PALETTE");
+  });
+
   it("escapes markup in the label", () => {
     const svg = sampleImageSvg({ ...spec, label: `<script>"a" & 'b'</script>` });
     expect(svg).not.toContain("<script>");

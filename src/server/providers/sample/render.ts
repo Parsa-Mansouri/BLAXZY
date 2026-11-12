@@ -186,7 +186,12 @@ export function textLines(
     .join("\n");
 }
 
-function lookSvg(spec: SampleImageSpec, width: number, height: number): string {
+function lookSvg(
+  spec: SampleImageSpec,
+  width: number,
+  height: number,
+  caption: string = PURPOSE_TEXT[spec.purpose],
+): string {
   const p = paletteFor(spec.digest);
   const m = Math.min(width, height);
   const inset = Math.round(m * 0.04);
@@ -205,7 +210,7 @@ function lookSvg(spec: SampleImageSpec, width: number, height: number): string {
   ${watermark(width, height)}
   ${sampleBadge(inset + Math.round(m * 0.03), inset + Math.round(m * 0.03), m)}
   <text x="${width / 2}" y="${purposeY}" font-family="${FONT}" font-weight="600" font-size="${purposeSize}"
-    letter-spacing="${purposeSize * 0.2}" fill="${p.accent}" text-anchor="middle">${escapeXml(PURPOSE_TEXT[spec.purpose].toUpperCase())}</text>
+    letter-spacing="${purposeSize * 0.2}" fill="${p.accent}" text-anchor="middle">${escapeXml(caption.toUpperCase())}</text>
   ${textLines(lines, width / 2, top + labelSize * 0.35, labelSize, "middle")}
   ${footer(width, height, m, spec.digest)}
 </svg>`;
@@ -356,7 +361,16 @@ function sheetSvg(spec: SampleImageSpec, width: number, height: number): string 
 /** The SVG source of a sample image (exported for tests). */
 export function sampleImageSvg(spec: SampleImageSpec): string {
   const { width, height } = sampleImageSize(spec);
+  if (isPackView(spec)) return lookSvg(spec, width, height, "View");
   return isSheet(spec.purpose) ? sheetSvg(spec, width, height) : lookSvg(spec, width, height);
+}
+
+/**
+ * One view of a location or prop pack ("Harbour Pier: Reverse"): a single picture, not a
+ * character sheet. Asset names never contain ":" (see cleanAssetName), so the colon marks a view.
+ */
+function isPackView(spec: SampleImageSpec): boolean {
+  return isSheet(spec.purpose) && spec.label.includes(": ");
 }
 
 /** Renders the sample image as PNG bytes. sharp is loaded on first use (worker only). */

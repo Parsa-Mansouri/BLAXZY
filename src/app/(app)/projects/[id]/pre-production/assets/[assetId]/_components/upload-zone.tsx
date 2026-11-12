@@ -4,19 +4,12 @@ import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { AudioLines, ImageUp } from "lucide-react";
 import { Button, DemoHint, DropScene, ProgressBar, cn } from "@/ui";
 import { createAssetUploadAction, finishAssetUploadAction } from "../actions";
+import { IMAGE_TYPES, MAX_PHOTO_BYTES, putFile } from "../_lib/reference-upload";
 import { useAssetScreen } from "./asset-context";
 import { ErrorLine } from "./shared";
 import { useFileDrop } from "./use-file-drop";
 
-const MB = 1024 * 1024;
-const MAX_BYTES = 25 * MB;
-
-const IMAGE_TYPES: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  webp: "image/webp",
-};
+const MAX_BYTES = MAX_PHOTO_BYTES;
 
 const AUDIO_TYPES: Record<string, string> = {
   mp3: "audio/mpeg",
@@ -28,27 +21,6 @@ type Phase =
   | { kind: "idle" }
   | { kind: "uploading"; name: string; progress: number }
   | { kind: "finishing"; name: string };
-
-/** PUTs the file to the presigned URL, reporting progress. */
-function putFile(
-  url: string,
-  headers: Record<string, string>,
-  file: File,
-  onProgress: (percent: number) => void,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress((event.loaded / event.total) * 100);
-    };
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error()));
-    xhr.onerror = () => reject(new Error());
-    xhr.onabort = () => reject(new Error());
-    xhr.send(file);
-  });
-}
 
 /**
  * Drop or choose a file, upload it straight to storage with progress, then hand it to the asset.

@@ -15,8 +15,9 @@ import {
   clipText,
   stagger,
 } from "@/ui";
+import type { DesignerInfo } from "../_lib/designer-view";
 import { useGuidedDraft } from "../_lib/guided-draft";
-import { startFromPromptAction } from "../actions";
+import { startDesignAction } from "../actions";
 import { StageHeading, useAssetScreen, useFocusOnArrival } from "./asset-context";
 import { GuidedFlow } from "./guided-flow";
 import {
@@ -27,7 +28,7 @@ import {
   type AssetInfo,
   type GuidedQuestion,
 } from "./shared";
-import { UploadZone } from "./upload-zone";
+import { ReferencePhotos } from "./reference-photos";
 import { useFileDrop } from "./use-file-drop";
 
 /** The way of adding the image, full width: no empty picture frame, since there is no image yet. */
@@ -35,7 +36,7 @@ function MethodLayout({ children }: { children: ReactNode }) {
   return <div className="flex min-w-0 flex-col gap-5">{children}</div>;
 }
 
-export type AddMethod = "chooser" | "guided" | "prompt" | "upload";
+export type AddMethod = "chooser" | "guided" | "prompt" | "photos" | "auto";
 
 const PLACEHOLDERS: Partial<Record<AssetInfo["kind"], string>> = {
   character: "Age, build, face, hair and clothing. Whatever matters most.",
@@ -64,6 +65,7 @@ export interface AddImageProps {
   projectId: string;
   asset: AssetInfo;
   questions: GuidedQuestion[];
+  designer: DesignerInfo;
   limits: { prompt: number; answer: number };
   price: number | null;
   balance: number;
@@ -74,7 +76,10 @@ export interface AddImageProps {
   onCancel?: () => void;
 }
 
-/** The three ways to give an asset its image: the questions lead, prompt and upload beside them. */
+/**
+ * The four ways to give an asset its image: the questions lead; a prompt, reference photos and
+ * "Design It for Me" (nothing to fill in) beside them.
+ */
 export function AddImage(props: AddImageProps) {
   const { asset, questions } = props;
   const { draft, save, clear } = useGuidedDraft(asset.id);
@@ -84,13 +89,14 @@ export function AddImage(props: AddImageProps) {
   // Null until the user picks: a saved draft of answers then resumes the questions.
   const [picked, setPicked] = useState<AddMethod | null>(initial ?? null);
   const method: AddMethod = picked ?? (draft && hasQuestions ? "guided" : "chooser");
-  // A file dropped on the Upload an Image tile, uploaded as soon as the upload view opens.
+  // A photo dropped on the Use Photos tile, uploaded as soon as the photos view opens.
   const [dropped, setDropped] = useState<File | undefined>(undefined);
 
   function pick(next: AddMethod, file?: File) {
-    setDropped(next === "upload" ? file : undefined);
+    setDropped(next === "photos" ? file : undefined);
     setPicked(next);
   }
+  const back = <BackToChooser onClick={() => pick("chooser")} />;
 
   if (method === "guided") {
     return (
@@ -101,8 +107,8 @@ export function AddImage(props: AddImageProps) {
         assetName={asset.name}
         assetDescription={asset.description}
         questions={questions}
+        aiDecides={props.designer.aiDecides}
         maxAnswer={props.limits.answer}
-        maxPrompt={props.limits.prompt}
         price={props.price}
         balance={props.balance}
         initial={draft}
@@ -126,28 +132,32 @@ export function AddImage(props: AddImageProps) {
     );
   }
 
-  if (method === "upload") {
+  if (method === "photos") {
     return (
       <MethodLayout>
-        <section aria-labelledby="upload-title" className="flex flex-1 in-2 flex-col gap-6">
-          <BackToChooser onClick={() => pick("chooser")} />
-          <div className="flex flex-col gap-3">
-            <StageHeading id="upload-title" className="text-heading-sm">
-              Upload an Image
-            </StageHeading>
-            <p className="text-body text-label-2">
-              Use a photo, a drawing or a still you already have. No credits needed.
-            </p>
-          </div>
-          <UploadZone
-            projectId={props.projectId}
-            assetId={asset.id}
-            assetName={asset.name}
-            grow
-            initialFile={dropped}
-          />
-        </section>
+        <ReferencePhotos
+          projectId={props.projectId}
+          asset={asset}
+          designer={props.designer}
+          maxPrompt={props.limits.prompt}
+          price={props.price}
+          balance={props.balance}
+          initialFile={dropped}
+          back={back}
+        />
       </MethodLayout>
+    );
+  }
+
+  if (method === "auto") {
+    return (
+      <DesignForMe
+        projectId={props.projectId}
+        asset={asset}
+        price={props.price}
+        balance={props.balance}
+        back={back}
+      />
     );
   }
 
@@ -173,7 +183,7 @@ function Chooser({
 }: AddImageProps & {
   hasQuestions: boolean;
   resuming: boolean;
-  /** `file`: one dropped on the Upload an Image tile, to upload straight away. */
+  /** `file`: one dropped on the Use Photos tile, to upload straight away. */
   onPick: (method: AddMethod, file?: File) => void;
 }) {
   const lead = useRef<HTMLElement>(null);
@@ -182,9 +192,9 @@ function Chooser({
     () => samplePrompt(asset.kind, asset.name, asset.description),
     [asset.kind, asset.name, asset.description],
   );
-  // The Upload an Image tile is a real drop target: a file let go on it opens the upload view
-  // and starts uploading. UploadZone checks the type and size.
-  const { dragging, dropProps } = useFileDrop({ onFile: (file) => onPick("upload", file) });
+  // The Use Photos tile is a real drop target: a photo let go on it opens the photos view and
+  // starts uploading (the view checks the type and size).
+  const { dragging, dropProps } = useFileDrop({ onFile: (file) => onPick("photos", file) });
   return (
     <MethodLayout>
       {title ? <StageHeading className="in-2 text-heading-sm">{title}</StageHeading> : null}
@@ -242,13 +252,21 @@ function Chooser({
                 "bg-elevated-2 outline-1 -outline-offset-1 outline-brand outline-dashed hover:bg-elevated-2",
             )}
             style={stagger(2)}
-            title="Upload an Image"
-            onClick={() => onPick("upload")}
+            title="Use Photos"
+            description="Say what each photo is for."
+            onClick={() => onPick("photos")}
             demo={
               <DemoHint delay={750} mask="none" className={cn(dragging && "invisible")}>
                 <DropScene variant="image" />
               </DemoHint>
             }
+          />
+          <QuietTile
+            className="flex-1 enter"
+            style={stagger(3)}
+            title="Design It for Me"
+            description="From the script and the film’s style."
+            onClick={() => onPick("auto")}
           />
         </div>
       </div>
@@ -318,7 +336,7 @@ function PromptWriter({
     }
     setError(null);
     startSending(async () => {
-      const result = await startFromPromptAction(projectId, asset.id, trimmed);
+      const result = await startDesignAction(projectId, asset.id, { prompt: trimmed });
       if (!result.ok) {
         setError(result.error);
         return;
@@ -409,6 +427,81 @@ function PromptWriter({
             size="large"
             loading={sending}
             disabled={!affordable}
+            onClick={generate}
+          >
+            Generate Image
+          </Button>
+          <ErrorLine>{error}</ErrorLine>
+        </div>
+      </section>
+    </MethodLayout>
+  );
+}
+
+/**
+ * "Design It for Me": nothing to fill in. The designer works from the script and the film's
+ * style; the user reviews the image before anything is built from it.
+ */
+function DesignForMe({
+  projectId,
+  asset,
+  price,
+  balance,
+  back,
+}: {
+  projectId: string;
+  asset: AssetInfo;
+  price: number | null;
+  balance: number;
+  back: ReactNode;
+}) {
+  const { moveOn } = useAssetScreen();
+  const id = useId();
+  const [error, setError] = useState<string | null>(null);
+  const [sending, startSending] = useTransition();
+
+  function generate() {
+    setError(null);
+    startSending(async () => {
+      const result = await startDesignAction(projectId, asset.id, {});
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      moveOn(result.data, `Creating ${asset.name}’s image`);
+    });
+  }
+
+  return (
+    <MethodLayout>
+      <section aria-labelledby={`${id}-title`} className="flex flex-1 in-2 flex-col gap-8">
+        {back}
+        <div className="flex max-w-(--measure) flex-col gap-3">
+          <StageHeading id={`${id}-title`} className="text-heading-sm">
+            Design It for Me
+          </StageHeading>
+          <p className="text-body text-pretty text-label-2">
+            BLAXZY designs {asset.name} from the script and the film’s style. You review the image
+            before anything is built from it.
+          </p>
+        </div>
+        {asset.description ? (
+          <figure className="flex max-w-(--measure) flex-col gap-2 border-l-2 border-brand pl-5">
+            <figcaption className="font-mono text-meta tracking-caps text-label-2 uppercase">
+              From the script
+            </figcaption>
+            <blockquote className="font-script text-script text-pretty text-label">
+              {asset.description}
+            </blockquote>
+          </figure>
+        ) : null}
+        <div className="mt-auto flex flex-col items-start gap-3">
+          <PriceLine price={price} balance={balance} action="image" />
+          <Button
+            variant="primary"
+            size="large"
+            loading={sending}
+            disabled={!canAfford(price, balance)}
             onClick={generate}
           >
             Generate Image

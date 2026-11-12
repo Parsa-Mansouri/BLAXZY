@@ -5,6 +5,7 @@ export const ASSET_STATUS_LABELS: Record<AssetStage, string> = {
   needs_image: "Needs Image",
   needs_recording: "Needs Recording",
   generating: "Creating Image",
+  needs_answer: "Answer a Question",
   look_review: "Review Image",
   building_sheet: "Building Sheet",
   sheet_review: "Review Sheet",

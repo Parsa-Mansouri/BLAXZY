@@ -2,25 +2,65 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import {
+  fieldsToConfirm,
   getAssetDetail,
   MAX_ASSET_DESCRIPTION_LENGTH,
   MAX_ASSET_NAME_LENGTH,
   MAX_GUIDED_ANSWER_LENGTH,
   MAX_LOOK_PROMPT_LENGTH,
   MAX_REVIEW_NOTE_LENGTH,
+  type Asset,
 } from "@/server/assets";
 import { requireUser } from "@/server/auth";
 import { getBalance } from "@/server/billing";
-import { ASSET_QUESTIONS, lookIssuesFor, sheetIssuesFor } from "@/server/damis";
+import {
+  AI_DECIDES,
+  DESIGNER_CATALOGS,
+  designerFor,
+  getReviewCatalog,
+  LOOK_FRAMES,
+  MAX_DESIGN_REFERENCES,
+  REFERENCE_CONFLICTS,
+  REFERENCE_ROLES,
+  sheetIssuesFor,
+  visibleOptions,
+} from "@/server/damis";
 import { quoteGeneration } from "@/server/generation";
 import { ASSET_KIND_LABELS } from "../../../_lib/asset-kinds";
 import { loadProject } from "../../../_lib/load-project";
 import { loadProjectForStage } from "../../../_lib/load-stage";
 import { AssetScreen } from "./_components/asset-screen";
 import { kindSlug } from "./_lib/asset-view";
+import type { DesignerInfo } from "./_lib/designer-view";
 import { parseIntent } from "./_lib/intent";
 
 type Params = Promise<{ id: string; assetId: string }>;
+
+/** Rejected images in a row before the "describe it exactly" hint, when the catalog says none. */
+const DEFAULT_MAX_ATTEMPTS = 3;
+
+/** The designer that draws this kind of asset, as plain data for the screen (null for voices). */
+function designerInfo(kind: Asset["kind"]): DesignerInfo | null {
+  const key = designerFor(kind);
+  if (!key) return null;
+  const catalog = getReviewCatalog(DESIGNER_CATALOGS[key]);
+  const options = visibleOptions(catalog, { sector: "wizard" });
+  const codes = new Set(options.map((o) => o.code));
+  return {
+    key,
+    options,
+    groups: catalog.groups.map(({ id, label }) => ({ id, label })),
+    maxAttempts: catalog.maxAttemptsBeforeSuggestion ?? DEFAULT_MAX_ATTEMPTS,
+    attemptMessage: catalog.attemptMessage?.en ?? null,
+    roles: REFERENCE_ROLES[key],
+    conflicts: Object.fromEntries(
+      Object.entries(REFERENCE_CONFLICTS).filter(([code]) => codes.has(code)),
+    ),
+    frames: LOOK_FRAMES[key],
+    maxReferences: MAX_DESIGN_REFERENCES,
+    aiDecides: AI_DECIDES,
+  };
+}
 
 /** "other asset" → "Other Asset". */
 const titleCase = (words: string) => words.replace(/\b\p{Ll}/gu, (c) => c.toUpperCase());
@@ -66,6 +106,7 @@ export default async function AssetPage({
     getBalance(user.id),
   ]);
   const kindLabel = ASSET_KIND_LABELS.find((k) => k.kind === asset.kind);
+  const latest = detail.looks[0];
 
   return (
     <AssetScreen
@@ -88,11 +129,16 @@ export default async function AssetPage({
         looks: detail.looks,
         sheets: detail.sheets,
       }}
+      design={{
+        waitingFor: detail.waitingFor,
+        rejectedInARow: detail.rejectedInARow,
+        toConfirm: latest?.status === "in_review" ? fieldsToConfirm(latest.spec) : [],
+      }}
+      designer={designerInfo(asset.kind)}
       orientation={style?.orientation ?? "landscape"}
       prices={{ look: lookPrice, sheet: sheetPrice }}
       balance={balance}
-      questions={ASSET_QUESTIONS[asset.kind]}
-      lookIssues={lookIssuesFor(asset.kind).map(({ code, label, hint }) => ({ code, label, hint }))}
+      questions={detail.questions}
       sheetIssues={sheetIssuesFor(asset.kind).map(({ code, label, hint }) => ({
         code,
         label,

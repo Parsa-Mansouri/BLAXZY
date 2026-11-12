@@ -12,10 +12,12 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 export function statusWords(counts: StageCounts): { text: string; tone: StatusTone } {
   const n = (stage: AssetStage) => counts[stage] ?? 0;
   const review = n("look_review") + n("sheet_review");
+  const questions = n("needs_answer");
   const failed = n("failed");
   const working = n("generating") + n("building_sheet");
   const parts: string[] = [];
   if (review > 0) parts.push(`${review} to review`);
+  if (questions > 0) parts.push(plural(questions, "has a question", "have a question"));
   if (n("needs_image") > 0) parts.push(plural(n("needs_image"), "needs an image", "need an image"));
   if (n("needs_recording") > 0) {
     parts.push(plural(n("needs_recording"), "needs a recording", "need a recording"));
@@ -27,7 +29,8 @@ export function statusWords(counts: StageCounts): { text: string; tone: StatusTo
       ? { text: "All ready", tone: "done" }
       : { text: "Nothing yet", tone: "none" };
   }
-  const tone: StatusTone = failed > 0 ? "failed" : review > 0 ? "waiting" : "working";
+  const tone: StatusTone =
+    failed > 0 ? "failed" : review > 0 || questions > 0 ? "waiting" : "working";
   return { text: parts.join(" · "), tone };
 }
 

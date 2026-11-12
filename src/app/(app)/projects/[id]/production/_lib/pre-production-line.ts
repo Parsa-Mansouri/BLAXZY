@@ -48,12 +48,14 @@ export async function preProductionLine(
   const image = counts.needs_image ?? 0;
   const recording = counts.needs_recording ?? 0;
   const working = (counts.generating ?? 0) + (counts.building_sheet ?? 0);
+  const question = counts.needs_answer ?? 0;
   const failed = counts.failed ?? 0;
 
   const parts: string[] = [];
   if (review > 0) parts.push(`${review} to review`);
   if (image > 0) parts.push(plural(image, "needs an image", "need an image"));
   if (recording > 0) parts.push(plural(recording, "needs a recording", "need a recording"));
+  if (question > 0) parts.push(plural(question, "has a question", "have a question"));
   if (failed > 0) parts.push(`${failed} failed`);
   if (working > 0) parts.push(`${working} generating`);
   if (parts.length === 0) return { text: "Every asset is ready", tone: "done" };

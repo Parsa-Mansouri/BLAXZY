@@ -7,6 +7,7 @@ import type { GuidedQuestion } from "@/server/damis";
 import { fileSrc } from "@/lib/file-src";
 import { cn } from "@/ui";
 import { PICTURE_MAX_H } from "../../../_lib/fill";
+import type { ArtworkShape } from "../_lib/asset-view";
 
 export type { GuidedQuestion };
 
@@ -54,13 +55,18 @@ export function When({ date }: { date: Date }) {
   );
 }
 
-const ASPECTS = {
+const ASPECTS: Record<ArtworkShape, string> = {
   landscape: "aspect-video",
   portrait: "aspect-[9/16]",
   sheet: "aspect-video",
-} as const;
+  "16:9": "aspect-video",
+  "9:16": "aspect-[9/16]",
+  "1:1": "aspect-square",
+  "4:3": "aspect-[4/3]",
+  "3:4": "aspect-[3/4]",
+};
 
-export type ArtworkShape = keyof typeof ASPECTS;
+export type { ArtworkShape };
 
 /**
  * A stored image in a box of known shape, contained on black so it never distorts or shifts the

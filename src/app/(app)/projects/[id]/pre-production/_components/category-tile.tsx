@@ -49,6 +49,7 @@ function nextStep(
   return (
     pick(find("sheet_review"), (name) => `Review ${name}’s Sheet`) ??
     pick(find("look_review"), (name) => `Review ${name}’s Image`) ??
+    pick(find("needs_answer"), (name) => `Answer the Question About ${name}`) ??
     pick(find("failed"), (name) => `Open ${name}`) ??
     pick(find("needs_image"), (name) => `Add an Image for ${name}`) ??
     pick(find("needs_recording"), (name) => `Add a Recording for ${name}`)

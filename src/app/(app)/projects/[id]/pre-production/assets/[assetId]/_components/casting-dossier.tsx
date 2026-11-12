@@ -95,12 +95,8 @@ export function CastingDossier({
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <p className="min-w-0 text-heading-sm font-bold break-words uppercase">{name}</p>
         <p className="shrink-0 text-meta tracking-[0.12em] uppercase tabular-nums">
-          <span aria-hidden="true">
-            Casting · {Math.min(step + 1, total)} / {total}
-          </span>
-          <span className="sr-only">
-            Question {Math.min(step + 1, total)} of {total}, {answered} answered
-          </span>
+          <span aria-hidden="true">Casting · No. {Math.min(step + 1, total)}</span>
+          <span className="sr-only">Question {Math.min(step + 1, total)}</span>
         </p>
       </div>
       {description ? (
@@ -159,9 +155,7 @@ export function CastingDossier({
           onClick={() => setExpanded((open) => !open)}
           className="self-start rounded-mark text-meta underline underline-offset-4 focus-ring @5xl:hidden"
         >
-          {expanded
-            ? "Show the current field only"
-            : `Show all ${total} fields · ${answered} answered`}
+          {expanded ? "Show the current field only" : "Show every field"}
         </button>
       ) : null}
 

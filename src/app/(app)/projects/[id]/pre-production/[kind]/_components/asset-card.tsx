@@ -105,9 +105,12 @@ export function AssetCard({
         <>
           {link("Answer Questions", "questions", true)}
           {link("Write a Prompt", "prompt")}
-          {link("Upload an Image", "upload")}
+          {link("Use Photos", "upload")}
         </>
       );
+      break;
+    case "needs_answer":
+      actions = link("Answer the Question", undefined, true);
       break;
     case "needs_recording":
       actions = link("Upload a Recording", undefined, true);

@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition, type KeyboardEvent } from "react";
-import { Button, SwapFade, TextLink, Textarea, cn, stagger } from "@/ui";
+import { Button, SwapFade, TextLink, Textarea, stagger } from "@/ui";
 import type { GuidedDraft } from "../_lib/guided-draft";
-import { startFromGuidedAction, startFromPromptAction } from "../actions";
+import { startFromGuidedAction } from "../actions";
+import { AnswerTiles, LETTERS, QUESTION_TITLE } from "./answer-tiles";
 import { focusIsFree, keepTitleVisible, useAssetScreen } from "./asset-context";
 import { CastingDossier } from "./casting-dossier";
 import { ErrorLine, PriceLine, canAfford, formatNumber, type GuidedQuestion } from "./shared";
 
 /**
- * How a question was answered: an offered answer (or, for a text question, written text), "Type it
- * yourself" with the user's own words, or "Skip, let BLAXZY decide" with an optional rough idea.
+ * How a question was answered: an offered answer (or, for a text question, written text), "Not
+ * what you have in mind?" with the user's own words, or "I'm not sure" (the designer decides).
  * The draft stores them as "answer", "other" and "unsure".
  */
 type Mode = "answer" | "other" | "unsure";
@@ -18,18 +19,27 @@ type Mode = "answer" | "other" | "unsure";
 /** The draft keeps the mode beside the answer, under `<question id>:mode`. */
 const modeKey = (id: string) => `${id}:mode`;
 
-/** The key that picks each offered answer, and the letter on its card. */
-const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
 interface Answer {
   mode: Mode | null;
   text: string;
 }
 
+/**
+ * The answer on file for a question. A question never touched shows the answer the script
+ * suggests (`prefill`): an offered one is picked, any other text is the user's own words.
+ */
 function readAnswer(question: GuidedQuestion, answers: Record<string, string>): Answer {
-  const text = answers[question.id] ?? "";
-  const stored = answers[modeKey(question.id)];
-  if (stored === "other" || stored === "unsure") return { mode: stored, text };
+  const stored = answers[question.id];
+  const mode = answers[modeKey(question.id)];
+  if (stored === undefined && mode === undefined && question.prefill) {
+    const offered = (question.options ?? []).some((o) => o.value === question.prefill);
+    return question.kind === "choice" && !offered
+      ? { mode: "other", text: question.prefill }
+      : { mode: "answer", text: question.prefill };
+  }
+  const text = stored ?? "";
+  if (mode === "unsure") return { mode: "unsure", text: "" };
+  if (mode === "other") return { mode: "other", text };
   if (question.kind === "choice") {
     return (question.options ?? []).some((o) => o.value === text)
       ? { mode: "answer", text }
@@ -43,25 +53,19 @@ function isAnswered({ mode, text }: Answer): boolean {
   return mode !== null && text.trim().length > 0;
 }
 
-/** The answer in a few words, as the prompt gives it to the writer. */
-function answerWords(question: GuidedQuestion, answer: Answer): string {
-  const text = answer.text.trim();
-  if (answer.mode === "unsure") return text ? `Not sure: ${text}` : "Not sure";
-  if (answer.mode === "other") return text || "Something else";
-  if (question.kind === "choice") {
-    return question.options?.find((o) => o.value === text)?.label ?? text;
-  }
-  return text;
-}
+/** Advanced questions (the prop's extra detail) may always be left empty. */
+const isOptional = (question: GuidedQuestion) =>
+  question.optional === true || question.advanced === true;
 
 /** The answer as the casting sheet types it in; null while unanswered. */
 function sheetWords(question: GuidedQuestion, answer: Answer): string | null {
   if (!isAnswered(answer)) return null;
-  if (answer.mode === "unsure") {
-    const idea = answer.text.trim();
-    return idea ? `Roughly: ${idea}` : "BLAXZY decides";
+  if (answer.mode === "unsure") return "BLAXZY decides";
+  const text = answer.text.trim();
+  if (answer.mode === "answer" && question.kind === "choice") {
+    return question.options?.find((o) => o.value === text)?.label ?? text;
   }
-  return answerWords(question, answer);
+  return text;
 }
 
 /** True when a key press belongs to a field, a menu or a dialog rather than to the questions. */
@@ -75,8 +79,11 @@ function typingElsewhere(target: EventTarget | null): boolean {
 /**
  * The guided questions as a casting session: the casting sheet on the leading side (every field a
  * question, any field opens it again), one question on the other, its offered answers as lettered
- * cards (the letter key picks one). Every question also takes the user's own words or "let BLAXZY
- * decide" with a rough idea. The last question's main button makes the image. No image preview.
+ * cards (the letter key picks one). Every question also takes the user's own words ("Not what you
+ * have in mind?") or "I'm not sure", which leaves it to the designer. The questions the script
+ * already answers were dropped by the server; a suggested answer is picked in advance. Optional
+ * extra detail (the prop's Advanced block) waits behind "Add more detail" after the last main
+ * question, whose main button makes the image.
  */
 export function GuidedFlow({
   projectId,
@@ -84,8 +91,8 @@ export function GuidedFlow({
   assetName,
   assetDescription,
   questions,
+  aiDecides,
   maxAnswer,
-  maxPrompt,
   price,
   balance,
   initial,
@@ -99,15 +106,16 @@ export function GuidedFlow({
   /** The script's description of the asset, quoted on the sheet. */
   assetDescription: string | null;
   questions: GuidedQuestion[];
+  /** The answer that means "I'm not sure". */
+  aiDecides: string;
   maxAnswer: number;
-  maxPrompt: number;
   price: number | null;
   balance: number;
   initial: GuidedDraft | null;
   onSave: (draft: GuidedDraft) => void;
   onClear: () => void;
   /** Leaves the questions for another way of adding the image. */
-  onMethod: (method: "prompt" | "upload") => void;
+  onMethod: (method: "prompt" | "photos") => void;
 }) {
   const { moveOn, shown } = useAssetScreen();
   const id = useId();
@@ -115,8 +123,15 @@ export function GuidedFlow({
   const body = useRef<HTMLDivElement>(null);
   const freeField = useRef<HTMLTextAreaElement>(null);
   const [answers, setAnswers] = useState<Record<string, string>>(initial?.answers ?? {});
-  const total = questions.length;
-  // Older drafts may stand on the summary that followed the last question: open that question.
+  const main = questions.filter((q) => !q.advanced);
+  const extra = questions.filter((q) => q.advanced);
+  // The extra detail opens when asked for, or when a saved draft already answered some of it.
+  const [detailed, setDetailed] = useState(
+    main.length === 0 || extra.some((q) => (initial?.answers[q.id] ?? "").trim().length > 0),
+  );
+  const sequence = detailed ? [...main, ...extra] : main;
+  const total = sequence.length;
+  // Older drafts may stand past the end (the summary that once followed): open the last question.
   const [step, setStep] = useState(Math.min(initial?.step ?? 0, Math.max(total - 1, 0)));
   const [error, setError] = useState<string | null>(null);
   // The field whose answer was just picked, so the sheet types it in.
@@ -125,8 +140,9 @@ export function GuidedFlow({
   const moved = useRef(false);
   const wantFreeFocus = useRef(false);
 
-  const question = questions[step] ?? null;
+  const question = sequence[step] ?? null;
   const last = step === total - 1;
+  const canAddDetail = !detailed && extra.length > 0 && last;
   const answer: Answer = question ? readAnswer(question, answers) : { mode: null, text: "" };
 
   // After moving between questions, put focus on the new question's control. The first question
@@ -142,7 +158,7 @@ export function GuidedFlow({
     if (!moved.current) keepTitleVisible();
   }, [step, shown]);
 
-  // "Type it yourself" and "Skip, let BLAXZY decide" open a field: it takes focus when opened.
+  // "Not what you have in mind?" opens a field: it takes focus when opened.
   useEffect(() => {
     if (!wantFreeFocus.current) return;
     wantFreeFocus.current = false;
@@ -181,15 +197,26 @@ export function GuidedFlow({
     set({ mode: "answer", text: value });
   }
 
-  /** Opens or closes "Type it yourself" or "Skip, let BLAXZY decide". */
-  function pickFree(mode: "other" | "unsure") {
-    if (answer.mode === mode) {
-      set({ mode: question?.kind === "text" ? "answer" : null, text: "" });
+  /** Opens or closes "Not what you have in mind?" (the user's own words). */
+  function pickOwnWords() {
+    if (answer.mode === "other") {
+      set({ mode: null, text: "" });
       return;
     }
     wantFreeFocus.current = true;
-    setTypedId(mode === "unsure" ? (question?.id ?? null) : null);
-    set({ mode, text: "" });
+    setTypedId(null);
+    set({ mode: "other", text: "" });
+  }
+
+  /** "I'm not sure": the designer decides. Choosing it again takes it back. */
+  function pickUnsure() {
+    if (!question) return;
+    if (answer.mode === "unsure") {
+      set({ mode: question.kind === "text" ? "answer" : null, text: "" });
+      return;
+    }
+    setTypedId(question.id);
+    set({ mode: "unsure", text: "" });
   }
 
   // The letter keys pick an offered answer while focus is on the questions (or nowhere), never
@@ -220,13 +247,13 @@ export function GuidedFlow({
   /** Checks the question on screen; says what is missing when it cannot be left yet. */
   function currentIsValid(): boolean {
     if (!question) return false;
-    if (!isAnswered(answer) && !question.optional) {
+    if (!isAnswered(answer) && !isOptional(question)) {
       setError(
         answer.mode === "other"
-          ? "Describe it in your own words, or pick another answer."
+          ? "Describe it in your own words, or pick an answer."
           : question.kind === "choice"
-            ? "Choose an answer, or let BLAXZY decide."
-            : "Write an answer, or let BLAXZY decide.",
+            ? "Choose an answer, or choose I’m not sure."
+            : "Write an answer, or choose I’m not sure.",
       );
       return false;
     }
@@ -243,38 +270,31 @@ export function GuidedFlow({
     else go(step + 1);
   }
 
+  function addDetail() {
+    if (!currentIsValid()) return;
+    setDetailed(true);
+    go(step + 1);
+  }
+
   function generate() {
-    const missing = questions.findIndex((q) => !q.optional && !isAnswered(readAnswer(q, answers)));
+    const missing = sequence.findIndex(
+      (q) => !isOptional(q) && !isAnswered(readAnswer(q, answers)),
+    );
     if (missing !== -1) {
       go(missing);
-      setError("Answer this one first, or let BLAXZY decide.");
+      setError("Answer this one first, or choose I’m not sure.");
       return;
     }
-    // The guided answers take an offered answer for a choice question. When a choice was answered
-    // in the user's own words (typed, or left to BLAXZY), the answers go as one written prompt.
+    // Every answer goes as it is: an offered answer, the user's own words, or "I'm not sure".
     const guided: Record<string, string> = {};
-    const lines: string[] = [];
-    let ownWords = false;
-    for (const q of questions) {
+    for (const q of sequence) {
       const a = readAnswer(q, answers);
       if (!isAnswered(a)) continue;
-      const words = answerWords(q, a);
-      lines.push(`${q.label} ${words}`);
-      if (q.kind === "choice" && a.mode !== "answer") ownWords = true;
-      guided[q.id] = q.kind === "choice" ? a.text.trim() : words;
-    }
-    const prompt = lines.join("\n");
-    if (ownWords && prompt.length > maxPrompt) {
-      setError(
-        `Your answers are longer than ${formatNumber(maxPrompt)} characters. Shorten one of them.`,
-      );
-      return;
+      guided[q.id] = a.mode === "unsure" ? aiDecides : a.text.trim();
     }
     setError(null);
     startSending(async () => {
-      const result = ownWords
-        ? await startFromPromptAction(projectId, assetId, prompt)
-        : await startFromGuidedAction(projectId, assetId, guided);
+      const result = await startFromGuidedAction(projectId, assetId, guided);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -285,16 +305,13 @@ export function GuidedFlow({
   }
 
   const affordable = canAfford(price, balance);
-  const freeHint =
-    answer.mode === "other"
-      ? "Describe it in your own words."
-      : "Any rough idea? BLAXZY fills in the rest.";
   const submitOnShortcut = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       next();
     }
   };
+  const optional = question ? isOptional(question) : false;
 
   return (
     <div ref={root} data-dossier className="@container flex flex-1 flex-col">
@@ -302,7 +319,7 @@ export function GuidedFlow({
         <CastingDossier
           name={assetName}
           description={assetDescription}
-          rows={questions.map((q) => ({
+          rows={sequence.map((q) => ({
             id: q.id,
             label: q.short,
             value: sheetWords(q, readAnswer(q, answers)),
@@ -318,10 +335,12 @@ export function GuidedFlow({
           {question ? (
             <SwapFade swapKey={question.id} className="flex flex-col gap-8">
               <div className="flex flex-col gap-3">
-                <h2
-                  id={`${id}-title`}
-                  className="text-display text-balance break-words @5xl:text-[3.75rem] @5xl:leading-[1.04] @5xl:tracking-[-0.03em]"
-                >
+                {question.advanced ? (
+                  <p className="font-mono text-meta tracking-caps text-label-2 uppercase">
+                    More detail · Optional
+                  </p>
+                ) : null}
+                <h2 id={`${id}-title`} className={QUESTION_TITLE}>
                   {question.label}
                 </h2>
                 {question.kind === "choice" ? (
@@ -333,49 +352,13 @@ export function GuidedFlow({
 
               <div className="flex flex-col gap-5">
                 {question.kind === "choice" ? (
-                  <div
-                    role="group"
-                    aria-labelledby={`${id}-title`}
-                    className="grid grid-cols-1 gap-3 @xl:grid-cols-2"
-                  >
-                    {(question.options ?? []).map((option, i) => {
-                      const selected = answer.mode === "answer" && answer.text === option.value;
-                      const letter = LETTERS[i];
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          data-option
-                          aria-pressed={selected}
-                          aria-keyshortcuts={letter}
-                          disabled={sending}
-                          onClick={() => pick(option.value, true)}
-                          className={cn(
-                            "flex min-h-20 press enter flex-col justify-between gap-4 rounded-inset border p-4 text-left focus-ring @xl:min-h-28",
-                            selected
-                              ? "border-brand bg-brand/12"
-                              : "border-separator-opaque bg-elevated hover:bg-elevated-2",
-                          )}
-                          style={stagger(i, 40)}
-                        >
-                          {letter ? (
-                            <span
-                              aria-hidden="true"
-                              className={cn(
-                                "font-script text-meta",
-                                selected ? "text-brand" : "text-label-3",
-                              )}
-                            >
-                              {letter}
-                            </span>
-                          ) : null}
-                          <span className="text-control-lg text-pretty text-label">
-                            {option.label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <AnswerTiles
+                    labelledBy={`${id}-title`}
+                    options={question.options ?? []}
+                    selected={answer.mode === "answer" ? answer.text : null}
+                    disabled={sending}
+                    onPick={(value) => pick(value, true)}
+                  />
                 ) : answer.mode !== "unsure" ? (
                   <Textarea
                     aria-labelledby={`${id}-title`}
@@ -389,7 +372,11 @@ export function GuidedFlow({
                     textStyle="script"
                     disabled={sending}
                   />
-                ) : null}
+                ) : (
+                  <p className="max-w-(--measure) swap-in text-body text-pretty text-label-2">
+                    BLAXZY decides this from the script and the film’s style.
+                  </p>
+                )}
 
                 <div
                   className="flex enter flex-wrap gap-x-6 gap-y-2 text-body"
@@ -399,27 +386,27 @@ export function GuidedFlow({
                     <TextLink
                       render={<button type="button" disabled={sending} />}
                       aria-pressed={answer.mode === "other"}
-                      onClick={() => pickFree("other")}
+                      onClick={pickOwnWords}
                     >
-                      Type it yourself
+                      Not what you have in mind?
                     </TextLink>
                   ) : null}
                   <TextLink
                     render={<button type="button" disabled={sending} />}
                     aria-pressed={answer.mode === "unsure"}
-                    onClick={() => pickFree("unsure")}
+                    onClick={pickUnsure}
                   >
-                    Skip, let BLAXZY decide
+                    I’m not sure
                   </TextLink>
                 </div>
 
-                {answer.mode === "other" || answer.mode === "unsure" ? (
+                {answer.mode === "other" ? (
                   <Textarea
                     ref={freeField}
-                    aria-label={freeHint}
-                    placeholder={freeHint}
+                    aria-label="Describe it in your own words"
+                    placeholder="Describe it in your own words."
                     value={answer.text}
-                    onChange={(e) => set({ mode: answer.mode, text: e.target.value })}
+                    onChange={(e) => set({ mode: "other", text: e.target.value })}
                     onKeyDown={submitOnShortcut}
                     minRows={2}
                     maxRows={10}
@@ -427,6 +414,11 @@ export function GuidedFlow({
                     disabled={sending}
                     className="swap-in"
                   />
+                ) : null}
+                {answer.mode === "unsure" && question.kind === "choice" ? (
+                  <p className="swap-in text-secondary text-pretty text-label-2">
+                    BLAXZY decides this from the script and the film’s style.
+                  </p>
                 ) : null}
               </div>
             </SwapFade>
@@ -444,8 +436,13 @@ export function GuidedFlow({
                 disabled={last && !affordable}
                 onClick={next}
               >
-                {last ? "Generate Image" : "Next"}
+                {last ? "Generate Image" : optional && !isAnswered(answer) ? "Skip" : "Next"}
               </Button>
+              {canAddDetail ? (
+                <Button variant="plain" size="large" onClick={addDetail} disabled={sending}>
+                  Add More Detail
+                </Button>
+              ) : null}
               {step > 0 ? (
                 <Button
                   variant="plain"
@@ -466,9 +463,9 @@ export function GuidedFlow({
                 <span aria-hidden="true">·</span>
                 <TextLink
                   render={<button type="button" disabled={sending} />}
-                  onClick={() => onMethod("upload")}
+                  onClick={() => onMethod("photos")}
                 >
-                  Upload an image
+                  Use photos
                 </TextLink>
               </p>
             </div>

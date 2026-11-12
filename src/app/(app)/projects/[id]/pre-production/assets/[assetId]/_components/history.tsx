@@ -3,10 +3,78 @@
 import { AudioLines, ImageOff } from "lucide-react";
 import { fileSrc } from "@/lib/file-src";
 import { Button, cn } from "@/ui";
-import { lookOrigin, versionStatusLabel, type HistoryItem } from "../_lib/asset-view";
+import type { LookView } from "@/server/assets";
+import {
+  lookOrigin,
+  lookShape,
+  parentLook,
+  versionStatusLabel,
+  type HistoryItem,
+} from "../_lib/asset-view";
+import type { DesignerInfo } from "../_lib/designer-view";
+import { fieldName } from "../_lib/look-review";
 import { StageHeading } from "./asset-context";
 import { StageLayout } from "./stage-panels";
+import { ReferenceThumbs } from "./reference-conflict";
 import { Artwork, MissingImage, When, type GuidedQuestion, type Orientation } from "./shared";
+
+/** "ai_decides" (I'm not sure) in words. */
+function answerWords(value: string, designer: DesignerInfo | null, label?: string): string {
+  if (designer && value === designer.aiDecides) return "Not sure: BLAXZY decided";
+  return label ?? value;
+}
+
+/** The look's answers to the guided questions, with their questions (as asked, when known). */
+function guidedAnswerRows(
+  look: LookView,
+  questions: readonly GuidedQuestion[],
+  designer: DesignerInfo | null,
+): { key: string; label: string; value: string }[] {
+  return Object.entries(look.guidedAnswers ?? {}).flatMap(([id, value]) => {
+    if (!value) return [];
+    const question = questions.find((q) => q.id === id);
+    const option = question?.options?.find((o) => o.value === value);
+    return [
+      {
+        key: id,
+        label: question?.label ?? fieldName(id),
+        value: answerWords(value, designer, option?.label),
+      },
+    ];
+  });
+}
+
+/** The look's answers to the designer's own questions. */
+function clarifyRows(look: LookView): { key: string; label: string; value: string }[] {
+  return Object.entries(look.clarifyAnswers ?? {}).flatMap(([id, value]) => {
+    if (!value) return [];
+    const question = look.spec?.questions.find((q) => q.id === id);
+    return [{ key: id, label: question?.question ?? fieldName(id), value }];
+  });
+}
+
+function AnswerList({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: { key: string; label: string; value: string }[];
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="text-section">{title}</h3>
+      <dl className="flex flex-col gap-2">
+        {rows.map((a) => (
+          <div key={a.key} className="flex flex-col">
+            <dt className="text-meta text-label-2">{a.label}</dt>
+            <dd className="text-body break-words text-label">{a.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
 import { AudioPlayer } from "./voice";
 
 function itemTitle(item: HistoryItem, voice: boolean): string {
@@ -110,6 +178,8 @@ export function HistoryViewer({
   voice,
   orientation,
   questions,
+  designer,
+  looks,
   onBack,
 }: {
   item: HistoryItem;
@@ -117,17 +187,16 @@ export function HistoryViewer({
   voice: boolean;
   orientation: Orientation;
   questions: GuidedQuestion[];
+  designer: DesignerInfo | null;
+  /** The listed looks, to say what a look answered. */
+  looks: LookView[];
   onBack: () => void;
 }) {
   const title = itemTitle(item, voice);
   const { version } = item;
   const look = item.kind === "look" ? item.version : null;
-  const answers = look?.guidedAnswers
-    ? questions.flatMap((q) => {
-        const value = look.guidedAnswers?.[q.id];
-        return value ? [{ label: q.label, value }] : [];
-      })
-    : [];
+  const answers = look ? guidedAnswerRows(look, questions, designer) : [];
+  const clarify = look ? clarifyRows(look) : [];
 
   const bar = (
     <div className="flex in-2 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-tile bg-elevated px-4 py-3">
@@ -155,7 +224,7 @@ export function HistoryViewer({
           <Artwork
             fileId={version.fileId}
             alt={`${assetName}, ${title}`}
-            shape={item.kind === "sheet" ? "sheet" : orientation}
+            shape={look ? lookShape(look.aspectRatio, orientation) : "sheet"}
           >
             {version.fileId ? null : (
               <MissingImage
@@ -169,7 +238,7 @@ export function HistoryViewer({
             <div className="flex flex-col gap-1.5">
               <StageHeading className="text-heading-sm">{title}</StageHeading>
               <p className="text-meta text-label-2">
-                {look ? `${lookOrigin(look)} · ` : ""}
+                {look ? `${lookOrigin(look, parentLook(looks, look))} · ` : ""}
                 <When date={version.createdAt} />
               </p>
               {version.isSample ? (
@@ -187,17 +256,20 @@ export function HistoryViewer({
                 </p>
               </div>
             ) : null}
-            {answers.length > 0 ? (
+            {look && look.references.length > 0 ? (
               <div className="flex flex-col gap-2">
-                <h3 className="text-section">Your Answers</h3>
-                <dl className="flex flex-col gap-2">
-                  {answers.map((a) => (
-                    <div key={a.label} className="flex flex-col">
-                      <dt className="text-meta text-label-2">{a.label}</dt>
-                      <dd className="text-body break-words text-label">{a.value}</dd>
-                    </div>
-                  ))}
-                </dl>
+                <h3 className="text-section">Your Photos</h3>
+                <ReferenceThumbs references={look.references} designer={designer} />
+              </div>
+            ) : null}
+            <AnswerList title="Your Answers" rows={answers} />
+            <AnswerList title="Your Answers to the Designer" rows={clarify} />
+            {look?.spec?.summary ? (
+              <div className="flex flex-col gap-1">
+                <h3 className="text-section">The Designer’s Summary</h3>
+                <p className="text-body text-pretty break-words text-label-2">
+                  {look.spec.summary}
+                </p>
               </div>
             ) : null}
           </div>

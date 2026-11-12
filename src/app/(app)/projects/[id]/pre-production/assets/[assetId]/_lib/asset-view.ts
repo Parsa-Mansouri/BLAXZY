@@ -1,4 +1,8 @@
 import type { AssetStage, LookView, SheetView } from "@/server/assets";
+import type { LookAspectRatio } from "./look-review";
+
+/** The shapes a picture is shown in: the project's orientation, a sheet, or a look's own ratio. */
+export type ArtworkShape = "landscape" | "portrait" | "sheet" | LookAspectRatio;
 
 /** What the detail screen needs from `getAssetDetail`, newest first. */
 export interface DetailVersions {
@@ -17,22 +21,54 @@ const STATUS_LABELS: Record<LookStatus, string> = {
   rejected: "Changes Requested",
   superseded: "Replaced",
   failed: "Failed",
+  needs_input: "Question Asked",
 };
 
 export const versionStatusLabel = (status: LookStatus) => STATUS_LABELS[status];
 
 export { assetStatusLabel as stageLabel } from "../../../../_lib/asset-status";
 
-/** How a look came to be, in a few words. */
-export function lookOrigin(look: LookView): string {
+/**
+ * How a look came to be, in a few words. `parent` is the look it answers (a rejected one it fixes,
+ * or one whose question was answered), when known.
+ */
+export function lookOrigin(look: LookView, parent?: LookView | null): string {
   if (look.source === "uploaded") return "Uploaded";
-  if (look.guidedAnswers) return "From your answers";
-  if (look.userPrompt) return "From your description";
-  return "Revised after review";
+  if (look.spec?.heroMode === "use_uploaded") return "Your photo, used as the Hero";
+  if (parent?.status === "rejected") return "Revised after review";
+  if (parent && look.clarifyAnswers) return "After your answer";
+  const photos = look.references.length > 0;
+  if (look.guidedAnswers) return photos ? "From your answers and photos" : "From your answers";
+  if (look.userPrompt) return photos ? "From your description and photos" : "From your description";
+  if (photos) return "From your photos";
+  if (look.parentId) return "Revised after review";
+  return "Designed by BLAXZY";
+}
+
+/** The look a look answers, among the listed ones. */
+export function parentLook(looks: readonly LookView[], look: LookView): LookView | null {
+  return look.parentId ? (looks.find((l) => l.id === look.parentId) ?? null) : null;
+}
+
+/**
+ * The shape a look is shown in: its own ratio when the designer chose one (character boards and
+ * location Heroes are 16:9, props follow their shape), else the project's orientation.
+ */
+export function lookShape(
+  aspectRatio: LookView["aspectRatio"],
+  orientation: "landscape" | "portrait",
+): ArtworkShape {
+  return aspectRatio ?? orientation;
 }
 
 /** The image to keep on screen while a new one is produced or after one failed. */
-export type HeldImage = { fileId: string; kind: "look" | "sheet"; versionNumber: number };
+export type HeldImage = {
+  fileId: string;
+  kind: "look" | "sheet";
+  versionNumber: number;
+  /** A look's own ratio (see `lookShape`); null for a sheet. */
+  aspectRatio: LookView["aspectRatio"];
+};
 
 /**
  * While a fix is generating (or after it failed), the version it fixes stays visible. A fix follows
@@ -54,6 +90,7 @@ export function heldImage({ stage, looks, sheets }: DetailVersions): HeldImage |
         fileId: previousLook.fileId,
         kind: "look",
         versionNumber: previousLook.versionNumber,
+        aspectRatio: previousLook.aspectRatio,
       };
     }
     return null;
@@ -71,10 +108,16 @@ export function heldImage({ stage, looks, sheets }: DetailVersions): HeldImage |
         fileId: previousSheet.fileId,
         kind: "sheet",
         versionNumber: previousSheet.versionNumber,
+        aspectRatio: null,
       };
     }
     if (look.fileId && look.status === "accepted") {
-      return { fileId: look.fileId, kind: "look", versionNumber: look.versionNumber };
+      return {
+        fileId: look.fileId,
+        kind: "look",
+        versionNumber: look.versionNumber,
+        aspectRatio: look.aspectRatio,
+      };
     }
   }
   return null;

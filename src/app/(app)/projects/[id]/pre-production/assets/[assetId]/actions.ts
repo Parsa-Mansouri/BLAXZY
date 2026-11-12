@@ -9,15 +9,18 @@ import {
   replaceLook,
   retryLook,
   retrySheet,
+  startDesign,
   startLookFromGuided,
-  startLookFromPrompt,
   startLookFromUpload,
+  startWithoutWaiting,
   submitLookReview,
   submitSheetReview,
   updateAsset,
+  answerLookQuestion,
   type AssetStage,
 } from "@/server/assets";
 import { requireUser } from "@/server/auth";
+import type { FixSelection } from "@/server/damis";
 import { confirmUpload, createUpload, StorageError } from "@/server/storage";
 import { versionsKey } from "./_lib/asset-view";
 
@@ -95,15 +98,63 @@ export async function pollAssetAction(assetId: string): Promise<string | null> {
   }
 }
 
-export async function startFromPromptAction(
+/** A reference photo of a design: an uploaded image, the role picked for it, what to keep. */
+export interface ReferencePhoto {
+  fileId: string;
+  role: string;
+  note?: string;
+}
+
+/**
+ * Starts a design from any mix of the user's words, reference photos and guided answers. With
+ * none of them it is "Design It for Me": the designer works from the script and the project.
+ */
+export async function startDesignAction(
   projectId: string,
   assetId: string,
-  prompt: string,
+  input: { prompt?: string; answers?: Record<string, string>; references?: ReferencePhoto[] },
 ): Promise<ActionResult<MoveOn | null>> {
   const user = await requireUser();
   try {
-    const look = await startLookFromPrompt({ assetId, userId: user.id, prompt });
+    const look = await startDesign({ assetId, userId: user.id, ...input });
     return look ? await movedOn(projectId, user.id, assetId) : { ok: false, error: MISSING };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** A prop waiting for its locations' Heroes is designed now, without them. */
+export async function startWithoutWaitingAction(
+  projectId: string,
+  assetId: string,
+): Promise<ActionResult<MoveOn | null>> {
+  const user = await requireUser();
+  try {
+    const stage = await startWithoutWaiting({ assetId, userId: user.id });
+    return stage
+      ? await afterStage(projectId, user.id, stage, assetId)
+      : { ok: false, error: MISSING };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * Answers the designer's question on a look that waits for it (keyed by question id; the
+ * "I'm not sure" answer lets the designer take its default), then the design carries on.
+ */
+export async function answerQuestionAction(
+  projectId: string,
+  lookId: string,
+  answers: Record<string, string>,
+  assetId?: string,
+): Promise<ActionResult<MoveOn | null>> {
+  const user = await requireUser();
+  try {
+    const stage = await answerLookQuestion({ lookId, userId: user.id, answers });
+    return stage
+      ? await afterStage(projectId, user.id, stage, assetId)
+      : { ok: false, error: MISSING };
   } catch (error) {
     return failure(error);
   }
@@ -129,7 +180,10 @@ export interface UploadTicketData {
   headers: Record<string, string>;
 }
 
-/** Records the file and returns where the browser sends its bytes. */
+/**
+ * Records the file and returns where the browser sends its bytes: a voice's recording, or a
+ * reference photo of an image asset (confirmed with `confirmReferenceUploadAction`).
+ */
 export async function createAssetUploadAction(
   assetId: string,
   file: { name: string; type: string; size: number },
@@ -168,7 +222,24 @@ export async function createAssetUploadAction(
   }
 }
 
-/** Checks the uploaded bytes, then uses the file as the asset's image or recording. */
+/**
+ * Checks the uploaded bytes of a reference photo (from `createAssetUploadAction`). Nothing starts:
+ * the photo is sent with a design or a review.
+ */
+export async function confirmReferenceUploadAction(fileId: string): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    await confirmUpload({ fileId, ownerId: user.id });
+    return { ok: true, data: null };
+  } catch (error) {
+    if (error instanceof StorageError) {
+      return { ok: false, error: "The upload did not complete. Choose the photo again." };
+    }
+    return failure(error);
+  }
+}
+
+/** Checks the uploaded bytes, then uses the file as the voice's recording. */
 export async function finishAssetUploadAction(
   projectId: string,
   assetId: string,
@@ -191,16 +262,33 @@ export async function finishAssetUploadAction(
   }
 }
 
+/** A sheet's review: the sheet's issues are not catalog-driven yet. */
 export interface ReviewInput {
   decision: "accepted" | "rejected";
   issueCodes?: string[];
   note?: string;
 }
 
+/** A look's review (see `submitLookReview`). */
+export interface LookReviewInput {
+  decision: "accepted" | "rejected";
+  /** Rejected: the designer's catalog options picked, with their chip, words and frame. */
+  selections?: FixSelection[];
+  note?: string;
+  /** Rejected: the next version's photos (one replaced or dropped). */
+  references?: ReferencePhoto[];
+  /** Rejected: values written on the spec card. */
+  specEdits?: { field: string; value: string }[];
+  /** Rejected: answers to the designer's non-blocking questions. */
+  clarifyAnswers?: Record<string, string>;
+  /** Accepted: the critical spec fields the user checked. */
+  confirmedFields?: string[];
+}
+
 export async function reviewLookAction(
   projectId: string,
   lookId: string,
-  review: ReviewInput,
+  review: LookReviewInput,
   /** The look's asset: when given, a decision that starts a job moves on (see `MoveOn`). */
   assetId?: string,
 ): Promise<ActionResult<MoveOn | null>> {

@@ -14,9 +14,11 @@ import {
   failedVersion,
   heldImage,
   historyItems,
+  parentLook,
   versionsKey,
   type DetailVersions,
 } from "../_lib/asset-view";
+import type { DesignerInfo } from "../_lib/designer-view";
 import type { AssetIntent } from "../_lib/intent";
 import { FILL_PAGE } from "../../../_lib/fill";
 import { pollAssetAction, type MoveOn } from "../actions";
@@ -24,6 +26,7 @@ import { AddImage, type AddMethod } from "./add-image";
 import { AssetScreenProvider } from "./asset-context";
 import { AssetHeader } from "./asset-header";
 import { HistoryStrip, HistoryViewer } from "./history";
+import { NeedsAnswerStage } from "./needs-answer";
 import {
   FailedStage,
   LookReviewStage,
@@ -32,6 +35,16 @@ import {
   WaitingStage,
 } from "./stage-panels";
 import type { AssetInfo, GuidedQuestion, IssueChoice, Limits, Orientation } from "./shared";
+
+/** What the asset's designer said about its current design. */
+export interface DesignState {
+  /** A prop waiting for these locations' Heroes before it is designed (by name). */
+  waitingFor: string[];
+  /** Images sent back in a row since the last accepted one. */
+  rejectedInARow: number;
+  /** The look in review's critical inferred spec fields, checked before Accept. */
+  toConfirm: string[];
+}
 import { VoiceStage } from "./voice";
 
 export interface AssetScreenProps {
@@ -40,11 +53,14 @@ export interface AssetScreenProps {
   kindName: string;
   category: { href: string; label: string };
   versions: DetailVersions;
+  design: DesignState;
+  /** The designer that draws the asset; null for voices. */
+  designer: DesignerInfo | null;
   orientation: Orientation;
   prices: { look: number | null; sheet: number | null };
   balance: number;
+  /** The guided questions still to ask (the designer's skip logic applied). */
   questions: GuidedQuestion[];
-  lookIssues: IssueChoice[];
   sheetIssues: IssueChoice[];
   limits: Limits;
   /** Where a card action asked the page to open (`?open=...`), read once. */
@@ -54,7 +70,7 @@ export interface AssetScreenProps {
 const INTENT_METHODS: Partial<Record<AssetIntent, AddMethod>> = {
   questions: "guided",
   prompt: "prompt",
-  upload: "upload",
+  upload: "photos",
 };
 
 /** Stages that end by themselves: the worker is (or is about to be) producing something. */
@@ -163,6 +179,7 @@ const ANNOUNCEMENTS: Record<AssetStage, string> = {
   needs_image: "Add an image.",
   needs_recording: "Add a recording.",
   generating: "Creating the image.",
+  needs_answer: "The designer has a question.",
   look_review: "The image is ready to review.",
   building_sheet: "Building the sheet.",
   sheet_review: "The sheet is ready to review.",
@@ -172,7 +189,7 @@ const ANNOUNCEMENTS: Record<AssetStage, string> = {
 
 /** One asset of pre-production: its image leads, its state decides what can be done. */
 export function AssetScreen(props: AssetScreenProps) {
-  const { projectId, asset, versions, orientation, prices, balance } = props;
+  const { projectId, asset, versions, orientation, prices, balance, designer, design } = props;
   const { stage, looks, sheets } = versions;
   const refresh = useAssetSync(asset.id, versions);
   const moveOn = useMoveOn(projectId, refresh);
@@ -232,6 +249,8 @@ export function AssetScreen(props: AssetScreenProps) {
         />
       );
     }
+    // Every image asset has a designer; only voices (handled above) have none.
+    if (!designer) return null;
     switch (stage) {
       case "needs_image":
       case "needs_recording":
@@ -240,6 +259,7 @@ export function AssetScreen(props: AssetScreenProps) {
             projectId={projectId}
             asset={asset}
             questions={props.questions}
+            designer={designer}
             limits={props.limits}
             price={prices.look}
             balance={balance}
@@ -248,11 +268,43 @@ export function AssetScreen(props: AssetScreenProps) {
         );
       case "generating":
         return (
-          <WaitingStage assetName={asset.name} kind="look" held={held} orientation={orientation} />
+          <WaitingStage
+            projectId={projectId}
+            assetId={asset.id}
+            assetName={asset.name}
+            kind="look"
+            held={held}
+            orientation={orientation}
+            waitingFor={design.waitingFor}
+            references={looks[0]?.references ?? []}
+            designer={designer}
+          />
         );
+      case "needs_answer": {
+        const look = looks[0];
+        if (!look) return null;
+        return (
+          <NeedsAnswerStage
+            key={look.id}
+            projectId={projectId}
+            assetId={asset.id}
+            assetName={asset.name}
+            look={look}
+            aiDecides={designer.aiDecides}
+            maxAnswer={props.limits.answer}
+          />
+        );
+      }
       case "building_sheet":
         return (
-          <WaitingStage assetName={asset.name} kind="sheet" held={held} orientation={orientation} />
+          <WaitingStage
+            projectId={projectId}
+            assetId={asset.id}
+            assetName={asset.name}
+            kind="sheet"
+            held={held}
+            orientation={orientation}
+          />
         );
       case "look_review": {
         const look = looks[0];
@@ -262,9 +314,13 @@ export function AssetScreen(props: AssetScreenProps) {
             projectId={projectId}
             assetId={asset.id}
             assetName={asset.name}
+            key={look.id}
             look={look}
+            parent={parentLook(looks, look)}
             orientation={orientation}
-            issues={props.lookIssues}
+            designer={designer}
+            toConfirm={design.toConfirm}
+            rejectedInARow={design.rejectedInARow}
             maxNote={props.limits.note}
             prices={prices}
             balance={balance}
@@ -311,6 +367,7 @@ export function AssetScreen(props: AssetScreenProps) {
               projectId={projectId}
               asset={asset}
               questions={props.questions}
+              designer={designer}
               limits={props.limits}
               price={prices.look}
               balance={balance}
@@ -362,6 +419,8 @@ export function AssetScreen(props: AssetScreenProps) {
                 voice={voice}
                 orientation={orientation}
                 questions={props.questions}
+                designer={designer}
+                looks={looks}
                 onBack={() => setViewingKey(null)}
               />
             ) : (

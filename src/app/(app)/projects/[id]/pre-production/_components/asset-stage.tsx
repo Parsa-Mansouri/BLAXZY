@@ -7,6 +7,7 @@ export const STAGE_TONES: Record<AssetStage, StatusTone> = {
   needs_image: "working",
   needs_recording: "working",
   generating: "working",
+  needs_answer: "waiting",
   look_review: "waiting",
   building_sheet: "working",
   sheet_review: "waiting",

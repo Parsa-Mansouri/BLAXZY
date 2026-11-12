@@ -109,7 +109,7 @@ function IssueTile({
 }
 
 /** The marks on the picture, one row each: number, where, and what is wrong there. */
-function MarkList({
+export function MarkList({
   marking,
   subject,
   disabled,

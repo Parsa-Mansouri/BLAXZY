@@ -6,6 +6,8 @@ import {
   historyItems,
   isCreditsFailure,
   kindSlug,
+  lookOrigin,
+  lookShape,
   versionsKey,
 } from "./asset-view";
 import { parseDraft } from "./guided-draft";
@@ -21,6 +23,12 @@ function look(n: number, patch: Partial<LookView> = {}): LookView {
     fileId: `file-look-${n}`,
     userPrompt: null,
     guidedAnswers: { age: "Older (60s-70s)" },
+    references: [],
+    clarifyAnswers: null,
+    spec: null,
+    aspectRatio: null,
+    parentId: null,
+    started: true,
     failure: null,
     isSample: true,
     createdAt: at(n),
@@ -51,6 +59,7 @@ describe("heldImage", () => {
       fileId: "file-look-1",
       kind: "look",
       versionNumber: 1,
+      aspectRatio: null,
     });
   });
 
@@ -148,5 +157,39 @@ describe("parseDraft", () => {
     expect(parseDraft("not json")).toBeNull();
     expect(parseDraft('{"answers":null,"step":1}')).toBeNull();
     expect(parseDraft(null)).toBeNull();
+  });
+});
+
+describe("lookShape and lookOrigin", () => {
+  it("shows a look in its own ratio, else in the project's orientation", () => {
+    expect(lookShape("1:1", "portrait")).toBe("1:1");
+    expect(lookShape(null, "portrait")).toBe("portrait");
+  });
+
+  it("says how a look was made", () => {
+    expect(lookOrigin(look(1))).toBe("From your answers");
+    expect(lookOrigin(look(1, { guidedAnswers: null }))).toBe("Designed by BLAXZY");
+    expect(
+      lookOrigin(look(1, { guidedAnswers: null, references: [{ fileId: "f", role: "face" }] })),
+    ).toBe("From your photos");
+    const parent = look(1, { status: "rejected" });
+    expect(lookOrigin(look(2, { parentId: "look-1" }), parent)).toBe("Revised after review");
+  });
+
+  it("says when an uploaded photo is used as the Hero", () => {
+    const spec = {
+      generator: "location-generator" as const,
+      aspectRatio: "16:9" as const,
+      heroMode: "use_uploaded" as const,
+      styleUsed: "",
+      styleSource: "",
+      summary: "",
+      assumptions: [],
+      warnings: [],
+      appliedFixes: [],
+      fields: [],
+      questions: [],
+    };
+    expect(lookOrigin(look(1, { spec }))).toBe("Your photo, used as the Hero");
   });
 });

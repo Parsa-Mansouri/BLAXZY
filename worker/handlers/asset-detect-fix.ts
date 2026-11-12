@@ -6,7 +6,8 @@ import {
   recordFixFailure,
   tempIdsFor,
 } from "../../src/server/assets";
-import { assetDetectFix, defineHandler } from "../../src/server/jobs";
+import { setSectioningState } from "../../src/server/blocks";
+import { assetDetectFix, defineHandler, enqueue, scriptSection } from "../../src/server/jobs";
 import { loadScriptJob, ScriptInputError } from "../../src/server/script";
 import { detectorProject, detectorScript, runDetector, viewFor } from "./asset-detection";
 import { handleFailure } from "./script-failure";
@@ -66,6 +67,14 @@ export const assetDetectFixHandler = defineHandler(assetDetectFix, async (payloa
       output: run.output,
       byTemp: view.byTemp,
     });
+    // The blocks are cut again so they name the corrected list (as after the first detection).
+    await setSectioningState({
+      projectId: job.projectId,
+      state: "running",
+      scriptVersionId: job.scriptVersionId,
+      failure: null,
+    });
+    await enqueue(scriptSection, { scriptVersionId: job.scriptVersionId, resection: true });
   } catch (error) {
     await handleFailure(error, assetDetectFix, context, async (d) => {
       await recordFixFailure(job.projectId, payload.reviewId, d.message);

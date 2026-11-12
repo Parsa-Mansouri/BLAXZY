@@ -326,6 +326,18 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     await assetDetectFixHandler.run({ reviewId }, jobContext());
     const after = await assets.listAssets(projectId, userId, { kind: "character" });
     expect(after?.items.length).toBe(names.length - 1);
+    // The merge moved block refs to the surviving name (logged), and sectioning runs again.
+    const { project: projectTable, projectEvent } = await import("../../src/server/db/schema");
+    const merges = await db()
+      .select({ payload: projectEvent.payload })
+      .from(projectEvent)
+      .where(and(eq(projectEvent.projectId, projectId), eq(projectEvent.type, "asset.merged")));
+    expect(merges[0]?.payload).toMatchObject({ by: "detector" });
+    const [sectioning] = await db()
+      .select({ stageState: projectTable.stageState })
+      .from(projectTable)
+      .where(eq(projectTable.id, projectId));
+    expect(sectioning?.stageState.sectioning).toMatchObject({ state: "running" });
     const panel = await assets.getDetectionPanel(projectId, userId);
     expect(panel).toMatchObject({ busy: false, rounds: 1, failure: null });
 

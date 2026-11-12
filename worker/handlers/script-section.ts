@@ -27,7 +27,7 @@ export const scriptSectionHandler = defineHandler(scriptSection, async (payload,
       resetBlocks,
     });
   };
-  if (await hasCurrentBlocksFor(project.id, versionId)) {
+  if (!payload.resection && (await hasCurrentBlocksFor(project.id, versionId))) {
     await done();
     return;
   }

@@ -80,10 +80,13 @@ export const assetDetectFix = defineJob({
   dedupeKey: (p) => p.reviewId,
 });
 
-/** Cut an accepted script into prompt blocks. */
+/**
+ * Cut an accepted script into prompt blocks. `resection`: cut it again although it has blocks (the
+ * detected assets changed in a correction round, so the blocks must name the new list).
+ */
 export const scriptSection = defineJob({
   name: "script.section",
-  payload: scriptPayload,
+  payload: scriptPayload.extend({ resection: z.boolean().optional() }),
   options: { ...damiJob, expireInSeconds: 90 * 60 },
 });
 

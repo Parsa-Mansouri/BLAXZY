@@ -5,9 +5,12 @@
  */
 import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
+import { rewriteAssetRefs } from "@/server/blocks";
 import {
   buildFixRequests,
   fixRequestCodes,
+  formatAssetRef,
+  nameKey,
   getReviewCatalog,
   ReviewCatalogError,
   visibleOptions,
@@ -241,6 +244,40 @@ export async function applyDetection(input: {
     }
     if (remove.length > 0) {
       await tx.update(asset).set({ status: "removed" }).where(inArray(asset.id, remove));
+    }
+    // A merge by the detector (ADT02) removes one side and keeps its name as an alias of the
+    // other: the current blocks' refs and tags move to the surviving name, as a manual merge does.
+    for (const id of remove) {
+      const gone = existing.find((a) => a.id === id);
+      if (!gone) continue;
+      const survivor = plan.assets.find(
+        (p) =>
+          p.kind === gone.kind &&
+          p.existing?.id !== gone.id &&
+          (p.details.aliases ?? []).some((alias) => nameKey(alias) === nameKey(gone.name)),
+      );
+      if (!survivor) continue;
+      const blocksRewritten = await rewriteAssetRefs(
+        {
+          projectId,
+          from: formatAssetRef(gone.kind, gone.name),
+          to: formatAssetRef(survivor.kind, survivor.name),
+        },
+        tx,
+      );
+      await tx.insert(projectEvent).values({
+        projectId,
+        userId: owner.ownerId,
+        type: "asset.merged",
+        payload: {
+          by: "detector",
+          keepName: survivor.name,
+          mergeId: gone.id,
+          mergeName: gone.name,
+          kind: gone.kind,
+          blocksRewritten,
+        },
+      });
     }
 
     const [row] = await tx

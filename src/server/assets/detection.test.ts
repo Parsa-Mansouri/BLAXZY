@@ -20,6 +20,10 @@ const script = [
   "EXT. HARBOUR PIER - DAWN",
   "",
   "Mara walks to the end of the pier with the lantern.",
+  "",
+  "INT. FERRY CABIN - DAY",
+  "",
+  "Mara sits alone in the cabin.",
 ].join("\n");
 
 const input = {
@@ -77,7 +81,11 @@ describe("the detector boundary", () => {
       details: plan.assets.map((a) => a.details),
       warnings: plan.warnings,
     };
-    expect(JSON.stringify(stored)).not.toMatch(/\b(char|loc|prop|voice)_\d+\b/);
+    // Not even inside look and state ids the detector built from its own ids (`loc_1_night`).
+    expect(JSON.stringify(stored)).not.toMatch(/(char|loc|prop|voice)_\d+/);
+    const stateIds = plan.assets.flatMap((a) => a.details.states ?? []).map((st) => st.id);
+    expect(stateIds.length).toBeGreaterThan(0);
+    expect(stateIds.every((id) => !/(char|loc|prop|voice)_\d/.test(id))).toBe(true);
   });
 
   it("rebuilds stored assets as a valid previous_output with fresh temporary ids", () => {

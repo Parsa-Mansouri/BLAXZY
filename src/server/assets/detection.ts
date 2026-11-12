@@ -50,7 +50,8 @@ const PREFIX: Record<DetectedKind, string> = {
   voice: "voice",
 };
 
-const TEMP_ID = /\b(?:char|loc|prop|voice)_\d+\b/g;
+/** A temporary id, also inside a longer id the detector built from it (`loc_1_night`). */
+const TEMP_ID = /\b(?:char|loc|prop|voice)_\d+(?![0-9])/g;
 
 export type DetectorView = {
   known: KnownAsset[];
@@ -375,6 +376,10 @@ export function planDetection(input: {
   };
   const refsOf = (ids: readonly string[]) => ids.map(refOf).filter((r): r is string => r !== null);
   const translate = (text: string) => text.replace(TEMP_ID, (id) => nameOf(id) ?? "another asset");
+  // Look and state ids the detector built from its own ids (`loc_1_night`) are stored name-based
+  // (`Ferry_Cabin_night`), so no temporary id reaches the database.
+  const localId = (id: string) =>
+    id.replace(TEMP_ID, (t) => (nameOf(t) ?? "asset").trim().replace(/\s+/g, "_"));
 
   const assets: PlannedAsset[] = [];
   const push = (
@@ -409,7 +414,7 @@ export function planDetection(input: {
       samePersonAs: nameOf(c.same_person_as),
       facts: c.facts.map(fromFact),
       looks: c.looks.map((l) => ({
-        id: l.look_id,
+        id: localId(l.look_id),
         description: l.description,
         sceneRefs: l.scene_refs,
         evidence: l.evidence,
@@ -434,7 +439,7 @@ export function planDetection(input: {
       timeOfDay: l.time_of_day,
       timesOfDay: l.times_of_day,
       states: l.states.map((s) => ({
-        id: s.state_id,
+        id: localId(s.state_id),
         description: s.description,
         sceneRefs: s.scene_refs,
         evidence: s.evidence,
@@ -455,7 +460,7 @@ export function planDetection(input: {
       subtype: p.subtype,
       facts: p.facts.map(fromFact),
       states: p.states.map((s) => ({
-        id: s.state_id,
+        id: localId(s.state_id),
         description: s.description,
         sceneRefs: s.scene_refs,
         evidence: s.evidence,
@@ -500,11 +505,11 @@ export function planDetection(input: {
     heading: s.heading,
     anchor: s.anchor,
     location: nameOf(s.location_id),
-    locationState: s.location_state_id,
+    locationState: s.location_state_id === null ? null : localId(s.location_state_id),
     timeOfDay: s.time_of_day,
     characters: namesOf(s.characters_present),
     characterLooks: s.char_looks
-      .map((l) => ({ character: nameOf(l.char_id), look: l.look_id }))
+      .map((l) => ({ character: nameOf(l.char_id), look: localId(l.look_id) }))
       .filter((l): l is { character: string; look: string } => l.character !== null),
     voices: namesOf(s.voices_heard),
     props: namesOf(s.props_present),

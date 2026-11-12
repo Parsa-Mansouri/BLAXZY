@@ -5,13 +5,15 @@ import {
   listAssetCards,
   MAX_CARD_PAGE_SIZE,
   MAX_REVIEW_NOTE_LENGTH,
+  packKindOf,
   type AssetStage,
 } from "@/server/assets";
 import { requireUser } from "@/server/auth";
-import { sheetIssuesFor } from "@/server/damis";
 import { ASSET_KIND_LABELS } from "../../_lib/asset-kinds";
 import { loadProjectForStage } from "../../_lib/load-stage";
-import type { ReviewSheet } from "./actions";
+import { characterSheetCatalog, packSheetCatalog } from "../_lib/sheet-catalogs";
+import { designRouteOption } from "../assets/[assetId]/_lib/sheet-review";
+import { toReviewSheet, type ReviewSheet } from "./_lib/review-sheet";
 import { SheetsReview, type ReviewItem, type ReviewStatus } from "./_components/sheets-review";
 
 /** The most assets one review lists. */
@@ -47,7 +49,14 @@ export default async function ReviewSheetsPage({ params }: { params: Promise<{ i
         // Voices are a recording, not a sheet: they count only while not ready.
         const status = kind === "voice" ? undefined : LISTED[card.stage];
         if (status) {
-          items.push({ id: card.asset.id, name: card.asset.name, kind, group: plural, status });
+          items.push({
+            id: card.asset.id,
+            name: card.asset.name,
+            kind,
+            group: plural,
+            status,
+            pack: packKindOf(kind) !== null,
+          });
         } else if (card.stage !== "ready") {
           notReady += 1;
         }
@@ -61,13 +70,7 @@ export default async function ReviewSheetsPage({ params }: { params: Promise<{ i
   let firstSheet: ReviewSheet | null = null;
   if (first && first.status !== "back") {
     const detail = await getAssetDetail(first.id, user.id);
-    const sheet =
-      first.status === "accepted"
-        ? detail?.sheets.find((s) => s.status === "accepted")
-        : detail?.sheets[0];
-    if (sheet?.fileId && (sheet.status === "accepted" || sheet.status === "in_review")) {
-      firstSheet = { sheetId: sheet.id, fileId: sheet.fileId, status: sheet.status };
-    }
+    firstSheet = detail ? toReviewSheet(detail, packKindOf(detail.asset.kind)) : null;
   }
 
   return (
@@ -77,12 +80,11 @@ export default async function ReviewSheetsPage({ params }: { params: Promise<{ i
       initialId={first?.id ?? null}
       initialSheet={firstSheet}
       notReady={notReady}
-      issues={Object.fromEntries(
-        ASSET_KIND_LABELS.map(({ kind }) => [
-          kind,
-          sheetIssuesFor(kind).map(({ code, label, hint }) => ({ code, label, hint })),
-        ]),
-      )}
+      characterCatalog={characterSheetCatalog()}
+      packRoutes={{
+        location: designRouteOption(packSheetCatalog("location").options),
+        prop: designRouteOption(packSheetCatalog("prop").options),
+      }}
       maxNote={MAX_REVIEW_NOTE_LENGTH}
       moved={project.stage !== "pre_production"}
     />

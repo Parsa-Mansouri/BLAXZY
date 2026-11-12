@@ -19,6 +19,7 @@ import {
   type DetailVersions,
 } from "../_lib/asset-view";
 import type { DesignerInfo } from "../_lib/designer-view";
+import { packWorking, sheetRejectedInARow, type SheetCatalogInfo } from "../_lib/sheet-review";
 import type { AssetIntent } from "../_lib/intent";
 import { FILL_PAGE } from "../../../_lib/fill";
 import { pollAssetAction, type MoveOn } from "../actions";
@@ -27,6 +28,7 @@ import { AssetScreenProvider } from "./asset-context";
 import { AssetHeader } from "./asset-header";
 import { HistoryStrip, HistoryViewer } from "./history";
 import { NeedsAnswerStage } from "./needs-answer";
+import { PackReadyStage, PackReviewStage, type PackInfo } from "./pack-stage";
 import {
   FailedStage,
   LookReviewStage,
@@ -34,7 +36,7 @@ import {
   SheetReviewStage,
   WaitingStage,
 } from "./stage-panels";
-import type { AssetInfo, GuidedQuestion, IssueChoice, Limits, Orientation } from "./shared";
+import type { AssetInfo, GuidedQuestion, Limits, Orientation } from "./shared";
 
 /** What the asset's designer said about its current design. */
 export interface DesignState {
@@ -61,7 +63,10 @@ export interface AssetScreenProps {
   balance: number;
   /** The guided questions still to ask (the designer's skip logic applied). */
   questions: GuidedQuestion[];
-  sheetIssues: IssueChoice[];
+  /** The sheet maker's review catalog: the character sheet's, or a pack's per-view one. */
+  sheetCatalog: SheetCatalogInfo | null;
+  /** Locations and props: the pack's views, lock rules and DNA card; null for characters. */
+  pack: PackInfo | null;
   limits: Limits;
   /** Where a card action asked the page to open (`?open=...`), read once. */
   intent: AssetIntent | null;
@@ -87,7 +92,7 @@ const RECHECK_MS = [1000, 3500];
  * so a refresh that was lost never leaves an old stage on screen. `refresh` is for after an action:
  * it refreshes at once, then checks again shortly after.
  */
-function useAssetSync(assetId: string, versions: DetailVersions) {
+function useAssetSync(assetId: string, versions: DetailVersions, working: boolean) {
   const router = useRouter();
   const key = versionsKey(versions);
   const keyRef = useRef(key);
@@ -117,7 +122,7 @@ function useAssetSync(assetId: string, versions: DetailVersions) {
     [assetId, router],
   );
 
-  const unsettled = versions.busy || WORKING_STAGES.includes(versions.stage);
+  const unsettled = working || versions.busy || WORKING_STAGES.includes(versions.stage);
   usePolling(check, true, unsettled ? FAST_POLL_MS : SETTLED_POLL_MS);
   // A generation in flight reserves or returns credits when it settles.
   useCreditWatch(unsettled);
@@ -191,7 +196,13 @@ const ANNOUNCEMENTS: Record<AssetStage, string> = {
 export function AssetScreen(props: AssetScreenProps) {
   const { projectId, asset, versions, orientation, prices, balance, designer, design } = props;
   const { stage, looks, sheets } = versions;
-  const refresh = useAssetSync(asset.id, versions);
+  const pack = props.pack;
+  // A pack's views are made one by one, and its contact sheet a moment after the lock.
+  const packBusy =
+    pack !== null &&
+    (packWorking(pack.views) ||
+      (stage === "ready" && sheets[0] !== undefined && !sheets[0].fileId));
+  const refresh = useAssetSync(asset.id, versions, packBusy);
   const moveOn = useMoveOn(projectId, refresh);
   // The intent applies to the panel first shown; it is then dropped from the address, so a reload
   // or a later stage does not reopen it.
@@ -304,6 +315,7 @@ export function AssetScreen(props: AssetScreenProps) {
             kind="sheet"
             held={held}
             orientation={orientation}
+            pack={pack !== null}
           />
         );
       case "look_review": {
@@ -330,7 +342,26 @@ export function AssetScreen(props: AssetScreenProps) {
       }
       case "sheet_review": {
         const sheet = sheets[0];
-        if (!sheet) return null;
+        if (!sheet || !props.sheetCatalog) return null;
+        if (pack) {
+          return (
+            <PackReviewStage
+              key={sheet.id}
+              projectId={projectId}
+              assetId={asset.id}
+              assetName={asset.name}
+              pack={pack}
+              sheet={sheet}
+              hero={acceptedLook(looks)}
+              catalog={props.sheetCatalog}
+              orientation={orientation}
+              maxNote={props.limits.note}
+              viewPrice={prices.sheet}
+              balance={balance}
+              initialAsking={intent === "changes"}
+            />
+          );
+        }
         return (
           <SheetReviewStage
             projectId={projectId}
@@ -339,7 +370,9 @@ export function AssetScreen(props: AssetScreenProps) {
             sheet={sheet}
             look={acceptedLook(looks)}
             orientation={orientation}
-            issues={props.sheetIssues}
+            key={sheet.id}
+            catalog={props.sheetCatalog}
+            rejectedInARow={sheetRejectedInARow(sheets)}
             maxNote={props.limits.note}
             sheetPrice={prices.sheet}
             balance={balance}
@@ -348,6 +381,20 @@ export function AssetScreen(props: AssetScreenProps) {
         );
       }
       case "ready":
+        if (pack) {
+          return (
+            <PackReadyStage
+              projectId={projectId}
+              assetId={asset.id}
+              assetName={asset.name}
+              pack={pack}
+              sheet={sheets[0] ?? null}
+              hero={acceptedLook(looks)}
+              orientation={orientation}
+              initialConfirming={intent === "change"}
+            />
+          );
+        }
         return (
           <ReadyStage
             projectId={projectId}

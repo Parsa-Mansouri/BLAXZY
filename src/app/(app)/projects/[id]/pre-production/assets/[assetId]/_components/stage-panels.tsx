@@ -13,6 +13,12 @@ import {
 import type { DesignerInfo } from "../_lib/designer-view";
 import { exactReferences, nextReferences, splitWarnings } from "../_lib/look-review";
 import {
+  designRouteOption,
+  splitSheetWarnings,
+  type DetailCell,
+  type SheetCatalogInfo,
+} from "../_lib/sheet-review";
+import {
   retryAction,
   reviewLookAction,
   reviewSheetAction,
@@ -23,8 +29,8 @@ import {
 } from "../actions";
 import { DrawnTick } from "../../../_components/drawn-tick";
 import { MarkLayer, useMarking, type Marking } from "../../../_components/mark-layer";
-import { RequestChangesPanel } from "../../../_components/request-changes-panel";
 import { StageHeading, useAssetScreen } from "./asset-context";
+import { Caps } from "./desk";
 import { LookChangesPanel } from "./look-changes-panel";
 import { ReferenceConflictChoice, ReferenceThumbs } from "./reference-conflict";
 import {
@@ -35,12 +41,12 @@ import {
   PriceLine,
   When,
   canAfford,
-  type IssueChoice,
   type Orientation,
 } from "./shared";
+import { SheetChangesPanel, type SheetChangesWords } from "./sheet-changes-panel";
 import { EMPTY_SPEC_DRAFT, SpecCard, specChanged, type SpecDraft } from "./spec-card";
 
-const SAMPLE_OUTPUT = "Sample output from the test generator.";
+export const SAMPLE_OUTPUT = "Sample output from the test generator.";
 
 /** The picture large on the leading side (`in-2`), what to do with it beside it (`in-3`). */
 export function StageLayout({
@@ -61,7 +67,15 @@ export function StageLayout({
 }
 
 /** "Image 2 · From your answers · 11 Nov, 14:02". */
-function VersionLine({ label, origin, date }: { label: string; origin?: string; date: Date }) {
+export function VersionLine({
+  label,
+  origin,
+  date,
+}: {
+  label: string;
+  origin?: string;
+  date: Date;
+}) {
   return (
     <p className="text-meta text-label-2">
       {label}
@@ -71,7 +85,7 @@ function VersionLine({ label, origin, date }: { label: string; origin?: string; 
 }
 
 /** A smaller image in the rail, for comparison. */
-function InsetImage({
+export function InsetImage({
   fileId,
   caption,
   alt,
@@ -123,6 +137,7 @@ export function WaitingStage({
   waitingFor = [],
   references = [],
   designer = null,
+  pack = false,
 }: {
   projectId: string;
   assetId: string;
@@ -135,6 +150,8 @@ export function WaitingStage({
   /** The photos the design starts from. */
   references?: LookView["references"];
   designer?: DesignerInfo | null;
+  /** A location pack or prop sheet being planned (its views follow one by one). */
+  pack?: boolean;
 }) {
   const { moveOn } = useAssetScreen();
   const [starting, startStarting] = useTransition();
@@ -144,12 +161,16 @@ export function WaitingStage({
     ? `${assetName} Waits for ${namesList(waitingFor)}`
     : kind === "look"
       ? `Creating ${assetName}’s Image`
-      : `Building ${assetName}’s Reference Sheet`;
+      : pack
+        ? `Planning ${assetName}’s Views`
+        : `Building ${assetName}’s Reference Sheet`;
   const heldCaption = held
     ? held.kind === "sheet"
       ? `Sheet ${held.versionNumber}, shown while the new sheet is built.`
       : kind === "sheet"
-        ? "The accepted image the sheet is built from."
+        ? pack
+          ? "The approved Hero every view is planned from."
+          : "The accepted image the sheet is built from."
         : `Image ${held.versionNumber}, shown while the new image is made.`
     : null;
 
@@ -190,7 +211,9 @@ export function WaitingStage({
           <p className="max-w-(--measure) text-body text-pretty text-label-2">
             {kind === "look"
               ? "This carries on while you work on other assets. The image appears here when it is ready."
-              : "This carries on while you work on other assets. The sheet appears here when it is ready."}
+              : pack
+                ? "The views that keep it the same from every side are being planned. Each one appears here to review as soon as it is made."
+                : "This carries on while you work on other assets. The sheet appears here when it is ready."}
           </p>
         </>
       )}
@@ -668,6 +691,115 @@ export function LookReviewStage({
   );
 }
 
+/** The six numbered detail frames of a character sheet, laid out as on the sheet (1 top left). */
+export function DetailFrames({ cells }: { cells: readonly DetailCell[] }) {
+  if (cells.length === 0) return null;
+  const sorted = [...cells].sort((a, b) => a.slot - b.slot);
+  return (
+    <section aria-label="Detail frames" className="flex flex-col gap-3">
+      <Caps as="h3">Detail frames</Caps>
+      <ol className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+        {sorted.map((cell) => (
+          <li key={cell.slot} className="flex min-w-0 items-baseline gap-3">
+            <span className="w-4 shrink-0 font-mono text-body text-label tabular-nums">
+              {cell.slot}
+            </span>
+            <span className="min-w-0 text-secondary text-pretty break-words text-label-2">
+              {cell.subject}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/**
+ * A design change the sheet maker refused (the design is approved before the sheet): what was
+ * asked, and the way to make it at the design step.
+ */
+export function DesignChangeNotice({
+  requests,
+  message,
+  disabled,
+  onChange,
+}: {
+  requests: readonly string[];
+  message: string | null;
+  disabled: boolean;
+  onChange: (text: string) => void;
+}) {
+  if (requests.length === 0) return null;
+  const text = requests.join("\n");
+  return (
+    <div className="flex flex-col items-start gap-3 rounded-tile border border-outline-quiet bg-elevated p-4">
+      <Caps as="h3">Not changed here</Caps>
+      <ul className="flex flex-col gap-1.5">
+        {requests.map((r) => (
+          <li key={r} className="text-body text-pretty break-words text-label">
+            “{r}”
+          </li>
+        ))}
+      </ul>
+      <p className="text-secondary text-pretty text-label-2">
+        {message ?? "This changes the approved design, so it is made at the design step, not here."}
+      </p>
+      <Button variant="outlined" disabled={disabled} onClick={() => onChange(text)}>
+        Change the Design
+      </Button>
+    </div>
+  );
+}
+
+/** A sheet maker's other notes and the fixes it applied, kept quiet. */
+export function SheetNotes({
+  warnings,
+  appliedFixes,
+}: {
+  warnings: readonly string[];
+  appliedFixes: readonly { code: string; change: string }[];
+}) {
+  if (warnings.length === 0 && appliedFixes.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      {warnings.length > 0 ? (
+        <ul className="flex flex-col gap-2 border-l-2 border-outline pl-4">
+          {warnings.map((w) => (
+            <li key={w} className="text-secondary text-pretty text-label-2">
+              {w}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {appliedFixes.length > 0 ? (
+        <details className="group">
+          <summary className="cursor-pointer rounded-mark text-secondary text-label-2 focus-ring marker:text-label-3 hover:text-label">
+            What was changed from the last one
+          </summary>
+          <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5">
+            {appliedFixes.map((f) => (
+              <li key={`${f.code}:${f.change}`} className="text-secondary text-pretty text-label-2">
+                {f.change}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+/** The panel's words for a character sheet. */
+export const CHARACTER_SHEET_WORDS: SheetChangesWords = {
+  subject: "sheet",
+  designTile: {
+    title: "Change the character’s design",
+    line: "Face, hair, body, outfit or colours: made at the character step.",
+  },
+  designHint:
+    "The character goes back to its design step with your words. Once you accept the new board, the sheet is rebuilt by itself.",
+};
+
 export function SheetReviewStage({
   projectId,
   assetId,
@@ -675,7 +807,8 @@ export function SheetReviewStage({
   sheet,
   look,
   orientation,
-  issues,
+  catalog,
+  rejectedInARow,
   maxNote,
   sheetPrice,
   balance,
@@ -687,7 +820,10 @@ export function SheetReviewStage({
   sheet: SheetView;
   look: LookView | null;
   orientation: Orientation;
-  issues: IssueChoice[];
+  /** The character sheet maker's catalog, as the Wizard shows it. */
+  catalog: SheetCatalogInfo;
+  /** Sheets of this design sent back in a row before this one. */
+  rejectedInARow: number;
   maxNote: number;
   sheetPrice: number | null;
   balance: number;
@@ -695,20 +831,31 @@ export function SheetReviewStage({
 }) {
   const review = useReview(projectId, { id: assetId, name: assetName }, initialAsking);
   const target = { kind: "sheet" as const, id: sheet.id };
+  const busy = review.accepting || review.sending;
   const marking = useMarking();
+  // A refused design change opens the panel on the design step, with the request written.
+  const [designText, setDesignText] = useState<string | null>(null);
+  const spec = sheet.spec;
+  const cells = spec?.detailCells ?? [];
+  const notes = splitSheetWarnings(spec?.warnings ?? []);
+  const designChanges = spec?.designChanges.length ? spec.designChanges : notes.designChanges;
+  const routeCode = designRouteOption(catalog.options)?.code;
   return (
     <StageLayout
       frame={
-        <Artwork
-          fileId={sheet.fileId}
-          alt={`${assetName}, reference sheet to review`}
-          shape="sheet"
-          overlay={
-            review.asking ? (
-              <MarkLayer marking={marking} subject="sheet" disabled={review.sending} />
-            ) : null
-          }
-        />
+        <div className="flex flex-col gap-6">
+          <Artwork
+            fileId={sheet.fileId}
+            alt={`${assetName}, reference sheet to review`}
+            shape="sheet"
+            overlay={
+              review.asking ? (
+                <MarkLayer marking={marking} subject="sheet" disabled={review.sending} />
+              ) : null
+            }
+          />
+          <DetailFrames cells={cells} />
+        </div>
       }
       rail={
         <Decision
@@ -716,8 +863,33 @@ export function SheetReviewStage({
           lead={`Accepting the sheet makes ${assetName} ready for Production.`}
           meta={
             <>
-              <VersionLine label={`Sheet ${sheet.versionNumber}`} date={sheet.createdAt} />
+              <VersionLine
+                label={`Sheet ${sheet.versionNumber}`}
+                origin={
+                  spec?.editMode === "edit_previous_sheet"
+                    ? "Edited from the last sheet"
+                    : sheet.parentId
+                      ? "Revised after review"
+                      : undefined
+                }
+                date={sheet.createdAt}
+              />
               {sheet.isSample ? <p className="text-meta text-label-2">{SAMPLE_OUTPUT}</p> : null}
+            </>
+          }
+          notices={
+            <>
+              <DesignChangeNotice
+                requests={designChanges}
+                message={catalog.designChangeMessage}
+                disabled={busy}
+                onChange={(text) => {
+                  marking.clear();
+                  setDesignText(text);
+                  review.setAsking(true);
+                }}
+              />
+              <SheetNotes warnings={notes.others} appliedFixes={spec?.appliedFixes ?? []} />
             </>
           }
           review={review}
@@ -736,21 +908,48 @@ export function SheetReviewStage({
           }
           marking={marking}
           panel={
-            <RequestChangesPanel
-              subject="sheet"
-              issues={issues}
+            <SheetChangesPanel
+              catalog={catalog}
+              cells={cells}
+              words={CHARACTER_SHEET_WORDS}
+              initialDesignText={designText}
+              rejectedInARow={rejectedInARow}
               maxNote={maxNote}
               sending={review.sending}
               serverError={review.panelError}
               price={sheetPrice}
+              priceAction="sheet"
               balance={balance}
               marking={marking}
-              onSubmit={(input) => review.run(target, { decision: "rejected", ...input }, "panel")}
+              markSubject="sheet"
+              headingAs={StageHeading}
+              onSubmit={(input) =>
+                review.run(
+                  target,
+                  {
+                    decision: "rejected",
+                    selections: input.selections,
+                    ...(input.note ? { note: input.note } : {}),
+                  },
+                  "panel",
+                  input.selections.some((s) => s.code === routeCode)
+                    ? `${assetName} goes back to its design`
+                    : undefined,
+                )
+              }
+              onReroll={(code) =>
+                review.run(
+                  target,
+                  { decision: "rejected", selections: [{ code }] },
+                  "panel",
+                  `Making ${assetName}’s sheet again`,
+                )
+              }
               onCancel={() => {
                 marking.clear();
+                setDesignText(null);
                 review.setAsking(false);
               }}
-              headingAs={StageHeading}
             />
           }
         />
@@ -767,6 +966,8 @@ export function ReadyStage({
   look,
   orientation,
   initialConfirming = false,
+  frame,
+  line,
 }: {
   projectId: string;
   assetId: string;
@@ -774,6 +975,10 @@ export function ReadyStage({
   sheet: SheetView | null;
   look: LookView | null;
   orientation: Orientation;
+  /** Replaces the sheet as the picture (a pack shows its contact sheet or its Hero). */
+  frame?: ReactNode;
+  /** Replaces the line under the title. */
+  line?: string;
   /** Open with the confirmation to change the image (a card's Change Image led here). */
   initialConfirming?: boolean;
 }) {
@@ -798,11 +1003,15 @@ export function ReadyStage({
   return (
     <StageLayout
       frame={
-        <Artwork
-          fileId={sheet?.fileId ?? null}
-          alt={`${assetName}, reference sheet`}
-          shape="sheet"
-        />
+        frame !== undefined ? (
+          frame
+        ) : (
+          <Artwork
+            fileId={sheet?.fileId ?? null}
+            alt={`${assetName}, reference sheet`}
+            shape="sheet"
+          />
+        )
       }
       rail={
         <>
@@ -811,7 +1020,7 @@ export function ReadyStage({
               {assetName} is ready.
             </StageHeading>
             <p className="text-body text-pretty text-label-2">
-              This sheet keeps {assetName} the same in every shot.
+              {line ?? `This sheet keeps ${assetName} the same in every shot.`}
             </p>
             {sheet ? (
               <VersionLine

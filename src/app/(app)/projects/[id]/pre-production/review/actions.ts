@@ -9,19 +9,17 @@ import {
   getPreProductionOverview,
   listAssetCards,
   MAX_CARD_PAGE_SIZE,
+  packKindOf,
   submitSheetReview,
   type AssetStage,
 } from "@/server/assets";
+import type { FixSelection } from "@/server/damis";
 import { ASSET_KIND_LABELS, type AssetKindKey } from "../../_lib/asset-kinds";
+import { toReviewSheet, type ReviewSheet } from "./_lib/review-sheet";
+
+export type { ReviewSheet };
 
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: string };
-
-/** The sheet of an asset as the review shows it: accepted, or waiting for the user. */
-export interface ReviewSheet {
-  sheetId: string;
-  fileId: string;
-  status: "accepted" | "in_review";
-}
 
 export interface NotReadyAsset {
   id: string;
@@ -53,25 +51,20 @@ export async function loadReviewSheetAction(
   try {
     const detail = await getAssetDetail(assetId, user.id);
     if (!detail) return { ok: false, error: "This asset no longer exists." };
-    const sheet =
-      detail.stage === "ready"
-        ? detail.sheets.find((s) => s.status === "accepted")
-        : detail.stage === "sheet_review" && detail.sheets[0]?.status === "in_review"
-          ? detail.sheets[0]
-          : null;
-    if (!sheet?.fileId || (sheet.status !== "accepted" && sheet.status !== "in_review")) {
-      return { ok: true, data: null };
-    }
-    return { ok: true, data: { sheetId: sheet.id, fileId: sheet.fileId, status: sheet.status } };
+    return { ok: true, data: toReviewSheet(detail, packKindOf(detail.asset.kind)) };
   } catch (error) {
     return failure(error);
   }
 }
 
-/** Sends a sheet (accepted or in review) back for changes: a new one is built from the notes. */
+/**
+ * Sends a sheet (accepted or in review) back for changes: a character sheet with the catalog's
+ * picks (a new sheet is built), or any sheet back to its design step with the design route.
+ */
 export async function requestSheetChangesAction(
+  projectId: string,
   sheetId: string,
-  input: { issueCodes: string[]; note: string },
+  input: { selections: FixSelection[]; note: string },
 ): Promise<ActionResult> {
   const user = await requireUser();
   try {
@@ -79,10 +72,11 @@ export async function requestSheetChangesAction(
       sheetId,
       userId: user.id,
       decision: "rejected",
-      issueCodes: input.issueCodes,
+      selections: input.selections,
       note: input.note || undefined,
     });
     if (!stage) return { ok: false, error: "This asset no longer exists." };
+    revalidatePath(`/projects/${projectId}/pre-production`, "layout");
     return { ok: true, data: null };
   } catch (error) {
     return failure(error);

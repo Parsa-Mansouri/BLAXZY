@@ -207,7 +207,11 @@ export function Credits({ n }: { n: number }) {
   );
 }
 
-const PRICE_ACTIONS = { image: "Creating this image", sheet: "Building the sheet" } as const;
+const PRICE_ACTIONS = {
+  image: "Creating this image",
+  sheet: "Building the sheet",
+  view: "Making this view",
+} as const;
 
 /**
  * Credits for a generation and the balance, in one quiet line that says what costs them; says what

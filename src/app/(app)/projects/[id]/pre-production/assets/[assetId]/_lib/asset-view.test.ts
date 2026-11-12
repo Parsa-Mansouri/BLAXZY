@@ -44,6 +44,8 @@ function sheet(n: number, lookId: string, patch: Partial<SheetView> = {}): Sheet
     lookId,
     status: "in_review",
     fileId: `file-sheet-${n}`,
+    spec: null,
+    parentId: null,
     failure: null,
     isSample: true,
     createdAt: at(30 + n),
@@ -136,6 +138,42 @@ describe("versionsKey and historyItems", () => {
     });
     const after = versionsKey({ stage: "look_review", busy: false, looks: [look(1)], sheets: [] });
     expect(before).not.toBe(after);
+  });
+
+  it("changes when a pack's view moves on or its contact sheet is stored", () => {
+    const base = { stage: "sheet_review" as const, busy: false, looks: [look(1)] };
+    const views = (status: "pending" | "in_review") => [
+      {
+        id: "view-1",
+        viewId: "reverse_wide",
+        versionNumber: 1,
+        label: "Reverse Wide",
+        position: 1,
+        status,
+        purpose: null,
+        fileId: null,
+        aspectRatio: "16:9" as const,
+        mustShow: [],
+        mustNotShow: [],
+        reviewFocus: [],
+        newHypotheses: [],
+        editMode: "full" as const,
+        warnings: [],
+        waitingFor: [],
+        parentId: null,
+        failure: null,
+        isSample: true,
+        createdAt: at(1),
+        decidedAt: null,
+      },
+    ];
+    const sheets = [sheet(1, "look-1", { fileId: null })];
+    expect(versionsKey({ ...base, sheets, packViews: views("pending") })).not.toBe(
+      versionsKey({ ...base, sheets, packViews: views("in_review") }),
+    );
+    expect(versionsKey({ ...base, stage: "ready", sheets })).not.toBe(
+      versionsKey({ ...base, stage: "ready", sheets: [sheet(1, "look-1")] }),
+    );
   });
 
   it("merges looks and sheets newest first", () => {

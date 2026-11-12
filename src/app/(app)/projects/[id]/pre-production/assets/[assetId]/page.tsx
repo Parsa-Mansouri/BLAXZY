@@ -9,6 +9,7 @@ import {
   MAX_GUIDED_ANSWER_LENGTH,
   MAX_LOOK_PROMPT_LENGTH,
   MAX_REVIEW_NOTE_LENGTH,
+  packKindOf,
   type Asset,
 } from "@/server/assets";
 import { requireUser } from "@/server/auth";
@@ -22,13 +23,13 @@ import {
   MAX_DESIGN_REFERENCES,
   REFERENCE_CONFLICTS,
   REFERENCE_ROLES,
-  sheetIssuesFor,
   visibleOptions,
 } from "@/server/damis";
 import { quoteGeneration } from "@/server/generation";
 import { ASSET_KIND_LABELS } from "../../../_lib/asset-kinds";
 import { loadProject } from "../../../_lib/load-project";
 import { loadProjectForStage } from "../../../_lib/load-stage";
+import { characterSheetCatalog, packSheetCatalog } from "../../_lib/sheet-catalogs";
 import { AssetScreen } from "./_components/asset-screen";
 import { kindSlug } from "./_lib/asset-view";
 import type { DesignerInfo } from "./_lib/designer-view";
@@ -107,6 +108,7 @@ export default async function AssetPage({
   ]);
   const kindLabel = ASSET_KIND_LABELS.find((k) => k.kind === asset.kind);
   const latest = detail.looks[0];
+  const pack = voice ? null : packKindOf(asset.kind);
 
   return (
     <AssetScreen
@@ -128,6 +130,7 @@ export default async function AssetPage({
         busy: detail.busy,
         looks: detail.looks,
         sheets: detail.sheets,
+        packViews: detail.packViews,
       }}
       design={{
         waitingFor: detail.waitingFor,
@@ -139,11 +142,17 @@ export default async function AssetPage({
       prices={{ look: lookPrice, sheet: sheetPrice }}
       balance={balance}
       questions={detail.questions}
-      sheetIssues={sheetIssuesFor(asset.kind).map(({ code, label, hint }) => ({
-        code,
-        label,
-        hint,
-      }))}
+      sheetCatalog={voice ? null : pack ? packSheetCatalog(pack) : characterSheetCatalog()}
+      pack={
+        pack
+          ? {
+              kind: pack,
+              views: detail.packViews,
+              lockGate: detail.lockGate,
+              dnaCard: detail.dnaCard,
+            }
+          : null
+      }
       limits={{
         prompt: MAX_LOOK_PROMPT_LENGTH,
         answer: MAX_GUIDED_ANSWER_LENGTH,

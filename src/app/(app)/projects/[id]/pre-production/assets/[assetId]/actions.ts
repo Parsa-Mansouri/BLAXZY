@@ -4,17 +4,20 @@ import { revalidatePath } from "next/cache";
 import {
   AssetInputError,
   getAssetDetail,
+  lockSheet,
   nextAssetNeedingInput,
   removeAsset,
   replaceLook,
   retryLook,
   retrySheet,
+  retrySheetView,
   startDesign,
   startLookFromGuided,
   startLookFromUpload,
   startWithoutWaiting,
   submitLookReview,
   submitSheetReview,
+  submitSheetViewReview,
   updateAsset,
   answerLookQuestion,
   type AssetStage,
@@ -262,11 +265,21 @@ export async function finishAssetUploadAction(
   }
 }
 
-/** A sheet's review: the sheet's issues are not catalog-driven yet. */
+/**
+ * A sheet's review (see `submitSheetReview`): a character sheet's catalog picks, or a pack's
+ * design route (LSX01, ASX01) with the user's words.
+ */
 export interface ReviewInput {
   decision: "accepted" | "rejected";
-  issueCodes?: string[];
+  /** Rejected: the sheet maker's catalog options picked, with their chip, words and frame. */
+  selections?: FixSelection[];
   note?: string;
+}
+
+/** A pack view's review (see `submitSheetViewReview`). */
+export interface ViewReviewInput extends ReviewInput {
+  /** Accepted: the parts the view proposes (its new hypotheses) were approved with it. */
+  hypothesesApproved?: boolean;
 }
 
 /** A look's review (see `submitLookReview`). */
@@ -313,6 +326,56 @@ export async function reviewSheetAction(
   const user = await requireUser();
   try {
     const stage = await submitSheetReview({ sheetId, userId: user.id, ...review });
+    return stage
+      ? await afterStage(projectId, user.id, stage, assetId)
+      : { ok: false, error: MISSING };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Approves one view of a location pack or prop sheet, or asks for changes on it. */
+export async function reviewSheetViewAction(
+  projectId: string,
+  viewRowId: string,
+  review: ViewReviewInput,
+  /** The view's asset: when given, a design change moves on (see `MoveOn`). */
+  assetId?: string,
+): Promise<ActionResult<MoveOn | null>> {
+  const user = await requireUser();
+  try {
+    const stage = await submitSheetViewReview({ viewRowId, userId: user.id, ...review });
+    return stage
+      ? await afterStage(projectId, user.id, stage, assetId)
+      : { ok: false, error: MISSING };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Makes a view that could not be made again. */
+export async function retrySheetViewAction(
+  projectId: string,
+  viewRowId: string,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    const stage = await retrySheetView({ viewRowId, userId: user.id });
+    return stage ? done(projectId) : { ok: false, error: MISSING };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Locks a location pack or prop sheet: the asset is ready and moves on. */
+export async function lockSheetAction(
+  projectId: string,
+  sheetId: string,
+  assetId?: string,
+): Promise<ActionResult<MoveOn | null>> {
+  const user = await requireUser();
+  try {
+    const stage = await lockSheet({ sheetId, userId: user.id });
     return stage
       ? await afterStage(projectId, user.id, stage, assetId)
       : { ok: false, error: MISSING };

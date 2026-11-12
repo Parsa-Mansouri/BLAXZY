@@ -1,4 +1,4 @@
-import type { AssetStage, LookView, SheetView } from "@/server/assets";
+import type { AssetStage, LookView, PackView, SheetView } from "@/server/assets";
 import type { LookAspectRatio } from "./look-review";
 
 /** The shapes a picture is shown in: the project's orientation, a sheet, or a look's own ratio. */
@@ -10,6 +10,8 @@ export interface DetailVersions {
   busy: boolean;
   looks: LookView[];
   sheets: SheetView[];
+  /** Locations and props: the views of the latest sheet (latest version of each). */
+  packViews?: PackView[];
 }
 
 type LookStatus = LookView["status"];
@@ -152,14 +154,23 @@ export function acceptedLook(looks: LookView[]): LookView | null {
 }
 
 /** A short fingerprint of the state, compared by the poller to decide when to refresh. */
-export function versionsKey({ stage, busy, looks, sheets }: DetailVersions): string {
+export function versionsKey({
+  stage,
+  busy,
+  looks,
+  sheets,
+  packViews = [],
+}: DetailVersions): string {
   const look = looks[0];
   const sheet = sheets[0];
   return [
     stage,
     busy ? "busy" : "idle",
     look ? `${look.id}:${look.status}` : "-",
-    sheet ? `${sheet.id}:${sheet.status}` : "-",
+    // A pack's contact sheet is stored a moment after the lock.
+    sheet ? `${sheet.id}:${sheet.status}:${sheet.fileId ? "file" : "-"}` : "-",
+    // A pack's views move on one by one while its sheet stays in review.
+    packViews.map((v) => `${v.id}:${v.status}`).join(","),
   ].join("|");
 }
 

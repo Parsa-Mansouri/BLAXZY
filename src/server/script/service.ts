@@ -1,7 +1,7 @@
 /**
  * The Script stage: script versions, reviews and the jobs that produce them. Every function takes
  * the acting user and returns null when the project is missing, archived or not theirs. Jobs are
- * enqueued only after the transaction that creates their version has committed.
+ * sent on the transaction that creates (or accepts) their version, so both commit together.
  */
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { setSectioningState } from "@/server/blocks";
@@ -70,7 +70,6 @@ export type ScriptState = {
 };
 
 const BUSY_MESSAGE = "A script is still being prepared. Wait for it to finish, then try again.";
-const ENQUEUE_FAILURE = "This step could not start. Try again in a moment.";
 
 /** The job that produces a version of each source. */
 const JOB_FOR_SOURCE: Record<ScriptSource, JobDefinition<typeof scriptWrite.payload> | null> = {
@@ -174,33 +173,19 @@ async function loadView(versionId: string): Promise<ScriptVersionView | null> {
 }
 
 /**
- * Enqueues the version's job after commit. If the queue is unreachable the version is marked
- * failed (so the user can retry) instead of staying pending with no job.
+ * Sends the job that produces the version on the transaction that wrote it: the pending version
+ * and its job are committed together or not at all (if the queue is unreachable the transaction
+ * fails and the user sees an error instead of a version waiting forever).
  */
-async function enqueueForVersion(row: ScriptVersionRow): Promise<void> {
+async function enqueueForVersion(tx: DbTx, row: ScriptVersionRow): Promise<void> {
   const job = JOB_FOR_SOURCE[row.source];
   if (!job) return;
-  try {
-    await enqueue(job, { scriptVersionId: row.id });
-  } catch (error) {
-    console.error(`[script] could not enqueue ${job.name} for ${row.id}:`, error);
-    await markFailed(row.id, ENQUEUE_FAILURE);
-  }
+  await enqueue(job, { scriptVersionId: row.id }, { tx });
 }
 
-async function enqueueDetection(projectId: string, versionId: string): Promise<void> {
-  try {
-    await enqueue(scriptDetectAssets, { scriptVersionId: versionId });
-  } catch (error) {
-    console.error(`[script] could not enqueue asset detection for ${versionId}:`, error);
-    await setSectioningState({
-      projectId,
-      state: "failed",
-      scriptVersionId: versionId,
-      failure: ENQUEUE_FAILURE,
-      onlyFor: versionId,
-    });
-  }
+/** Asset detection (then sectioning) of a newly accepted version, on the accepting transaction. */
+async function enqueueDetection(tx: DbTx, versionId: string): Promise<void> {
+  await enqueue(scriptDetectAssets, { scriptVersionId: versionId }, { tx });
 }
 
 /** pending → failed with a user-readable reason. Returns whether this call changed it. */
@@ -257,10 +242,10 @@ export async function startFromBrief(input: {
       versionId: row.id,
       source: "generated",
     });
+    await enqueueForVersion(tx, row);
     return row;
   });
   if (!created) return null;
-  await enqueueForVersion(created);
   return loadView(created.id);
 }
 
@@ -291,10 +276,10 @@ export async function startFromIdea(input: {
       versionId: row.id,
       source: "enhanced",
     });
+    await enqueueForVersion(tx, row);
     return row;
   });
   if (!created) return null;
-  await enqueueForVersion(created);
   return loadView(created.id);
 }
 
@@ -368,10 +353,10 @@ export async function approveOutline(input: {
       nextVersionId: next.id,
       approvedAdditions: additions,
     });
+    await enqueueForVersion(tx, next);
     return next;
   });
   if (!created) return null;
-  await enqueueForVersion(created);
   return loadView(created.id);
 }
 
@@ -412,10 +397,10 @@ export async function startFromUpload(input: {
       source: "uploaded",
       fileId,
     });
+    await enqueueForVersion(tx, row);
     return row;
   });
   if (!created) return null;
-  await enqueueForVersion(created);
   return loadView(created.id);
 }
 
@@ -589,6 +574,7 @@ export async function submitScriptReview(input: {
         issueCodes,
         comments: comments.length,
       });
+      await enqueueForVersion(tx, next);
       return { kind: "rejected" as const, row: next };
     }
 
@@ -612,11 +598,10 @@ export async function submitScriptReview(input: {
       { projectId, state: "running", scriptVersionId: version.id, failure: null },
       tx,
     );
+    await enqueueDetection(tx, version.id);
     return { kind: "accepted" as const, row: version };
   });
   if (!outcome) return null;
-  if (outcome.kind === "rejected") await enqueueForVersion(outcome.row);
-  else await enqueueDetection(projectId, outcome.row.id);
   return loadView(outcome.row.id);
 }
 
@@ -653,6 +638,13 @@ export async function editAcceptedScript(input: {
       .update(scriptVersion)
       .set({ status: "superseded" })
       .where(and(projectScope(projectId), eq(scriptVersion.status, "accepted")));
+    // A revision still waiting for review answers the script this edit replaces: it would stay in
+    // review forever behind the new version, so it is superseded too.
+    const dropped = await tx
+      .update(scriptVersion)
+      .set({ status: "superseded", decidedAt: now })
+      .where(and(projectScope(projectId), eq(scriptVersion.status, "in_review")))
+      .returning({ id: scriptVersion.id });
     const row = await insertVersion(
       tx,
       {
@@ -671,16 +663,17 @@ export async function editAcceptedScript(input: {
     await logEvent(tx, projectId, userId, "script.edited", {
       versionId: row.id,
       parentId: accepted.id,
+      ...(dropped.length > 0 ? { supersededInReview: dropped.map((d) => d.id) } : {}),
     });
     await advanceStage({ projectId, from: "script", to: "pre_production" }, tx);
     await setSectioningState(
       { projectId, state: "running", scriptVersionId: row.id, failure: null },
       tx,
     );
+    await enqueueDetection(tx, row.id);
     return { changed: true as const, row };
   });
   if (!outcome) return null;
-  if (outcome.changed) await enqueueDetection(projectId, outcome.row.id);
   return loadView(outcome.row.id);
 }
 
@@ -707,15 +700,21 @@ export async function retryScriptVersion(input: {
     if (version.status !== "failed" || latest?.id !== version.id) {
       throw new ScriptInputError("Only the latest failed version can be retried.");
     }
+    const failedNotes = readNotes(version.damiNotes);
     const [updated] = await tx
       .update(scriptVersion)
-      .set({ status: "pending", damiNotes: { ...readNotes(version.damiNotes), failure: null } })
+      .set({ status: "pending", damiNotes: { ...failedNotes, failure: null } })
       .where(eq(scriptVersion.id, version.id))
       .returning();
-    await logEvent(tx, projectId, userId, "script.retried", { versionId });
+    // The row is reset for the new attempt; the event keeps what the failed attempt left.
+    await logEvent(tx, projectId, userId, "script.retried", {
+      versionId,
+      previousFailure: failedNotes.failure ?? null,
+      previousDamiRunId: version.damiRunId,
+    });
+    if (updated) await enqueueForVersion(tx, updated);
     return updated ?? null;
   });
   if (!row) return null;
-  await enqueueForVersion(row);
   return loadView(row.id);
 }

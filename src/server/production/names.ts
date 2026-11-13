@@ -48,9 +48,15 @@ export function exportDownloadName(projectTitle: string): string {
   return `${fileSlug(projectTitle, "film")}_clips.zip`;
 }
 
-/** One CSV field (RFC 4180): quoted when it holds a comma, a quote or a line break. */
-function csvField(value: string | number): string {
-  const text = String(value);
+/**
+ * One CSV field (RFC 4180): quoted when it holds a comma, a quote or a line break. A text cell
+ * (titles and excerpts are user or model text) starting with `=`, `+`, `-`, `@`, a tab or a
+ * carriage return gets a leading `'`, so spreadsheets show it as text instead of running it as a
+ * formula. Numbers are written as they are.
+ */
+export function csvField(value: string | number): string {
+  const text =
+    typeof value === "string" && /^[=+\-@\t\r]/.test(value) ? `'${value}` : String(value);
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 

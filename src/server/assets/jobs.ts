@@ -361,14 +361,17 @@ export async function requestSheetGeneration(sheetId: string): Promise<RequestOu
   });
 }
 
-/** A location's look settled without a Hero: props waiting for it go ahead without it. */
-async function wakeAfterLocation(assetId: string, projectId: string): Promise<void> {
-  const [row] = await getDb()
+/**
+ * A location's look settled without a Hero: props waiting for it go ahead without it. Runs in the
+ * transaction that failed the look, so the props' jobs are sent with that change.
+ */
+async function wakeAfterLocation(tx: DbTx, assetId: string, projectId: string): Promise<void> {
+  const [row] = await tx
     .select({ kind: asset.kind })
     .from(asset)
     .where(eq(asset.id, assetId))
     .limit(1);
-  if (row && designerFor(row.kind) === "location") await wakeWaitingLooks(projectId);
+  if (row && designerFor(row.kind) === "location") await wakeWaitingLooks(projectId, tx);
 }
 
 /** pending → failed with a user-readable reason. Returns whether this call changed it. */
@@ -377,23 +380,21 @@ export async function failLook(
   failure: string,
   damiRunId?: string | null,
 ): Promise<boolean> {
-  const failed = await getDb().transaction(async (tx) => {
+  return getDb().transaction(async (tx) => {
     const [row] = await tx
       .update(assetLook)
       .set({ status: "failed", failure, ...(damiRunId ? { damiRunId } : {}) })
       .where(and(eq(assetLook.id, lookId), eq(assetLook.status, "pending")))
       .returning();
-    if (!row) return null;
+    if (!row) return false;
     await logEvent(tx, row.projectId, null, "asset.look_failed", {
       assetId: row.assetId,
       lookId,
       failure,
     });
-    return row;
+    await wakeAfterLocation(tx, row.assetId, row.projectId);
+    return true;
   });
-  if (!failed) return false;
-  await wakeAfterLocation(failed.assetId, failed.projectId);
-  return true;
 }
 
 export async function failSheet(
@@ -440,7 +441,7 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
     .limit(1);
   if (!owner) return;
   const { projectId } = owner;
-  const settled = await getDb().transaction(async (tx) => {
+  await getDb().transaction(async (tx) => {
     if (g.purpose === "asset_look") {
       const [row] = await tx
         .update(assetLook)
@@ -459,16 +460,20 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
           lookId: row.id,
           generationId: g.id,
         });
-        return { failedLook: succeeded ? null : row.assetId };
+        // A failed location look wakes its waiting props, in this transaction.
+        if (!succeeded) await wakeAfterLocation(tx, row.assetId, projectId);
+        return;
       }
-      if (succeeded) return { failedLook: null };
-      // Applied before: the look this generation failed still wakes its waiting props.
+      if (succeeded) return;
+      // Applied before (by a run that may have died before waking): the look this generation
+      // failed still wakes its waiting props (a no-op when their jobs are queued).
       const [done] = await tx
         .select({ assetId: assetLook.assetId, status: assetLook.status })
         .from(assetLook)
         .where(and(eq(assetLook.projectId, projectId), eq(assetLook.generationId, g.id)))
         .limit(1);
-      return { failedLook: done?.status === "failed" ? done.assetId : null };
+      if (done?.status === "failed") await wakeAfterLocation(tx, done.assetId, projectId);
+      return;
     }
     const [row] = await tx
       .update(assetSheet)
@@ -487,15 +492,13 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
         sheetId: row.id,
         generationId: g.id,
       });
-      return { failedLook: null };
+      return;
     }
     // Not a sheet: a view of a location pack or a prop sheet. Its pack advances: the job is sent
     // with the view's update, so a crash cannot lose it (a repeated call finds no pending view).
     const advance = await applyViewGenerationResult(tx, projectId, g.id, values);
     if (advance) await enqueue(assetSheetViewsAdvance, { sheetId: advance }, { tx });
-    return { failedLook: null };
   });
-  if (settled.failedLook) await wakeAfterLocation(settled.failedLook, projectId);
 }
 
 /**

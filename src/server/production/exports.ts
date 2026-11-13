@@ -11,7 +11,9 @@ import { getDb, type DbExecutor } from "@/server/db/client";
 import { exportBundle, project, type ExportStatus } from "@/server/db/schema";
 import { exportBuild, enqueue } from "@/server/jobs";
 import { listEpisodes } from "@/server/projects";
+import { decodeOrderCursor, encodeOrderCursor } from "@/server/projects/cursor";
 import {
+  FILE_PURPOSES,
   getDownloadUrl,
   getOwnedFileInfo,
   openFileStream,
@@ -50,28 +52,26 @@ export const DEFAULT_CLIP_PAGE_SIZE = 50;
 export const MAX_CLIP_PAGE_SIZE = 200;
 const SCAN_BATCH = 500;
 
-export const EXPORT_TOO_LARGE =
-  "This film is larger than 4 GB, too large for one ZIP for now. Download the clips one by one.";
+/** The largest ZIP an export stores (the storage limit of its purpose). */
+const EXPORT_MAX_BYTES = FILE_PURPOSES.export_zip.maxBytes;
+
+export const EXPORT_TOO_LARGE = `This film is larger than ${Math.floor(
+  EXPORT_MAX_BYTES / 1024 ** 3,
+)} GB, too large for one ZIP. Download the clips one by one.`;
 export const EXPORT_CHANGED =
   "The film changed while the ZIP was being prepared. Ask for the ZIP again.";
-const ENQUEUE_FAILURE = "We could not start the ZIP. Try again in a moment.";
 
 const listInput = z.object({
   limit: z.number().int().min(1).max(MAX_CLIP_PAGE_SIZE).default(DEFAULT_CLIP_PAGE_SIZE),
   cursor: z.string().max(200).nullish(),
 });
 
-function encodeCursor(orderIndex: number, id: string): string {
-  return Buffer.from(`${orderIndex}|${id}`, "utf8").toString("base64url");
-}
-
 function decodeCursor(cursor: string): { orderIndex: number; id: string } {
-  const [order, id, ...rest] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
-  const orderIndex = Number(order);
-  if (rest.length > 0 || !Number.isInteger(orderIndex) || !isUuid(id ?? "")) {
+  const decoded = decodeOrderCursor(cursor);
+  if (!decoded) {
     throw new ProductionInputError("That page link is no longer valid. Reload the list.");
   }
-  return { orderIndex, id: id as string };
+  return decoded;
 }
 
 /** The accepted final of a block when the block is done, else null. */
@@ -146,7 +146,7 @@ export async function listFinishedClips(
   const last = page.at(-1);
   return {
     items,
-    nextCursor: rows.length > limit && last ? encodeCursor(last.orderIndex, last.id) : null,
+    nextCursor: rows.length > limit && last ? encodeOrderCursor(last.orderIndex, last.id) : null,
   };
 }
 
@@ -174,7 +174,8 @@ export async function getClipDownloadUrl(input: {
     });
     return link.url;
   } catch (error) {
-    if (error instanceof StorageError) return null;
+    // Only a missing file reads as "no clip"; anything else is a real failure.
+    if (error instanceof StorageError && error.code === "not_found") return null;
     throw error;
   }
 }
@@ -234,7 +235,7 @@ async function toExportView(
         })
       ).url;
     } catch (error) {
-      if (!(error instanceof StorageError)) throw error;
+      if (!(error instanceof StorageError && error.code === "not_found")) throw error;
     }
   }
   return {
@@ -249,7 +250,7 @@ async function toExportView(
 /**
  * Asks for a ZIP of every finished clip (all blocks must be done). Reuses the newest ready (or
  * still pending) bundle of the same clips; otherwise creates a pending one and queues
- * `export.build`.
+ * `export.build` in the same transaction.
  */
 export async function requestExport(input: {
   projectId: string;
@@ -279,7 +280,7 @@ export async function requestExport(input: {
       )
       .orderBy(desc(exportBundle.createdAt))
       .limit(1);
-    if (existing) return { bundle: existing, project: owned, created: false };
+    if (existing) return { bundle: existing, project: owned };
     const [bundle] = await tx
       .insert(exportBundle)
       .values({
@@ -295,20 +296,11 @@ export async function requestExport(input: {
       exportId: bundle.id,
       clips: film.clips.length,
     });
-    return { bundle, project: owned, created: true };
+    await enqueue(exportBuild, { exportId: bundle.id }, { tx });
+    return { bundle, project: owned };
   });
   if (!outcome) return null;
-  let bundle = outcome.bundle;
-  if (outcome.created) {
-    try {
-      await enqueue(exportBuild, { exportId: bundle.id });
-    } catch (error) {
-      console.error(`[production] could not enqueue export.build for ${bundle.id}:`, error);
-      await failExport(bundle.id, ENQUEUE_FAILURE);
-      bundle = { ...bundle, status: "failed", failure: ENQUEUE_FAILURE };
-    }
-  }
-  return toExportView(bundle, outcome.project);
+  return toExportView(outcome.bundle, outcome.project);
 }
 
 /** The export, or null when it is missing or not the user's. */
@@ -346,6 +338,15 @@ export async function failExport(exportId: string, failure: string): Promise<boo
     await logEvent(tx, row.projectId, null, "production.export_failed", { exportId, failure });
     return true;
   });
+}
+
+async function isPendingExport(exportId: string): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ status: exportBundle.status })
+    .from(exportBundle)
+    .where(eq(exportBundle.id, exportId))
+    .limit(1);
+  return row?.status === "pending";
 }
 
 /**
@@ -394,10 +395,13 @@ export async function buildExport(exportId: string, signal?: AbortSignal): Promi
   }
   let total: number;
   try {
-    total = assertZipFits([
-      { name: "shots.csv", size: csv.byteLength },
-      ...sized.map((s) => ({ name: s.clip.downloadName, size: s.size })),
-    ]);
+    total = assertZipFits(
+      [
+        { name: "shots.csv", size: csv.byteLength },
+        ...sized.map((s) => ({ name: s.clip.downloadName, size: s.size })),
+      ],
+      EXPORT_MAX_BYTES,
+    );
   } catch (error) {
     if (error instanceof ZipLimitError) {
       await failExport(exportId, EXPORT_TOO_LARGE);
@@ -415,16 +419,21 @@ export async function buildExport(exportId: string, signal?: AbortSignal): Promi
     },
   ];
   for (const { clip, size } of sized) {
-    const { stream } = await openFileStream(clip.fileId, { signal });
+    const { stream } = await openFileStream(clip.fileId, { signal, ownerId: row.ownerId });
     const sum = await crc32Of(stream);
     if (sum.size !== size) throw new Error(`clip file ${clip.fileId} changed size`);
     entries.push({
       name: clip.downloadName,
       size,
       crc: sum.crc,
-      open: async () => (await openFileStream(clip.fileId, { signal })).stream,
+      open: async () =>
+        (await openFileStream(clip.fileId, { signal, ownerId: row.ownerId })).stream,
     });
   }
+
+  // The CRC pass can take long: a run that lost the race (another attempt finished, or the export
+  // failed meanwhile) stops before uploading a ZIP nobody would use.
+  if (!(await isPendingExport(exportId))) return false;
 
   const stored = await putFileBytes({
     ownerId: row.ownerId,

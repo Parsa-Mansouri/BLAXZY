@@ -12,6 +12,7 @@ import {
   formatAssetRef,
   nameKey,
   getReviewCatalog,
+  parseAssetRef,
   ReviewCatalogError,
   visibleOptions,
   type AssetDetectorOutput,
@@ -32,6 +33,7 @@ import {
   type ReviewFixRequest,
 } from "@/server/db/schema";
 import { assetDetectFix, enqueue } from "@/server/jobs";
+import { wakeWaitingLooks } from "./designs";
 import {
   isDetectedKind,
   planDetection,
@@ -40,6 +42,7 @@ import {
   type KnownRow,
   type KnownStatus,
 } from "./detection";
+import { assertPreProductionOpen, ENQUEUE_FAILURE, wakeOnTx } from "./preproduction";
 import { AssetInputError, parse, type Asset } from "./service";
 
 const uuid = z.uuid();
@@ -148,11 +151,14 @@ export async function applyDetection(input: {
     throw new AssetInputError("That project does not exist.");
   }
   return getDb().transaction(async (tx) => {
+    // Lock order of every asset writer: the project row first, then asset rows. Every user
+    // action on an asset takes this lock too, so it runs wholly before or after this one, and the
+    // rows read below are current (a user's removal or inclusion is never overwritten).
     const [owner] = await tx
       .select({ ownerId: project.ownerId })
       .from(project)
       .where(eq(project.id, projectId))
-      .for("update");
+      .for("no key update");
     if (!owner) throw new AssetInputError("That project does not exist.");
     const rows = await knownRows(tx, projectId);
     const existing = rows.map((r) => r.asset);
@@ -244,6 +250,10 @@ export async function applyDetection(input: {
     }
     if (remove.length > 0) {
       await tx.update(asset).set({ status: "removed" }).where(inArray(asset.id, remove));
+      // Props waiting for a location the detector removed go ahead without it.
+      if (existing.some((a) => a.kind === "location" && remove.includes(a.id))) {
+        await wakeWaitingLooks(projectId, tx);
+      }
     }
     // A merge by the detector (ADT02) removes one side and keeps its name as an alias of the
     // other: the current blocks' refs and tags move to the surviving name, as a manual merge does.
@@ -343,7 +353,7 @@ function splitWarning(w: string): DetectionWarning {
 async function ownedProject(projectId: string, userId: string) {
   if (!uuid.safeParse(projectId).success) return null;
   const [row] = await getDb()
-    .select({ id: project.id, mode: project.mode })
+    .select({ id: project.id, mode: project.mode, stage: project.stage })
     .from(project)
     .where(and(eq(project.id, projectId), eq(project.ownerId, userId), isNull(project.archivedAt)))
     .limit(1);
@@ -412,9 +422,11 @@ const selectionSchema = z.object({
   targetNames: z.array(z.string().min(1).max(300)).max(50).optional(),
 });
 
+const NOT_AN_ASSET = "One of the chosen assets is not on the list. Reload the page.";
+
 const submitSchema = z.object({
-  projectId: z.string(),
-  userId: z.string().min(1),
+  projectId: z.string().max(100),
+  userId: z.string().min(1).max(128),
   selections: z.array(selectionSchema).min(1, "Pick what is wrong first.").max(20),
   note: z.string().trim().max(8000).optional(),
 });
@@ -434,6 +446,7 @@ export async function submitDetectionReview(input: {
   const parsed = parse(submitSchema, input);
   const owned = await ownedProject(parsed.projectId, parsed.userId);
   if (!owned) return null;
+  assertPreProductionOpen(owned);
   const catalog = getReviewCatalog(CATALOG_KEY);
   const allowed = new Set(
     visibleOptions(catalog, { sector: owned.mode === "pro" ? "pro" : "wizard" }).map((o) => o.code),
@@ -443,6 +456,14 @@ export async function submitDetectionReview(input: {
       throw new AssetInputError("One of the chosen fixes is not available.");
   }
   const skip = parsed.selections.filter((s) => s.code === SKIP_CODE);
+  // Each target is a `kind:Name` ref; anything else is refused before it reaches the database.
+  const skipRefs = skip.flatMap((s) =>
+    (s.targetNames ?? []).map((ref) => {
+      const target = parseAssetRef(ref);
+      if (!target) throw new AssetInputError(NOT_AN_ASSET);
+      return target;
+    }),
+  );
   const rescan = parsed.selections.some((s) => s.code === RESCAN_CODE);
   let requests: ReviewFixRequest[];
   try {
@@ -464,29 +485,36 @@ export async function submitDetectionReview(input: {
   }
 
   const outcome = await getDb().transaction(async (tx) => {
+    // The project row first (the lock order of every asset writer), with ownership and stage.
     const [locked] = await tx
-      .select({ id: project.id })
+      .select({ id: project.id, stage: project.stage })
       .from(project)
-      .where(eq(project.id, parsed.projectId))
-      .for("update");
+      .where(
+        and(
+          eq(project.id, parsed.projectId),
+          eq(project.ownerId, parsed.userId),
+          isNull(project.archivedAt),
+        ),
+      )
+      .for("no key update");
     if (!locked) return null;
+    assertPreProductionOpen(locked);
     let skipped = 0;
-    for (const s of skip) {
-      for (const ref of s.targetNames ?? []) {
-        const colon = ref.indexOf(":");
-        const updated = await tx
-          .update(asset)
-          .set({ priority: "skipped" })
-          .where(
-            and(
-              eq(asset.projectId, parsed.projectId),
-              eq(asset.kind, ref.slice(0, colon) as Asset["kind"]),
-              sql`lower(${asset.name}) = lower(${ref.slice(colon + 1)})`,
-            ),
-          )
-          .returning({ id: asset.id });
-        skipped += updated.length;
-      }
+    let skippedLocation = false;
+    for (const target of skipRefs) {
+      const updated = await tx
+        .update(asset)
+        .set({ priority: "skipped" })
+        .where(
+          and(
+            eq(asset.projectId, parsed.projectId),
+            eq(asset.kind, target.kind),
+            sql`lower(${asset.name}) = lower(${target.name})`,
+          ),
+        )
+        .returning({ id: asset.id });
+      skipped += updated.length;
+      if (updated.length > 0 && target.kind === "location") skippedLocation = true;
     }
     if (skipped > 0) {
       await tx.insert(projectEvent).values({
@@ -496,6 +524,8 @@ export async function submitDetectionReview(input: {
         payload: { refs: skip.flatMap((s) => s.targetNames ?? []) },
       });
     }
+    // A skipped location is not designed: props waiting for it go ahead without it.
+    if (skippedLocation) await wakeOnTx(tx, parsed.projectId);
     if (requests.length === 0 && !rescan) return { skipped, reviewId: null };
     const latest = await latestDetection(tx, parsed.projectId);
     if (!latest) {
@@ -517,21 +547,17 @@ export async function submitDetectionReview(input: {
         damiRunId: latest.damiRunId,
       })
       .returning({ id: review.id });
-    return { skipped, reviewId: row?.id ?? null };
-  });
-  if (!outcome) return null;
-  if (outcome.reviewId) {
+    if (!row) throw new Error("review insert returned no row");
+    // The fix job is sent with the review: the panel never shows a round as running without it.
     try {
-      await enqueue(assetDetectFix, { reviewId: outcome.reviewId });
+      await enqueue(assetDetectFix, { reviewId: row.id }, { tx });
     } catch (error) {
       console.error("[assets] could not enqueue asset.detect.fix:", error);
-      await recordFixFailure(
-        parsed.projectId,
-        outcome.reviewId,
-        "This could not start. Try again.",
-      );
+      throw new AssetInputError(ENQUEUE_FAILURE);
     }
-  }
+    return { skipped, reviewId: row.id };
+  });
+  if (!outcome) return null;
   return { skipped: outcome.skipped, started: outcome.reviewId !== null };
 }
 

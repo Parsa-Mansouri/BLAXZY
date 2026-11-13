@@ -71,6 +71,13 @@
       "when": 1794563712898,
       "tag": "0009_generation_notified_ledger_checks_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794573467773,
+      "tag": "0010_action_rate_limit_and_indexes",
+      "breakpoints": true
     }
   ]
 }

@@ -85,8 +85,20 @@ export async function listAssets(
     cursor?: string | null;
   } = {},
 ): Promise<{ items: Asset[]; nextCursor: string | null } | null> {
-  const { kind, includeRemoved, limit, cursor } = parse(listAssetsSchema, opts);
+  const parsed = parse(listAssetsSchema, opts);
   if (!(await ownsProject(projectId, userId))) return null;
+  return listAssetPage(projectId, parsed);
+}
+
+/**
+ * One page of the project's assets with no ownership check: for services that have just checked
+ * the project themselves (`listAssetCards`). Not exported from the module index.
+ */
+export async function listAssetPage(
+  projectId: string,
+  opts: { kind?: AssetKind; includeRemoved?: boolean; limit?: number; cursor?: string | null },
+): Promise<{ items: Asset[]; nextCursor: string | null }> {
+  const { kind, includeRemoved, limit, cursor } = parse(listAssetsSchema, opts);
   const after = cursor ? decodeCursor(cursor) : null;
   const rows = await getDb()
     .select()

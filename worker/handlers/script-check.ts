@@ -22,7 +22,10 @@ export const scriptCheckHandler = defineHandler(scriptCheck, async (payload, con
     if (!file || file.status !== "ready") {
       throw new ScriptInputError("The uploaded file is no longer available. Upload it again.");
     }
-    const bytes = await readFileBytes(file.id, { signal: context.signal });
+    const bytes = await readFileBytes(file.id, {
+      signal: context.signal,
+      ownerId: project.ownerId,
+    });
     const content = await extractScriptText(bytes, file.mimeType, file.originalName ?? "script");
     const run = await runDami(
       scriptChecker,

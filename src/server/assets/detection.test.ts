@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { assetDetectorOutputSchema, type AssetDetectorOutput } from "@/server/damis";
 import { sampleAssetDetector } from "@/server/damis/sample/asset-detector";
 import type { asset } from "@/server/db/schema";
-import { detectorView, planDetection, tempIdsFor, visibleWarnings } from "./detection";
+import {
+  detectorView,
+  markRemovedByUser,
+  planDetection,
+  removedByUser,
+  tempIdsFor,
+  visibleWarnings,
+} from "./detection";
 
 type Asset = typeof asset.$inferSelect;
 
@@ -128,6 +135,43 @@ describe("the detector boundary", () => {
       ...view.previousOutput.voices,
     ];
     expect(entries.every((e) => e.scene_refs.length > 0)).toBe(true);
+  });
+
+  it("never revives an asset the user removed; one the detector removed comes back", () => {
+    const rows = plan.assets.map(row);
+    const mara = rows.find((a) => a.kind === "character" && a.name === "Mara");
+    const cabin = rows.find((a) => a.kind === "location" && a.name === "Ferry Cabin");
+    if (!mara || !cabin) throw new Error("sample changed");
+    const view = detectorView(
+      rows.map((a) => ({ asset: a, status: "detected" as const })),
+      plan.sceneIndex,
+    );
+    // The user removed Mara while the detector ran (the temporary id still points at her), and
+    // the detector itself removed the cabin earlier.
+    const removedMara: Asset = {
+      ...mara,
+      status: "removed",
+      details: markRemovedByUser(mara.details),
+    };
+    const removedCabin: Asset = { ...cabin, status: "removed" };
+    const existing = rows.map((a) =>
+      a.id === mara.id ? removedMara : a.id === cabin.id ? removedCabin : a,
+    );
+    const byTemp = new Map(
+      [...view.byTemp].map(([temp, a]) => [temp, existing.find((e) => e.id === a.id) ?? a]),
+    );
+    const again = planDetection({ output: view.previousOutput, byTemp, existing });
+    const names = again.assets.map((a) => `${a.kind}:${a.name}`);
+    expect(names).not.toContain("character:Mara");
+    expect(names.some((n) => n.startsWith("character:Mara ("))).toBe(false);
+    expect(again.assets.find((a) => a.existing?.id === cabin.id)).toBeDefined();
+    expect(removedByUser(removedMara)).toBe(true);
+    expect(removedByUser(removedCabin)).toBe(false);
+
+    // A fresh run finding her by name (no temporary id) drops her too.
+    const fresh = planDetection({ output, byTemp: new Map(), existing });
+    expect(fresh.assets.some((a) => a.kind === "character" && /^mara/i.test(a.name))).toBe(false);
+    expect(fresh.assets.find((a) => a.existing?.id === cabin.id)?.name).toBe("Ferry Cabin");
   });
 
   it("hides MINOR_PRESENT from the user", () => {

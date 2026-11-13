@@ -18,6 +18,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -469,6 +470,25 @@ export const rateLimit = pgTable(
   (t) => [index("rate_limit_last_request_idx").on(t.lastRequest)],
 );
 
+/**
+ * Server-action rate-limit counters (`src/server/ratelimit`): one row per key (user and bucket)
+ * and fixed window, incremented by one atomic upsert, so every web replica shares the count.
+ * Operational counters, not domain data: old windows are deleted by the `ratelimit.prune` job.
+ */
+export const actionRateLimit = pgTable(
+  "action_rate_limit",
+  {
+    key: text("key").notNull(),
+    windowStart: ts("window_start").notNull(),
+    count: integer("count").notNull().default(1),
+  },
+  (t) => [
+    primaryKey({ columns: [t.key, t.windowStart] }),
+    // Pruning deletes windows older than a cutoff.
+    index("action_rate_limit_window_idx").on(t.windowStart),
+  ],
+);
+
 /* -------------------------------------------------------------------------- */
 /* Projects                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -560,6 +580,8 @@ export const file = pgTable(
     index("file_owner_idx").on(t.ownerId),
     // Cleanup scans (old pending or abandoned uploads).
     index("file_status_created_idx").on(t.status, t.createdAt),
+    // One owner's recent pending uploads (the unfinished-upload limit).
+    index("file_owner_status_created_idx").on(t.ownerId, t.status, t.createdAt),
   ],
 );
 
@@ -595,6 +617,8 @@ export const damiRun = pgTable(
     index("dami_run_user_created_idx").on(t.userId, t.createdAt.desc()),
     index("dami_run_key_version_idx").on(t.damiKey, t.damiVersion),
     index("dami_run_status_idx").on(t.status),
+    // The stuck-run sweep: runs still `running` that started long ago.
+    index("dami_run_status_started_idx").on(t.status, t.startedAt),
   ],
 );
 
@@ -681,6 +705,8 @@ export const asset = pgTable(
   (t) => [
     uniqueIndex("asset_project_kind_name_unique").on(t.projectId, t.kind, sql`lower(${t.name})`),
     index("asset_project_kind_status_idx").on(t.projectId, t.kind, t.status),
+    // A project's assets in display order, keyset-paginated by (display_order, id).
+    index("asset_project_order_idx").on(t.projectId, t.displayOrder, t.id),
   ],
 );
 

@@ -32,11 +32,12 @@ describe.skipIf(!hasFfmpeg)(
     const { closeJobQueue } = await import("../../src/server/jobs");
     const { closeDb, getDb } = await import("../../src/server/db/client");
     const s = await import("../../src/server/db/schema");
-    const { and, asc, eq, inArray, isNull } = await import("drizzle-orm");
+    const { and, asc, eq, inArray, isNull, sql } = await import("drizzle-orm");
     const { generationRunHandler } = await import("./generation-run");
     const { blockReviseHandler, productionPrepareHandler } = await import("./production-prepare");
     const { takeFixHandler, takeGenerateHandler } = await import("./production-take");
     const { exportBuildHandler } = await import("./production-export");
+    const { productionDispatchHandler } = await import("./production-dispatch");
     const { productionGenerationHook } = await import("./production-generation-hook");
     const { createProductionFixtures } =
       await import("../../src/server/test-support/production-fixtures");
@@ -569,6 +570,26 @@ describe.skipIf(!hasFfmpeg)(
       const again = await takeRow(t2.id);
       expect(again.status).toBe("failed");
       expect(again.generationId).not.toBe(firstGeneration);
+      // Rule 4: the reset row loses the link to the failed attempt; the retry's event keeps it.
+      const retried = await getDb()
+        .select({ payload: s.projectEvent.payload })
+        .from(s.projectEvent)
+        .where(
+          and(
+            eq(s.projectEvent.projectId, projectId),
+            eq(s.projectEvent.type, "production.take_retried"),
+          ),
+        )
+        .orderBy(asc(s.projectEvent.createdAt));
+      expect(retried.at(-1)?.payload).toMatchObject({
+        takeId: t2.id,
+        previousGenerationId: firstGeneration,
+        previousFailure: expect.stringMatching(/asked to fail/),
+      });
+      expect(retried.at(0)?.payload).toMatchObject({
+        previousGenerationId: null,
+        previousFailure: expect.stringMatching(/You need 20 credits/),
+      });
       expect(await billing.getBalance(userId)).toBe(115);
       await expect(production.retryTake({ takeId: t1.id, userId })).rejects.toThrow(
         /Only the latest clip that failed/,
@@ -726,6 +747,185 @@ describe.skipIf(!hasFfmpeg)(
       expect(take.status).toBe("failed");
       expect(take.failure).toMatch(/“Tomas” is not ready in Pre-production any more/);
       expect(await billing.getBalance(userId)).toBe(100);
+    });
+
+    /* -------------------------------------------------------------------------------------- */
+    /* Jobs on the transaction, fan-out, filters and cursors                                   */
+    /* -------------------------------------------------------------------------------------- */
+
+    /** Jobs of a type queued for a row, read from the throwaway queue schema. */
+    async function queued(name: string, key: string, value: string): Promise<number> {
+      const result = await getDb().execute<{ n: number }>(
+        sql`select count(*)::int as n from ${sql.raw(jobSchema)}.job
+            where name = ${name} and data->>${key} = ${value}`,
+      );
+      return Number(result.rows[0]?.n ?? 0);
+    }
+
+    /** Fan-out jobs of one kind queued for a project. */
+    async function dispatches(projectId: string, kind: "prepare" | "takes"): Promise<number> {
+      const result = await getDb().execute<{ n: number }>(
+        sql`select count(*)::int as n from ${sql.raw(jobSchema)}.job
+            where name = 'production.dispatch' and data->>'projectId' = ${projectId}
+              and data->>'kind' = ${kind}`,
+      );
+      return Number(result.rows[0]?.n ?? 0);
+    }
+
+    /** Jobs of a type queued for the blocks of a project. */
+    async function queuedForBlocks(name: string, projectId: string): Promise<number> {
+      const result = await getDb().execute<{ n: number }>(
+        sql`select count(*)::int as n from ${sql.raw(jobSchema)}.job j
+            join prompt_block b on b.id = (j.data->>'blockId')::uuid
+            where j.name = ${name} and b.project_id = ${projectId}`,
+      );
+      return Number(result.rows[0]?.n ?? 0);
+    }
+
+    it("claims blocks with one fan-out job on the claim, which queues each block's job once", async () => {
+      const { userId, projectId } = await setup(1000);
+      const [l1] = await lineages(projectId);
+      if (!l1) throw new Error("blocks missing");
+      // A page rendered twice: one claim, one fan-out job, no per-block job sent by the request.
+      await production.ensurePrepared(projectId, userId);
+      await production.ensurePrepared(projectId, userId);
+      expect(await dispatches(projectId, "prepare")).toBe(1);
+      expect(await queuedForBlocks("production.prepare", projectId)).toBe(0);
+      expect((await production.getProductionOverview(projectId, userId))?.phase).toBe("preparing");
+
+      // The fan-out queues one preparation per pending block; running it again adds nothing.
+      await productionDispatchHandler.run({ projectId, kind: "prepare" }, jobContext());
+      await productionDispatchHandler.run({ projectId, kind: "prepare" }, jobContext());
+      expect(await queuedForBlocks("production.prepare", projectId)).toBe(3);
+
+      // A rejected block's next version is a revision: its job is sent on the review's
+      // transaction, and the fan-out picks the revision job for it too (deduplicated).
+      await drain(projectId);
+      await production.submitBlockReview({
+        lineageId: l1,
+        userId,
+        decision: "rejected",
+        issueCodes: ["wrong_camera"],
+      });
+      expect(await queuedForBlocks("block.revise", projectId)).toBe(1);
+      expect(await production.dispatchProductionJobs(projectId, "prepare")).toBe(1);
+      expect(await queuedForBlocks("block.revise", projectId)).toBe(1);
+    });
+
+    it("starts drafts in one batch with one fan-out job, numbering after earlier takes", async () => {
+      const { userId, projectId } = await setup(1000);
+      const [l1, l2, l3] = await lineages(projectId);
+      if (!l1 || !l2 || !l3) throw new Error("blocks missing");
+      await prepareAndApprove(projectId, userId);
+      const quote = await production.quoteProduction(projectId, userId);
+      const wrong = production.startDrafts({ projectId, userId, expectedCredits: 1 });
+      await expect(wrong).rejects.toBeInstanceOf(production.PriceChangedError);
+      await expect(wrong).rejects.toBeInstanceOf(production.ProductionInputError);
+      await expect(wrong).rejects.toThrow(production.PRICE_CHANGED_MESSAGE);
+
+      // An old (superseded) take on the first lineage: the new draft is numbered after it.
+      const [block1] = await getDb()
+        .select({ id: s.promptBlock.id })
+        .from(s.promptBlock)
+        .where(and(eq(s.promptBlock.lineageId, l1), isNull(s.promptBlock.supersededAt)));
+      await getDb()
+        .insert(s.blockTake)
+        .values({
+          projectId,
+          blockId: block1?.id ?? "",
+          lineageId: l1,
+          takeNumber: 1,
+          stage: "draft",
+          status: "superseded",
+        });
+
+      expect(
+        await production.startDrafts({
+          projectId,
+          userId,
+          expectedCredits: quote?.drafts.credits ?? -1,
+        }),
+      ).toEqual({ started: 3 });
+      const takes = await getDb()
+        .select()
+        .from(s.blockTake)
+        .where(and(eq(s.blockTake.projectId, projectId), eq(s.blockTake.status, "pending")));
+      expect(new Map(takes.map((t) => [t.lineageId, t.takeNumber]))).toEqual(
+        new Map([
+          [l1, 2],
+          [l2, 1],
+          [l3, 1],
+        ]),
+      );
+      expect(takes.every((t) => t.prompt !== null && t.stage === "draft")).toBe(true);
+      expect(await dispatches(projectId, "takes")).toBe(1);
+      expect(await production.dispatchProductionJobs(projectId, "takes")).toBe(3);
+      for (const take of takes) expect(await queued("take.generate", "takeId", take.id)).toBe(1);
+      expect(await production.dispatchProductionJobs(projectId, "takes")).toBe(3);
+      for (const take of takes) expect(await queued("take.generate", "takeId", take.id)).toBe(1);
+      await drain(projectId);
+      const overview = await production.getProductionOverview(projectId, userId);
+      expect(overview?.counts.draft_review).toBe(3);
+    });
+
+    it("filters blocks by stage in the database, matching the derived stage, with cursors", async () => {
+      const { userId, projectId } = await setup(1000);
+      const [l1, l2, l3] = await lineages(projectId);
+      if (!l1 || !l2 || !l3) throw new Error("blocks missing");
+      await production.ensurePrepared(projectId, userId);
+      await drain(projectId);
+      await production.submitBlockReview({ lineageId: l2, userId, decision: "accepted" });
+      const all = await production.listProductionBlocks(projectId, userId, { limit: 50 });
+      expect(all?.items.map((b) => b.stage)).toEqual(["block_review", "approved", "block_review"]);
+      for (const stage of production.BLOCK_PRODUCTION_STAGES) {
+        const page = await production.listProductionBlocks(projectId, userId, { stage: [stage] });
+        expect(page?.items.map((b) => b.lineageId)).toEqual(
+          all?.items.filter((b) => b.stage === stage).map((b) => b.lineageId),
+        );
+      }
+      // Paged through a filter: one match per page, then the end.
+      const first = await production.listProductionBlocks(projectId, userId, {
+        stage: ["block_review"],
+        limit: 1,
+      });
+      expect(first?.items.map((b) => b.lineageId)).toEqual([l1]);
+      const second = await production.listProductionBlocks(projectId, userId, {
+        stage: ["block_review"],
+        limit: 1,
+        cursor: first?.nextCursor,
+      });
+      expect(second?.items.map((b) => b.lineageId)).toEqual([l3]);
+      expect(second?.nextCursor).toBeNull();
+
+      // Takes count: drafts in review, then one accepted (its final generating).
+      await production.approveAllBlocks({ projectId, userId });
+      await startAllDrafts(projectId, userId);
+      const filtered = async (stage: (typeof production.BLOCK_PRODUCTION_STAGES)[number]) =>
+        (await production.listProductionBlocks(projectId, userId, { stage: [stage] }))?.items.map(
+          (b) => b.lineageId,
+        );
+      expect(await filtered("draft_review")).toEqual([l1, l2, l3]);
+      await production.submitTakeReview({
+        takeId: await latestTakeId(l1, userId),
+        userId,
+        decision: "accepted",
+      });
+      expect(await filtered("final_generating")).toEqual([l1]);
+      expect(await filtered("draft_review")).toEqual([l2, l3]);
+
+      // Forged cursors are input errors, not database errors.
+      const forged = (text: string) => Buffer.from(text, "utf8").toString("base64url");
+      for (const cursor of [forged(`1e300|${l1}`), forged(`99999999999|${l1}`), "%%%"]) {
+        await expect(
+          production.listProductionBlocks(projectId, userId, { cursor }),
+        ).rejects.toBeInstanceOf(production.ProductionInputError);
+        await expect(
+          production.listFinishedClips(projectId, userId, { cursor }),
+        ).rejects.toBeInstanceOf(production.ProductionInputError);
+        await expect(blocks.listBlocks(projectId, userId, { cursor })).rejects.toBeInstanceOf(
+          blocks.BlocksInputError,
+        );
+      }
     });
 
     /* -------------------------------------------------------------------------------------- */

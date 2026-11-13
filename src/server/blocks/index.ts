@@ -21,6 +21,7 @@ export {
   SECTIONING_STATES,
   setSectioningState,
   type PromptBlock,
+  type ReplaceBlocksResult,
   type SectioningRecord,
   type SectioningState,
   type SectioningStatus,

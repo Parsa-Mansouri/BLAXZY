@@ -5,9 +5,9 @@
  * `views` for shots that need another angle. Read-only; no ownership checks (callers have checked
  * the project).
  */
-import { and, asc, eq, inArray, ne, or } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { getDb, type DbExecutor } from "@/server/db/client";
-import { formatAssetRef, parseAssetRef, type ParsedAssetRef } from "@/server/damis";
+import { formatAssetRef, nameKey, parseAssetRef, type ParsedAssetRef } from "@/server/damis";
 import { asset, type AssetKind } from "@/server/db/schema";
 import { latestByAsset, newestLookWithStatus, newestSheetWithStatus, type AssetRow } from "./looks";
 import { acceptedPackViews, packKindOf } from "./packs";
@@ -94,27 +94,42 @@ export async function listReadyReferenceAssets(
   return (await describe(db, rows)).filter((a) => a.ready && a.referenceFileId !== null);
 }
 
-/** The project's assets named by `kind:Name` refs (removed ones too), keyed by ref. */
+/**
+ * The project's assets named by `kind:Name` refs (removed ones too), keyed by ref. Names match
+ * ignoring case, as they are unique (the `(project, kind, lower(name))` index serves the lookup):
+ * each asset is keyed by its own ref and by every requested ref that names it.
+ */
 export async function describeAssetRefs(
   projectId: string,
   refs: readonly string[],
   db: DbExecutor = getDb(),
 ): Promise<Map<string, ReferenceAsset>> {
-  const parsed = [...new Set(refs)]
-    .map(parseAssetRef)
-    .filter((r): r is ParsedAssetRef => r !== null)
+  const requested = [...new Set(refs)]
+    .map((ref) => ({ ref, parsed: parseAssetRef(ref) }))
+    .filter((r): r is { ref: string; parsed: ParsedAssetRef } => r.parsed !== null)
     .slice(0, MAX_REFERENCE_ASSETS);
-  if (parsed.length === 0) return new Map();
+  if (requested.length === 0) return new Map();
   const rows = await db
     .select()
     .from(asset)
     .where(
       and(
         eq(asset.projectId, projectId),
-        or(...parsed.map((r) => and(eq(asset.kind, r.kind), eq(asset.name, r.name)))),
+        or(
+          ...requested.map(({ parsed: r }) =>
+            and(eq(asset.kind, r.kind), sql`lower(${asset.name}) = lower(${r.name})`),
+          ),
+        ),
       ),
     );
-  return new Map((await describe(db, rows)).map((a) => [a.ref, a]));
+  const described = await describe(db, rows);
+  const byKey = new Map(described.map((a) => [`${a.kind}:${nameKey(a.name)}`, a]));
+  const out = new Map(described.map((a) => [a.ref, a]));
+  for (const { ref, parsed } of requested) {
+    const found = byKey.get(`${parsed.kind}:${nameKey(parsed.name)}`);
+    if (found) out.set(ref, found);
+  }
+  return out;
 }
 
 /** The project's assets with these ids (removed ones too), keyed by id. */

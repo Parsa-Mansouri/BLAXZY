@@ -20,7 +20,7 @@ describe.skipIf(!reachable)("script services (integration)", async () => {
   const { closeJobQueue } = await import("@/server/jobs");
   const { closeDb, getDb } = await import("@/server/db/client");
   const { damiRun, project, projectEvent, review } = await import("@/server/db/schema");
-  const { eq } = await import("drizzle-orm");
+  const { and, eq, sql } = await import("drizzle-orm");
   const fixtures = createFixtures();
 
   afterAll(async () => {
@@ -170,6 +170,75 @@ describe.skipIf(!reachable)("script services (integration)", async () => {
         "script.edited",
       ]),
     );
+  });
+
+  /** Jobs of a type queued for a version, read from the throwaway queue schema. */
+  async function queued(name: string, versionId: string): Promise<number> {
+    const result = await getDb().execute<{ n: number }>(
+      sql`select count(*)::int as n from ${sql.raw(jobSchema)}.job
+          where name = ${name} and data->>'scriptVersionId' = ${versionId}`,
+    );
+    return Number(result.rows[0]?.n ?? 0);
+  }
+
+  it("queues each version's job with it, and an edit supersedes a version still in review", async () => {
+    const userId = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId);
+    const v1 = (await script.startFromBrief({ projectId, userId, brief: "A pier." }))?.id ?? "";
+    expect(await queued("script.write", v1)).toBe(1);
+    await writeDone(v1, projectId);
+    await script.submitScriptReview({ projectId, userId, versionId: v1, decision: "accepted" });
+    expect(await queued("script.detect-assets", v1)).toBe(1);
+
+    // A new draft is waiting for review when the user edits the accepted script.
+    const v2 = (await script.startFromBrief({ projectId, userId, brief: "Another." }))?.id ?? "";
+    await writeDone(v2, projectId);
+    expect((await script.getScriptVersion(v2, userId))?.status).toBe("in_review");
+    const edited = await script.editAcceptedScript({
+      projectId,
+      userId,
+      content: CONTENT.replace("Wait.", "Stop."),
+    });
+    expect(edited).toMatchObject({ versionNumber: 3, status: "accepted" });
+    expect(await queued("script.detect-assets", edited?.id ?? "")).toBe(1);
+    expect((await script.getScriptVersion(v2, userId))?.status).toBe("superseded");
+    const state = await script.getScriptState(projectId, userId);
+    expect(state?.current?.id).toBe(edited?.id);
+    const [event] = await getDb()
+      .select({ payload: projectEvent.payload })
+      .from(projectEvent)
+      .where(and(eq(projectEvent.projectId, projectId), eq(projectEvent.type, "script.edited")));
+    expect(event?.payload).toMatchObject({ supersededInReview: [v2] });
+  });
+
+  it("keeps the failed attempt in the retry's event (the row is reset)", async () => {
+    const userId = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId);
+    const v1 = (await script.startFromBrief({ projectId, userId, brief: "A pier." }))?.id ?? "";
+    const [run] = await getDb()
+      .insert(damiRun)
+      .values({
+        damiKey: "script-writer",
+        damiVersion: "1.0.0",
+        model: "sample",
+        status: "failed",
+        projectId,
+        input: {},
+      })
+      .returning({ id: damiRun.id });
+    expect(await script.failScriptVersion(v1, "Claude is busy right now.", run?.id)).toBe(true);
+    const retried = await script.retryScriptVersion({ projectId, userId, versionId: v1 });
+    expect(retried).toMatchObject({ status: "pending", failure: null });
+    const [event] = await getDb()
+      .select({ payload: projectEvent.payload })
+      .from(projectEvent)
+      .where(and(eq(projectEvent.projectId, projectId), eq(projectEvent.type, "script.retried")));
+    expect(event?.payload).toEqual({
+      versionId: v1,
+      previousFailure: "Claude is busy right now.",
+      previousDamiRunId: run?.id,
+    });
+    expect(await queued("script.write", v1)).toBe(1); // the queued job is reused (same key)
   });
 
   it("validates reviews", async () => {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { episodeCount } from "@/lib/style-options";
 import {
   MAX_REFERENCE_DESCRIPTION_CHARS,
   MAX_REFERENCE_IMAGES,
@@ -84,9 +85,10 @@ export type DurationPlan = {
 export function planDuration(style: ProjectStyle): DurationPlan {
   const words = (seconds: number) => Math.max(20, Math.round((seconds / 60) * WORDS_PER_MINUTE));
   if (style.format === "series" && style.episodeDurationSeconds) {
+    // The same rule as the episode rows `saveStyle` creates (ceil: episodes cover the runtime).
     const episodes = Math.max(
       1,
-      Math.round(style.totalDurationSeconds / style.episodeDurationSeconds),
+      episodeCount(style.totalDurationSeconds, style.episodeDurationSeconds),
     );
     return {
       totalSeconds: style.totalDurationSeconds,

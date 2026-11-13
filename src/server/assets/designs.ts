@@ -3,7 +3,7 @@
  * side: the guided questions of an asset, its reference photos, and props that wait for the
  * locations they stand in. Not exported from the module index.
  */
-import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   designerFor,
@@ -13,7 +13,7 @@ import {
   REFERENCE_ROLES,
   type GuidedQuestion,
 } from "@/server/damis";
-import { getDb, type DbExecutor } from "@/server/db/client";
+import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
 import {
   asset,
   assetLook,
@@ -40,7 +40,7 @@ export function questionsFor(row: AssetRow, style: ProjectStyle | null): GuidedQ
 export const MAX_REFERENCE_NOTE = 1000;
 
 export const referenceInputSchema = z.object({
-  fileId: z.string(),
+  fileId: z.string().max(100),
   role: z.string().trim().min(1).max(40),
   note: z
     .string()
@@ -150,12 +150,16 @@ export function untouched(look: {
 
 /**
  * Starts the props that waited for a location of the project once none of their locations is
- * still being designed. Called after a location's look is accepted, fails, is replaced or the
- * location is removed. Bounded by the project's pending looks.
+ * still being designed. Called, in the transaction that unblocked them, after a location's look
+ * is accepted or fails, or the location is removed, merged away, skipped or dropped by the
+ * detector: the jobs are sent on `tx`, so they exist exactly when that change commits. Without
+ * `tx` it runs in its own transaction. A failed send throws (nothing is swallowed). Bounded by
+ * the project's pending looks; the jobs are sent in look-id order, so two concurrent wakes never
+ * wait on each other's dedupe keys in opposite orders.
  */
-export async function wakeWaitingLooks(projectId: string): Promise<number> {
-  const db = getDb();
-  const waiting = await db
+export async function wakeWaitingLooks(projectId: string, tx?: DbTx): Promise<number> {
+  if (!tx) return getDb().transaction((t) => wakeWaitingLooks(projectId, t));
+  const waiting = await tx
     .select({ look: assetLook, asset })
     .from(assetLook)
     .innerJoin(asset, eq(asset.id, assetLook.assetId))
@@ -169,18 +173,15 @@ export async function wakeWaitingLooks(projectId: string): Promise<number> {
         isNull(assetLook.parentId),
       ),
     )
+    .orderBy(asc(assetLook.id))
     .limit(200);
   let woken = 0;
   for (const { look, asset: row } of waiting) {
     if (designerFor(row.kind) !== "prop") continue;
-    if ((await locationsInFlight(db, row)).length > 0) continue;
-    try {
-      // A job already queued for the look has the same dedupe key: this send is then a no-op.
-      await enqueue(assetLookGenerate, { lookId: look.id });
-      woken++;
-    } catch (error) {
-      console.error(`[assets] could not wake look ${look.id}:`, error);
-    }
+    if ((await locationsInFlight(tx, row)).length > 0) continue;
+    // A job already queued for the look has the same dedupe key: this send is then a no-op.
+    await enqueue(assetLookGenerate, { lookId: look.id }, { tx });
+    woken++;
   }
   return woken;
 }

@@ -108,6 +108,62 @@ describe.skipIf(!reachable)("blocks service (integration)", async () => {
     });
   });
 
+  it("stores blocks only for the newest accepted version, and refuses shared places", async () => {
+    const userId = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId);
+    const v1 = await version(projectId, 1);
+    const v2 = await version(projectId, 2);
+    await blocks.replaceBlocks({
+      projectId,
+      scriptVersionId: v2,
+      blocks: [block(0, "Cut from the new script.")],
+      damiRunIds: [],
+    });
+    // A slow run for the older version finishes later: it changes nothing.
+    const late = await blocks.replaceBlocks({
+      projectId,
+      scriptVersionId: v1,
+      blocks: [block(0, "Cut from the old script."), block(1, "Old.")],
+      damiRunIds: [],
+    });
+    expect(late).toEqual({
+      created: 0,
+      carried: 0,
+      superseded: 0,
+      reset: 0,
+      skipped: "not_latest",
+    });
+    const current = (await blocks.listBlocks(projectId, userId))?.items ?? [];
+    expect(current.map((b) => [b.scriptVersionId, b.scriptExcerpt])).toEqual([
+      [v2, "Cut from the new script."],
+    ]);
+    // A version that was superseded meanwhile is not the newest accepted one either.
+    await getDb()
+      .update(scriptVersion)
+      .set({ status: "superseded" })
+      .where(eq(scriptVersion.id, v2));
+    expect(
+      (
+        await blocks.replaceBlocks({
+          projectId,
+          scriptVersionId: v2,
+          blocks: [block(0, "Again.")],
+          damiRunIds: [],
+        })
+      ).skipped,
+    ).toBe("not_latest");
+
+    // Two blocks in one place would share a clip's file name in the export.
+    await expect(
+      blocks.replaceBlocks({
+        projectId,
+        scriptVersionId: v1,
+        blocks: [block(0, "One."), block(0, "Two.")],
+        damiRunIds: [],
+      }),
+    ).rejects.toThrow("Sectioning returned two blocks in the same place.");
+  });
+
   it("paginates, reports sectioning state and hides other users' blocks", async () => {
     const userId = await fixtures.newUser();
     const other = await fixtures.newUser();

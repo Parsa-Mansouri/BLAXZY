@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { project, projectEvent } from "@/server/db/schema";
+import { decodeTimestampCursor, encodeTimestampCursor } from "./cursor";
 import {
   archiveProjectSchema,
   createProjectSchema,
@@ -25,18 +26,10 @@ const notArchived = isNull(project.archivedAt);
 /** Microsecond-precise ISO text of `updated_at` (JS dates would round and repeat rows). */
 const updatedAtText = sql<string>`to_char(${project.updatedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
-const CURSOR_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
-
-function encodeCursor(updatedAt: string, id: string): string {
-  return Buffer.from(`${updatedAt}|${id}`, "utf8").toString("base64url");
-}
-
 function decodeCursor(cursor: string): { updatedAt: string; id: string } {
-  const bad = new ProjectInputError("That page link is no longer valid. Reload the list.");
-  const [updatedAt, id, ...rest] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
-  if (rest.length > 0 || !updatedAt || !id) throw bad;
-  if (!CURSOR_PATTERN.test(updatedAt) || !uuidSchema.safeParse(id).success) throw bad;
-  return { updatedAt, id };
+  const decoded = decodeTimestampCursor(cursor);
+  if (!decoded) throw new ProjectInputError("That page link is no longer valid. Reload the list.");
+  return { updatedAt: decoded.timestamp, id: decoded.id };
 }
 
 /** Creates a Wizard project at the Style stage and logs `project.created`, in one transaction. */
@@ -82,7 +75,7 @@ export async function listProjects(input: ListProjectsInput): Promise<ProjectPag
   const hasMore = rows.length > limit && last !== undefined;
   return {
     items: page.map((r) => r.row),
-    nextCursor: hasMore ? encodeCursor(last.cursorTs, last.row.id) : null,
+    nextCursor: hasMore ? encodeTimestampCursor(last.cursorTs, last.row.id) : null,
   };
 }
 

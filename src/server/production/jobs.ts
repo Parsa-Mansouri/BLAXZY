@@ -4,7 +4,8 @@
  * record the outcome, always with conditional updates so a duplicate or stale run cannot
  * overwrite newer state.
  */
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { describeAssetRefs, listReadyReferenceAssets, type ReferenceAsset } from "@/server/assets";
 import {
   failBlockPreparation,
@@ -12,6 +13,7 @@ import {
   getCurrentBlock,
   getPreviousCurrentBlock,
   getPreviousVersion,
+  MAX_PRODUCTION_BLOCKS,
   storeBlockPreparation,
   type PromptBlock,
 } from "@/server/blocks";
@@ -31,11 +33,13 @@ import {
   blockTake,
   generation,
   project,
+  promptBlock,
   review,
   type ProjectStyle,
   type ReviewSubject,
 } from "@/server/db/schema";
 import { enqueueGeneration, requestGeneration, type FinishedGeneration } from "@/server/generation";
+import { blockRevise, enqueue, productionPrepare, takeFix, takeGenerate } from "@/server/jobs";
 import { isUuid, STALE_MESSAGE } from "./access";
 import { ProductionInputError } from "./errors";
 import { MAX_BLOCK_ASSETS } from "./service";
@@ -541,4 +545,91 @@ export async function applyTakeGenerationResult(g: FinishedGeneration): Promise<
       );
     }
   });
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* Fan-out (`production.dispatch`)                                                             */
+/* ------------------------------------------------------------------------------------------ */
+
+/**
+ * Queues the per-row job of every pending row of a project (worker, `production.dispatch`):
+ * `prepare`: each current, non-stale block waiting for preparation gets `block.revise` when it
+ * answers the rejected review of its predecessor, else `production.prepare`; `takes`: each
+ * pending take without a generation gets `take.generate` (prompt stored) or `take.fix`. Safe to
+ * run any number of times: the per-row jobs are keyed by their row (a duplicate send is dropped)
+ * and their handlers check the row is still waiting. Returns how many rows it covered.
+ */
+export async function dispatchProductionJobs(
+  projectId: string,
+  kind: "prepare" | "takes",
+): Promise<number> {
+  if (!isUuid(projectId)) return 0;
+  const db = getDb();
+  if (kind === "prepare") {
+    const blocks = await db
+      .select({
+        id: promptBlock.id,
+        lineageId: promptBlock.lineageId,
+        versionNumber: promptBlock.versionNumber,
+      })
+      .from(promptBlock)
+      .where(
+        and(
+          eq(promptBlock.projectId, projectId),
+          isNull(promptBlock.supersededAt),
+          eq(promptBlock.stale, false),
+          eq(promptBlock.productionState, "pending"),
+        ),
+      )
+      .orderBy(asc(promptBlock.orderIndex), asc(promptBlock.id))
+      .limit(MAX_PRODUCTION_BLOCKS);
+    if (blocks.length === 0) return 0;
+    // A revision answers a rejected review of the version right before it in its lineage.
+    const previous = alias(promptBlock, "previous");
+    const revisions = await db
+      .selectDistinct({ id: promptBlock.id })
+      .from(promptBlock)
+      .innerJoin(
+        previous,
+        and(
+          eq(previous.lineageId, promptBlock.lineageId),
+          eq(previous.versionNumber, sql`${promptBlock.versionNumber} - 1`),
+        ),
+      )
+      .innerJoin(
+        review,
+        and(
+          eq(review.subjectType, "prompt_block"),
+          eq(review.subjectId, previous.id),
+          eq(review.decision, "rejected"),
+        ),
+      )
+      .where(
+        inArray(
+          promptBlock.id,
+          blocks.map((b) => b.id),
+        ),
+      );
+    const revise = new Set(revisions.map((r) => r.id));
+    for (const block of blocks) {
+      await enqueue(revise.has(block.id) ? blockRevise : productionPrepare, { blockId: block.id });
+    }
+    return blocks.length;
+  }
+  const takes = await db
+    .select({ id: blockTake.id, prompt: blockTake.prompt })
+    .from(blockTake)
+    .where(
+      and(
+        eq(blockTake.projectId, projectId),
+        eq(blockTake.status, "pending"),
+        isNull(blockTake.generationId),
+      ),
+    )
+    .orderBy(asc(blockTake.createdAt))
+    .limit(MAX_PRODUCTION_BLOCKS);
+  for (const take of takes) {
+    await enqueue(take.prompt ? takeGenerate : takeFix, { takeId: take.id });
+  }
+  return takes.length;
 }

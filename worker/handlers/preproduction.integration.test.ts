@@ -6,6 +6,7 @@
  */
 import "dotenv/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { AssetDetectorOutput } from "../../src/server/damis";
 import type { AssetKind } from "../../src/server/db/schema";
 import { servicesReachable } from "../../src/server/test-support/generation-fixtures";
 import {
@@ -34,6 +35,7 @@ describe.skipIf(!reachable)(
     const { assetSheetAssembleHandler, assetSheetPlanHandler, assetSheetViewsAdvanceHandler } =
       await import("./asset-sheet-pack");
     const { generationRunHandler } = await import("./generation-run");
+    const { latestViewRows } = await import("../../src/server/assets/packs");
     const { assetGenerationHook } = await import("./asset-generation-hook");
     const { createPreProductionFixtures } =
       await import("../../src/server/test-support/preprod-fixtures");
@@ -135,6 +137,14 @@ describe.skipIf(!reachable)(
         await generationRunHandler.run({ generationId: after.generationId }, jobContext());
       }
       return sheetRow(sheetId);
+    }
+
+    /** Moves the project's assets' creation a minute back (past the double-submit window). */
+    async function backdate(projectId: string) {
+      await getDb()
+        .update(s.asset)
+        .set({ createdAt: sql`now() - interval '1 minute'` })
+        .where(eq(s.asset.projectId, projectId));
     }
 
     async function detail(assetId: string, userId: string) {
@@ -700,6 +710,23 @@ describe.skipIf(!reachable)(
 
       // Retry: a new generation, never the refunded one; then the old hook arrives again.
       await assets.retryLook({ lookId: failed.id, userId });
+      // The failed attempt stays on record (the row is cleared for the new one).
+      const [retried1] = await getDb()
+        .select({ payload: s.projectEvent.payload })
+        .from(s.projectEvent)
+        .where(
+          and(
+            eq(s.projectEvent.projectId, projectId),
+            eq(s.projectEvent.type, "asset.look_retried"),
+          ),
+        );
+      expect(retried1?.payload).toMatchObject({
+        lookId: failed.id,
+        previousGenerationId: generationId,
+        previousFailure: failed.failure,
+      });
+      // Its job was sent with the retry.
+      expect(await queued("asset.look.generate", "lookId", failed.id)).toBeGreaterThan(0);
       await assetLookGenerateHandler.run({ lookId: failed.id }, jobContext());
       const retried = await lookRow(failed.id);
       expect(retried.status).toBe("pending");
@@ -823,8 +850,14 @@ describe.skipIf(!reachable)(
       const { userId, projectId } = await setup(0);
       const keep = await add(projectId, userId, "character", "Tomas");
       const dupe = await add(projectId, userId, "character", "Old Tomas");
+      // A double submit returns the asset just added: no "Tomas (2)".
+      const doubleClick = await add(projectId, userId, "character", "TOMAS");
+      expect(doubleClick.id).toBe(keep.id);
+      // A distinct later add of the same name is deliberate: "Tomas (2)".
+      await backdate(projectId);
       const again = await add(projectId, userId, "character", "Tomas");
       expect([keep.name, dupe.name, again.name]).toEqual(["Tomas", "Old Tomas", "Tomas (2)"]);
+      await backdate(projectId);
       const lower = await add(projectId, userId, "character", "tomas");
       expect(lower.name).toBe("tomas (3)");
       expect(keep.origin).toBe("manual");
@@ -1134,8 +1167,21 @@ describe.skipIf(!reachable)(
       d = await detail(cabin.id, userId);
       expect(d.stage).toBe("ready");
       expect(d.packViews.find((v) => v.viewId === "corner_a")?.status).toBe("superseded");
+      // The lock sent the assemble job with it.
+      expect(await queued("asset.sheet.assemble", "sheetId", sheetId)).toBe(1);
       await assetSheetAssembleHandler.run({ sheetId }, jobContext());
-      expect((await sheetRow(sheetId)).fileId).not.toBeNull();
+      const contact = (await sheetRow(sheetId)).fileId;
+      expect(contact).not.toBeNull();
+      // A duplicate run finds the file and uploads nothing.
+      await assetSheetAssembleHandler.run({ sheetId }, jobContext(2));
+      expect((await sheetRow(sheetId)).fileId).toBe(contact);
+      const contactFiles = await getDb()
+        .select({ id: s.file.id })
+        .from(s.file)
+        .where(
+          and(eq(s.file.projectId, projectId), eq(s.file.originalName, "pack_contact_sheet.png")),
+        );
+      expect(contactFiles).toHaveLength(1);
       // Production attaches the Hero and lists the approved views.
       const refs = await assets.listReadyReferenceAssets(projectId);
       const ref = refs.find((r) => r.assetId === cabin.id);
@@ -1259,6 +1305,296 @@ describe.skipIf(!reachable)(
         expect(d.lockGate?.canLock).toBe(false);
         await expect(assets.lockSheet({ sheetId, userId })).rejects.toThrow(/Approve these first/);
       }
+    });
+
+    it("a foreign id is missing before anything about it is read; answers are bounded", async () => {
+      const { userId, projectId } = await setup(0);
+      const voice = await add(projectId, userId, "voice", "Tomas's voice");
+      const recording = await assets.startLookFromUpload({
+        assetId: voice.id,
+        userId,
+        fileId: await fixtures.storedAudio(userId),
+      });
+      const stranger = await fixtures.newUser();
+      const photo = await fixtures.storedImage(stranger);
+      const references = [{ fileId: photo, role: "hero" }];
+      // The same answer as for an id that does not exist: nothing about the asset's kind leaks.
+      expect(
+        await assets.submitLookReview({
+          lookId: recording?.id ?? "",
+          userId: stranger,
+          decision: "rejected",
+          note: "Different",
+          references,
+        }),
+      ).toBeNull();
+      expect(
+        await assets.submitLookReview({
+          lookId: crypto.randomUUID(),
+          userId: stranger,
+          decision: "rejected",
+          note: "Different",
+          references,
+        }),
+      ).toBeNull();
+      expect(
+        await assets.startDesign({ assetId: voice.id, userId: stranger, references }),
+      ).toBeNull();
+
+      const tomas = await add(projectId, userId);
+      const tooMany = Object.fromEntries(
+        Array.from({ length: assets.MAX_GUIDED_ANSWERS + 1 }, (_, i) => [`q${i}`, "x"]),
+      );
+      await expect(
+        assets.startLookFromGuided({ assetId: tomas.id, userId, answers: tooMany }),
+      ).rejects.toThrow(/more answers than questions/);
+    });
+
+    it("a waiting prop wakes when its location is skipped, merged away or dropped by the detector", async () => {
+      const { userId, projectId } = await setup(100);
+      /** A location with a look in flight and a prop that waits for it. */
+      async function waitingPair(locationName: string, propName: string, waitsFor = locationName) {
+        const location = await add(projectId, userId, "location", locationName);
+        await assets.startLookFromPrompt({ assetId: location.id, userId, prompt: "A place" });
+        const prop = await add(projectId, userId, "prop", propName);
+        await getDb()
+          .update(s.asset)
+          .set({ details: { locationIds: [waitsFor] } })
+          .where(eq(s.asset.id, prop.id));
+        const look = await assets.startLookFromPrompt({
+          assetId: prop.id,
+          userId,
+          prompt: "A small object",
+        });
+        expect(look).toMatchObject({ status: "pending", started: false });
+        expect(await queued("asset.look.generate", "lookId", look?.id ?? "")).toBe(0);
+        return { location, prop, lookId: look?.id ?? "" };
+      }
+
+      // Skipped from the detected list (ADP01).
+      const cabin = await waitingPair("Ferry Cabin", "Locket");
+      expect(
+        await assets.submitDetectionReview({
+          projectId,
+          userId,
+          selections: [{ code: "ADP01", targetNames: ["location:ferry cabin"] }],
+        }),
+      ).toEqual({ skipped: 1, started: false });
+      expect(await queued("asset.look.generate", "lookId", cabin.lookId)).toBe(1);
+
+      // Merged away into a location that is not being designed.
+      const boilerRoom = await add(projectId, userId, "location", "Boiler Room");
+      const gauge = await waitingPair("Boiler Rm", "Gauge");
+      await assets.mergeAssets({ keepId: boilerRoom.id, mergeId: gauge.location.id, userId });
+      expect(await queued("asset.look.generate", "lookId", gauge.lookId)).toBe(1);
+
+      // A wake that never came: the look can still be started by hand.
+      const deck = await waitingPair("Deck", "Rope");
+      expect(await detail(deck.prop.id, userId)).toMatchObject({
+        waitingFor: ["Deck"],
+        canStartWithoutWaiting: true,
+      });
+      await getDb()
+        .update(s.assetLook)
+        .set({ status: "failed", failure: "x" })
+        .where(eq(s.assetLook.assetId, deck.location.id));
+      expect(await detail(deck.prop.id, userId)).toMatchObject({
+        waitingFor: [],
+        canStartWithoutWaiting: true,
+      });
+      expect(await assets.startWithoutWaiting({ assetId: deck.prop.id, userId })).toBe(
+        "generating",
+      );
+      expect(await queued("asset.look.generate", "lookId", deck.lookId)).toBe(1);
+      expect((await detail(deck.prop.id, userId)).canStartWithoutWaiting).toBe(false);
+      // A look that never waited is never offered the button.
+      const tomas = await add(projectId, userId);
+      await assets.startLookFromPrompt({ assetId: tomas.id, userId, prompt: "A man" });
+      expect((await detail(tomas.id, userId)).canStartWithoutWaiting).toBe(false);
+
+      // Removed by the detector (an incremental answer that drops the location).
+      const pier = await getDb()
+        .insert(s.asset)
+        .values({
+          projectId,
+          kind: "location",
+          name: "Harbour Pier",
+          origin: "detected",
+          details: { sceneRefs: ["1"] },
+          displayOrder: 99,
+        })
+        .returning();
+      const pierId = pier[0]?.id ?? "";
+      await assets.startLookFromPrompt({ assetId: pierId, userId, prompt: "A pier" });
+      const lantern = await add(projectId, userId, "prop", "Lantern");
+      await getDb()
+        .update(s.asset)
+        .set({ details: { locationIds: ["Harbour Pier"] } })
+        .where(eq(s.asset.id, lantern.id));
+      const lanternLook = await assets.startLookFromPrompt({
+        assetId: lantern.id,
+        userId,
+        prompt: "An oil lantern",
+      });
+      expect(await queued("asset.look.generate", "lookId", lanternLook?.id ?? "")).toBe(0);
+      const state = await assets.loadDetectorState(projectId);
+      const view = assets.detectorView(state.rows, []);
+      const pierTemp = view.tempByName.get("location:harbour pier") ?? "";
+      expect(pierTemp).not.toBe("");
+      const output: AssetDetectorOutput = {
+        output_version: "output_21",
+        mode: "incremental",
+        scene_index: [],
+        characters: [],
+        locations: [],
+        props: [],
+        voices: [],
+        diff: { added: [], updated: [], removed: [pierTemp] },
+        summary: {
+          scene_count: 0,
+          character_count: 0,
+          location_count: 0,
+          prop_count: 0,
+          voice_count: 0,
+        },
+        applied_fixes: [],
+        assumptions: [],
+        warnings: [],
+      };
+      const result = await assets.applyDetection({
+        projectId,
+        scriptVersionId: await fixtures.acceptedScript(projectId, userId),
+        damiRunId: null,
+        mode: "incremental",
+        output,
+        byTemp: view.byTemp,
+      });
+      expect(result.removed).toBe(1);
+      expect(await queued("asset.look.generate", "lookId", lanternLook?.id ?? "")).toBe(1);
+    });
+
+    it("a pack sent back to its designer stops; a failed view retries with its job; plans are capped", async () => {
+      const { userId, projectId } = await setup(600);
+      const { asset: cabin } = await acceptLocation(userId, projectId, "Ferry Cabin");
+      const sheetId = (await detail(cabin.id, userId)).sheets[0]?.id ?? "";
+      await assetSheetPlanHandler.run({ sheetId }, jobContext());
+      await advancePack(sheetId);
+      const reverse = (await detail(cabin.id, userId)).packViews[0];
+      expect(reverse?.status).toBe("in_review");
+      const generations = async () =>
+        (
+          await getDb()
+            .select({ id: s.generation.id })
+            .from(s.generation)
+            .where(eq(s.generation.projectId, projectId))
+        ).length;
+      const before = await generations();
+      expect(
+        await assets.submitSheetViewReview({
+          viewRowId: reverse?.id ?? "",
+          userId,
+          decision: "rejected",
+          selections: [{ code: "LSX01", customText: "A second window on the east wall" }],
+        }),
+      ).toBe("generating");
+      const views = await getDb()
+        .select({ status: s.assetSheetView.status })
+        .from(s.assetSheetView)
+        .where(eq(s.assetSheetView.sheetId, sheetId));
+      expect(views.length).toBeGreaterThan(1);
+      expect(views.every((v) => v.status === "superseded")).toBe(true);
+      // An advance still queued for the old pack requests nothing (no credits spent).
+      await advancePack(sheetId);
+      expect(await generations()).toBe(before);
+
+      // A view that failed is retried with its advance sent in the same transaction, and the
+      // failed attempt stays on record.
+      const { asset: room } = await acceptLocation(userId, projectId, "Engine Room");
+      const roomSheetId = (await detail(room.id, userId)).sheets[0]?.id ?? "";
+      await assetSheetPlanHandler.run({ sheetId: roomSheetId }, jobContext());
+      const planned = (await detail(room.id, userId)).packViews[0];
+      expect(await assets.failSheetView(planned?.id ?? "", "The view could not be made.")).toBe(
+        true,
+      );
+      await getDb().execute(
+        sql.raw(
+          `delete from ${jobSchema}.job where name = 'asset.sheet.views.advance' ` +
+            `and data->>'sheetId' = '${roomSheetId}'`,
+        ),
+      );
+      expect(await assets.retrySheetView({ viewRowId: planned?.id ?? "", userId })).toBe(
+        "sheet_review",
+      );
+      expect(await queued("asset.sheet.views.advance", "sheetId", roomSheetId)).toBe(1);
+      expect((await viewRow(planned?.id ?? "")).status).toBe("planned");
+      const [retried] = await getDb()
+        .select({ payload: s.projectEvent.payload })
+        .from(s.projectEvent)
+        .where(
+          and(
+            eq(s.projectEvent.projectId, projectId),
+            eq(s.projectEvent.type, "asset.sheet_view_retried"),
+          ),
+        );
+      expect(retried?.payload).toMatchObject({
+        viewRowId: planned?.id,
+        previousFailure: "The view could not be made.",
+        previousGenerationId: null,
+      });
+
+      // A plan of more than 20 views, or with a view twice, is refused.
+      const spec = (await sheetRow(roomSheetId)).spec;
+      if (!spec) throw new Error("no plan");
+      const plannedView = (viewId: string) => ({
+        viewId,
+        label: viewId,
+        purpose: null,
+        prompt: "A view",
+        aspectRatio: "16:9" as const,
+        referenceOrder: [],
+        dependsOn: [],
+        mustShow: [],
+        mustNotShow: [],
+        reviewFocus: [],
+        newHypotheses: [],
+        editMode: "full" as const,
+        warnings: [],
+      });
+      await expect(
+        assets.storePackPlan({
+          sheetId: roomSheetId,
+          spec,
+          views: Array.from({ length: 21 }, (_, i) => plannedView(`view_${i}`)),
+          damiRunId: crypto.randomUUID(),
+        }),
+      ).rejects.toThrow(/at most 20/);
+      await expect(
+        assets.storePackPlan({
+          sheetId: roomSheetId,
+          spec,
+          views: [plannedView("reverse_wide"), plannedView("reverse_wide")],
+          damiRunId: crypto.randomUUID(),
+        }),
+      ).rejects.toThrow(/same view twice/);
+
+      // An older pack with more than 20 views is listed whole, never cut by view id.
+      await getDb()
+        .insert(s.assetSheetView)
+        .values(
+          Array.from({ length: 22 }, (_, i) => ({
+            sheetId,
+            assetId: cabin.id,
+            projectId,
+            viewId: `legacy_${String(i).padStart(2, "0")}`,
+            versionNumber: 1,
+            label: `Legacy ${i}`,
+            position: 100 + i,
+            status: "superseded" as const,
+          })),
+        );
+      const all = await latestViewRows(getDb(), sheetId);
+      expect(all.filter((v) => v.viewId.startsWith("legacy_"))).toHaveLength(22);
+      expect(all.length).toBeGreaterThan(22);
     });
   },
 );

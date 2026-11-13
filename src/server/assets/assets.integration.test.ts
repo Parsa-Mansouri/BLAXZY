@@ -264,6 +264,15 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     const userId = await fixtures.newUser();
     const projectId = await fixtures.newProject(userId);
     const v = await versionAndRun(projectId, 1);
+    // Still at the script stage: the list cannot be corrected yet.
+    await expect(
+      assets.submitDetectionReview({
+        projectId,
+        userId,
+        selections: [{ code: "ADP01", targetNames: ["prop:Lamp"] }],
+      }),
+    ).rejects.toThrow(/Accept a script/);
+    await getDb().update(project).set({ stage: "pre_production" }).where(eq(project.id, projectId));
     await apply(projectId, v, "full", [
       { kind: "character", name: "Ines" },
       { kind: "prop", name: "Lamp" },
@@ -276,6 +285,25 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     expect(skipped).toEqual({ skipped: 1, started: false });
     const lamp = (await assets.listAssets(projectId, userId, { kind: "prop" }))?.items[0];
     expect(lamp?.priority).toBe("skipped");
+    // Crafted targets are refused as input, never sent to Postgres as an invalid kind.
+    for (const ref of ["Lamp", "bogus:Lamp", "prop:", "prop:Lamp\u0000"]) {
+      await expect(
+        assets.submitDetectionReview({
+          projectId,
+          userId,
+          selections: [{ code: "ADP01", targetNames: [ref] }],
+        }),
+      ).rejects.toBeInstanceOf(assets.AssetInputError);
+    }
+    // Another user's project is "missing".
+    const stranger = await fixtures.newUser();
+    expect(
+      await assets.submitDetectionReview({
+        projectId,
+        userId: stranger,
+        selections: [{ code: "ADP01", targetNames: ["prop:Lamp"] }],
+      }),
+    ).toBeNull();
     await expect(
       assets.submitDetectionReview({ projectId, userId, selections: [{ code: "ADT07" }] }),
     ).rejects.toThrow(/not available/);
@@ -342,5 +370,95 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     expect(await next("Lamp Room")).toBe("Lamp");
     expect(await next("Lamp")).toBe("Ines");
     expect(await assets.nextAssetNeedingInput(projectId, other, id("Ines"))).toBeNull();
+  });
+
+  it("a removal while the detector runs waits for the project row and is never undone", async () => {
+    const userId = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId);
+    await getDb().update(project).set({ stage: "pre_production" }).where(eq(project.id, projectId));
+    const first = await versionAndRun(projectId, 1);
+    await apply(projectId, first, "full", [
+      { kind: "character", name: "Mara" },
+      { kind: "character", name: "Jonas" },
+    ]);
+    const listed = await assets.listAssets(projectId, userId, { kind: "character" });
+    const mara = listed?.items.find((a) => a.name === "Mara");
+    if (!mara) throw new Error("setup failed");
+
+    // The detector read the list (Mara active) and ran; it now applies its answer, holding the
+    // project row. The user removes Mara meanwhile.
+    const second = await versionAndRun(projectId, 2);
+    const run = await detect(projectId, [
+      { kind: "character", name: "Mara" },
+      { kind: "character", name: "Jonas" },
+    ]);
+    let release: () => void = () => undefined;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let signalHeld: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      signalHeld = resolve;
+    });
+    const holder = getDb().transaction(async (tx) => {
+      await tx
+        .select({ id: project.id })
+        .from(project)
+        .where(eq(project.id, projectId))
+        .for("update");
+      signalHeld();
+      await released;
+    });
+    await held;
+    const removing = assets.removeAsset({ assetId: mara.id, userId });
+    const raced = await Promise.race([
+      removing.then(() => "finished"),
+      new Promise<string>((resolve) => setTimeout(() => resolve("waiting"), 300)),
+    ]);
+    // The user's removal takes the project row first, as the detection does.
+    expect(raced).toBe("waiting");
+    const applying = assets.applyDetection({
+      projectId,
+      scriptVersionId: second.versionId,
+      damiRunId: second.runId,
+      mode: "full",
+      output: run.output,
+      byTemp: run.byTemp,
+    });
+    release();
+    await holder;
+    expect(await removing).toBe(true);
+    await applying;
+    const after = await assets.listAssets(projectId, userId, {
+      kind: "character",
+      includeRemoved: true,
+    });
+    expect(after?.items.map((a) => [a.name, a.status]).sort()).toEqual([
+      ["Jonas", "active"],
+      ["Mara", "removed"],
+    ]);
+
+    // A later detection finding "mara" by name neither revives her nor adds a "Mara (2)".
+    const third = await versionAndRun(projectId, 3);
+    await apply(projectId, third, "incremental", [{ kind: "character", name: "mara" }]);
+    const later = await assets.listAssets(projectId, userId, {
+      kind: "character",
+      includeRemoved: true,
+    });
+    expect(later?.items.map((a) => [a.name, a.status]).sort()).toEqual([
+      ["Jonas", "active"],
+      ["Mara", "removed"],
+    ]);
+  });
+
+  it("describes refs ignoring the name's case", async () => {
+    const userId = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId);
+    const v = await versionAndRun(projectId, 1);
+    await apply(projectId, v, "full", [{ kind: "character", name: "Jonas" }]);
+    const found = await assets.describeAssetRefs(projectId, ["character:jonas", "prop:Jonas"]);
+    expect(found.get("character:jonas")).toMatchObject({ name: "Jonas", ref: "character:Jonas" });
+    expect(found.get("character:Jonas")?.name).toBe("Jonas");
+    expect(found.has("prop:Jonas")).toBe(false);
   });
 });

@@ -67,6 +67,14 @@ export const scriptSectionHandler = defineHandler(scriptSection, async (payload,
       blocks: result.blocks.map((b) => ({ ...b, damiRunId: runFor(b.startLine) })),
       damiRunIds: result.runIds,
     });
+    if (replaced.skipped) {
+      // A newer version was accepted meanwhile (checked under the project lock): its own run
+      // cuts the blocks, and this version's sectioning record is left as it is.
+      console.info(
+        `[script.section] blocks of ${versionId} not stored: it is not the newest accepted version`,
+      );
+      return;
+    }
     await done(replaced.reset);
   } catch (error) {
     await handleFailure(

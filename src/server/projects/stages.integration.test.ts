@@ -165,6 +165,64 @@ describe.skipIf(!reachable)("stage state machine (integration)", async () => {
     expect(listed?.map((e) => e.number)).toEqual([1, 2, 3, 4]);
   });
 
+  it("makes ceil(total / episode) episode rows: 100 s of 30 s episodes is 4", async () => {
+    const { ownerId, p } = await newProject();
+    await projects.saveStyle({ projectId: p.id, userId: ownerId, style: series(100, 30) });
+    expect((await episodesOf(p.id)).map((e) => e.number)).toEqual([1, 2, 3, 4]);
+    expect(projects.episodeCount(100, 30)).toBe(4);
+  });
+
+  it("keeps what the damis wrote into the style when the form is saved again", async () => {
+    const { ownerId, p } = await newProject();
+    await projects.saveStyle({ projectId: p.id, userId: ownerId, style: movie(600) });
+    expect(await projects.mergeDamiStyle(p.id, { lookLine: "Sodium light on wet streets." })).toBe(
+      true,
+    );
+    expect(await projects.mergeDamiStyle(p.id, { styleDescriptor: "Grainy 35mm noir." })).toBe(
+      true,
+    );
+    const saved = await projects.saveStyle({
+      projectId: p.id,
+      userId: ownerId,
+      style: { ...movie(900), genre: "drama" },
+    });
+    expect(saved?.style).toMatchObject({
+      genre: "drama",
+      totalDurationSeconds: 900,
+      lookLine: "Sodium light on wet streets.",
+      styleDescriptor: "Grainy 35mm noir.",
+    });
+    // A value the input sets wins.
+    const own = await projects.saveStyle({
+      projectId: p.id,
+      userId: ownerId,
+      style: { ...movie(900), lookLine: "My own look." },
+    });
+    expect(own?.style?.lookLine).toBe("My own look.");
+    expect(own?.style?.styleDescriptor).toBe("Grainy 35mm noir.");
+  });
+
+  it("enriches a style saved under older rules, validating only the patch", async () => {
+    const { ownerId, p } = await newProject();
+    await projects.saveStyle({ projectId: p.id, userId: ownerId, style: movie(600) });
+    // Stored before today's limits: a 2-second film (now refused by the form).
+    await getDb()
+      .update(project)
+      .set({ style: { ...movie(2), visualStyle: "noir" } })
+      .where(eq(project.id, p.id));
+    expect(await projects.mergeDamiStyle(p.id, { lookLine: "Rain." })).toBe(true);
+    const fresh = await projects.getProjectForUser(p.id, ownerId);
+    expect(fresh?.style).toMatchObject({ totalDurationSeconds: 2, lookLine: "Rain." });
+    // The patch itself is still checked.
+    await expect(projects.mergeDamiStyle(p.id, { lookLine: "x".repeat(1001) })).rejects.toThrow(
+      projects.ProjectInputError,
+    );
+    // onlyMissing leaves a field the style has alone.
+    expect(await projects.mergeDamiStyle(p.id, { lookLine: "Other." }, { onlyMissing: true })).toBe(
+      false,
+    );
+  });
+
   it("rejects invalid styles with user-safe messages and changes nothing", async () => {
     const { ownerId, p } = await newProject();
     const bad = async (style: unknown, message: RegExp) => {

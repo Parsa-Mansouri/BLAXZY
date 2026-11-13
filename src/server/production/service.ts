@@ -5,11 +5,12 @@
  *
  * Every function takes the acting user and returns null (or false) when the project or block is
  * missing, archived or not theirs; input the user can fix throws `ProductionInputError` with a
- * user-safe message. Damis and generations run in jobs, enqueued after the transaction that
- * created their row has committed. Nothing is overwritten or deleted: decisions change statuses,
- * new attempts are new takes, and a changed block is a new block version.
+ * user-safe message. Damis and generations run in jobs, sent on the transaction that created
+ * their row (`enqueue(..., { tx })`): the row and its job commit together or not at all. Nothing
+ * is overwritten or deleted: decisions change statuses, new attempts are new takes, and a changed
+ * block is a new block version.
  */
-import { and, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { describeAssetsById } from "@/server/assets";
 import { getBalance } from "@/server/billing";
@@ -17,7 +18,6 @@ import {
   approveBlocks,
   claimBlocksForPreparation,
   createNextBlockVersion,
-  failBlockPreparation,
   getCurrentBlocks,
   getPreviousVersion,
   listCurrentBlockStates,
@@ -32,10 +32,12 @@ import {
   TAKE_ISSUE_CODES,
 } from "@/server/damis";
 import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
-import { blockTake, project, review, type ProjectStyle } from "@/server/db/schema";
+import { blockTake, project, promptBlock, review, type ProjectStyle } from "@/server/db/schema";
 import { MAX_REFERENCES, quoteGeneration } from "@/server/generation";
 import { blockRevise, enqueue, productionPrepare, takeFix, takeGenerate } from "@/server/jobs";
+import { productionDispatch } from "@/server/jobs/definitions";
 import { advanceStage, reopenProduction } from "@/server/projects";
+import { decodeOrderCursor, encodeOrderCursor } from "@/server/projects/cursor";
 import {
   isUuid,
   lockLineage,
@@ -46,7 +48,7 @@ import {
   userIdSchema,
   type ProjectRow,
 } from "./access";
-import { ProductionInputError } from "./errors";
+import { PriceChangedError, ProductionInputError } from "./errors";
 import {
   BLOCK_PRODUCTION_STAGES,
   canStartDraftsFrom,
@@ -56,6 +58,7 @@ import {
 } from "./stage";
 import {
   getTake,
+  insertDraftTakes,
   insertTake,
   latestLiveTake,
   listTakeViews,
@@ -98,11 +101,9 @@ export const MAX_REVIEW_NOTE_LENGTH = 2000;
 export const DEFAULT_BLOCK_PAGE_SIZE = 50;
 export const MAX_BLOCK_PAGE_SIZE = 200;
 
-const ENQUEUE_FAILURE = "We could not start this step. Try again in a moment.";
 const NEEDS_REASON = "Tell us what is wrong: pick an issue or write a note.";
 const NOT_IN_REVIEW = "This is no longer waiting for review. Reload the page.";
 const BUSY_MESSAGE = "This shot is still being worked on. Wait for it to finish, then try again.";
-const PRICE_CHANGED = "The price changed. Check the new total, then confirm again.";
 
 /** Why the film cannot be finished or downloaded whole yet (no "x of y" totals). */
 export function notFinalMessage(notFinal: number): string {
@@ -169,17 +170,12 @@ const listInput = z.object({
 /* Helpers                                                                                     */
 /* ------------------------------------------------------------------------------------------ */
 
-function encodeCursor(orderIndex: number, id: string): string {
-  return Buffer.from(`${orderIndex}|${id}`, "utf8").toString("base64url");
-}
-
 function decodeCursor(cursor: string): { orderIndex: number; id: string } {
-  const [order, id, ...rest] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
-  const orderIndex = Number(order);
-  if (rest.length > 0 || !Number.isInteger(orderIndex) || !isUuid(id ?? "")) {
+  const decoded = decodeOrderCursor(cursor);
+  if (!decoded) {
     throw new ProductionInputError("That page link is no longer valid. Reload the list.");
   }
-  return { orderIndex, id: id as string };
+  return decoded;
 }
 
 function requireStyle(row: ProjectRow): ProjectStyle {
@@ -221,28 +217,14 @@ async function isRevision(db: DbExecutor, block: PromptBlock): Promise<boolean> 
   return row !== undefined;
 }
 
-async function enqueuePreparation(block: PromptBlock, revision: boolean): Promise<void> {
-  const job = revision ? blockRevise : productionPrepare;
-  try {
-    await enqueue(job, { blockId: block.id });
-  } catch (error) {
-    console.error(`[production] could not enqueue ${job.name} for ${block.id}:`, error);
-    await failBlockPreparation({ blockId: block.id, failure: ENQUEUE_FAILURE });
-  }
+/** The pending block's preparation (or revision) job, on the transaction that made it pending. */
+async function enqueuePreparation(tx: DbTx, block: PromptBlock, revision: boolean): Promise<void> {
+  await enqueue(revision ? blockRevise : productionPrepare, { blockId: block.id }, { tx });
 }
 
-/** Fails a pending take whose job could not be queued, so the user can retry it. */
-async function enqueueTakeJob(take: Pick<TakeRow, "id" | "prompt">): Promise<void> {
-  const job = take.prompt ? takeGenerate : takeFix;
-  try {
-    await enqueue(job, { takeId: take.id });
-  } catch (error) {
-    console.error(`[production] could not enqueue ${job.name} for ${take.id}:`, error);
-    await getDb()
-      .update(blockTake)
-      .set({ status: "failed", failure: ENQUEUE_FAILURE })
-      .where(and(eq(blockTake.id, take.id), eq(blockTake.status, "pending")));
-  }
+/** The pending take's job, on the transaction that created (or reset) it. */
+async function enqueueTakeJob(tx: DbTx, take: Pick<TakeRow, "id" | "prompt">): Promise<void> {
+  await enqueue(take.prompt ? takeGenerate : takeFix, { takeId: take.id }, { tx });
 }
 
 async function blockView(db: DbExecutor, block: PromptBlock): Promise<ProductionBlock | null> {
@@ -320,6 +302,10 @@ export async function reopenProductionAfterScriptEdit(projectId: string): Promis
  * edit). No-op when everything is prepared or pending, when the project is not the user's, or
  * while blocks are stale (they wait for new blocks). `reopened` is true when this call moved the
  * project from done back to production.
+ *
+ * Called while rendering a page, so it stays cheap whatever the film's length: the claim is a few
+ * set-based statements, and the per-block jobs are queued by one `production.dispatch` job sent
+ * on the claiming transaction (claimed blocks always have their job coming).
  */
 export async function ensurePrepared(
   projectId: string,
@@ -327,7 +313,7 @@ export async function ensurePrepared(
 ): Promise<{ reopened: boolean }> {
   const outcome = await getDb().transaction(async (tx) => {
     const owned = await openProject(tx, projectId, userId, true);
-    if (!owned) return { blocks: [], reopened: false };
+    if (!owned) return { reopened: false };
     assertWritable(owned);
     const blocks = await claimBlocksForPreparation(projectId, tx);
     const superseded = await supersedeLineageTakes(
@@ -348,9 +334,11 @@ export async function ensurePrepared(
       });
     }
     const reopened = await reopenIfUnfinished(tx, owned, userId, "shots_not_final");
-    return { blocks, reopened };
+    if (blocks.length > 0) {
+      await enqueue(productionDispatch, { projectId, kind: "prepare" }, { tx });
+    }
+    return { reopened };
   });
-  for (const block of outcome.blocks) await enqueuePreparation(block, false);
   return { reopened: outcome.reopened };
 }
 
@@ -372,11 +360,13 @@ export async function retryPreparation(input: {
     await logEvent(tx, project.id, userId, "production.preparation_retried", {
       lineageId,
       blockId: block.id,
+      previousFailure: block.productionFailure,
+      previousDamiRunId: block.productionDamiRunId,
     });
-    return { block, revision: await isRevision(tx, block) };
+    await enqueuePreparation(tx, block, await isRevision(tx, block));
+    return block;
   });
   if (!outcome) return null;
-  await enqueuePreparation(outcome.block, outcome.revision);
   return "preparing";
 }
 
@@ -403,8 +393,69 @@ export async function getProductionOverview(
 }
 
 /**
+ * The latest live take of each block's lineage (lateral, on the (lineage, take number) index)
+ * and the block's stage computed from it in SQL: the same rules as `deriveBlockStage` (kept in
+ * step by the integration test that compares the two).
+ */
+function stageSql(take: { status: SQL; stage: SQL }): SQL<string> {
+  const final = sql`${take.stage} = 'final'`;
+  return sql<string>`case
+    when ${promptBlock.stale} then 'preparing'
+    when ${promptBlock.productionState} in ('none', 'pending') then 'preparing'
+    when ${promptBlock.productionState} = 'failed' then 'prepare_failed'
+    when ${take.status} is null or ${take.status} = 'superseded' then
+      case when ${promptBlock.approvedAt} is null then 'block_review' else 'approved' end
+    when ${take.status} = 'pending' then
+      case when ${final} then 'final_generating' else 'draft_generating' end
+    when ${take.status} = 'in_review' then
+      case when ${final} then 'final_review' else 'draft_review' end
+    when ${take.status} = 'failed' then 'failed'
+    when ${take.status} = 'accepted' then
+      case when ${final} then 'done' else 'final_generating' end
+    else 'draft_generating'
+  end`;
+}
+
+/** One keyset page of the current blocks whose stage is one of `stages`, in story order. */
+async function pageBlocksInStages(
+  db: DbExecutor,
+  projectId: string,
+  stages: readonly BlockProductionStage[],
+  opts: { limit: number; after: { orderIndex: number; id: string } | null },
+): Promise<PromptBlock[]> {
+  const latest = db
+    .select({ status: blockTake.status, stage: blockTake.stage })
+    .from(blockTake)
+    .where(eq(blockTake.lineageId, promptBlock.lineageId))
+    .orderBy(desc(blockTake.takeNumber))
+    .limit(1)
+    .as("latest_take");
+  const { after } = opts;
+  const rows = await db
+    .select({ block: promptBlock })
+    .from(promptBlock)
+    .leftJoinLateral(latest, sql`true`)
+    .where(
+      and(
+        eq(promptBlock.projectId, projectId),
+        isNull(promptBlock.supersededAt),
+        inArray(stageSql({ status: sql`${latest.status}`, stage: sql`${latest.stage}` }), [
+          ...stages,
+        ]),
+        after
+          ? sql`(${promptBlock.orderIndex}, ${promptBlock.id}) > (${after.orderIndex}, ${after.id}::uuid)`
+          : undefined,
+      ),
+    )
+    .orderBy(asc(promptBlock.orderIndex), asc(promptBlock.id))
+    .limit(opts.limit);
+  return rows.map((r) => r.block);
+}
+
+/**
  * One page of the current blocks in story order, each with its stage. With `stage`, only blocks
- * in those stages (the scan reads further pages until the page is full).
+ * in those stages: the filter runs in the database (one query per page, however few blocks
+ * match).
  */
 export async function listProductionBlocks(
   projectId: string,
@@ -414,28 +465,24 @@ export async function listProductionBlocks(
   const { limit, cursor, stage } = parse(listInput, opts);
   const db = getDb();
   if (!(await openProject(db, projectId, userId))) return null;
+  const after = cursor ? decodeCursor(cursor) : null;
+  const rows =
+    stage === undefined
+      ? await pageCurrentBlocks(projectId, { limit: limit + 1, after }, db)
+      : stage.length === 0
+        ? []
+        : await pageBlocksInStages(db, projectId, stage, { limit: limit + 1, after });
+  const page = rows.slice(0, limit);
+  const views = await toProductionBlocks(db, projectId, page);
+  // The views derive the stage again (from the same rows); a block whose stage moved between
+  // the two reads is left out of this page rather than shown under the wrong filter.
   const wanted = stage ? new Set(stage) : null;
-  let after = cursor ? decodeCursor(cursor) : null;
-  const items: ProductionBlock[] = [];
-  let more = false;
-  const batch = wanted ? Math.max(limit + 1, 100) : limit + 1;
-  for (;;) {
-    const rows = await pageCurrentBlocks(projectId, { limit: batch, after }, db);
-    const views = await toProductionBlocks(db, projectId, rows);
-    for (const view of views) {
-      if (wanted && !wanted.has(view.stage)) continue;
-      if (items.length === limit) {
-        more = true;
-        break;
-      }
-      items.push(view);
-    }
-    const last = rows.at(-1);
-    if (more || rows.length < batch || !last) break;
-    after = { orderIndex: last.orderIndex, id: last.id };
-  }
-  const last = items.at(-1);
-  return { items, nextCursor: more && last ? encodeCursor(last.orderIndex, last.id) : null };
+  const items = wanted ? views.filter((v) => wanted.has(v.stage)) : views;
+  const last = page.at(-1);
+  return {
+    items,
+    nextCursor: rows.length > limit && last ? encodeOrderCursor(last.orderIndex, last.id) : null,
+  };
 }
 
 /** One block (by lineage) with its newest takes. */
@@ -523,10 +570,10 @@ export async function setBlockAssets(input: {
       previousBlockId: block.id,
       assetRefs: refs,
     });
+    await enqueuePreparation(tx, next, false);
     return next;
   });
   if (!created) return null;
-  await enqueuePreparation(created, false);
   return blockView(getDb(), created);
 }
 
@@ -580,10 +627,10 @@ export async function submitBlockReview(input: {
       nextBlockId: next.id,
       issueCodes: reason.issueCodes,
     });
+    await enqueuePreparation(tx, next, true);
     return { stage: "preparing" as const, next };
   });
   if (!outcome) return null;
-  if (outcome.next) await enqueuePreparation(outcome.next, true);
   return outcome.stage;
 }
 
@@ -656,7 +703,8 @@ export async function quoteProduction(
 /**
  * Starts one draft take per approved block without a take (`take.generate` each), after the user
  * confirmed the total. Refused when the total is not `expectedCredits` any more, when the balance
- * does not cover it, or while blocks are still being prepared or reviewed. Each draft still
+ * does not cover it (a changed total throws `PriceChangedError`), or while blocks are still being
+ * prepared or reviewed. Each draft still
  * reserves its own credits when it is requested (a draft that cannot fails with the credits
  * message).
  */
@@ -681,7 +729,7 @@ export async function startDrafts(input: {
     }
     const quote = await draftQuote(tx, owned);
     const total = quote.lineageIds.length * quote.each;
-    if (total !== expectedCredits) throw new ProductionInputError(PRICE_CHANGED);
+    if (total !== expectedCredits) throw new PriceChangedError();
     const balance = await getBalance(userId);
     if (balance < total) {
       throw new ProductionInputError(
@@ -690,29 +738,31 @@ export async function startDrafts(input: {
     }
     const blocks = await getCurrentBlocks(quote.lineageIds, tx);
     blocks.sort((a, b) => a.orderIndex - b.orderIndex);
-    const created: TakeRow[] = [];
-    for (const block of blocks) {
-      created.push(
-        await insertTake(tx, {
-          projectId,
-          blockId: block.id,
-          lineageId: block.lineageId,
-          stage: "draft",
-          status: "pending",
-          prompt: block.productionPrompt,
-          damiRunId: block.productionDamiRunId,
-        }),
-      );
-    }
+    const created = await insertDraftTakes(
+      tx,
+      projectId,
+      blocks.map((block) => ({
+        projectId,
+        blockId: block.id,
+        lineageId: block.lineageId,
+        stage: "draft" as const,
+        status: "pending" as const,
+        prompt: block.productionPrompt,
+        damiRunId: block.productionDamiRunId,
+      })),
+    );
     await logEvent(tx, projectId, userId, "production.drafts_started", {
       count: created.length,
       credits: total,
       takeIds: created.map((t) => t.id),
     });
+    // One fan-out job queues every draft's job (`take.generate`), however many there are.
+    if (created.length > 0) {
+      await enqueue(productionDispatch, { projectId, kind: "takes" }, { tx });
+    }
     return created;
   });
   if (!takes) throw new ProductionInputError("That project was not found.");
-  for (const take of takes) await enqueueTakeJob(take);
   return { started: takes.length };
 }
 
@@ -772,7 +822,7 @@ export async function submitTakeReview(input: {
     };
     if (decision === "accepted" && latest.stage === "final") {
       await logEvent(tx, project.id, userId, "production.take_accepted", event);
-      return { stage: "done" as const, next: null };
+      return { stage: "done" as const };
     }
     if (decision === "accepted") {
       const final = await insertTake(tx, {
@@ -790,7 +840,8 @@ export async function submitTakeReview(input: {
         ...event,
         finalTakeId: final.id,
       });
-      return { stage: "final_generating" as const, next: final };
+      await enqueueTakeJob(tx, final);
+      return { stage: "final_generating" as const };
     }
     const next = await insertTake(tx, {
       projectId: project.id,
@@ -804,10 +855,10 @@ export async function submitTakeReview(input: {
       ...event,
       nextTakeId: next.id,
     });
-    return { stage: "draft_generating" as const, next };
+    await enqueueTakeJob(tx, next);
+    return { stage: "draft_generating" as const };
   });
   if (!outcome) return null;
-  if (outcome.next) await enqueueTakeJob(outcome.next);
   return outcome.stage;
 }
 
@@ -839,15 +890,18 @@ export async function retryTake(input: {
       .set({ status: "pending", failure: null, generationId: null })
       .where(and(eq(blockTake.id, takeId), eq(blockTake.status, "failed")))
       .returning();
+    // The row is reset for the new attempt; the event keeps the link to the failed one.
     await logEvent(tx, project.id, userId, "production.take_retried", {
       lineageId: block.lineageId,
       takeId,
       stage: latest.stage,
+      previousGenerationId: latest.generationId,
+      previousFailure: latest.failure,
     });
+    if (updated) await enqueueTakeJob(tx, updated);
     return updated ?? null;
   });
   if (!take) return null;
-  await enqueueTakeJob(take);
   return take.stage === "final" ? "final_generating" : "draft_generating";
 }
 

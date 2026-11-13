@@ -149,6 +149,17 @@ export const fileSweep = defineJob({
   dedupeKey: () => "sweep",
 });
 
+/**
+ * Deletes old server-action rate-limit windows (`src/server/ratelimit`). Every 5 minutes, one
+ * prune at a time.
+ */
+export const ratelimitPrune = defineJob({
+  name: "ratelimit.prune",
+  payload: z.object({}),
+  options: { retryLimit: 1, retryDelaySeconds: 60, retryBackoff: false, expireInSeconds: 5 * 60 },
+  dedupeKey: () => "prune",
+});
+
 /*
  * Pre-production (see docs/M2_M3_CONTRACTS.md). Each job writes the image prompt with a dami
  * (unless one is stored already), then requests the generation; the generation's completion hook
@@ -271,6 +282,20 @@ export const exportBuild = defineJob({
 });
 
 /**
+ * Fan-out of a project's production work, sent on the transaction that created it: `prepare`
+ * queues the preparation (or revision) job of every pending block, `takes` the job of every
+ * pending take without a generation. Idempotent (each per-row job is keyed by its row), and one
+ * may be queued beside a running one, so rows claimed while it runs are not missed.
+ */
+export const productionDispatch = defineJob({
+  name: "production.dispatch",
+  payload: z.object({ projectId: z.string().uuid(), kind: z.enum(["prepare", "takes"]) }),
+  options: { retryLimit: 3, retryDelaySeconds: 10, retryBackoff: true, expireInSeconds: 10 * 60 },
+  dedupeKey: (p) => `${p.projectId}:${p.kind}`,
+  allowFollowUp: true,
+});
+
+/**
  * Every job type. Their queues are created once per process before the first send, so a send on a
  * caller's transaction (`enqueue(..., { tx })`) never creates a queue inside it.
  */
@@ -288,6 +313,7 @@ export const ALL_JOBS = [
   generationSweep,
   damiSweep,
   fileSweep,
+  ratelimitPrune,
   assetLookGenerate,
   assetLookFix,
   assetSheetGenerate,
@@ -300,4 +326,5 @@ export const ALL_JOBS = [
   takeGenerate,
   takeFix,
   exportBuild,
+  productionDispatch,
 ] as const;

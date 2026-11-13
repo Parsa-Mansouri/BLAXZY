@@ -17,10 +17,12 @@ import {
   fileSweepHandler,
   fileSweepSchedule,
 } from "./maintenance-sweeps";
+import { productionDispatchHandler } from "./production-dispatch";
 import { exportBuildHandler } from "./production-export";
 import { productionGenerationHook } from "./production-generation-hook";
 import { blockReviseHandler, productionPrepareHandler } from "./production-prepare";
 import { takeFixHandler, takeGenerateHandler } from "./production-take";
+import { ratelimitPruneHandler, ratelimitPruneSchedule } from "./ratelimit-prune";
 import { scriptCheckHandler } from "./script-check";
 import { scriptDetectAssetsHandler } from "./script-detect-assets";
 import { scriptEnhanceHandler } from "./script-enhance";
@@ -43,6 +45,7 @@ export const schedules: JobSchedule[] = [
   generationSweepSchedule,
   damiSweepSchedule,
   fileSweepSchedule,
+  ratelimitPruneSchedule,
 ];
 
 /** Every job handler this worker runs. Add new handlers here. */
@@ -60,6 +63,7 @@ export const handlers: JobHandler[] = [
   generationSweepHandler,
   damiSweepHandler,
   fileSweepHandler,
+  ratelimitPruneHandler,
   assetLookGenerateHandler,
   assetLookFixHandler,
   assetSheetGenerateHandler,
@@ -72,4 +76,5 @@ export const handlers: JobHandler[] = [
   takeGenerateHandler,
   takeFixHandler,
   exportBuildHandler,
+  productionDispatchHandler,
 ];

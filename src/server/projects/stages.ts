@@ -8,7 +8,9 @@ import {
   type ProjectStyle,
   type WizardStage,
 } from "@/server/db/schema";
+import { z } from "zod";
 import { projectStyleSchema } from "@/server/damis";
+import { episodeCount, episodeCountOf } from "./episodes";
 import type { Project } from "./service";
 import { ProjectInputError, uuidSchema } from "./schemas";
 import { applyStyleReferences, assertReferenceFiles, referenceFileIds } from "./style-references";
@@ -128,7 +130,7 @@ function validateStyle(style: unknown) {
   if (s.episodeDurationSeconds > s.totalDurationSeconds) {
     throw new ProjectInputError("An episode cannot be longer than the whole series.");
   }
-  if (Math.ceil(s.totalDurationSeconds / s.episodeDurationSeconds) > MAX_EPISODES) {
+  if (episodeCount(s.totalDurationSeconds, s.episodeDurationSeconds) > MAX_EPISODES) {
     throw new ProjectInputError(
       `That would be more than ${MAX_EPISODES} episodes. Make the episodes longer.`,
     );
@@ -137,13 +139,38 @@ function validateStyle(style: unknown) {
 }
 
 /**
- * Stores the Style answers, reconciles episode rows (adds missing, updates targets, never deletes),
+ * Style fields the Style form does not collect: written by the damis (`mergeDamiStyle`) or by
+ * other stages. A save of the form keeps them unless its input sets them.
+ */
+const CARRIED_STYLE_FIELDS = [
+  "lookLine",
+  "styleDescriptor",
+  "extras",
+  "eraSetting",
+  "artDirectionNotes",
+  "audienceRating",
+] as const satisfies readonly (keyof ProjectStyle)[];
+
+function carryStoredFields(answers: ProjectStyle, stored: ProjectStyle | null): ProjectStyle {
+  if (!stored) return answers;
+  const carried: Partial<ProjectStyle> = {};
+  for (const key of CARRIED_STYLE_FIELDS) {
+    if (answers[key] === undefined && stored[key] !== undefined) {
+      Object.assign(carried, { [key]: stored[key] });
+    }
+  }
+  return { ...answers, ...carried };
+}
+
+/**
+ * Stores the Style answers (fields the form does not collect, such as the damis' look line and
+ * style descriptor, are kept from the stored style unless the input sets them), reconciles episode rows (adds missing, updates targets, never deletes),
  * moves `style → script` when still at `style`, and logs `style.saved` / `style.changed`.
  * Returns null when the project is not the user's.
  */
 export async function saveStyle(input: SaveStyleInput): Promise<Project | null> {
   if (!uuidSchema.safeParse(input.projectId).success) return null;
-  const style = applyStyleReferences(validateStyle(input.style));
+  const answers = applyStyleReferences(validateStyle(input.style));
   return getDb().transaction(async (tx) => {
     const [existing] = await tx
       .select()
@@ -151,15 +178,13 @@ export async function saveStyle(input: SaveStyleInput): Promise<Project | null> 
       .where(and(eq(project.id, input.projectId), eq(project.ownerId, input.userId), notArchived))
       .for("update");
     if (!existing) return null;
+    const style = carryStoredFields(answers, existing.style);
     await assertReferenceFiles(referenceFileIds(style), {
       userId: input.userId,
       projectId: existing.id,
     });
 
-    const count =
-      style.format === "series" && style.episodeDurationSeconds !== undefined
-        ? Math.ceil(style.totalDurationSeconds / style.episodeDurationSeconds)
-        : 1;
+    const count = episodeCountOf(style);
     const target =
       style.format === "series" && style.episodeDurationSeconds !== undefined
         ? style.episodeDurationSeconds
@@ -222,6 +247,11 @@ export async function listEpisodes(projectId: string, userId: string): Promise<E
 /** Style fields a dami fills in on the user's behalf (never the user's own answers). */
 export type DamiStylePatch = Partial<Pick<ProjectStyle, "lookLine" | "styleDescriptor">>;
 
+const damiStylePatchSchema = z.strictObject({
+  lookLine: projectStyleSchema.shape.lookLine,
+  styleDescriptor: projectStyleSchema.shape.styleDescriptor,
+}) satisfies z.ZodType<DamiStylePatch>;
+
 /**
  * Worker only: merges dami-written fields into the project's style and logs `style.enriched`
  * with the whole style (the event log keeps every version). Returns false when the project has no
@@ -244,12 +274,23 @@ export async function mergeDamiStyle(
       .for("update");
     if (!existing?.style) return false;
     const current = existing.style;
-    const fields = options.onlyMissing
-      ? (Object.keys(patch) as (keyof DamiStylePatch)[]).filter((k) => current[k] === undefined)
-      : (Object.keys(patch) as (keyof DamiStylePatch)[]);
+    const given = (Object.keys(patch) as (keyof DamiStylePatch)[]).filter(
+      (k) => patch[k] !== undefined,
+    );
+    const fields = options.onlyMissing ? given.filter((k) => current[k] === undefined) : given;
     if (fields.length === 0) return false;
-    patch = Object.fromEntries(fields.map((k) => [k, patch[k]])) as DamiStylePatch;
-    const style = validateStyle({ ...existing.style, ...patch });
+    // Only the patch is validated: the stored style may predate today's rules (it was valid when
+    // saved), and an enrichment must not fail because of answers the dami did not write.
+    const parsed = damiStylePatchSchema.safeParse(
+      Object.fromEntries(fields.map((k) => [k, patch[k]])),
+    );
+    if (!parsed.success) {
+      throw new ProjectInputError(
+        `That style enrichment is not valid (${parsed.error.issues[0]?.path.join(".") ?? "patch"}).`,
+      );
+    }
+    patch = parsed.data;
+    const style: ProjectStyle = { ...current, ...patch };
     await tx.update(project).set({ style }).where(eq(project.id, existing.id));
     await tx.insert(projectEvent).values({
       projectId: existing.id,

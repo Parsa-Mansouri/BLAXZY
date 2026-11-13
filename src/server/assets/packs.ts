@@ -28,11 +28,12 @@ import {
   type SheetViewReference,
   type SheetViewStatus,
 } from "@/server/db/schema";
-import { enqueueGeneration, requestGeneration } from "@/server/generation";
+import { requestGeneration } from "@/server/generation";
 import { assetSheetAssemble, assetSheetViewsAdvance, enqueue } from "@/server/jobs";
 import { isSampleProvider } from "@/server/providers";
 import { putFileBytes, readFileBytes } from "@/server/storage";
 import { logEvent, type AssetRow, type LookRow, type SheetRow } from "./looks";
+import { AssetInputError } from "./service";
 
 export type PackViewRow = typeof assetSheetView.$inferSelect;
 export type PackKind = "location" | "prop";
@@ -86,16 +87,20 @@ export type DnaCard = {
   mutable: string[];
 };
 
-const MAX_VIEWS = 20;
+/** The most views one pack plans (the sheet makers' schemas cap their plans at this). */
+export const MAX_VIEWS = 20;
 
-/** The latest version of every view of a sheet, in generation order. */
+/**
+ * The latest version of every view of a sheet, in generation order. Not truncated: the set is
+ * bounded by the plan (`storePackPlan` refuses more than `MAX_VIEWS` views), and a LIMIT here
+ * would silently drop views of a pack (by view id, not by position).
+ */
 export async function latestViewRows(db: DbExecutor, sheetId: string): Promise<PackViewRow[]> {
   const rows = await db
     .selectDistinctOn([assetSheetView.viewId])
     .from(assetSheetView)
     .where(eq(assetSheetView.sheetId, sheetId))
-    .orderBy(assetSheetView.viewId, desc(assetSheetView.versionNumber))
-    .limit(MAX_VIEWS);
+    .orderBy(assetSheetView.viewId, desc(assetSheetView.versionNumber));
   return rows.sort((a, b) => a.position - b.position || a.viewId.localeCompare(b.viewId));
 }
 
@@ -307,7 +312,9 @@ export type PlannedView = {
 /**
  * Stores a pack's plan on a pending sheet that has none: the spec, the dami run and every view
  * (version 1, planned, in generation order). The sheet moves to `in_review` (its views are made
- * and reviewed one by one). False when another run stored it first.
+ * and reviewed one by one). False when another run stored it first. Throws `AssetInputError`
+ * for a plan of more than `MAX_VIEWS` views or with a view id twice (the schemas refuse both;
+ * this is the last line of defence, as a pack's views are keyed by view id).
  */
 export async function storePackPlan(input: {
   sheetId: string;
@@ -315,6 +322,15 @@ export async function storePackPlan(input: {
   views: PlannedView[];
   damiRunId: string;
 }): Promise<boolean> {
+  if (input.views.length > MAX_VIEWS) {
+    throw new AssetInputError(
+      `The sheet maker planned ${input.views.length} views; a pack has at most ${MAX_VIEWS}. Try again.`,
+    );
+  }
+  const ids = new Set(input.views.map((v) => v.viewId));
+  if (ids.size !== input.views.length) {
+    throw new AssetInputError("The sheet maker planned the same view twice. Try again.");
+  }
   return getDb().transaction(async (tx) => {
     const [sheet] = await tx
       .update(assetSheet)
@@ -489,9 +505,12 @@ export function viewReferenceFiles(
 
 /**
  * Requests every planned view (with a prompt) whose dependencies are approved, each in its own
- * transaction with the view row locked. Returns how many generations it requested. A view whose
- * generation cannot be requested (credits, input) fails with the reason. Only a pack in review
- * advances.
+ * transaction: the sheet row is share-locked and must still be in review (a pack sent back to its
+ * designer or set aside meanwhile stops here, so it never spends credits), then the view row is
+ * locked; the generation and its run job are written in that transaction. Returns how many
+ * generations it requested. A view whose generation cannot be requested (credits, input) fails
+ * with the reason. Lock order: sheet, then view (the user's actions take the project and asset
+ * rows first, then the sheet before its views, see `lockSheet` and `sendBackToDesigner`).
  */
 export async function advanceSheetViews(
   sheetId: string,
@@ -535,8 +554,18 @@ export async function advanceSheetViews(
       accepted,
       previousFileId,
     );
+    const progress = { stopped: false };
     try {
       const generationId = await getDb().transaction(async (tx: DbTx) => {
+        const [sheetNow] = await tx
+          .select({ status: assetSheet.status })
+          .from(assetSheet)
+          .where(eq(assetSheet.id, sheetId))
+          .for("share");
+        if (sheetNow?.status !== "in_review") {
+          progress.stopped = true;
+          return null;
+        }
         const [locked] = await tx
           .select()
           .from(assetSheetView)
@@ -566,26 +595,24 @@ export async function advanceSheetViews(
           .where(eq(assetSheetView.id, view.id));
         return id;
       });
-      if (generationId) {
-        await enqueueGeneration(generationId);
-        requested++;
-      }
+      // `requestGeneration` sent the run job on the same transaction.
+      if (generationId) requested++;
     } catch (error) {
       const message = onError(error);
       if (message === null) throw error;
       await failSheetView(view.id, message);
     }
+    if (progress.stopped) break;
   }
   return requested;
 }
 
-/** Queues an advance of the pack (deduplicated per sheet; a follow-up may wait beside a run). */
-export async function enqueueAdvance(sheetId: string): Promise<void> {
-  try {
-    await enqueue(assetSheetViewsAdvance, { sheetId });
-  } catch (error) {
-    console.error(`[assets] could not enqueue the views of ${sheetId}:`, error);
-  }
+/**
+ * Queues an advance of the pack (deduplicated per sheet; a follow-up may wait beside a run). Pass
+ * `tx` to send it with the change that calls for it. Throws when it cannot be queued.
+ */
+export async function enqueueAdvance(sheetId: string, options: { tx?: DbTx } = {}): Promise<void> {
+  await enqueue(assetSheetViewsAdvance, { sheetId }, options);
 }
 
 /**
@@ -729,9 +756,23 @@ export async function composeContactSheet(input: {
     .toBuffer();
 }
 
+/** True when there is no contact sheet to store: the sheet has its file, is gone or not accepted. */
+async function hasContactSheet(sheetId: string): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ fileId: assetSheet.fileId, status: assetSheet.status })
+    .from(assetSheet)
+    .where(eq(assetSheet.id, sheetId))
+    .limit(1);
+  return !row || row.status !== "accepted" || row.fileId !== null;
+}
+
 /**
  * Builds and stores a locked pack's contact sheet as the sheet's file (once: only while the
- * accepted sheet has none). Logs `asset.sheet_ready`. False when there is nothing to do.
+ * accepted sheet has none). Logs `asset.sheet_ready`. False when there is nothing to do. The
+ * images are read as the project owner's files. A duplicate run that loses the final
+ * compare-and-set leaves its upload unreferenced: it is logged with its file id (the storage
+ * module exports no way to mark it abandoned), and the sheet is re-checked right before the upload
+ * so this only happens when two runs compose at the same moment.
  */
 export async function assemblePackSheet(sheetId: string, signal?: AbortSignal): Promise<boolean> {
   const ctx = await loadPackJob(sheetId);
@@ -739,7 +780,8 @@ export async function assemblePackSheet(sheetId: string, signal?: AbortSignal): 
   const kind = packKindOf(ctx.asset.kind);
   if (!kind) return false;
   const accepted = ctx.views.filter((v) => v.status === "accepted" && v.fileId);
-  const read = (id: string) => readFileBytes(id, signal ? { signal } : {});
+  const ownerId = ctx.project.ownerId;
+  const read = (id: string) => readFileBytes(id, signal ? { signal, ownerId } : { ownerId });
   const png = await composeContactSheet({
     heroBytes: await read(ctx.look.fileId),
     heroLabel: kind === "location" ? "Hero" : "Hero 3/4",
@@ -750,6 +792,8 @@ export async function assemblePackSheet(sheetId: string, signal?: AbortSignal): 
     card: dnaCardOf(kind, ctx.look.spec),
     scaleText: ctx.sheet.spec?.scaleCard?.text ?? null,
   });
+  // Another run may have stored it while this one composed: nothing to upload then.
+  if (await hasContactSheet(sheetId)) return false;
   const file = await putFileBytes({
     ownerId: ctx.project.ownerId,
     projectId: ctx.project.id,
@@ -771,7 +815,12 @@ export async function assemblePackSheet(sheetId: string, signal?: AbortSignal): 
         ),
       )
       .returning();
-    if (!row) return false;
+    if (!row) {
+      console.warn(
+        `[assets] contact sheet ${file.id} of sheet ${sheetId} lost to another run; the file is unreferenced`,
+      );
+      return false;
+    }
     await logEvent(tx, row.projectId, null, "asset.sheet_ready", {
       assetId: row.assetId,
       sheetId: row.id,
@@ -781,13 +830,12 @@ export async function assemblePackSheet(sheetId: string, signal?: AbortSignal): 
   });
 }
 
-/** Queues the contact sheet of a locked pack. */
-export async function enqueueAssemble(sheetId: string): Promise<void> {
-  try {
-    await enqueue(assetSheetAssemble, { sheetId });
-  } catch (error) {
-    console.error(`[assets] could not enqueue the contact sheet of ${sheetId}:`, error);
-  }
+/**
+ * Queues the contact sheet of a locked pack. Pass `tx` to send it with the lock. Throws when it
+ * cannot be queued.
+ */
+export async function enqueueAssemble(sheetId: string, options: { tx?: DbTx } = {}): Promise<void> {
+  await enqueue(assetSheetAssemble, { sheetId }, options);
 }
 
 /** The accepted views of the accepted packs of these assets (Production's per-shot references). */

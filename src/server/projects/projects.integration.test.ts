@@ -150,5 +150,13 @@ describe.skipIf(!reachable)("projects service (integration)", async () => {
     await expect(projects.listProjects({ ownerId, cursor: "garbage" })).rejects.toBeInstanceOf(
       projects.ProjectInputError,
     );
+    // Well formed but impossible (February 30th): an input error, not a database error.
+    const impossible = projects.encodeTimestampCursor(
+      "2026-02-30T10:00:00.000000Z",
+      "6f1c2a4e-1b2c-4d3e-8f9a-0b1c2d3e4f5a",
+    );
+    await expect(projects.listProjects({ ownerId, cursor: impossible })).rejects.toBeInstanceOf(
+      projects.ProjectInputError,
+    );
   });
 });

@@ -5,11 +5,18 @@
  *
  * Every function takes the acting user and returns null (or false) when the project or asset is
  * missing, archived or not theirs; input the user can fix throws `AssetInputError` with a
- * user-safe message. Work that takes time (damis, generations) runs in jobs, enqueued after the
- * transaction that creates the look or sheet has committed. Nothing is overwritten or deleted:
- * decisions change statuses, and new attempts are new versions.
+ * user-safe message. Work that takes time (damis, generations) runs in jobs, sent on the
+ * transaction that creates the look or sheet (the job exists exactly when the row does; a send
+ * that fails rolls the change back and throws `AssetInputError`). Nothing is overwritten or
+ * deleted: decisions change statuses, and new attempts are new versions.
+ *
+ * Lock order (every writer here, `detection-store.ts` and the worker side): the project row
+ * first (`FOR NO KEY UPDATE`, as `@/server/production` locks it before anything else), then asset
+ * rows (`lockAsset`; several in id order), then a sheet row before its views. The worker's pack
+ * advance takes only a sheet (shared) and then a view, the generation hook single look, sheet or
+ * view rows. No path takes an asset lock without holding the project lock first.
  */
-import { and, asc, eq, inArray, isNull, max, ne } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, max, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { rewriteAssetRefs } from "@/server/blocks";
 import {
@@ -36,6 +43,7 @@ import {
   assetSheet,
   assetSheetView,
   project,
+  projectEvent,
   review,
   WIZARD_STAGES,
   type AssetKind,
@@ -47,10 +55,14 @@ import {
 import {
   assetLookFix,
   assetLookGenerate,
+  assetSheetAssemble,
   assetSheetFix,
   assetSheetGenerate,
   assetSheetPlan,
+  assetSheetViewsAdvance,
   enqueue,
+  type JobDefinition,
+  type JobInput,
 } from "@/server/jobs";
 import { advanceStage, canOpenStage } from "@/server/projects";
 import { FILE_PURPOSES, getOwnedFileInfo, type FilePurpose } from "@/server/storage";
@@ -78,10 +90,9 @@ import {
   type SheetRow,
   type SheetView,
 } from "./looks";
+import { markRemovedByUser, removedByUser } from "./detection";
 import {
   dnaCardOf,
-  enqueueAdvance,
-  enqueueAssemble,
   latestViewRows,
   listPackViews,
   packKindOf,
@@ -91,7 +102,7 @@ import {
   type PackView,
   type PackViewRow,
 } from "./packs";
-import { AssetInputError, listAssets, parse, type Asset } from "./service";
+import { AssetInputError, listAssetPage, parse, type Asset } from "./service";
 import { deriveAssetState, pickNextAsset, type AssetStage } from "./stage";
 
 export type AssetCard = { asset: Asset; stage: AssetStage; thumbnailFileId: string | null };
@@ -109,6 +120,12 @@ export type AssetDetail = {
   questions: GuidedQuestion[];
   /** A prop waiting for these locations' Heroes before it is designed (by name). */
   waitingFor: string[];
+  /**
+   * The latest look waits to be designed (a prop that waited for its locations, no job has
+   * touched it yet): offer "start without waiting" (`startWithoutWaiting`), also when `waitingFor`
+   * is already empty (its locations settled but the look was never started).
+   */
+  canStartWithoutWaiting: boolean;
   /** Images sent back in a row since the last accepted one (for the "describe it" hint). */
   rejectedInARow: number;
   /** Locations and props: the views of the latest sheet (latest version of each), in order. */
@@ -137,23 +154,33 @@ export const MAX_ASSET_NAME_LENGTH = MAX_ASSET_NAME;
 export const MAX_ASSET_DESCRIPTION_LENGTH = 4000;
 export const DEFAULT_CARD_PAGE_SIZE = 24;
 export const MAX_CARD_PAGE_SIZE = 100;
+/** Most answers one request may carry (more than any designer asks). */
+export const MAX_GUIDED_ANSWERS = 40;
+/**
+ * A second add of the same name (ignoring case) within this many seconds is a double submit: the
+ * asset just added is returned instead of a "Name (2)".
+ */
+export const DUPLICATE_ADD_WINDOW_SECONDS = 10;
 
 const BUSY_MESSAGE = "This asset is still being worked on. Wait for it to finish, then try again.";
 const REMOVED_MESSAGE = "This asset was removed from the project.";
 const STAGE_MESSAGE = "Accept a script before starting pre-production.";
-const ENQUEUE_FAILURE = "This step could not start. Try again in a moment.";
+/** A job could not be queued: the change was rolled back with it, so trying again is safe. */
+export const ENQUEUE_FAILURE = "This step could not start. Try again in a moment.";
 
 const uuid = z.uuid();
 const isUuid = (value: string) => uuid.safeParse(value).success;
 const userIdSchema = z.string().trim().min(1).max(128);
+/** An id from the client (checked as a uuid where it is used; bounded here). */
+const idSchema = z.string().max(100);
 
 /* ------------------------------------------------------------------------------------------ */
 /* Input schemas                                                                               */
 /* ------------------------------------------------------------------------------------------ */
 
-const assetRefInput = z.object({ assetId: z.string(), userId: userIdSchema });
+const assetRefInput = z.object({ assetId: idSchema, userId: userIdSchema });
 
-const uploadInput = assetRefInput.extend({ fileId: z.string() });
+const uploadInput = assetRefInput.extend({ fileId: idSchema });
 
 const promptSchema = z
   .string({ error: "Describe the image you want." })
@@ -163,16 +190,20 @@ const promptSchema = z
 
 const promptInput = assetRefInput.extend({ prompt: promptSchema });
 
-const answersSchema = z.record(
-  z.string().max(64, "That is not one of the questions."),
-  z
-    .string({ error: "Answers must be text." })
-    .max(
-      MAX_GUIDED_ANSWER_LENGTH,
-      `Keep each answer under ${MAX_GUIDED_ANSWER_LENGTH} characters.`,
-    ),
-  { error: "Answer the questions first." },
-);
+const answersSchema = z
+  .record(
+    z.string().max(64, "That is not one of the questions."),
+    z
+      .string({ error: "Answers must be text." })
+      .max(
+        MAX_GUIDED_ANSWER_LENGTH,
+        `Keep each answer under ${MAX_GUIDED_ANSWER_LENGTH} characters.`,
+      ),
+    { error: "Answer the questions first." },
+  )
+  .refine((answers) => Object.keys(answers).length <= MAX_GUIDED_ANSWERS, {
+    error: "There are more answers than questions.",
+  });
 
 const guidedInput = assetRefInput.extend({ answers: answersSchema });
 
@@ -215,7 +246,7 @@ const specEditSchema = z.object({
 });
 
 const lookReviewInput = z.object({
-  lookId: z.string(),
+  lookId: idSchema,
   userId: userIdSchema,
   decision: z.enum(["accepted", "rejected"], { error: "Accept or reject the image." }),
   /** Rejected: the catalog options picked (with chips, text and the view they are about). */
@@ -232,7 +263,7 @@ const lookReviewInput = z.object({
 });
 
 const sheetReviewInput = z.object({
-  sheetId: z.string(),
+  sheetId: idSchema,
   userId: userIdSchema,
   decision: z.enum(["accepted", "rejected"], { error: "Accept or reject the sheet." }),
   /** Rejected: the catalog options picked (with chips, text and the frame they are about). */
@@ -241,7 +272,7 @@ const sheetReviewInput = z.object({
 });
 
 const viewReviewInput = z.object({
-  viewRowId: z.string(),
+  viewRowId: idSchema,
   userId: userIdSchema,
   decision: z.enum(["accepted", "rejected"], { error: "Approve the view or ask for changes." }),
   selections: z.array(fixSelectionSchema).max(40).optional(),
@@ -266,7 +297,7 @@ const descriptionSchema = z
   );
 
 const addInput = z.object({
-  projectId: z.string(),
+  projectId: idSchema,
   userId: userIdSchema,
   kind: z.enum(ASSET_KINDS, { error: "Choose what kind of asset this is." }),
   name: nameSchema,
@@ -278,7 +309,7 @@ const updateInput = assetRefInput.extend({
   description: descriptionSchema.optional(),
 });
 
-const mergeInput = z.object({ keepId: z.string(), mergeId: z.string(), userId: userIdSchema });
+const mergeInput = z.object({ keepId: idSchema, mergeId: idSchema, userId: userIdSchema });
 
 const cardsInput = z.object({
   kind: z.enum(ASSET_KINDS, { error: "Choose a kind of asset." }),
@@ -292,7 +323,8 @@ const cardsInput = z.object({
 
 type ProjectRow = typeof project.$inferSelect;
 
-function assertPreProductionOpen(row: Pick<ProjectRow, "stage">): void {
+/** Throws `AssetInputError` unless the project's pre-production can be opened (also later stages). */
+export function assertPreProductionOpen(row: Pick<ProjectRow, "stage">): void {
   const wizardStage = (WIZARD_STAGES as readonly string[]).includes(row.stage);
   if (wizardStage && !canOpenStage(row, "pre_production" satisfies WizardStage)) {
     throw new AssetInputError(STAGE_MESSAGE);
@@ -302,7 +334,11 @@ function assertPreProductionOpen(row: Pick<ProjectRow, "stage">): void {
 const ownedProjectWhere = (projectId: string, userId: string) =>
   and(eq(project.id, projectId), eq(project.ownerId, userId), isNull(project.archivedAt));
 
-/** The user's project with pre-production open, or null when not theirs. */
+/**
+ * The user's project with pre-production open, or null when not theirs. With `lock`, the project
+ * row is locked (`FOR NO KEY UPDATE`: writers of this module exclude each other, while inserts of
+ * rows referencing the project elsewhere, such as generations, are not blocked).
+ */
 async function openProject(
   db: DbExecutor,
   projectId: string,
@@ -311,32 +347,74 @@ async function openProject(
 ): Promise<ProjectRow | null> {
   if (!isUuid(projectId)) return null;
   const query = db.select().from(project).where(ownedProjectWhere(projectId, userId)).limit(1);
-  const [row] = lock ? await query.for("update") : await query;
+  const [row] = lock ? await query.for("no key update") : await query;
   if (!row) return null;
   assertPreProductionOpen(row);
   return row;
 }
 
-/** The asset and its project, the asset row locked, when the user owns it and the stage is open. */
+/**
+ * The asset and its project when the user owns it and the stage is open: the project row is
+ * locked first, then the asset row (the module's lock order, see the header). A foreign or
+ * missing id gives null before anything about the asset is read.
+ */
 async function lockAsset(
   tx: DbTx,
   assetId: string,
   userId: string,
 ): Promise<{ asset: AssetRow; project: ProjectRow } | null> {
   if (!isUuid(assetId)) return null;
-  const [row] = await tx
-    .select({ asset, project })
+  const [target] = await tx
+    .select({ projectId: asset.projectId })
     .from(asset)
-    .innerJoin(project, eq(project.id, asset.projectId))
-    .where(and(eq(asset.id, assetId), eq(project.ownerId, userId), isNull(project.archivedAt)))
-    .for("update", { of: asset });
+    .where(eq(asset.id, assetId))
+    .limit(1);
+  if (!target) return null;
+  const owner = await openProject(tx, target.projectId, userId, true);
+  if (!owner) return null;
+  const [row] = await tx
+    .select()
+    .from(asset)
+    .where(and(eq(asset.id, assetId), eq(asset.projectId, owner.id)))
+    .for("update");
   if (!row) return null;
-  assertPreProductionOpen(row.project);
-  return row;
+  return { asset: row, project: owner };
+}
+
+/**
+ * Sends a job on the caller's transaction (it exists only if that commits). A failed send throws
+ * `AssetInputError` (`ENQUEUE_FAILURE`), which rolls the whole change back: nothing is left
+ * pending without its job, and the user can simply try again.
+ */
+async function enqueueOnTx<J extends JobDefinition>(
+  tx: DbTx,
+  job: J,
+  payload: JobInput<J>,
+): Promise<void> {
+  try {
+    await enqueue(job, payload, { tx });
+  } catch (error) {
+    console.error(`[assets] could not enqueue ${job.name}:`, error);
+    throw new AssetInputError(ENQUEUE_FAILURE);
+  }
 }
 
 function assertActive(row: AssetRow): void {
   if (row.status !== "active") throw new AssetInputError(REMOVED_MESSAGE);
+}
+
+/**
+ * Wakes the project's waiting props on the caller's transaction (`wakeWaitingLooks`); a failed
+ * send rolls the change back as `AssetInputError` (`ENQUEUE_FAILURE`).
+ */
+export async function wakeOnTx(tx: DbTx, projectId: string): Promise<void> {
+  try {
+    await wakeWaitingLooks(projectId, tx);
+  } catch (error) {
+    if (error instanceof AssetInputError) throw error;
+    console.error(`[assets] could not wake the waiting props of ${projectId}:`, error);
+    throw new AssetInputError(ENQUEUE_FAILURE);
+  }
 }
 
 async function nextLookNumber(tx: DbTx, assetId: string): Promise<number> {
@@ -379,45 +457,26 @@ async function insertSheet(
   return row;
 }
 
-/** Fails a pending look or sheet whose job could not be queued, so the user can retry it. */
-async function markEnqueueFailed(kind: "look" | "sheet", id: string): Promise<void> {
-  const db = getDb();
-  if (kind === "look") {
-    await db
-      .update(assetLook)
-      .set({ status: "failed", failure: ENQUEUE_FAILURE })
-      .where(and(eq(assetLook.id, id), eq(assetLook.status, "pending")));
-  } else {
-    await db
-      .update(assetSheet)
-      .set({ status: "failed", failure: ENQUEUE_FAILURE })
-      .where(and(eq(assetSheet.id, id), eq(assetSheet.status, "pending")));
-  }
-}
-
 /**
- * Enqueues the job that produces a pending look: a fix when it answers a rejected parent (the
- * handler reads the parent and its review either way; the job name is for the logs).
+ * Sends the job that produces a pending look, on the transaction that created it: a fix when it
+ * answers a rejected parent (the handler reads the parent and its review either way; the job name
+ * is for the logs).
  */
 async function enqueueLookJob(
+  tx: DbTx,
   look: Pick<LookRow, "id" | "parentId">,
   mode: "generate" | "fix" = look.parentId ? "fix" : "generate",
 ): Promise<void> {
-  const job = mode === "fix" ? assetLookFix : assetLookGenerate;
-  try {
-    await enqueue(job, { lookId: look.id });
-  } catch (error) {
-    console.error(`[assets] could not enqueue ${job.name} for ${look.id}:`, error);
-    await markEnqueueFailed("look", look.id);
-  }
+  await enqueueOnTx(tx, mode === "fix" ? assetLookFix : assetLookGenerate, { lookId: look.id });
 }
 
 /**
- * Enqueues the job that produces a pending sheet: a location pack or prop sheet is planned by its
- * sheet maker (`asset.sheet.plan`); a character sheet is generated, or fixed when it answers a
- * rejected one.
+ * Sends the job that produces a pending sheet, on the transaction that created it: a location
+ * pack or prop sheet is planned by its sheet maker (`asset.sheet.plan`); a character sheet is
+ * generated, or fixed when it answers a rejected one.
  */
 async function enqueueSheetJob(
+  tx: DbTx,
   sheet: Pick<SheetRow, "id" | "parentId">,
   kind: AssetKind,
 ): Promise<void> {
@@ -426,12 +485,7 @@ async function enqueueSheetJob(
     : sheet.parentId
       ? assetSheetFix
       : assetSheetGenerate;
-  try {
-    await enqueue(job, { sheetId: sheet.id });
-  } catch (error) {
-    console.error(`[assets] could not enqueue ${job.name} for ${sheet.id}:`, error);
-    await markEnqueueFailed("sheet", sheet.id);
-  }
+  await enqueueOnTx(tx, job, { sheetId: sheet.id });
 }
 
 /**
@@ -583,8 +637,8 @@ export async function listAssetCards(
   const { kind, limit, cursor } = parse(cardsInput, opts);
   const db = getDb();
   if (!(await openProject(db, projectId, userId))) return null;
-  const page = await listAssets(projectId, userId, { kind, limit, cursor });
-  if (!page) return null;
+  // Ownership was checked just above: the page needs no second check.
+  const page = await listAssetPage(projectId, { kind, limit, cursor });
   const ids = page.items.map((a) => a.id);
   const { looks, sheets } = await latestByAsset(db, ids);
   const acceptedSheets = await newestSheetWithStatus(db, ids, "accepted");
@@ -603,6 +657,38 @@ export async function listAssetCards(
   return { items, nextCursor: page.nextCursor };
 }
 
+/**
+ * True when this look was started waiting for locations (`asset.look_started` with `waitingFor`)
+ * and the wait was never skipped. Reads the project's events of two types from the look's
+ * creation on (the `(project, type, created_at)` index).
+ */
+async function startedWaiting(
+  db: DbExecutor,
+  row: AssetRow,
+  look: Pick<LookView, "id" | "createdAt">,
+): Promise<boolean> {
+  const events = await db
+    .select({
+      type: projectEvent.type,
+      waitingFor: sql<unknown>`${projectEvent.payload} -> 'waitingFor'`,
+    })
+    .from(projectEvent)
+    .where(
+      and(
+        eq(projectEvent.projectId, row.projectId),
+        inArray(projectEvent.type, ["asset.look_started", "asset.look_wait_skipped"]),
+        gte(projectEvent.createdAt, look.createdAt),
+        sql`${projectEvent.payload} ->> 'lookId' = ${look.id}`,
+      ),
+    )
+    .limit(10);
+  const waited = events.some(
+    (e) =>
+      e.type === "asset.look_started" && Array.isArray(e.waitingFor) && e.waitingFor.length > 0,
+  );
+  return waited && !events.some((e) => e.type === "asset.look_wait_skipped");
+}
+
 /** One asset (removed ones too) with its stage and its newest looks and sheets. */
 export async function getAssetDetail(assetId: string, userId: string): Promise<AssetDetail | null> {
   if (!isUuid(assetId)) return null;
@@ -619,10 +705,16 @@ export async function getAssetDetail(assetId: string, userId: string): Promise<A
   const sheets = await listSheetViews(db, assetId);
   const state = deriveAssetState(row.asset.kind, looks[0] ?? null, sheets[0] ?? null);
   const latest = looks[0];
-  const waitingFor =
-    latest && latest.status === "pending" && !latest.started
-      ? await locationsInFlight(db, row.asset)
-      : [];
+  const untouchedLatest =
+    latest !== undefined &&
+    latest.status === "pending" &&
+    !latest.started &&
+    latest.parentId === null &&
+    designerFor(row.asset.kind) === "prop";
+  const waitingFor = untouchedLatest ? await locationsInFlight(db, row.asset) : [];
+  // Its locations settled but the look was never started (the wake was lost): it still waits.
+  const canStartWithoutWaiting =
+    untouchedLatest && (waitingFor.length > 0 || (await startedWaiting(db, row.asset, latest)));
   const accepted = looks.findIndex((l) => l.status === "accepted");
   const since = accepted === -1 ? looks : looks.slice(0, accepted);
   const pack = packKindOf(row.asset.kind);
@@ -648,6 +740,7 @@ export async function getAssetDetail(assetId: string, userId: string): Promise<A
     busy: state.busy,
     questions: questionsFor(row.asset, row.project.style),
     waitingFor,
+    canStartWithoutWaiting,
     rejectedInARow: since.filter((l) => l.status === "rejected").length,
     packViews,
     lockGate,
@@ -757,10 +850,18 @@ async function startGeneratedLook(
 ): Promise<LookView | null> {
   if (!isUuid(assetId)) return null;
   const db = getDb();
-  // Photos are checked before the transaction (each reads the file table).
-  const [preview] = await db.select().from(asset).where(eq(asset.id, assetId)).limit(1);
-  const references =
-    preview && values.references ? await checkReferences(preview, userId, values.references) : [];
+  // Photos are checked before the transaction (each reads the file table), and only on the
+  // user's own asset: a foreign id is "missing" before anything about it is looked at.
+  const [preview] = await db
+    .select({ asset })
+    .from(asset)
+    .innerJoin(project, eq(project.id, asset.projectId))
+    .where(and(eq(asset.id, assetId), eq(project.ownerId, userId), isNull(project.archivedAt)))
+    .limit(1);
+  if (!preview) return null;
+  const references = values.references
+    ? await checkReferences(preview.asset, userId, values.references)
+    : [];
   const created = await db.transaction(async (tx) => {
     const locked = await lockAsset(tx, assetId, userId);
     if (!locked) return null;
@@ -797,11 +898,11 @@ async function startGeneratedLook(
       references: references.length,
       ...(waitingFor.length > 0 ? { waitingFor } : {}),
     });
-    return { look, waiting: waitingFor.length > 0 };
+    if (waitingFor.length === 0) await enqueueLookJob(tx, look);
+    return look;
   });
   if (!created) return null;
-  if (!created.waiting) await enqueueLookJob(created.look);
-  return loadLookView(getDb(), created.look.id);
+  return loadLookView(getDb(), created.id);
 }
 
 /** Generates a look from the user's own description: look pending, `asset.look.generate`. */
@@ -868,10 +969,10 @@ export async function startWithoutWaiting(input: {
       assetId,
       lookId: latest.id,
     });
+    await enqueueLookJob(tx, latest);
     return latest;
   });
   if (!look) return null;
-  await enqueueLookJob(look);
   return "generating";
 }
 
@@ -984,11 +1085,13 @@ export async function submitLookReview(input: {
   const clarify = parsed.clarifyAnswers ?? {};
   if (!isUuid(lookId)) return null;
   const db = getDb();
+  // Only the user's own look is read (a foreign id is "missing" before its photos are checked).
   const [target] = await db
     .select({ asset })
     .from(assetLook)
     .innerJoin(asset, eq(asset.id, assetLook.assetId))
-    .where(eq(assetLook.id, lookId))
+    .innerJoin(project, eq(project.id, asset.projectId))
+    .where(and(eq(assetLook.id, lookId), eq(project.ownerId, userId), isNull(project.archivedAt)))
     .limit(1);
   if (!target) return null;
   const newReferences =
@@ -1055,7 +1158,7 @@ export async function submitLookReview(input: {
         ...(referencesChanged ? { referencesChanged: true } : {}),
         ...(specEdits.length > 0 ? { specEdits: specEdits.map((e) => e.field) } : {}),
       });
-      if (latest.source === "uploaded") return { stage: "needs_image" as const, job: null };
+      if (latest.source === "uploaded") return "needs_image" as const;
       const reroll =
         plan.regenerate !== null &&
         plan.fixRequests.length === 0 &&
@@ -1082,7 +1185,8 @@ export async function submitLookReview(input: {
           : {}),
         createdBy: userId,
       });
-      return { stage: "generating" as const, job: { kind: "look" as const, row: next } };
+      await enqueueLookJob(tx, next);
+      return "generating" as const;
     }
 
     await tx
@@ -1121,15 +1225,12 @@ export async function submitLookReview(input: {
       sheetId: sheet.id,
       ...(confirmed.length > 0 ? { confirmedFields: confirmed } : {}),
     });
-    return { stage: "building_sheet" as const, job: { kind: "sheet" as const, row: sheet } };
+    await enqueueSheetJob(tx, sheet, row.kind);
+    // An accepted location wakes the props that waited for its Hero (sent with the acceptance).
+    if (designerFor(row.kind) === "location") await wakeOnTx(tx, row.projectId);
+    return "building_sheet" as const;
   });
-  if (!outcome) return null;
-  if (outcome.job?.kind === "look") await enqueueLookJob(outcome.job.row);
-  if (outcome.job?.kind === "sheet") await enqueueSheetJob(outcome.job.row, target.asset.kind);
-  if (decision === "accepted" && designerFor(target.asset.kind) === "location") {
-    await wakeWaitingLooks(target.asset.projectId);
-  }
-  return outcome.stage;
+  return outcome;
 }
 
 /**
@@ -1144,7 +1245,7 @@ export async function answerLookQuestion(input: {
   answers: Record<string, string>;
 }): Promise<AssetStage | null> {
   const { lookId, userId, answers } = parse(
-    z.object({ lookId: z.string(), userId: userIdSchema, answers: answersSchema }),
+    z.object({ lookId: idSchema, userId: userIdSchema, answers: answersSchema }),
     input,
   );
   if (!isUuid(lookId)) return null;
@@ -1200,10 +1301,10 @@ export async function answerLookQuestion(input: {
       nextLookId: look.id,
       questions: Object.keys(answers),
     });
+    await enqueueLookJob(tx, look, "generate");
     return look;
   });
   if (!next) return null;
-  await enqueueLookJob(next, "generate");
   return "generating";
 }
 
@@ -1258,7 +1359,8 @@ function planSheetReview(kind: AssetKind, selections: readonly FixSelection[]): 
  * Sends an asset back to its designer from the sheet step (the owner's SX01, LSX01, ASX01, or a
  * `DESIGN_CHANGE_REQUESTED:` warning): the sheet is rejected, the accepted design is rejected with
  * the request as a fix request, and the design's next version is started (a designer fix round).
- * Once the new design is accepted, a new sheet is built automatically. Returns the new look.
+ * Once the new design is accepted, a new sheet is built automatically. A pack's views not decided
+ * yet are superseded. The new look's job is sent on `tx`. Returns the new look.
  */
 async function sendBackToDesigner(
   tx: DbTx,
@@ -1301,6 +1403,19 @@ async function sendBackToDesigner(
     .update(assetSheet)
     .set({ status: "rejected", decidedAt: now })
     .where(eq(assetSheet.id, sheet.id));
+  // A pack's views still to be made or reviewed are set aside (kept, superseded), so nothing more
+  // is generated or charged for it: the pack advance re-checks the sheet before each request, and
+  // a generation already running settles on no view.
+  const setAside = await tx
+    .update(assetSheetView)
+    .set({ status: "superseded" })
+    .where(
+      and(
+        eq(assetSheetView.sheetId, sheet.id),
+        inArray(assetSheetView.status, ["planned", "pending", "in_review"]),
+      ),
+    )
+    .returning({ id: assetSheetView.id });
   await tx.insert(review).values({
     projectId: row.projectId,
     userId,
@@ -1334,7 +1449,9 @@ async function sendBackToDesigner(
     lookId: look.id,
     nextLookId: next.id,
     code,
+    ...(setAside.length > 0 ? { viewsSetAside: setAside.map((v) => v.id) } : {}),
   });
+  await enqueueLookJob(tx, next, "fix");
   return next;
 }
 
@@ -1402,7 +1519,7 @@ export async function submitSheetReview(input: {
       );
     }
     if (plan.route) {
-      const next = await sendBackToDesigner(tx, {
+      await sendBackToDesigner(tx, {
         row,
         look,
         sheet: latest,
@@ -1411,7 +1528,7 @@ export async function submitSheetReview(input: {
         text: plan.route.text,
         note,
       });
-      return { stage: "generating" as const, job: { kind: "look" as const, row: next } };
+      return "generating" as const;
     }
     const now = new Date();
     const issueCodes = [
@@ -1459,7 +1576,8 @@ export async function submitSheetReview(input: {
         nextSheetId: next.id,
         issueCodes,
       });
-      return { stage: "building_sheet" as const, job: { kind: "sheet" as const, row: next } };
+      await enqueueSheetJob(tx, next, row.kind);
+      return "building_sheet" as const;
     }
     await tx
       .update(assetSheet)
@@ -1480,12 +1598,9 @@ export async function submitSheetReview(input: {
       sheetId,
       lookId: latest.lookId,
     });
-    return { stage: "ready" as const, job: null };
+    return "ready" as const;
   });
-  if (!outcome) return null;
-  if (outcome.job?.kind === "sheet") await enqueueSheetJob(outcome.job.row, "character");
-  if (outcome.job?.kind === "look") await enqueueLookJob(outcome.job.row, "fix");
-  return outcome.stage;
+  return outcome;
 }
 
 /** The view, its sheet and its asset, the asset locked, when the user owns it. */
@@ -1612,14 +1727,16 @@ export async function submitSheetViewReview(input: {
         viewRowId: view.id,
         viewId: view.viewId,
       });
-      return { stage: "sheet_review" as const, job: { kind: "advance" as const, id: sheet.id } };
+      // The views that waited for this one are requested next (sent with the approval).
+      await enqueueOnTx(tx, assetSheetViewsAdvance, { sheetId: sheet.id });
+      return "sheet_review" as const;
     }
     const plan = planSheetReview(
       row.kind,
       selections.map((s) => ({ ...s, viewId: view.viewId })),
     );
     if (plan.route) {
-      const next = await sendBackToDesigner(tx, {
+      await sendBackToDesigner(tx, {
         row,
         look,
         sheet,
@@ -1629,7 +1746,7 @@ export async function submitSheetViewReview(input: {
         note,
         viewLabel: view.label,
       });
-      return { stage: "generating" as const, job: { kind: "look" as const, row: next } };
+      return "generating" as const;
     }
     const issueCodes = [
       ...fixRequestCodes(plan.fixRequests),
@@ -1665,38 +1782,26 @@ export async function submitSheetViewReview(input: {
       nextViewRowId: next.id,
       issueCodes,
     });
-    return {
-      stage: "sheet_review" as const,
-      job: reroll
-        ? { kind: "advance" as const, id: sheet.id }
-        : { kind: "fix" as const, id: sheet.id, viewRowId: next.id },
-    };
+    // A re-roll is requested by the advance; a fix round re-writes this view first.
+    if (reroll) await enqueueOnTx(tx, assetSheetViewsAdvance, { sheetId: sheet.id });
+    else await enqueueOnTx(tx, assetSheetPlan, { sheetId: sheet.id, viewRowId: next.id });
+    return "sheet_review" as const;
   });
-  if (!outcome) return null;
-  const job = outcome.job;
-  if (job.kind === "advance") await enqueueAdvance(job.id);
-  if (job.kind === "look") await enqueueLookJob(job.row, "fix");
-  if (job.kind === "fix") {
-    try {
-      await enqueue(assetSheetPlan, { sheetId: job.id, viewRowId: job.viewRowId });
-    } catch (error) {
-      console.error(`[assets] could not enqueue the fix of view ${job.viewRowId}:`, error);
-      await getDb()
-        .update(assetSheetView)
-        .set({ status: "failed", failure: ENQUEUE_FAILURE })
-        .where(and(eq(assetSheetView.id, job.viewRowId), eq(assetSheetView.status, "planned")));
-    }
-  }
-  return outcome.stage;
+  return outcome;
 }
 
-/** Runs a failed view (its latest version) again: back to planned, then the pack advances. */
+/**
+ * Runs a failed view (its latest version) again: back to planned, then the pack advances (or, a
+ * fix round that failed before its prompt was written, the sheet maker runs again), the job sent
+ * with the change. The failed attempt (its generation, refunded, and its failure) is kept in the
+ * `asset.sheet_view_retried` event before the row is cleared.
+ */
 export async function retrySheetView(input: {
   viewRowId: string;
   userId: string;
 }): Promise<AssetStage | null> {
   const { viewRowId, userId } = parse(
-    z.object({ viewRowId: z.string(), userId: userIdSchema }),
+    z.object({ viewRowId: idSchema, userId: userIdSchema }),
     input,
   );
   const outcome = await getDb().transaction(async (tx) => {
@@ -1716,16 +1821,17 @@ export async function retrySheetView(input: {
       assetId: row.id,
       sheetId: sheet.id,
       viewRowId: view.id,
+      previousGenerationId: view.generationId,
+      previousFailure: view.failure,
     });
-    return { sheetId: sheet.id, needsPrompt };
+    if (needsPrompt) {
+      await enqueueOnTx(tx, assetSheetPlan, { sheetId: sheet.id, viewRowId: view.id });
+    } else {
+      await enqueueOnTx(tx, assetSheetViewsAdvance, { sheetId: sheet.id });
+    }
+    return "sheet_review" as const;
   });
-  if (!outcome) return null;
-  if (outcome.needsPrompt) {
-    await enqueue(assetSheetPlan, { sheetId: outcome.sheetId, viewRowId });
-  } else {
-    await enqueueAdvance(outcome.sheetId);
-  }
-  return "sheet_review";
+  return outcome;
 }
 
 /**
@@ -1737,7 +1843,7 @@ export async function lockSheet(input: {
   sheetId: string;
   userId: string;
 }): Promise<AssetStage | null> {
-  const { sheetId, userId } = parse(z.object({ sheetId: z.string(), userId: userIdSchema }), input);
+  const { sheetId, userId } = parse(z.object({ sheetId: idSchema, userId: userIdSchema }), input);
   if (!isUuid(sheetId)) return null;
   const locked = await getDb().transaction(async (tx) => {
     const [target] = await tx
@@ -1762,6 +1868,13 @@ export async function lockSheet(input: {
     ) {
       throw new AssetInputError(NOT_IN_REVIEW);
     }
+    // The sheet row before its views (the order the pack advance takes them in): an advance
+    // running now finishes its view first, and the next one finds the sheet accepted.
+    await tx
+      .select({ id: assetSheet.id })
+      .from(assetSheet)
+      .where(eq(assetSheet.id, sheetId))
+      .for("update");
     const views = await latestViewRows(tx, sheetId);
     const gate = packLockGate(pack, sheet.spec, views);
     if (!gate.canLock) {
@@ -1803,11 +1916,11 @@ export async function lockSheet(input: {
       lookId: sheet.lookId,
       views: views.filter((v) => v.status === "accepted").map((v) => v.viewId),
     });
-    return true;
+    // The contact sheet is assembled for people (sent with the lock).
+    await enqueueOnTx(tx, assetSheetAssemble, { sheetId });
+    return "ready" as const;
   });
-  if (!locked) return null;
-  await enqueueAssemble(sheetId);
-  return "ready";
+  return locked;
 }
 
 /* ------------------------------------------------------------------------------------------ */
@@ -1815,15 +1928,17 @@ export async function lockSheet(input: {
 /* ------------------------------------------------------------------------------------------ */
 
 /**
- * Runs a failed look (the asset's latest) again: back to pending and its job re-enqueued. The job
- * re-runs the dami only when no prompt was stored; otherwise it requests a new generation with the
- * stored prompt (the failed generation's credits were refunded and are never reused).
+ * Runs a failed look (the asset's latest) again: back to pending and its job re-enqueued (sent with
+ * the change). The job re-runs the dami only when no prompt was stored; otherwise it requests a
+ * new generation with the stored prompt (the failed generation's credits were refunded and are
+ * never reused). The failed attempt's generation and failure are kept in the
+ * `asset.look_retried` event (the audit trail) before the row is cleared.
  */
 export async function retryLook(input: {
   lookId: string;
   userId: string;
 }): Promise<AssetStage | null> {
-  const { lookId, userId } = parse(z.object({ lookId: z.string(), userId: userIdSchema }), input);
+  const { lookId, userId } = parse(z.object({ lookId: idSchema, userId: userIdSchema }), input);
   if (!isUuid(lookId)) return null;
   const look = await getDb().transaction(async (tx) => {
     const [target] = await tx
@@ -1845,12 +1960,17 @@ export async function retryLook(input: {
       .set({ status: "pending", failure: null, generationId: null })
       .where(eq(assetLook.id, lookId))
       .returning();
-    await logEvent(tx, row.projectId, userId, "asset.look_retried", { assetId: row.id, lookId });
-    return updated ?? null;
+    if (!updated) return null;
+    await logEvent(tx, row.projectId, userId, "asset.look_retried", {
+      assetId: row.id,
+      lookId,
+      previousGenerationId: latest.generationId,
+      previousFailure: latest.failure,
+    });
+    await enqueueLookJob(tx, updated);
+    return "generating" as const;
   });
-  if (!look) return null;
-  await enqueueLookJob(look);
-  return "generating";
+  return look;
 }
 
 /** Runs a failed sheet (the asset's latest, of its accepted look) again; see `retryLook`. */
@@ -1858,7 +1978,7 @@ export async function retrySheet(input: {
   sheetId: string;
   userId: string;
 }): Promise<AssetStage | null> {
-  const { sheetId, userId } = parse(z.object({ sheetId: z.string(), userId: userIdSchema }), input);
+  const { sheetId, userId } = parse(z.object({ sheetId: idSchema, userId: userIdSchema }), input);
   if (!isUuid(sheetId)) return null;
   const sheet = await getDb().transaction(async (tx) => {
     const [target] = await tx
@@ -1886,15 +2006,17 @@ export async function retrySheet(input: {
       .set({ status: "pending", failure: null, generationId: null })
       .where(eq(assetSheet.id, sheetId))
       .returning();
+    if (!updated) return null;
     await logEvent(tx, row.projectId, userId, "asset.sheet_retried", {
       assetId: row.id,
       sheetId,
+      previousGenerationId: latest.generationId,
+      previousFailure: latest.failure,
     });
-    return updated ? { row: updated, kind: row.kind } : null;
+    await enqueueSheetJob(tx, updated, row.kind);
+    return "building_sheet" as const;
   });
-  if (!sheet) return null;
-  await enqueueSheetJob(sheet.row, sheet.kind);
-  return "building_sheet";
+  return sheet;
 }
 
 /**
@@ -1961,7 +2083,10 @@ async function takenNames(
 
 /**
  * Adds an asset by hand (origin manual; detection never changes or removes it). The name is
- * cleaned and made unique in its kind: a second "Mara" becomes "Mara (2)".
+ * cleaned and made unique in its kind: a second "Mara" becomes "Mara (2)". A double submit (the
+ * same name, ignoring case, added by hand to this project within `DUPLICATE_ADD_WINDOW_SECONDS`;
+ * only the owner adds by hand) returns the asset just added instead; the project lock serialises
+ * the two requests, so the second always sees the first.
  */
 export async function addAsset(input: {
   projectId: string;
@@ -1974,6 +2099,21 @@ export async function addAsset(input: {
   return getDb().transaction(async (tx) => {
     const owned = await openProject(tx, projectId, userId, true);
     if (!owned) return null;
+    const [justAdded] = await tx
+      .select()
+      .from(asset)
+      .where(
+        and(
+          eq(asset.projectId, projectId),
+          eq(asset.kind, kind),
+          sql`lower(${asset.name}) = lower(${given})`,
+          eq(asset.origin, "manual"),
+          eq(asset.status, "active"),
+          gt(asset.createdAt, sql`now() - make_interval(secs => ${DUPLICATE_ADD_WINDOW_SECONDS})`),
+        ),
+      )
+      .limit(1);
+    if (justAdded) return justAdded;
     const name = uniqueName(given, await takenNames(tx, projectId, kind));
     const [last] = await tx
       .select({ order: max(asset.displayOrder) })
@@ -2011,14 +2151,7 @@ export async function updateAsset(input: {
   const { assetId, userId, name: given, description } = parse(updateInput, input);
   if (!isUuid(assetId)) return null;
   return getDb().transaction(async (tx) => {
-    // Project first (as block rewrites do), then the asset.
-    const [first] = await tx
-      .select({ projectId: asset.projectId })
-      .from(asset)
-      .where(eq(asset.id, assetId))
-      .limit(1);
-    if (!first) return null;
-    if (!(await openProject(tx, first.projectId, userId, true))) return null;
+    // Project first (as block rewrites do), then the asset: `lockAsset` takes them in that order.
     const locked = await lockAsset(tx, assetId, userId);
     if (!locked) return null;
     const { asset: row } = locked;
@@ -2093,29 +2226,35 @@ export async function includeSkippedAsset(input: {
   });
 }
 
-/** Marks an asset removed (kept, never deleted). True when it is removed (also if it already was). */
+/**
+ * Marks an asset removed (kept, never deleted) and records that the user removed it
+ * (`details.removedBy`), so a later detection never brings it back. True when it is removed (also
+ * if it already was). Props waiting for a removed location are woken in the same transaction.
+ */
 export async function removeAsset(input: { assetId: string; userId: string }): Promise<boolean> {
   const { assetId, userId } = parse(assetRefInput, input);
   if (!isUuid(assetId)) return false;
   const removed = await getDb().transaction(async (tx) => {
     const locked = await lockAsset(tx, assetId, userId);
-    if (!locked) return null;
+    if (!locked) return false;
     const { asset: row } = locked;
-    if (row.status === "removed") return { row, changed: false };
-    await tx.update(asset).set({ status: "removed" }).where(eq(asset.id, assetId));
+    if (removedByUser(row)) return true;
+    // Removed by the detector before: now the user's choice too (never revived).
+    await tx
+      .update(asset)
+      .set({ status: "removed", details: markRemovedByUser(row.details) })
+      .where(eq(asset.id, assetId));
+    if (row.status === "removed") return true;
     await logEvent(tx, row.projectId, userId, "asset.removed", {
       assetId,
       kind: row.kind,
       name: row.name,
     });
-    return { row, changed: true };
+    // Props waiting for a removed location go ahead without it.
+    if (row.kind === "location") await wakeOnTx(tx, row.projectId);
+    return true;
   });
-  if (!removed) return false;
-  // Props waiting for a removed location go ahead without it.
-  if (removed.changed && removed.row.kind === "location") {
-    await wakeWaitingLooks(removed.row.projectId);
-  }
-  return true;
+  return removed;
 }
 
 /**
@@ -2154,7 +2293,11 @@ export async function mergeAssets(input: {
     if (keep.status !== "active" || merged.status !== "active") {
       throw new AssetInputError(REMOVED_MESSAGE);
     }
-    await tx.update(asset).set({ status: "removed" }).where(eq(asset.id, mergeId));
+    // Merged away by the user: a later detection never revives it (`details.removedBy`).
+    await tx
+      .update(asset)
+      .set({ status: "removed", details: markRemovedByUser(merged.details) })
+      .where(eq(asset.id, mergeId));
     const blocksRewritten = await rewriteAssetRefs(
       {
         projectId: keep.projectId,
@@ -2171,6 +2314,8 @@ export async function mergeAssets(input: {
       mergeName: merged.name,
       blocksRewritten,
     });
+    // Props waiting for the merged-away location go ahead (the kept one may be done already).
+    if (merged.kind === "location") await wakeOnTx(tx, keep.projectId);
     return keep;
   });
 }
@@ -2189,7 +2334,7 @@ export async function completePreProduction(input: {
   userId: string;
 }): Promise<boolean> {
   const { projectId, userId } = parse(
-    z.object({ projectId: z.string(), userId: userIdSchema }),
+    z.object({ projectId: idSchema, userId: userIdSchema }),
     input,
   );
   return getDb().transaction(async (tx) => {

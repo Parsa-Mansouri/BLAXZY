@@ -40,6 +40,26 @@ export function isDetectedKind(kind: AssetKind): kind is DetectedKind {
   return (DETECTED_KINDS as readonly string[]).includes(kind);
 }
 
+/**
+ * Who removed an asset, kept in `details.removedBy` (the same jsonb as `AssetDetails`; no column).
+ * An asset the user removed (or merged away) is never revived by a later detection; one the
+ * detector removed may be.
+ */
+type RemovalMark = { removedBy?: "user" | "detector" };
+
+/** True when the user removed this asset (by hand or by merging it into another). */
+export function removedByUser(a: Pick<Asset, "status" | "details">): boolean {
+  if (a.status !== "removed") return false;
+  const details = a.details as (AssetDetails & RemovalMark) | null;
+  return details?.removedBy === "user";
+}
+
+/** The asset's details marked as removed by the user (the rest kept). */
+export function markRemovedByUser(details: AssetDetails | null): AssetDetails {
+  const marked: AssetDetails & RemovalMark = { ...(details ?? {}), removedBy: "user" };
+  return marked;
+}
+
 export type KnownStatus = "detected" | "in_progress" | "approved";
 export type KnownRow = { asset: Asset; status: KnownStatus };
 
@@ -311,8 +331,10 @@ function fromFact(f: DetectorFact): AssetFact {
 /**
  * The detector's answer in names. Entries matching a stored row (through `byTemp`) keep that
  * row's name; a new entry whose name matches a removed detected row of its kind revives it;
- * other new entries get a unique name ("Mara (2)"). `voice_only` characters become voice assets
- * only. Temporary ids inside warnings and assumptions are replaced by names.
+ * other new entries get a unique name ("Mara (2)"). An entry that is an asset the user removed
+ * (through `byTemp`, when the user removed it while the detector ran, or by name) is dropped: the
+ * user's removal is never undone and no "Mara (2)" stands in for it. `voice_only` characters
+ * become voice assets only. Temporary ids inside warnings and assumptions are replaced by names.
  */
 export function planDetection(input: {
   output: AssetDetectorOutput;
@@ -324,16 +346,31 @@ export function planDetection(input: {
   const taken = new Map<string, string[]>();
   for (const a of input.existing) taken.set(a.kind, [...(taken.get(a.kind) ?? []), a.name]);
   const usedRows = new Set<string>();
-  const names = new Map<string, { kind: DetectedKind; name: string; row: Asset | null }>();
+  const names = new Map<
+    string,
+    { kind: DetectedKind; name: string; row: Asset | null; dropped?: true }
+  >();
 
   const resolve = (tempId: string, kind: DetectedKind, wanted: string) => {
     const known = byTemp.get(tempId);
     if (known && known.kind === kind && !usedRows.has(known.id)) {
       usedRows.add(known.id);
-      names.set(tempId, { kind, name: known.name, row: known });
+      names.set(tempId, {
+        kind,
+        name: known.name,
+        row: known,
+        ...(removedByUser(known) ? { dropped: true as const } : {}),
+      });
       return;
     }
     const clean = cleanAssetName(wanted) || `${kind} ${tempId.split("_")[1] ?? ""}`.trim();
+    const userRemoved = input.existing.find(
+      (a) => a.kind === kind && removedByUser(a) && nameKey(a.name) === nameKey(clean),
+    );
+    if (userRemoved) {
+      names.set(tempId, { kind, name: userRemoved.name, row: userRemoved, dropped: true });
+      return;
+    }
     const revived = input.existing.find(
       (a) =>
         a.kind === kind &&
@@ -397,7 +434,7 @@ export function planDetection(input: {
     details: AssetDetails,
   ) => {
     const n = names.get(tempId);
-    if (!n) return;
+    if (!n || n.dropped) return;
     assets.push({
       tempId,
       kind,

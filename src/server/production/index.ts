@@ -3,7 +3,7 @@
  * `export_bundle`; block versions go through `@/server/blocks`, assets through `@/server/assets`.
  * The services take the acting user and check ownership; the job surface is for the worker.
  */
-export { ProductionInputError } from "./errors";
+export { PRICE_CHANGED_MESSAGE, PriceChangedError, ProductionInputError } from "./errors";
 export {
   BLOCK_PRODUCTION_STAGES,
   canStartDraftsFrom,
@@ -57,6 +57,7 @@ export {
   applyTakeGenerationResult,
   assertTakeBlockUsable,
   blockReviserInput,
+  dispatchProductionJobs,
   failPreparation,
   failTake,
   loadPreparationJob,

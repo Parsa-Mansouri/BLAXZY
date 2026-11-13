@@ -4,6 +4,7 @@ import { assetTag, isVoiceRef, replaceAssetTag, type SectionedBlock } from "@/se
 import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
 import { project, projectEvent, promptBlock, scriptVersion } from "@/server/db/schema";
 import { enqueue, scriptDetectAssets } from "@/server/jobs";
+import { decodeOrderCursor, encodeOrderCursor } from "@/server/projects/cursor";
 
 export type PromptBlock = typeof promptBlock.$inferSelect;
 
@@ -25,6 +26,15 @@ export type SectioningStatus = {
   failure: string | null;
   /** Shots the last script edit sent back through Production's preparation (0 when none). */
   resetBlocks: number;
+};
+
+export type ReplaceBlocksResult = {
+  created: number;
+  carried: number;
+  superseded: number;
+  reset: number;
+  /** Set when nothing changed because the version is not the newest accepted one any more. */
+  skipped?: "not_latest";
 };
 
 export const DEFAULT_BLOCK_PAGE_SIZE = 50;
@@ -62,7 +72,13 @@ const sectionedBlockSchema = z.object({
 const replaceBlocksSchema = z.object({
   projectId: uuid,
   scriptVersionId: uuid,
-  blocks: z.array(sectionedBlockSchema).min(1, "Sectioning returned no blocks."),
+  blocks: z
+    .array(sectionedBlockSchema)
+    .min(1, "Sectioning returned no blocks.")
+    // The order is the film's: two blocks in one place would also share a clip's file name.
+    .refine((blocks) => new Set(blocks.map((b) => b.orderIndex)).size === blocks.length, {
+      message: "Sectioning returned two blocks in the same place.",
+    }),
   damiRunIds: z.array(uuid),
 });
 
@@ -226,21 +242,40 @@ async function sectionedAssetRefs(
  * the user's own choice of assets, and (when prepared) its production preparation and approval.
  * Other blocks start a new lineage. Every previous current row gets `supersededAt`. `reset` counts
  * the new blocks that must be prepared again while the previous ones had been in production.
+ *
+ * Only the project's newest accepted script version may replace its blocks: checked under the
+ * project lock, so a slow run for an older version can never supersede blocks cut from a newer
+ * one. Otherwise nothing changes and the result has `skipped: "not_latest"`.
  */
 export async function replaceBlocks(input: {
   projectId: string;
   scriptVersionId: string;
   blocks: Array<SectionedBlock & { damiRunId?: string }>;
   damiRunIds: string[];
-}): Promise<{ created: number; carried: number; superseded: number; reset: number }> {
+}): Promise<ReplaceBlocksResult> {
   const { projectId, scriptVersionId, blocks, damiRunIds } = parse(replaceBlocksSchema, input);
-  return getDb().transaction(async (tx) => {
+  return getDb().transaction(async (tx): Promise<ReplaceBlocksResult> => {
     // Serialise replacements per project.
     await tx
       .select({ id: project.id })
       .from(project)
       .where(eq(project.id, projectId))
       .for("update");
+    const [newest] = await tx
+      .select({ id: scriptVersion.id })
+      .from(scriptVersion)
+      .where(
+        and(
+          eq(scriptVersion.projectId, projectId),
+          isNull(scriptVersion.episodeId),
+          eq(scriptVersion.status, "accepted"),
+        ),
+      )
+      .orderBy(desc(scriptVersion.versionNumber))
+      .limit(1);
+    if (newest?.id !== scriptVersionId) {
+      return { created: 0, carried: 0, superseded: 0, reset: 0, skipped: "not_latest" };
+    }
     const previous = await tx
       .select()
       .from(promptBlock)
@@ -466,17 +501,10 @@ async function ownedProject(projectId: string, userId: string) {
   return row ?? null;
 }
 
-function encodeCursor(orderIndex: number, id: string): string {
-  return Buffer.from(`${orderIndex}|${id}`, "utf8").toString("base64url");
-}
-
 function decodeCursor(cursor: string): { orderIndex: number; id: string } {
-  const [order, id, ...rest] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
-  const orderIndex = Number(order);
-  if (rest.length > 0 || !Number.isInteger(orderIndex) || !uuid.safeParse(id).success) {
-    throw new BlocksInputError("That page link is no longer valid. Reload the list.");
-  }
-  return { orderIndex, id: id as string };
+  const decoded = decodeOrderCursor(cursor);
+  if (!decoded) throw new BlocksInputError("That page link is no longer valid. Reload the list.");
+  return decoded;
 }
 
 /** The project's current blocks in story order, keyset-paginated. */
@@ -506,7 +534,7 @@ export async function listBlocks(
   const last = items.at(-1);
   return {
     items,
-    nextCursor: rows.length > limit && last ? encodeCursor(last.orderIndex, last.id) : null,
+    nextCursor: rows.length > limit && last ? encodeOrderCursor(last.orderIndex, last.id) : null,
   };
 }
 
@@ -582,13 +610,11 @@ export async function setSectioningState(
   return updated.length > 0;
 }
 
-const RETRY_ENQUEUE_FAILURE = "This step could not be started. Try again in a moment.";
-
 /**
  * Runs asset detection and sectioning again after a failed run: only while the project's
  * sectioning state is `failed`. Sets it to `running` for the accepted script version and enqueues
- * `script.detect-assets` (which queues sectioning in turn). Returns the new status, or null when
- * the project is missing, archived or not the user's.
+ * `script.detect-assets` (which queues sectioning in turn) in the same transaction. Returns the
+ * new status, or null when the project is missing, archived or not the user's.
  */
 export async function retrySectioning(input: {
   projectId: string;
@@ -634,20 +660,9 @@ export async function retrySectioning(input: {
       type: "sectioning.retried",
       payload: { versionId: accepted.id },
     });
+    await enqueue(scriptDetectAssets, { scriptVersionId: accepted.id }, { tx });
     return accepted.id;
   });
   if (!versionId) return null;
-  try {
-    await enqueue(scriptDetectAssets, { scriptVersionId: versionId });
-  } catch (error) {
-    console.error(`[blocks] could not enqueue asset detection for ${versionId}:`, error);
-    await setSectioningState({
-      projectId,
-      state: "failed",
-      scriptVersionId: versionId,
-      failure: RETRY_ENQUEUE_FAILURE,
-      onlyFor: versionId,
-    });
-  }
   return getSectioningStatus(projectId, userId);
 }

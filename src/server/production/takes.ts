@@ -3,7 +3,7 @@
  * view the screens get, and the queries for a lineage's latest live take. Not exported from the
  * module index.
  */
-import { and, desc, eq, inArray, isNotNull, ne, notInArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, max, ne, notInArray } from "drizzle-orm";
 import { SAMPLE_MODEL } from "@/server/damis";
 import type { DbExecutor, DbTx } from "@/server/db/client";
 import {
@@ -170,6 +170,45 @@ export async function insertTake(
     .returning();
   if (!row) throw new Error("block_take insert returned no row");
   return row;
+}
+
+/** Rows inserted per statement by `insertDraftTakes` (well under Postgres' parameter limit). */
+const INSERT_CHUNK = 500;
+
+/**
+ * Inserts one take per lineage (at most one value per lineage), each with its lineage's next
+ * number: one query for every lineage's last number, then one insert per chunk. The caller holds
+ * the project lock (which every take insert of the project takes first). Rows come back in the
+ * order given.
+ */
+export async function insertDraftTakes(
+  tx: DbTx,
+  projectId: string,
+  values: readonly Omit<typeof blockTake.$inferInsert, "takeNumber">[],
+): Promise<TakeRow[]> {
+  if (values.length === 0) return [];
+  const lineageIds = [...new Set(values.map((v) => v.lineageId))];
+  if (lineageIds.length !== values.length)
+    throw new Error("insertDraftTakes: one take per lineage");
+  const last = await tx
+    .select({ lineageId: blockTake.lineageId, n: max(blockTake.takeNumber) })
+    .from(blockTake)
+    .where(and(eq(blockTake.projectId, projectId), inArray(blockTake.lineageId, lineageIds)))
+    .groupBy(blockTake.lineageId);
+  const next = new Map(last.map((r) => [r.lineageId, (r.n ?? 0) + 1]));
+  const rows: TakeRow[] = [];
+  for (let i = 0; i < values.length; i += INSERT_CHUNK) {
+    const chunk = values
+      .slice(i, i + INSERT_CHUNK)
+      .map((v) => ({ ...v, takeNumber: next.get(v.lineageId) ?? 1 }));
+    rows.push(...(await tx.insert(blockTake).values(chunk).returning()));
+  }
+  const byLineage = new Map(rows.map((r) => [r.lineageId, r]));
+  return values.map((v) => {
+    const row = byLineage.get(v.lineageId);
+    if (!row) throw new Error("block_take insert returned no row");
+    return row;
+  });
 }
 
 /**

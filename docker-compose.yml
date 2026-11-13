@@ -1,17 +1,21 @@
 name: blaxzy
 
+# LOCAL DEVELOPMENT ONLY: fixed dev credentials, ports bound to 127.0.0.1, no TLS, no backups.
+# Do not use this file for staging or production (managed Postgres and a real S3 store there).
+
 # NOTE: the official minio/minio images are no longer published on Docker Hub/Quay, so the
 # S3-compatible store is RustFS. The service keeps the name "minio" and the MINIO_* port
 # variables so it can be swapped for any S3 server without touching the rest of the repo.
 services:
   postgres:
     image: postgres:17
+    restart: unless-stopped
     environment:
       POSTGRES_DB: blaxzy
       POSTGRES_USER: blaxzy
       POSTGRES_PASSWORD: blaxzy
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,13 +25,14 @@ services:
       retries: 10
 
   minio:
-    image: rustfs/rustfs:latest
+    image: rustfs/rustfs:1.0.4
+    restart: unless-stopped
     environment:
       RUSTFS_ACCESS_KEY: blaxzy
       RUSTFS_SECRET_KEY: blaxzy-secret
     ports:
-      - "${MINIO_API_PORT:-9100}:9000"
-      - "${MINIO_CONSOLE_PORT:-9101}:9001"
+      - "127.0.0.1:${MINIO_API_PORT:-9100}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9101}:9001"
     volumes:
       - minio_data:/data
     healthcheck:
@@ -37,7 +42,7 @@ services:
       retries: 12
 
   minio-init:
-    image: amazon/aws-cli:latest
+    image: amazon/aws-cli:2.39.7
     depends_on:
       minio:
         condition: service_healthy

@@ -12,6 +12,9 @@ export const AUTH_BASE_PATH = "/api/auth";
 /** Request header the proxy sets so server code knows the path being rendered. */
 export const PATHNAME_HEADER = "x-blaxzy-pathname";
 
+/** The readiness endpoint (`src/app/api/health/route.ts`). */
+export const HEALTH_PATH = "/api/health";
+
 export const LOGIN_PATH = "/login";
 export const VERIFY_EMAIL_PATH = "/verify-email";
 
@@ -37,6 +40,8 @@ export function isPublicPath(pathname: string, isDevelopment: boolean): boolean 
   const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
   if (PUBLIC_PAGES.has(normalized)) return true;
   if (isUnder(normalized, AUTH_BASE_PATH)) return true;
+  // Probed by load balancers and the container health check, which carry no session.
+  if (normalized === HEALTH_PATH) return true;
   if (isDevelopment && isUnder(normalized, "/dev")) return true;
   return false;
 }

@@ -12,16 +12,22 @@ describe("isPublicPath", () => {
     "/reset-password",
     "/api/auth",
     "/api/auth/sign-in/email",
+    "/api/health",
   ])("treats %j as public", (path) => {
     expect(isPublicPath(path, false)).toBe(true);
   });
 
-  it.each(["/dashboard", "/projects/1", "/loginx", "/api/projects", "/api/authx", "/dev/ui"])(
-    "treats %j as protected",
-    (path) => {
-      expect(isPublicPath(path, false)).toBe(false);
-    },
-  );
+  it.each([
+    "/dashboard",
+    "/projects/1",
+    "/loginx",
+    "/api/projects",
+    "/api/authx",
+    "/api/health/x",
+    "/dev/ui",
+  ])("treats %j as protected", (path) => {
+    expect(isPublicPath(path, false)).toBe(false);
+  });
 
   it("opens /dev only in development", () => {
     expect(isPublicPath("/dev", true)).toBe(true);

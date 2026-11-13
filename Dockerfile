@@ -3,6 +3,7 @@
 # Two images from one build:
 #   web    (default target): node server.js   (Next standalone output)
 #   worker (--target worker): node worker.cjs  (esbuild bundle + sharp + ffmpeg)
+#   migrate (--target migrate): node migrate.cjs  (applies drizzle/ migrations, then exits)
 # The worker is bundled with esbuild into a single file. Only native packages stay outside the
 # bundle (`--external:sharp`); they are installed for the worker in /app/worker/node_modules.
 # ffmpeg (sample video) comes from the distribution in the worker image only.
@@ -24,7 +25,14 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 FROM deps AS build
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm build && pnpm worker:build
+# next.config.ts bakes the Content-Security-Policy into the build, and the policy must allow the
+# origin browsers use for presigned S3 URLs: pass it with
+# `docker build --build-arg S3_PUBLIC_ENDPOINT=https://s3.example.com .`
+# (unset: images, media and uploads are allowed from any https: origin). Not a secret.
+ARG S3_PUBLIC_ENDPOINT=""
+ARG S3_ENDPOINT=""
+ENV S3_PUBLIC_ENDPOINT=$S3_PUBLIC_ENDPOINT     S3_ENDPOINT=$S3_ENDPOINT
+RUN pnpm build && pnpm worker:build && pnpm migrate:build
 
 # The worker's native dependencies (sharp + its prebuilt libvips for this platform), at the exact
 # version pinned in package.json, in a flat node_modules next to the bundle.
@@ -53,6 +61,8 @@ COPY --from=build --chown=app:app /app/dist/worker.cjs ./worker/index.cjs
 COPY --from=worker-deps --chown=app:app /opt/worker/node_modules ./worker/node_modules
 # `node worker.cjs` is the entry point; modules resolve from /app/worker/node_modules.
 RUN printf 'require("./worker/index.cjs");\n' > worker.cjs && chown app:app worker.cjs
+# No HEALTHCHECK: the worker serves no port and writes no heartbeat, so a probe could only check
+# that the process exists, which the container runtime already tracks (use a restart policy).
 USER app
 CMD ["node", "worker.cjs"]
 
@@ -64,4 +74,6 @@ COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
 USER app
 EXPOSE 3000
+# GET /api/health answers 200 only while `select 1` works (alpine has no curl, so use node).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3   CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 CMD ["node", "server.js"]

@@ -12,3 +12,10 @@ docs
 Dockerfile
 .dockerignore
 docker-compose.yml
+.claude
+.impeccable
+.vscode
+*.md
+test-results
+playwright-report
+tsconfig.tsbuildinfo

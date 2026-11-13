@@ -6,7 +6,7 @@
  * BLAXZY's camelCase, sent as the owner's JSON template (see `prompt.ts`).
  */
 import { z } from "zod";
-import { designerProjectSchema, MAX_DESIGN_TEXT } from "../shared/designer";
+import { designerProjectSchema, MAX_DESIGN_TEXT, MAX_SHEET_VIEWS } from "../shared/designer";
 import { PROP_ASPECT_RATIOS, PROP_SHEET_LEVELS } from "../prop-generator/schema";
 
 const viewId = z.string().trim().min(1).max(60);
@@ -118,7 +118,7 @@ export const propSheetOutputSchema = z.object({
   asset_id: z.string(),
   asset_name: z.string(),
   sheet_level: z.enum(PROP_SHEET_LEVELS),
-  views: z.array(propSheetViewSchema).describe("At most 13 views."),
+  views: z.array(propSheetViewSchema).max(MAX_SHEET_VIEWS).describe("At most 13 views."),
   generation_order: z.array(z.string()),
   scale_card: propScaleCardSchema.describe(
     "Data for the backend-drawn scale card. Never drawn by the image model.",

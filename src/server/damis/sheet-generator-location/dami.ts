@@ -1,6 +1,13 @@
 import { defineDami } from "../framework/define";
 import { CLAUDE_MODELS } from "../framework/models";
-import { sheetFixProblems } from "../shared/designer";
+import {
+  duplicateIds,
+  editPreviousViewProblems,
+  generationOrderProblems,
+  isSheetFixRound,
+  sheetFixProblems,
+  viewDependencyProblems,
+} from "../shared/designer";
 import { buildLocationSheetPrompt } from "./prompt";
 import {
   locationSheetInputSchema,
@@ -34,10 +41,7 @@ function coverageViewIds(spec: Record<string, unknown>): string[] {
 
 /** True when the run is a fix round (rule 9 of the owner's prompt). */
 export function isLocationSheetFix(input: LocationSheetParsedInput): boolean {
-  return (
-    input.previousOutput !== undefined &&
-    (input.fixRequests.length > 0 || input.userNotes !== undefined)
-  );
+  return isSheetFixRound(input);
 }
 
 /**
@@ -74,7 +78,12 @@ export function checkLocationSheet(
   }
   if (output.concept_sheet !== null) problems.push("concept_sheet must be null in lock mode");
   const ids = output.views.map((v) => v.view_id);
-  if (new Set(ids).size !== ids.length) problems.push("every view_id must appear once in views");
+  const repeated = duplicateIds(ids);
+  if (repeated.length > 0) {
+    problems.push(
+      `every view_id must appear once in views: ${repeated.join(", ")} appear more than once`,
+    );
+  }
   if (ids.length === 0 && output.warnings.length === 0) {
     problems.push("views is empty: write the views, or explain in warnings why not");
   }
@@ -99,44 +108,38 @@ export function checkLocationSheet(
     }
   }
   // Generation order: every view once, after the views of this answer it depends on.
-  const order = output.generation_order;
-  const position = new Map(order.map((id, i) => [id, i]));
-  if (ids.length > 0 && (order.length !== ids.length || ids.some((id) => !position.has(id)))) {
-    problems.push("generation_order must list every view_id of views exactly once");
-  }
+  const { problems: orderProblems, position } = generationOrderProblems(
+    ids,
+    output.generation_order,
+    { allowEmpty: true },
+  );
+  problems.push(...orderProblems);
   // A re-written view may depend on a view of the pack that is not approved (yet).
   const approved = new Set([
     ...input.approvedImages.map((a) => a.viewId),
     ...(input.onlyViews ? coverageViewIds(input.lockedSpec) : []),
   ]);
   for (const view of output.views) {
-    const at = position.get(view.view_id) ?? -1;
-    for (const dep of view.depends_on) {
-      const depAt = position.get(dep);
-      if (depAt !== undefined && depAt >= at) {
-        problems.push(
-          `${view.view_id} depends on ${dep}, so it must come after it in generation_order`,
-        );
-      }
-      if (depAt === undefined && !approved.has(dep) && !LOCATION_HERO_VIEWS.includes(dep)) {
-        problems.push(`${view.view_id} depends on ${dep}, which is neither approved nor in views`);
-      }
-    }
+    problems.push(
+      ...viewDependencyProblems(
+        view.view_id,
+        view.depends_on,
+        position,
+        (d) => approved.has(d) || LOCATION_HERO_VIEWS.includes(d),
+      ),
+    );
     if (view.reference_order.length > MAX_VIEW_REFERENCES) {
       problems.push(`${view.view_id} uses more than ${MAX_VIEW_REFERENCES} reference images`);
     }
     if (!view.image_prompt.trim()) problems.push(`${view.view_id} has no image_prompt`);
-    const previous = `previous:${view.view_id}`;
-    const requests = input.fixRequests.filter((r) => r.viewId === view.view_id);
     if (view.edit_mode === "edit_previous_view") {
-      if (requests.length === 0 || !requests.every((r) => r.editEligible)) {
-        problems.push(
-          `${view.view_id}: edit_previous_view only when every request for the view is edit_eligible`,
-        );
-      }
-      if (!view.reference_order.some((r) => r.source_view_id === previous)) {
-        problems.push(`${view.view_id}: edit_previous_view needs "${previous}" in reference_order`);
-      }
+      problems.push(
+        ...editPreviousViewProblems(
+          view.view_id,
+          input.fixRequests.filter((r) => r.viewId === view.view_id),
+          view.reference_order.some((r) => r.source_view_id === `previous:${view.view_id}`),
+        ),
+      );
     }
   }
   problems.push(

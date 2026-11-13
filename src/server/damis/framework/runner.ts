@@ -1,4 +1,5 @@
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
+import { APIUserAbortError } from "@anthropic-ai/sdk";
 import type { z } from "zod";
 import { getEnv } from "@/server/env";
 import {
@@ -10,6 +11,7 @@ import {
 import { getProcessClaudeLimiter, Semaphore } from "./concurrency";
 import { STREAMING_THRESHOLD_TOKENS, type DamiDefinition, type DamiEffort } from "./define";
 import {
+  DamiAbortedError,
   DamiApiError,
   DamiConfigError,
   DamiError,
@@ -18,8 +20,14 @@ import {
   DamiRefusalError,
   DamiTruncatedError,
 } from "./errors";
-import { resolvePromptImages, storageImageResolver, type ImageResolver } from "./images";
-import { resolveDamiMode, SAMPLE_MODEL, type DamiMode } from "./mode";
+import {
+  isUnusableImageError,
+  resolvePromptImages,
+  storageImageResolver,
+  type ImageResolver,
+  type ResolvedImage,
+} from "./images";
+import { resolveDamiMode, SAMPLE_MODEL, warnSampleModeInProduction, type DamiMode } from "./mode";
 import { resolveModel } from "./models";
 import { addUsage, computeCostUsd, ZERO_USAGE, type TokenUsage } from "./pricing";
 import { buildClaudeRequest, replayAssistantContent, responseText } from "./request";
@@ -60,7 +68,8 @@ export type DamiRunnerDeps = {
   limiter?: Semaphore;
   /** Values given here are used instead of the environment. */
   config?: Partial<DamiRuntimeConfig>;
-  sleep?: (ms: number) => Promise<void>;
+  /** Waits between retries. `signal` aborts the wait (the runner also stops waiting on its own). */
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   random?: () => number;
   backoff?: { baseDelayMs: number; maxDelayMs: number };
   /** Loads prompt images (live mode only). Default: object storage, downscaled with sharp. */
@@ -147,6 +156,51 @@ function correctionMessage(issues: string[]): string {
   ].join("\n");
 }
 
+/** True when the run was stopped through its signal, however the failure surfaced. */
+function isAbort(error: unknown, signal: AbortSignal | undefined): boolean {
+  return (
+    signal?.aborted === true ||
+    error instanceof APIUserAbortError ||
+    (error instanceof Error && error.name === "AbortError")
+  );
+}
+
+/** Waits `ms`, but stops waiting (and rejects with the signal's reason) when `signal` aborts. */
+async function abortableWait(
+  sleep: (ms: number, signal?: AbortSignal) => Promise<void>,
+  ms: number,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  if (!signal) return sleep(ms);
+  signal.throwIfAborted();
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  signal.addEventListener("abort", onAbort, { once: true });
+  try {
+    await Promise.race([
+      sleep(ms, controller.signal),
+      new Promise<never>((_, reject) => {
+        controller.signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      }),
+    ]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+    controller.abort();
+  }
+}
+
+function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    }
+    signal?.addEventListener("abort", done, { once: true });
+  });
+}
+
 function describeError(error: unknown): string {
   if (error instanceof Error) {
     const cause = error.cause instanceof Error ? ` (cause: ${error.cause.message})` : "";
@@ -192,7 +246,7 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
   }
   const limiter = deps.limiter ?? getProcessClaudeLimiter(config.maxConcurrency);
   const store = deps.store ?? createDrizzleDamiRunStore();
-  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const sleep = deps.sleep ?? defaultSleep;
   const backoff = { ...DEFAULT_BACKOFF, ...deps.backoff, random: deps.random ?? Math.random };
 
   const maxTokens = ctx.maxOutputTokens ?? dami.maxOutputTokens;
@@ -203,27 +257,7 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
     );
   }
   const prompt = dami.build(validInput);
-  // Sample mode never reads storage: images become text stand-ins.
-  let images: Awaited<ReturnType<typeof resolvePromptImages>> | undefined;
-  if (!sample) {
-    try {
-      images = await resolvePromptImages(
-        prompt,
-        deps.resolveImage ?? storageImageResolver,
-        ctx.signal,
-      );
-    } catch (error) {
-      throw new DamiInputError(dami.key, [`An image could not be loaded: ${describeError(error)}`]);
-    }
-  }
   const streaming = dami.streaming || maxTokens > STREAMING_THRESHOLD_TOKENS;
-  const request = buildClaudeRequest(prompt, {
-    model,
-    maxTokens,
-    effort: ctx.effort ?? dami.effort,
-    outputSchema: dami.output,
-    images,
-  });
   const callOptions = { signal: ctx.signal, dami: { key: dami.key, input: validInput } };
 
   const runId = await store.start({
@@ -235,24 +269,37 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
     input: validInput,
   });
 
+  if (sample) warnSampleModeInProduction();
+
   let attempts = 0;
   let usage: TokenUsage | null = null;
 
   const call = async (req: ClaudeRequest): Promise<ClaudeResponse> => {
     for (let retry = 0; ; retry++) {
+      if (ctx.signal?.aborted) throw new DamiAbortedError(dami.key, { cause: ctx.signal.reason });
       attempts++;
       try {
-        const response = await limiter.run(() =>
-          streaming
-            ? client.streamMessage(req, callOptions)
-            : client.createMessage(req, callOptions),
+        const response = await limiter.run(
+          () =>
+            streaming
+              ? client.streamMessage(req, callOptions)
+              : client.createMessage(req, callOptions),
+          ctx.signal,
         );
         usage = addUsage(usage ?? ZERO_USAGE, usageOf(response));
         return response;
       } catch (error) {
+        if (isAbort(error, ctx.signal)) throw new DamiAbortedError(dami.key, { cause: error });
         const transient = isTransientError(error);
         if (transient && retry < config.maxRetries) {
-          await sleep(backoffDelayMs(retry + 1, error, backoff));
+          try {
+            await abortableWait(sleep, backoffDelayMs(retry + 1, error, backoff), ctx.signal);
+          } catch (waitError) {
+            if (isAbort(waitError, ctx.signal)) {
+              throw new DamiAbortedError(dami.key, { cause: waitError });
+            }
+            throw waitError;
+          }
           continue;
         }
         throw new DamiApiError(
@@ -267,6 +314,38 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
   };
 
   try {
+    // Sample mode never reads storage: images become text stand-ins. Loaded after the run row
+    // exists so a failure here is recorded on it.
+    let images: Map<string, ResolvedImage> | undefined;
+    if (!sample) {
+      try {
+        images = await resolvePromptImages(
+          prompt,
+          deps.resolveImage ?? storageImageResolver,
+          ctx.signal,
+        );
+      } catch (error) {
+        if (isAbort(error, ctx.signal)) throw new DamiAbortedError(dami.key, { cause: error });
+        if (isUnusableImageError(error)) {
+          throw new DamiInputError(dami.key, [
+            `An image could not be used: ${describeError(error)}`,
+          ]);
+        }
+        // Storage or network trouble: the job may be retried later.
+        throw new DamiApiError(dami.key, `An image could not be loaded: ${describeError(error)}`, {
+          cause: error,
+          transient: true,
+          status: null,
+        });
+      }
+    }
+    const request = buildClaudeRequest(prompt, {
+      model,
+      maxTokens,
+      effort: ctx.effort ?? dami.effort,
+      outputSchema: dami.output,
+      images,
+    });
     const messages: MessageParam[] = [...request.messages];
     let correctionsLeft = 1;
     for (;;) {
@@ -291,7 +370,12 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
         }
         const finalUsage: TokenUsage = usage ?? ZERO_USAGE;
         const costUsd = computeCostUsd(model, finalUsage);
-        await store.finish(runId, { status: "succeeded", output, attempts, usage, costUsd });
+        // Bookkeeping must never discard a paid, valid output (a retry would pay again).
+        try {
+          await store.finish(runId, { status: "succeeded", output, attempts, usage, costUsd });
+        } catch (storeError) {
+          console.error(`[damis] could not record success of run ${runId}:`, storeError);
+        }
         return { runId, output, model, attempts, usage: finalUsage, costUsd };
       }
       if (correctionsLeft === 0) throw new DamiOutputError(dami.key, result.issues);
@@ -314,7 +398,7 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
     const finalUsage: TokenUsage | null = usage;
     try {
       await store.finish(runId, {
-        status: "failed",
+        status: typed instanceof DamiAbortedError ? "aborted" : "failed",
         error: describeError(typed),
         attempts,
         usage: finalUsage,

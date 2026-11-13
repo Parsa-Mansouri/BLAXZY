@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb, type Db } from "@/server/db/client";
-import { damiRun } from "@/server/db/schema";
+import { damiRun, type DamiRunStatus } from "@/server/db/schema";
 import type { TokenUsage } from "./pricing";
 
 export type DamiRunStart = {
@@ -21,7 +21,9 @@ type DamiRunEnd = {
 
 export type DamiRunFinish =
   | (DamiRunEnd & { status: "succeeded"; output: unknown })
-  | (DamiRunEnd & { status: "failed"; error: string });
+  | (DamiRunEnd & { status: "failed"; error: string })
+  /** Stopped through the abort signal, or swept after its process died. Not an API failure. */
+  | (DamiRunEnd & { status: "aborted"; error: string });
 
 /** Persistence for dami runs. The runner is its only user, and so the only writer of dami_run. */
 export interface DamiRunStore {
@@ -54,9 +56,10 @@ export function createDrizzleDamiRunStore(db: Db = getDb()): DamiRunStore {
       await db
         .update(damiRun)
         .set({
-          status: result.status,
+          // `aborted` is stored as free text; DamiRunStatus (db/schema.ts) should list it.
+          status: result.status as string as DamiRunStatus,
           output: result.status === "succeeded" ? result.output : null,
-          error: result.status === "failed" ? result.error : null,
+          error: result.status === "succeeded" ? null : result.error,
           attempts: result.attempts,
           inputTokens: usage?.inputTokens ?? null,
           outputTokens: usage?.outputTokens ?? null,

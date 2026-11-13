@@ -6,7 +6,7 @@
  * output); the input is BLAXZY's camelCase, sent as the owner's `<input>` JSON (see `prompt.ts`).
  */
 import { z } from "zod";
-import { designerProjectSchema, MAX_DESIGN_TEXT } from "../shared/designer";
+import { designerProjectSchema, MAX_DESIGN_TEXT, MAX_SHEET_VIEWS } from "../shared/designer";
 
 /** A view of the pack, by view id (`hero_wide`, `reverse_wide`, `detail_1` ...). */
 const viewId = z.string().trim().min(1).max(60);
@@ -99,6 +99,7 @@ export const locationSheetOutputSchema = z.object({
     .describe("Concept mode only; null in lock mode."),
   views: z
     .array(locationSheetViewSchema)
+    .max(MAX_SHEET_VIEWS)
     .describe(
       "Lock mode only; empty in concept mode. Excludes the Hero, which is already approved.",
     ),

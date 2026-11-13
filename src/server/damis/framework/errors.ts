@@ -3,7 +3,7 @@
  * exists, its id, so callers can link the failure to the stored run.
  */
 export type DamiErrorCode =
-  "invalid_input" | "config" | "api" | "invalid_output" | "refusal" | "truncated";
+  "invalid_input" | "config" | "api" | "invalid_output" | "refusal" | "truncated" | "aborted";
 
 export class DamiError extends Error {
   readonly code: DamiErrorCode;
@@ -96,5 +96,16 @@ export class DamiTruncatedError extends DamiError {
       damiKey,
       `Dami "${damiKey}" output was cut off at max_tokens (${maxTokens}). Raise maxOutputTokens or reduce the input size.`,
     );
+  }
+}
+
+/**
+ * The run was stopped through `DamiRunContext.signal` (a stopping worker, a cancelled job). Never
+ * retried; the run is stored as `aborted`, not `failed`. Handlers decide what to do via their own
+ * signal: this only says the dami did not finish.
+ */
+export class DamiAbortedError extends DamiError {
+  constructor(damiKey: string, options?: { cause?: unknown }) {
+    super("aborted", damiKey, `Dami "${damiKey}" was aborted before it finished.`, options);
   }
 }

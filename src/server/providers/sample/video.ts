@@ -10,7 +10,7 @@
  */
 import { once } from "node:events";
 import { createReadStream } from "node:fs";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GenerationPurpose } from "@/server/db/schema";
@@ -231,6 +231,50 @@ export function sampleVideoArgs(spec: SampleVideoSpec, dir: string, output: stri
   return args;
 }
 
+const TEMP_PREFIX = "blaxzy-video-";
+
+/** A render directory older than this is a leftover of a killed process (a render takes seconds). */
+export const STALE_VIDEO_DIR_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Removes `blaxzy-video-*` directories in the OS temp dir whose last change is older than
+ * `maxAgeMs`: a hard kill (SIGKILL, OOM) skips `dispose` and leaks them. Only directories with
+ * exactly that prefix are touched. Returns how many were removed; never throws.
+ */
+export async function sweepStaleSampleVideoDirs(
+  maxAgeMs: number,
+  options: { dir?: string; now?: number } = {},
+): Promise<number> {
+  const root = options.dir ?? tmpdir();
+  const cutoff = (options.now ?? Date.now()) - maxAgeMs;
+  let removed = 0;
+  try {
+    const entries = await readdir(root, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !entry.name.startsWith(TEMP_PREFIX)) continue;
+      const path = join(root, entry.name);
+      try {
+        if ((await stat(path)).mtimeMs >= cutoff) continue;
+        await rm(path, { recursive: true, force: true, maxRetries: 3 });
+        removed++;
+      } catch {
+        // In use or already gone: leave it.
+      }
+    }
+  } catch {
+    // Unreadable temp dir: nothing to sweep.
+  }
+  return removed;
+}
+
+let sweptStaleDirs: Promise<number> | undefined;
+
+/** Sweeps once per process, on the first render (never at import time). */
+function sweepStaleOnce(): void {
+  sweptStaleDirs ??= sweepStaleSampleVideoDirs(STALE_VIDEO_DIR_MS);
+  void sweptStaleDirs;
+}
+
 /**
  * Renders the clip and its poster (a JPEG frame from one second in). Returns the MP4 as a stream
  * of known length; `dispose` removes the temporary files.
@@ -239,7 +283,8 @@ export async function renderSampleVideo(
   spec: SampleVideoSpec,
   options: { signal?: AbortSignal } = {},
 ): Promise<ProviderResult> {
-  const dir = await mkdtemp(join(tmpdir(), "blaxzy-video-"));
+  sweepStaleOnce();
+  const dir = await mkdtemp(join(tmpdir(), TEMP_PREFIX));
   const dispose = () => rm(dir, { recursive: true, force: true, maxRetries: 3 });
   try {
     const l = layoutFor(spec);

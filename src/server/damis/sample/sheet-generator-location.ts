@@ -15,17 +15,12 @@ import {
   type LocationSheetView,
 } from "../sheet-generator-location/schema";
 import { DESIGN_CHANGE_PREFIX } from "../sheet-generator-character/schema";
+import { record } from "../shared/designer";
 import { truncate } from "./util";
 
 type PlannedView = { view_id: string; name: string; purpose: string };
 
 const ORDINALS = ["first", "second", "third", "fourth"];
-
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
 
 function strings(value: unknown, key: string): string[] {
   return Array.isArray(value)

@@ -44,6 +44,7 @@ export type {
   DamiRuntimeConfig,
 } from "./framework/runner";
 export {
+  DamiAbortedError,
   DamiApiError,
   DamiConfigError,
   DamiError,
@@ -55,6 +56,7 @@ export {
 } from "./framework/errors";
 export type { ClaudeClient, ClaudeRequest, ClaudeResponse } from "./framework/client";
 export type { DamiRunStore, DamiRunStart, DamiRunFinish } from "./framework/store";
+export { DEFAULT_STUCK_AFTER_MINUTES, sweepStuckDamiRuns } from "./framework/sweep";
 export { Semaphore } from "./framework/concurrency";
 export { getDamiMode, resolveDamiMode, SAMPLE_MODEL, type DamiMode } from "./framework/mode";
 export { createSampleClaudeClient, SAMPLE_GENERATORS } from "./sample/client";

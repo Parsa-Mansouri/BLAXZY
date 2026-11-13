@@ -62,8 +62,9 @@ function answersVersion(binary: string): Promise<boolean> {
 let resolving: Promise<string> | undefined;
 
 async function resolveUncached(): Promise<string> {
-  // Validated like the rest of the environment, but on its own: tools and tests that render or
-  // probe media need no database or storage settings.
+  // Deliberately not getEnv(): that parses the whole environment and throws without DATABASE_URL,
+  // storage settings and so on, while scripts/dev-generation and the media tests only render or
+  // probe. The variable is still validated with its own schema entry.
   const configured = envSchema.shape.FFMPEG_PATH.parse(process.env.FFMPEG_PATH);
   if (configured) {
     if (await isExecutableFile(configured)) return configured;
@@ -104,33 +105,80 @@ export async function ffmpegAvailable(): Promise<boolean> {
 
 const STDERR_TAIL = 4_000;
 
+/** A hung ffmpeg is stopped after this long (a sample clip renders in seconds). */
+export const FFMPEG_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** After SIGTERM, a process that has not exited within this long is sent SIGKILL. */
+export const FFMPEG_KILL_GRACE_MS = 5_000;
+
+export type RunFfmpegOptions = {
+  signal?: AbortSignal;
+  allowFailure?: boolean;
+  /** Overrides `FFMPEG_TIMEOUT_MS` for this call. */
+  timeoutMs?: number;
+  /** Overrides `FFMPEG_KILL_GRACE_MS` for this call. */
+  killGraceMs?: number;
+};
+
+/** ffmpeg did not finish within its timeout and was killed. */
+export class FfmpegTimeoutError extends Error {
+  constructor(timeoutMs: number, stderr: string) {
+    super(`ffmpeg timed out after ${timeoutMs} ms: ${stderr.slice(-STDERR_TAIL)}`);
+    this.name = "FfmpegTimeoutError";
+  }
+}
+
 /**
  * Runs ffmpeg with `args` (no shell). Resolves with its stderr (ffmpeg logs there); rejects with
- * the stderr tail when it exits non-zero, and kills it when `signal` aborts.
+ * the stderr tail when it exits non-zero. When `signal` aborts or the timeout passes, the process
+ * gets SIGTERM and, if it is still alive after the grace period, SIGKILL; the promise settles only
+ * once the process has exited.
  */
 export async function runFfmpeg(
   args: string[],
-  options: { signal?: AbortSignal; allowFailure?: boolean } = {},
+  options: RunFfmpegOptions = {},
 ): Promise<{ code: number | null; stderr: string }> {
   const binary = await resolveFfmpeg();
+  const timeoutMs = options.timeoutMs ?? FFMPEG_TIMEOUT_MS;
+  const killGraceMs = options.killGraceMs ?? FFMPEG_KILL_GRACE_MS;
+  const { signal } = options;
+  if (signal?.aborted) throw signal.reason ?? new Error("aborted");
   return new Promise((resolve, reject) => {
     // The binary is chosen at run time; tell Next not to trace it (that would pull in the project).
     const child = spawn(/* turbopackIgnore: true */ binary, ["-hide_banner", "-nostdin", ...args], {
       stdio: ["ignore", "ignore", "pipe"],
       windowsHide: true,
-      signal: options.signal,
     });
     let stderr = "";
+    let stopped: "abort" | "timeout" | null = null;
+    let killTimer: NodeJS.Timeout | undefined;
+    const stop = (why: "abort" | "timeout") => {
+      if (stopped) return;
+      stopped = why;
+      child.kill("SIGTERM");
+      killTimer = setTimeout(() => child.kill("SIGKILL"), killGraceMs);
+    };
+    const onAbort = () => stop("abort");
+    const timeout = setTimeout(() => stop("timeout"), timeoutMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    const cleanup = () => {
+      clearTimeout(timeout);
+      clearTimeout(killTimer);
+      signal?.removeEventListener("abort", onAbort);
+    };
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {
       stderr = (stderr + chunk).slice(-STDERR_TAIL * 4);
     });
     child.once("error", (err) => {
-      if (options.signal?.aborted) reject(options.signal.reason ?? err);
-      else reject(new FfmpegUnavailableError(`ffmpeg failed to start: ${err.message}`));
+      cleanup();
+      reject(new FfmpegUnavailableError(`ffmpeg failed to start: ${err.message}`));
     });
     child.once("close", (code) => {
-      if (code === 0 || options.allowFailure) resolve({ code, stderr });
+      cleanup();
+      if (stopped === "abort") reject(signal?.reason ?? new Error("ffmpeg was aborted"));
+      else if (stopped === "timeout") reject(new FfmpegTimeoutError(timeoutMs, stderr));
+      else if (code === 0 || options.allowFailure) resolve({ code, stderr });
       else reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-STDERR_TAIL)}`));
     });
   });

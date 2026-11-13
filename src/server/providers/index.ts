@@ -31,9 +31,41 @@ export type {
 
 const providers = new Map<string, GenerationProvider>();
 
-function create(id: string): GenerationProvider {
-  if (id === "higgsfield") return new HiggsfieldProvider();
-  return new SampleProvider();
+type ProviderId = typeof SAMPLE_PROVIDER_ID | "higgsfield";
+
+function isProviderId(id: string): id is ProviderId {
+  return id === SAMPLE_PROVIDER_ID || id === "higgsfield";
+}
+
+let sampleWarned = false;
+
+/** One loud structured warning per process when the sample provider is used in production. */
+function warnSampleProviderInProduction(): void {
+  if (sampleWarned || process.env.NODE_ENV !== "production") return;
+  sampleWarned = true;
+  console.warn(
+    JSON.stringify({
+      level: "warn",
+      event: "sample_mode_in_production",
+      component: "providers",
+      message:
+        "The SAMPLE generation provider is active in a production process: clips and images are placeholders. Set GENERATION_PROVIDER=higgsfield to generate for real.",
+    }),
+  );
+}
+
+function create(id: ProviderId): GenerationProvider {
+  switch (id) {
+    case "higgsfield":
+      return new HiggsfieldProvider();
+    case SAMPLE_PROVIDER_ID:
+      warnSampleProviderInProduction();
+      return new SampleProvider();
+    default: {
+      const unknown: never = id;
+      throw new Error(`Unknown generation provider "${String(unknown)}"`);
+    }
+  }
 }
 
 /**
@@ -45,9 +77,7 @@ export function getProvider(id?: string): GenerationProvider {
   const key = id ?? getEnv().GENERATION_PROVIDER;
   let provider = providers.get(key);
   if (!provider) {
-    if (key !== SAMPLE_PROVIDER_ID && key !== "higgsfield") {
-      throw new Error(`Unknown generation provider "${key}"`);
-    }
+    if (!isProviderId(key)) throw new Error(`Unknown generation provider "${key}"`);
     provider = create(key);
     providers.set(key, provider);
   }

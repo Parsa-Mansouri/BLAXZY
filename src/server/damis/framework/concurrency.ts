@@ -19,8 +19,13 @@ export class Semaphore {
     return this.waiting.length;
   }
 
-  async run<T>(task: () => Promise<T>): Promise<T> {
-    await this.acquire();
+  /**
+   * Runs `task` once a slot is free. When `signal` aborts while the call is still queued, it
+   * leaves the queue without taking a slot and rejects with the signal's reason; a task that is
+   * already running is not interrupted here (it gets the signal itself).
+   */
+  async run<T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    await this.acquire(signal);
     try {
       return await task();
     } finally {
@@ -28,14 +33,25 @@ export class Semaphore {
     }
   }
 
-  private acquire(): Promise<void> {
+  private acquire(signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) return Promise.reject(abortReason(signal));
     if (this.running < this.max) {
       this.running++;
       return Promise.resolve();
     }
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       // The slot is handed over directly by release(), so `running` stays unchanged.
-      this.waiting.push(resolve);
+      const waiter = () => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      };
+      const onAbort = () => {
+        const at = this.waiting.indexOf(waiter);
+        if (at >= 0) this.waiting.splice(at, 1);
+        reject(abortReason(signal));
+      };
+      this.waiting.push(waiter);
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
   }
 
@@ -49,9 +65,18 @@ export class Semaphore {
   }
 }
 
+function abortReason(signal: AbortSignal | undefined): unknown {
+  return signal?.reason ?? new DOMException("The operation was aborted.", "AbortError");
+}
+
 let processLimiter: Semaphore | undefined;
 
-/** The per-process limit on concurrent Claude calls (`DAMI_MAX_CONCURRENCY`). */
+/**
+ * The limit on concurrent Claude calls (`DAMI_MAX_CONCURRENCY`) of THIS process. It is per
+ * process, not global: with several worker processes (and the web server, if it ever runs a
+ * dami) the total number of concurrent Claude calls is the number of processes times this value.
+ * Size it against the API rate limit divided by the number of processes.
+ */
 export function getProcessClaudeLimiter(max: number): Semaphore {
   if (!processLimiter || processLimiter.max !== max) {
     processLimiter = new Semaphore(max);

@@ -1,6 +1,14 @@
 import { defineDami } from "../framework/define";
 import { CLAUDE_MODELS } from "../framework/models";
-import { sheetFixProblems } from "../shared/designer";
+import {
+  duplicateIds,
+  editPreviousViewProblems,
+  generationOrderProblems,
+  isSheetFixRound,
+  record,
+  sheetFixProblems,
+  viewDependencyProblems,
+} from "../shared/designer";
 import { buildPropSheetPrompt } from "./prompt";
 import {
   propSheetInputSchema,
@@ -16,12 +24,6 @@ export const MAX_PROP_VIEW_REFERENCES = 4;
 export const PROP_LEVEL_MAX_IMAGES = { simple: 2, standard: 7, production: 14 } as const;
 
 type Level = keyof typeof PROP_LEVEL_MAX_IMAGES;
-
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
 
 /** The non-default states of the locked spec (`dna.states`), by state id. */
 export function nonDefaultStates(spec: Record<string, unknown>): string[] {
@@ -47,10 +49,7 @@ const RANK: Record<Level, number> = { simple: 0, standard: 1, production: 2 };
 
 /** True when the run is a fix round (the owner's FIX MODE). */
 export function isPropSheetFix(input: PropSheetParsedInput): boolean {
-  return (
-    input.previousOutput !== undefined &&
-    (input.fixRequests.length > 0 || input.userNotes !== undefined)
-  );
+  return isSheetFixRound(input);
 }
 
 /**
@@ -62,7 +61,12 @@ export function isPropSheetFix(input: PropSheetParsedInput): boolean {
 export function checkPropSheet(output: PropSheetOutput, input: PropSheetParsedInput): string[] {
   const problems: string[] = [];
   const ids = output.views.map((v) => v.view_id);
-  if (new Set(ids).size !== ids.length) problems.push("every view_id must appear once in views");
+  const repeated = duplicateIds(ids);
+  if (repeated.length > 0) {
+    problems.push(
+      `every view_id must appear once in views: ${repeated.join(", ")} appear more than once`,
+    );
+  }
   if (ids.includes("hero_34")) problems.push("views must not include hero_34: it is approved");
   const minimum = minimumPropLevel(input.lockedSpec);
   if (minimum && RANK[output.sheet_level] < RANK[minimum]) {
@@ -79,40 +83,28 @@ export function checkPropSheet(output: PropSheetOutput, input: PropSheetParsedIn
       }
     }
   }
-  const order = output.generation_order;
-  const position = new Map(order.map((id, i) => [id, i]));
-  if (order.length !== ids.length || ids.some((id) => !position.has(id))) {
-    problems.push("generation_order must list every view_id of views exactly once");
-  }
+  const { problems: orderProblems, position } = generationOrderProblems(
+    ids,
+    output.generation_order,
+  );
+  problems.push(...orderProblems);
   const approved = new Set(input.approvedImages.map((a) => a.viewId));
   for (const view of output.views) {
-    const at = position.get(view.view_id) ?? -1;
-    for (const dep of view.depends_on) {
-      const depAt = position.get(dep);
-      if (depAt !== undefined && depAt >= at) {
-        problems.push(
-          `${view.view_id} depends on ${dep}, so it must come after it in generation_order`,
-        );
-      }
-      if (depAt === undefined && !approved.has(dep)) {
-        problems.push(`${view.view_id} depends on ${dep}, which is neither approved nor in views`);
-      }
-    }
+    problems.push(
+      ...viewDependencyProblems(view.view_id, view.depends_on, position, (d) => approved.has(d)),
+    );
     if (view.reference_order.length > MAX_PROP_VIEW_REFERENCES) {
       problems.push(`${view.view_id} uses more than ${MAX_PROP_VIEW_REFERENCES} reference images`);
     }
     if (!view.image_prompt.trim()) problems.push(`${view.view_id} has no image_prompt`);
-    const previous = `previous:${view.view_id}`;
     if (view.edit_mode === "edit_previous_view") {
-      const requests = input.fixRequests.filter((r) => r.viewId === view.view_id);
-      if (requests.length === 0 || !requests.every((r) => r.editEligible)) {
-        problems.push(
-          `${view.view_id}: edit_previous_view only when every request for the view is edit_eligible`,
-        );
-      }
-      if (!view.reference_order.some((r) => r.source === previous)) {
-        problems.push(`${view.view_id}: edit_previous_view needs "${previous}" in reference_order`);
-      }
+      problems.push(
+        ...editPreviousViewProblems(
+          view.view_id,
+          input.fixRequests.filter((r) => r.viewId === view.view_id),
+          view.reference_order.some((r) => r.source === `previous:${view.view_id}`),
+        ),
+      );
     } else if (view.reference_order[0]?.source !== "approved_hero") {
       problems.push(`${view.view_id}: reference_order[0] must be approved_hero`);
     }

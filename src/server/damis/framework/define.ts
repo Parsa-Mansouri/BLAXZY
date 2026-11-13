@@ -86,9 +86,29 @@ const KEY_PATTERN = /^[a-z][a-z0-9-]*$/;
 /** Calls with a larger `max_tokens` stream by default, to avoid HTTP timeouts. */
 export const STREAMING_THRESHOLD_TOKENS = 16_000;
 
-export function defineDami<I extends z.ZodType, O extends z.ZodType, R = z.output<O>>(
-  config: DamiConfig<I, O, R>,
-): DamiDefinition<I, O, R> {
+/** A config without `finalize`: the public result is the validated output itself. */
+export type DamiConfigIdentity<I extends z.ZodType, O extends z.ZodType> = DamiConfig<
+  I,
+  O,
+  z.output<O>
+> & { finalize?: undefined };
+
+/** A config with `finalize`, which alone decides the public result type `R`. */
+export type DamiConfigFinalized<I extends z.ZodType, O extends z.ZodType, R> = DamiConfig<
+  I,
+  O,
+  R
+> & { finalize: NonNullable<DamiConfig<I, O, R>["finalize"]> };
+
+export function defineDami<I extends z.ZodType, O extends z.ZodType>(
+  config: DamiConfigIdentity<I, O>,
+): DamiDefinition<I, O, z.output<O>>;
+export function defineDami<I extends z.ZodType, O extends z.ZodType, R>(
+  config: DamiConfigFinalized<I, O, R>,
+): DamiDefinition<I, O, R>;
+export function defineDami<I extends z.ZodType, O extends z.ZodType>(
+  config: DamiConfig<I, O, unknown>,
+): DamiDefinition<I, O, unknown> {
   if (!KEY_PATTERN.test(config.key)) {
     throw new Error(`Invalid dami key "${config.key}": use lower-case words joined by hyphens`);
   }
@@ -108,8 +128,8 @@ export function defineDami<I extends z.ZodType, O extends z.ZodType, R = z.outpu
     streaming: config.streaming ?? config.maxOutputTokens > STREAMING_THRESHOLD_TOKENS,
     build: (input) => config.build(input),
     check: (output, input) => (check ? check(output, input) : []),
-    // Without `finalize`, R defaults to z.output<O> and the output is returned unchanged.
-    finalize: (output, input) => (finalize ? finalize(output, input) : (output as unknown as R)),
+    // Without `finalize` the overloads make the result type z.output<O>: the output is returned as is.
+    finalize: (output, input) => (finalize ? finalize(output, input) : output),
   };
 }
 

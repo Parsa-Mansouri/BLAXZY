@@ -3,7 +3,12 @@ import { z } from "zod";
 import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
 import { defineDami } from "./define";
 import { DamiInputError, DamiTruncatedError } from "./errors";
-import { MAX_IMAGE_EDGE_PX, prepareImageBytes, type ImageResolver } from "./images";
+import {
+  ImageUnusableError,
+  MAX_IMAGE_EDGE_PX,
+  prepareImageBytes,
+  type ImageResolver,
+} from "./images";
 import { buildClaudeRequest, countBreakpoints } from "./request";
 import { runDami } from "./runner";
 
@@ -74,11 +79,11 @@ describe("dami images", () => {
     expect(store.runs[0]!.input).toEqual({ fileIds: ["only-id"] });
   });
 
-  it("fails with an input error when an image cannot be loaded", async () => {
+  it("fails with an input error when an image is unusable", async () => {
     const client = new FakeClaudeClient([jsonResponse({ seen: 1 })]);
     const { deps } = testDeps(client, {
       resolveImage: async () => {
-        throw new Error("File not found");
+        throw new ImageUnusableError("File not found");
       },
     });
     await expect(runDami(looker, { fileIds: ["x"] }, {}, deps)).rejects.toBeInstanceOf(
@@ -126,6 +131,41 @@ describe("dami images", () => {
     expect(kept.mediaType).toBe("image/png");
     const keptMeta = await sharp(Buffer.from(kept.data, "base64")).metadata();
     expect(keptMeta.width).toBe(40);
+  });
+});
+
+describe("prepareImageBytes format allowlist", () => {
+  it("rejects an SVG even when it is stored under an image MIME type", async () => {
+    const svg = new TextEncoder().encode(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>',
+    );
+    await expect(prepareImageBytes(svg)).rejects.toBeInstanceOf(ImageUnusableError);
+  });
+
+  it("rejects a TIFF", async () => {
+    const { default: sharp } = await import("sharp");
+    const tiff = await sharp({
+      create: { width: 8, height: 8, channels: 3, background: "#fff" },
+    })
+      .tiff()
+      .toBuffer();
+    await expect(prepareImageBytes(new Uint8Array(tiff))).rejects.toThrow(
+      /Unsupported image format/,
+    );
+  });
+
+  it("rejects corrupt bytes as unusable, and accepts WebP and GIF", async () => {
+    await expect(prepareImageBytes(new Uint8Array([1, 2, 3, 4]))).rejects.toBeInstanceOf(
+      ImageUnusableError,
+    );
+    const { default: sharp } = await import("sharp");
+    const base = { create: { width: 8, height: 8, channels: 3 as const, background: "#369" } };
+    const webp = await sharp(base).webp().toBuffer();
+    const gif = await sharp(base).gif().toBuffer();
+    await expect(prepareImageBytes(new Uint8Array(webp))).resolves.toMatchObject({
+      mediaType: "image/jpeg",
+    });
+    await expect(prepareImageBytes(new Uint8Array(gif))).resolves.toBeDefined();
   });
 });
 

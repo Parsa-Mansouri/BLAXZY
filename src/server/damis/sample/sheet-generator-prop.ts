@@ -18,16 +18,11 @@ import {
   type PropSheetView,
 } from "../sheet-generator-prop/schema";
 import { DESIGN_CHANGE_PREFIX } from "../sheet-generator-character/schema";
+import { record } from "../shared/designer";
 import { truncate } from "./util";
 
 const ORDINALS = ["first", "second", "third", "fourth"];
 const ORTHO = ["front", "right", "back", "left", "top", "bottom"];
-
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
 
 function text(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;

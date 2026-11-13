@@ -7,19 +7,19 @@ import { Plus } from "lucide-react";
 import type { BlockDetail } from "@/server/production";
 import {
   Button,
+  cn,
+  formatDurationLong,
   PaperSheet,
   PictureTile,
   ProgressBar,
-  StatusLine,
-  cn,
-  formatDurationLong,
   stagger,
+  StatusLine,
+  StoredImage,
 } from "@/ui";
 import { fileSrc } from "@/lib/file-src";
 import { ChangeRequest, type IssueChoice } from "../../_components/change-request";
-import { Mono } from "../../_components/values";
 import { useRefreshReviewList } from "../../_components/review-list-context";
-import { usePolling } from "../../../_lib/use-polling";
+import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import { blocksHref } from "../../../_lib/production-routes";
 import {
   pollBlockAction,
@@ -32,12 +32,11 @@ import { blockKey } from "../_lib/block-key";
 import { BLOCK_STATE_TONES, blockStateLabel, scriptChangeNotice } from "../_lib/block-state";
 import { AssetPickerSheet } from "./asset-picker-sheet";
 import { PromptView } from "./prompt-view";
+import { Mono } from "@/app/(app)/_components/values";
 
 export type { IssueChoice };
 export type BlockView = Omit<BlockDetail, "takes">;
 
-const FAST_POLL_MS = 2000;
-const SETTLED_POLL_MS = 10000;
 /** When to check again after an action: its own refresh may have raced the server. */
 const RECHECK_MS = [1000, 3500];
 
@@ -71,7 +70,8 @@ function useBlockSync(lineageId: string, block: BlockView) {
       // Never after the page was left: the action would be posted from another page.
       if (!isActive() || !alive.current) return;
       const next = await pollBlockAction(lineageId);
-      if (isActive() && alive.current && next !== keyRef.current) router.refresh();
+      // null: signed out, rate limited or the poll failed. Not a change, so nothing to refresh.
+      if (isActive() && alive.current && next !== null && next !== keyRef.current) router.refresh();
     },
     [lineageId, router],
   );
@@ -435,13 +435,9 @@ export function BlockScreen({
                     aspect="video"
                     picture={
                       asset.thumbnailFileId ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- stored media behind a redirect
-                        <img
+                        <StoredImage
                           src={fileSrc(asset.thumbnailFileId)}
                           alt={`${asset.name}, sheet`}
-                          loading="lazy"
-                          decoding="async"
-                          draggable={false}
                         />
                       ) : undefined
                     }

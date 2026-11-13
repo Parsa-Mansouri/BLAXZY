@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { FixSelection, ReviewOption } from "@/server/damis";
+import type { FixSelection } from "@/server/damis";
+import type { ClientReviewOption } from "@/lib/review-option";
 import { Button, Field, Textarea } from "@/ui";
 import { buildDesignChange, type PackKind } from "../../assets/[assetId]/_lib/sheet-review";
 import { Caps } from "../../assets/[assetId]/_components/desk";
-import { ErrorLine } from "../../assets/[assetId]/_components/shared";
+import { ErrorLine } from "@/app/(app)/_components/values";
 
 /**
  * Sends a locked location pack or prop sheet back to its design step (the owner's LSX01 or
@@ -21,7 +22,7 @@ export function DesignRoutePanel({
   onCancel,
 }: {
   kind: PackKind;
-  route: ReviewOption | null;
+  route: ClientReviewOption | null;
   maxText: number;
   sending: boolean;
   serverError: string | null;

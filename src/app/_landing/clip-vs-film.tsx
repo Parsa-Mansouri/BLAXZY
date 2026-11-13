@@ -1,6 +1,6 @@
-import { ContactSheet } from "./ContactSheet";
+import { ContactSheet } from "./contact-sheet";
 import { TREE_LINES } from "./content";
-import { Reveal } from "./Reveal";
+import { Reveal } from "./reveal";
 
 /** One clip versus the whole production: a statement, the film's contact sheet, the deliverable tree. */
 export function ClipVsFilm() {

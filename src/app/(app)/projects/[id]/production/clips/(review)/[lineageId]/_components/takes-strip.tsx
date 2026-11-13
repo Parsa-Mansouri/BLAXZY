@@ -2,7 +2,7 @@
 
 import type { TakeView } from "@/server/production";
 import { fileSrc } from "@/lib/file-src";
-import { cn, stagger } from "@/ui";
+import { cn, stagger, StoredImage } from "@/ui";
 import { TAKE_STATUS_LABELS, type Orientation } from "../../../_lib/clip-view";
 
 /** The empty frame's few words; never a fake picture. */
@@ -73,13 +73,9 @@ export function TakesStrip({
                     )}
                   >
                     {take.posterFileId ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- a redirect to a presigned URL
-                      <img
+                      <StoredImage
                         src={fileSrc(take.posterFileId)}
                         alt=""
-                        loading="lazy"
-                        decoding="async"
-                        draggable={false}
                         className={cn(
                           "absolute inset-0 size-full object-contain",
                           take.status === "superseded" && "opacity-45",

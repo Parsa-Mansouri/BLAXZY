@@ -1,8 +1,4 @@
-const numberFormat = new Intl.NumberFormat("en-US");
-export const formatNumber = (n: number) => numberFormat.format(n);
-
-/** "1 credit", "140 credits". */
-export const creditsWords = (n: number) => `${formatNumber(n)} ${n === 1 ? "credit" : "credits"}`;
+import { formatNumber } from "@/app/(app)/_lib/format";
 
 /** "1 shot", "7 shots". */
 export const shotsWords = (n: number) => `${formatNumber(n)} ${n === 1 ? "shot" : "shots"}`;

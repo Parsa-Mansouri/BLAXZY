@@ -33,18 +33,11 @@ import { StageHeading, useAssetScreen } from "./asset-context";
 import { Caps } from "./desk";
 import { LookChangesPanel } from "./look-changes-panel";
 import { ReferenceConflictChoice, ReferenceThumbs } from "./reference-conflict";
-import {
-  Amount,
-  Artwork,
-  ErrorLine,
-  MissingImage,
-  PriceLine,
-  When,
-  canAfford,
-  type Orientation,
-} from "./shared";
+import { Artwork, MissingImage, PriceLine, type Orientation } from "./shared";
 import { SheetChangesPanel, type SheetChangesWords } from "./sheet-changes-panel";
 import { EMPTY_SPEC_DRAFT, SpecCard, specChanged, type SpecDraft } from "./spec-card";
+import { Amount, ErrorLine, When } from "@/app/(app)/_components/values";
+import { canAfford } from "@/app/(app)/_lib/format";
 
 export const SAMPLE_OUTPUT = "Sample output from the test generator.";
 

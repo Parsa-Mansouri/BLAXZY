@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { requireUser } from "@/server/auth";
 import { getBalance } from "@/server/billing";
-import { TAKE_ISSUE_LIST } from "@/server/damis";
+import { TAKE_ISSUE_LIST } from "@/server/damis/light";
 import { quoteGeneration } from "@/server/generation";
 import { getBlockDetail, MAX_REVIEW_NOTE_LENGTH, quoteProduction } from "@/server/production";
 import { loadProject } from "../../../../_lib/load-project";

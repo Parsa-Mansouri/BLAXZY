@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ReviewOption } from "@/server/damis";
+import type { ClientReviewOption } from "@/lib/review-option";
 import {
   buildSelections,
   categoryWarnings,
@@ -13,22 +13,21 @@ import {
 
 function option(
   code: string,
-  kind: ReviewOption["kind"],
-  extra: Partial<ReviewOption> = {},
-): ReviewOption {
+  kind: ClientReviewOption["kind"],
+  extra: Partial<ClientReviewOption> = {},
+): ClientReviewOption {
   return {
     code,
     kind,
     label: code,
     needsText: false,
     proOnly: false,
-    callsClaude: true,
-    editEligible: false,
+    takesValue: false,
     ...extra,
   };
 }
 
-const OPTIONS: ReviewOption[] = [
+const OPTIONS: ClientReviewOption[] = [
   option("ADT01", "technical", { needsText: true, targetCount: 0, label: "Missing" }),
   option("ADT02", "technical", { targetCount: 2, label: "Same" }),
   option("ADT03", "technical", { targetCount: 1, label: "Two" }),
@@ -47,7 +46,7 @@ const OPTIONS: ReviewOption[] = [
     },
   }),
   option("ADT05", "technical", { targetCount: 1, needsText: true, label: "Description" }),
-  option("ADP01", "preference", { targetCount: 1, callsClaude: false }),
+  option("ADP01", "preference", { targetCount: 1 }),
   option("ADP99", "preference", { needsText: true, targetCount: 0 }),
   option("ADR01", "regenerate"),
 ];

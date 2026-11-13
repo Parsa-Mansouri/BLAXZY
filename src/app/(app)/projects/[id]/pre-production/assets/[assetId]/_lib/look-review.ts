@@ -4,7 +4,8 @@
  * change would contradict, the designer's warnings and the spec card's groups.
  */
 import type { LookSpecView, LookView } from "@/server/assets";
-import type { FixSelection, ReviewOption } from "@/server/damis";
+import type { FixSelection } from "@/server/damis";
+import type { ClientReviewOption } from "@/lib/review-option";
 import type { DesignerInfo } from "./designer-view";
 
 export type LookReference = LookView["references"][number];
@@ -14,42 +15,47 @@ export type LookAspectRatio = NonNullable<LookView["aspectRatio"]>;
 export type LookSide = "technical" | "preference";
 
 /** The options of one side, in catalog order. */
-export function optionsFor(options: readonly ReviewOption[], side: LookSide): ReviewOption[] {
+export function optionsFor(
+  options: readonly ClientReviewOption[],
+  side: LookSide,
+): ClientReviewOption[] {
   return options.filter((o) => o.kind === side);
 }
 
 /** The re-roll option ("Try again"), sent alone with the same prompt; null when there is none. */
-export function regenerateOption(options: readonly ReviewOption[]): ReviewOption | null {
+export function regenerateOption(
+  options: readonly ClientReviewOption[],
+): ClientReviewOption | null {
   return options.find((o) => o.kind === "regenerate") ?? null;
 }
 
 /** Labels plainer than the catalog's, where it writes "(write it)". */
-export function optionLabel(option: Pick<ReviewOption, "label">): string {
+export function optionLabel(option: Pick<ClientReviewOption, "label">): string {
   return option.label.replace(/\s*\(write it\)\s*$/i, "");
 }
 
 /** The ready answers of an option's follow-up (one is picked), or none. */
-export function followupChips(option: ReviewOption): { label: string; value: string }[] {
+export function followupChips(option: ClientReviewOption): { label: string; value: string }[] {
   const followup = option.followup;
   if (!followup || followup.type === "text" || followup.type === "steps") return [];
   return followup.options.map(({ label, value }) => ({ label, value }));
 }
 
 /** True when the option takes the user's own words. */
-export function takesText(option: ReviewOption): boolean {
+export function takesText(option: ClientReviewOption): boolean {
   return option.needsText || option.followup?.allowCustom === true;
 }
 
 /**
- * True when the option cannot be sent without a chip or the user's words: its instruction has a
- * `{value}` to fill, or it needs text.
+ * True when the option cannot be sent without a chip or the user's words: its instruction takes a
+ * `{value}`, or it needs text.
  */
-export function needsAnswer(option: ReviewOption): boolean {
-  return option.needsText || (option.instructionTemplate?.includes("{value}") ?? false);
+export function needsAnswer(option: ClientReviewOption): boolean {
+  return option.needsText || option.takesValue;
 }
 
 /** True when anything opens under the picked option: chips, a text field or the frame picker. */
-export function hasStrip(option: ReviewOption, frames: readonly unknown[]): boolean {
+export function hasStrip(option: ClientReviewOption, frames: readonly unknown[]): boolean {
   return followupChips(option).length > 0 || takesText(option) || frames.length > 0;
 }
 
@@ -82,7 +88,7 @@ export type BuiltLookSelections =
  */
 export function buildLookSelections(
   draft: LookReviewDraft,
-  options: readonly ReviewOption[],
+  options: readonly ClientReviewOption[],
   maxText: number,
 ): BuiltLookSelections {
   const selections: FixSelection[] = [];
@@ -117,7 +123,7 @@ export function buildLookSelections(
 
 /** The reference roles a change contradicts, for this designer. */
 export function conflictingRoles(
-  option: ReviewOption,
+  option: ClientReviewOption,
   designer: Pick<DesignerInfo, "key" | "conflicts">,
 ): readonly string[] {
   if (designer.key === "character") {
@@ -139,7 +145,7 @@ export interface ReferenceConflict {
  */
 export function findReferenceConflict(
   picked: readonly string[],
-  options: readonly ReviewOption[],
+  options: readonly ClientReviewOption[],
   references: readonly LookReference[],
   designer: Pick<DesignerInfo, "key" | "conflicts">,
 ): ReferenceConflict | null {

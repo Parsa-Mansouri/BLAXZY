@@ -72,5 +72,3 @@ export function Popover({
     </BasePopover.Root>
   );
 }
-
-export const PopoverClose = BasePopover.Close;

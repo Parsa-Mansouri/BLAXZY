@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, PageHeader, ProgressBar, StatusDot } from "@/ui";
-import { usePolling } from "../../_lib/use-polling";
+import { usePolling } from "@/app/(app)/_lib/use-polling";
 import { splitScenes } from "../_lib/scenes";
 import { pollScriptAction, retryVersionAction } from "../actions";
 import { ReadingSheet } from "./screenplay-sheet";
@@ -49,7 +49,9 @@ function useRefreshWhenDone(projectId: string, versionId: string) {
   usePolling(async (isActive) => {
     const poll = await pollScriptAction(projectId);
     if (!isActive()) return;
-    if (!poll || poll.versionId !== versionId || poll.status !== "pending") router.refresh();
+    // No answer (signed out, rate limited, a failed poll) is not a change.
+    if (!poll) return;
+    if (poll.versionId !== versionId || poll.status !== "pending") router.refresh();
   }, true);
 }
 

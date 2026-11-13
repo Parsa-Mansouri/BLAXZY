@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PackView, SheetView } from "@/server/assets";
-import {
-  DESIGN_CHANGE_PREFIX,
-  getReviewCatalog,
-  visibleOptions,
-  type ReviewOption,
-} from "@/server/damis";
+import { DESIGN_CHANGE_PREFIX, getReviewCatalog, visibleOptions } from "@/server/damis";
+import { toClientOptions, type ClientReviewOption } from "@/lib/review-option";
 import {
   buildDesignChange,
   buildSheetSelections,
@@ -27,14 +23,18 @@ import {
   viewStateWords,
 } from "./sheet-review";
 
-const characterOptions = visibleOptions(getReviewCatalog("sheet-generator-character"), {
-  sector: "wizard",
-  context: { render_cell_numbers: true },
-});
-const locationOptions = visibleOptions(getReviewCatalog("sheet-generator-location"), {
-  sector: "wizard",
-});
-const propOptions = visibleOptions(getReviewCatalog("sheet-generator-prop"), { sector: "wizard" });
+const characterOptions = toClientOptions(
+  visibleOptions(getReviewCatalog("sheet-generator-character"), {
+    sector: "wizard",
+    context: { render_cell_numbers: true },
+  }),
+);
+const locationOptions = toClientOptions(
+  visibleOptions(getReviewCatalog("sheet-generator-location"), { sector: "wizard" }),
+);
+const propOptions = toClientOptions(
+  visibleOptions(getReviewCatalog("sheet-generator-prop"), { sector: "wizard" }),
+);
 
 const cells = [
   { slot: 1, subject: "main fabric", reason: "default" },
@@ -42,7 +42,7 @@ const cells = [
   { slot: 4, subject: "brass buckle", reason: "signature" },
 ];
 
-const find = (options: ReviewOption[], code: string) => {
+const find = (options: ClientReviewOption[], code: string) => {
   const option = options.find((o) => o.code === code);
   if (!option) throw new Error(`no ${code}`);
   return option;

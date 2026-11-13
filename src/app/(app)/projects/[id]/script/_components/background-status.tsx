@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button, StatusLine } from "@/ui";
 import type { BackgroundStatus } from "../../_lib/background-status";
 import { productionHref } from "../../_lib/production-routes";
-import { usePolling } from "../../_lib/use-polling";
+import { usePolling } from "@/app/(app)/_lib/use-polling";
 import { backgroundStatusAction, retrySectioningAction } from "../actions";
 
 /** Live status of what runs after acceptance; polls while it runs. */

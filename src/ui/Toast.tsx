@@ -4,6 +4,7 @@ import { useMemo, type MouseEvent, type ReactNode } from "react";
 import { Toast as BaseToast } from "@base-ui/react/toast";
 import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from "lucide-react";
 import { cn } from "./cn";
+import { StoredImage } from "./StoredImage";
 
 export type ToastKind = "info" | "success" | "warning" | "danger";
 
@@ -114,12 +115,9 @@ function ToastList() {
               className={cn("relative w-full bg-ground", mediaShapes[media.aspect ?? "landscape"])}
             >
               {/* The source may be a redirect to a short-lived address: next/image cannot cache it. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <StoredImage
                 src={media.src}
                 alt={media.alt}
-                decoding="async"
-                draggable={false}
                 className="absolute inset-0 size-full object-contain"
               />
             </div>

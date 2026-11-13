@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { usePolling } from "../../_lib/use-polling";
+import { usePolling } from "@/app/(app)/_lib/use-polling";
 import { pollOverviewAction } from "./overview-actions";
 
 /** Refreshes the overview when its progress or images change; polls only while work is running. */

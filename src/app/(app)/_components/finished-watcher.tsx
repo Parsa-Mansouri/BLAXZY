@@ -6,7 +6,7 @@ import type { FinishedAssetEvent } from "@/server/assets";
 import { fileSrc } from "@/lib/file-src";
 import { useToast } from "@/ui";
 import { pollFinishedAction } from "../_lib/finished-actions";
-import { usePolling } from "../_lib/use-polling";
+import { usePolling } from "@/app/(app)/_lib/use-polling";
 import { assetHref } from "../projects/[id]/_lib/asset-kinds";
 
 const POLL_MS = 4500;
@@ -38,7 +38,7 @@ function storeCursor(cursor: string) {
 }
 
 /** "Ines's image is ready" / "Couldn't make Ines's sheet". */
-export function finishedTitle(event: Pick<FinishedAssetEvent, "what" | "ready" | "assetName">) {
+function finishedTitle(event: Pick<FinishedAssetEvent, "what" | "ready" | "assetName">) {
   const thing = `${event.assetName}'s ${event.what === "look" ? "image" : "sheet"}`;
   return event.ready ? `${thing} is ready` : `Couldn't make ${thing}`;
 }

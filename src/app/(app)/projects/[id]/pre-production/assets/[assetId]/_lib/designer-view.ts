@@ -1,4 +1,5 @@
-import type { DesignerKey, ReferenceRoleChoice, ReviewOption } from "@/server/damis";
+import type { DesignerKey, ReferenceRoleChoice } from "@/server/damis";
+import type { ClientReviewOption } from "@/lib/review-option";
 
 /**
  * What the asset screen needs to know about the designer that draws the asset (character,
@@ -9,7 +10,7 @@ import type { DesignerKey, ReferenceRoleChoice, ReviewOption } from "@/server/da
 export interface DesignerInfo {
   key: DesignerKey;
   /** The review catalog's options visible in the Wizard, in catalog order. */
-  options: ReviewOption[];
+  options: ClientReviewOption[];
   /** The catalog's groups (props: Framing, Studio, Form ...), in order. */
   groups: { id: string; label: string }[];
   /** Rejected images in a row after which the screen suggests describing it exactly. */

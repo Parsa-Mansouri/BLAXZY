@@ -2,12 +2,14 @@
 
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { AudioLines, ImageUp } from "lucide-react";
+import { fileMime, fileProblem, uploadViaTicket } from "@/lib/upload";
+import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
 import { Button, DemoHint, DropScene, ProgressBar, cn } from "@/ui";
 import { createAssetUploadAction, finishAssetUploadAction } from "../actions";
-import { IMAGE_TYPES, MAX_PHOTO_BYTES, putFile } from "../_lib/reference-upload";
+import { IMAGE_TYPES, MAX_PHOTO_BYTES } from "../_lib/reference-upload";
 import { useAssetScreen } from "./asset-context";
-import { ErrorLine } from "./shared";
 import { useFileDrop } from "./use-file-drop";
+import { ErrorLine } from "@/app/(app)/_components/values";
 
 const MAX_BYTES = MAX_PHOTO_BYTES;
 
@@ -48,6 +50,7 @@ export function UploadZone({
 }) {
   const { moveOn } = useAssetScreen();
   const id = useId();
+  const signal = useAbortOnUnmount();
   const input = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [error, setError] = useState<string | null>(null);
@@ -57,53 +60,46 @@ export function UploadZone({
 
   async function upload(file: File) {
     setError(null);
-    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-    const type = types[extension];
-    if (!type) {
-      setError(`This file type cannot be used. Choose a ${formats} file.`);
-      return;
-    }
-    if (file.size === 0) {
-      setError("This file is empty. Choose another one.");
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      setError(
-        audio
+    const problem = fileProblem(file, {
+      types,
+      maxBytes: MAX_BYTES,
+      messages: {
+        type: `This file type cannot be used. Choose a ${formats} file.`,
+        empty: "This file is empty. Choose another one.",
+        size: audio
           ? "This file is larger than 25 MB. Export a shorter or compressed recording."
           : "This image is larger than 25 MB. Export a smaller version and try again.",
-      );
+      },
+    });
+    if (problem) {
+      setError(problem);
       return;
     }
     setPhase({ kind: "uploading", name: file.name, progress: 0 });
-    const ticket = await createAssetUploadAction(assetId, {
-      name: file.name,
-      type,
-      size: file.size,
+    const result = await uploadViaTicket({
+      createTicket: () =>
+        createAssetUploadAction(assetId, {
+          name: file.name,
+          type: fileMime(file, types),
+          size: file.size,
+        }),
+      file,
+      confirm: (fileId) => finishAssetUploadAction(projectId, assetId, fileId),
+      onProgress: (progress) => setPhase({ kind: "uploading", name: file.name, progress }),
+      onPhase: (next) => {
+        if (next === "confirming") setPhase({ kind: "finishing", name: file.name });
+      },
+      signal: signal(),
+      uploadFailedMessage: "The upload failed. Check your connection and choose the file again.",
     });
-    if (!ticket.ok) {
+    if (!result.ok) {
+      if (result.aborted) return;
       setPhase({ kind: "idle" });
-      setError(ticket.error);
-      return;
-    }
-    try {
-      await putFile(ticket.data.uploadUrl, ticket.data.headers, file, (progress) =>
-        setPhase({ kind: "uploading", name: file.name, progress }),
-      );
-    } catch {
-      setPhase({ kind: "idle" });
-      setError("The upload failed. Check your connection and choose the file again.");
-      return;
-    }
-    setPhase({ kind: "finishing", name: file.name });
-    const finished = await finishAssetUploadAction(projectId, assetId, ticket.data.fileId);
-    if (!finished.ok) {
-      setPhase({ kind: "idle" });
-      setError(finished.error);
+      setError(result.error);
       return;
     }
     // A recording makes the voice ready, so the user moves on; an image stays here for review.
-    moveOn(finished.data, `${assetName}’s voice is ready`);
+    moveOn(result.confirmed, `${assetName}’s voice is ready`);
   }
 
   const { dragging, dropProps } = useFileDrop({
@@ -119,6 +115,10 @@ export function UploadZone({
     if (!initialFile || started.current === initialFile) return;
     started.current = initialFile;
     startInitial(initialFile);
+    // Strict Mode's simulated unmount aborts this upload, so the remount starts it again.
+    return () => {
+      started.current = null;
+    };
   }, [initialFile]);
 
   const Icon = audio ? AudioLines : ImageUp;

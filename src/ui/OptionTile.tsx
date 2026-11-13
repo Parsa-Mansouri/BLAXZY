@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "./cn";
 import { Tick } from "./Feedback";
+import { StoredImage } from "./StoredImage";
 
 export interface OptionTileProps {
   /** The option's name, under the picture. */
@@ -88,8 +89,7 @@ export function OptionTile({
           <Plus aria-hidden="true" className="size-(--icon-lg) text-label-2" />
         ) : src ? (
           // Example pictures are small static files; next/image is not needed here.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt={alt} className="absolute inset-0 size-full object-cover" />
+          <StoredImage src={src} alt={alt} className="absolute inset-0 size-full object-cover" />
         ) : (
           <span>Example image</span>
         )}

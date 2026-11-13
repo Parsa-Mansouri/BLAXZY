@@ -3,6 +3,8 @@
 import { useId, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { fileSrc } from "@/lib/file-src";
+import { fileMime, fileProblem, uploadViaTicket } from "@/lib/upload";
+import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
 import {
   MAX_REFERENCE_DESCRIPTION_CHARS,
   MAX_REFERENCE_IMAGE_MB,
@@ -16,37 +18,17 @@ import {
 import {
   AnimatedPlaceholder,
   Button,
+  cn,
   DemoHint,
   DropScene,
   IconButton,
   Input,
   ProgressBar,
-  Textarea,
-  cn,
   stagger,
+  StoredImage,
+  Textarea,
 } from "@/ui";
 import { createStyleReferenceUploadAction, finishStyleReferenceUploadAction } from "../actions";
-
-/** PUTs the file to the presigned URL, reporting progress. */
-function putFile(
-  url: string,
-  headers: Record<string, string>,
-  file: File,
-  onProgress: (percent: number) => void,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress((event.loaded / event.total) * 100);
-    };
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error()));
-    xhr.onerror = () => reject(new Error());
-    xhr.onabort = () => reject(new Error());
-    xhr.send(file);
-  });
-}
 
 interface Uploading {
   key: string;
@@ -111,6 +93,7 @@ export function ReferencePanel({
   onChange: (update: (prev: StyleReferenceInput) => StyleReferenceInput) => void;
 }) {
   const id = useId();
+  const signal = useAbortOnUnmount();
   const fileInput = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const [uploads, setUploads] = useState<Uploading[]>([]);
@@ -133,45 +116,41 @@ export function ReferencePanel({
   }
 
   async function uploadOne(file: File) {
-    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-    const type = REFERENCE_IMAGE_TYPES[extension];
-    if (!type) {
-      setImageError("Choose a .png, .jpg or .webp image.");
-      return;
-    }
-    if (file.size === 0 || file.size > MAX_REFERENCE_IMAGE_MB * 1024 * 1024) {
-      setImageError(`Choose an image up to ${MAX_REFERENCE_IMAGE_MB} MB.`);
+    const problem = fileProblem(file, {
+      types: REFERENCE_IMAGE_TYPES,
+      maxBytes: MAX_REFERENCE_IMAGE_MB * 1024 * 1024,
+      messages: {
+        type: "Choose a .png, .jpg or .webp image.",
+        empty: `Choose an image up to ${MAX_REFERENCE_IMAGE_MB} MB.`,
+        size: `Choose an image up to ${MAX_REFERENCE_IMAGE_MB} MB.`,
+      },
+    });
+    if (problem) {
+      setImageError(problem);
       return;
     }
     const key = `${file.name}-${crypto.randomUUID()}`;
     setUploads((list) => [...list, { key, name: file.name, progress: 0 }]);
-    const done = () => setUploads((list) => list.filter((u) => u.key !== key));
-    const ticket = await createStyleReferenceUploadAction(projectId, {
-      name: file.name,
-      type,
-      size: file.size,
-    });
-    if (!ticket.ok) {
-      done();
-      setImageError(ticket.error);
-      return;
-    }
-    try {
-      await putFile(ticket.data.uploadUrl, ticket.data.headers, file, (progress) =>
+    const result = await uploadViaTicket({
+      createTicket: () =>
+        createStyleReferenceUploadAction(projectId, {
+          name: file.name,
+          type: fileMime(file, REFERENCE_IMAGE_TYPES),
+          size: file.size,
+        }),
+      file,
+      confirm: (fileId) => finishStyleReferenceUploadAction(fileId),
+      onProgress: (progress) =>
         setUploads((list) => list.map((u) => (u.key === key ? { ...u, progress } : u))),
-      );
-    } catch {
-      done();
-      setImageError("The upload failed. Check your connection and add the image again.");
+      signal: signal(),
+      uploadFailedMessage: "The upload failed. Check your connection and add the image again.",
+    });
+    setUploads((list) => list.filter((u) => u.key !== key));
+    if (!result.ok) {
+      if (!result.aborted) setImageError(result.error);
       return;
     }
-    const finished = await finishStyleReferenceUploadAction(ticket.data.fileId);
-    done();
-    if (!finished.ok) {
-      setImageError(finished.error);
-      return;
-    }
-    const fileId = ticket.data.fileId;
+    const fileId = result.fileId;
     onChange((prev) => ({ ...prev, fileIds: [...prev.fileIds, fileId] }));
   }
 
@@ -182,7 +161,10 @@ export function ReferencePanel({
       setImageError(`Add up to ${MAX_REFERENCE_IMAGES} images.`);
     }
     // One at a time, so each finished id is added to the latest answer.
-    for (const file of list.slice(0, Math.max(0, imageSlots))) await uploadOne(file);
+    for (const file of list.slice(0, Math.max(0, imageSlots))) {
+      if (signal().aborted) return;
+      await uploadOne(file);
+    }
   }
 
   function onDrop(event: DragEvent<HTMLDivElement>) {
@@ -265,8 +247,7 @@ export function ReferencePanel({
               className="group/ref relative swap-in overflow-hidden rounded-tile bg-elevated"
             >
               {/* Stored images are served through /api/files; next/image is not needed here. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <StoredImage
                 src={fileSrc(fileId)}
                 alt={`Reference image ${i + 1}`}
                 className="absolute inset-0 size-full object-cover"

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { Button, ProgressBar, Skeleton, StatusLine, formatDurationLong } from "@/ui";
-import { usePolling } from "../../_lib/use-polling";
+import { usePolling } from "@/app/(app)/_lib/use-polling";
+import { mergeLoadedPages, useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
 import { loadShotsAction, pollPreProductionAction } from "../actions";
 import type { ShotRow } from "./shot-types";
 
@@ -79,16 +80,23 @@ export function ShotList({
   initial: ShotRow[];
   initialCursor: string | null;
 }) {
-  const [shots, setShots] = useState(initial);
-  const [cursor, setCursor] = useState(initialCursor);
+  const first = useMemo(
+    () => ({ shots: initial, cursor: initialCursor }),
+    [initial, initialCursor],
+  );
+  // A refresh brings page one again; pages loaded with Load More stay.
+  const [{ shots, cursor }, setList] = useServerSnapshot(first, (current, fresh) => {
+    const merged = mergeLoadedPages({
+      current: current.shots,
+      currentCursor: current.cursor,
+      fresh: fresh.shots,
+      freshCursor: fresh.cursor,
+      id: (shot) => shot.id,
+    });
+    return { shots: merged.items, cursor: merged.cursor };
+  });
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
-  const [seen, setSeen] = useState(initial);
-  if (seen !== initial) {
-    setSeen(initial);
-    setShots(initial);
-    setCursor(initialCursor);
-  }
 
   function more() {
     if (!cursor) return;
@@ -99,8 +107,7 @@ export function ShotList({
         setError(page.error);
         return;
       }
-      setShots((list) => [...list, ...page.items]);
-      setCursor(page.nextCursor);
+      setList((list) => ({ shots: [...list.shots, ...page.items], cursor: page.nextCursor }));
     });
   }
 

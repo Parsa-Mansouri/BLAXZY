@@ -3,13 +3,7 @@
 import { useId, useState, type ComponentType, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 import { Button, Field, IconButton, IssueDemo, Textarea, cn, issueScene, stagger } from "@/ui";
-import {
-  ErrorLine,
-  PriceLine,
-  canAfford,
-  formatNumber,
-  type IssueChoice,
-} from "../assets/[assetId]/_components/shared";
+import { PriceLine, type IssueChoice } from "../assets/[assetId]/_components/shared";
 import {
   MAX_MARKS,
   MAX_MARK_TEXT,
@@ -19,6 +13,8 @@ import {
   regionWords,
 } from "../_lib/marks";
 import { focusSoon, markFieldId, markPinId, type Marking } from "./mark-layer";
+import { ErrorLine } from "@/app/(app)/_components/values";
+import { canAfford, formatNumber } from "@/app/(app)/_lib/format";
 
 type HeadingProps = { id?: string; className?: string; children: ReactNode };
 

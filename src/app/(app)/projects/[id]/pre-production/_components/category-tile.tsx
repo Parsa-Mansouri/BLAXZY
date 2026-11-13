@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { fileSrc } from "@/lib/file-src";
-import { Button, DemoHint, SilhouetteScene, StatusLine, cn, stagger } from "@/ui";
+import { Button, cn, DemoHint, SilhouetteScene, stagger, StatusLine, StoredImage } from "@/ui";
 import { assetHref, categoryHref } from "../../_lib/asset-kinds";
 import { ASSET_STATUS_LABELS } from "../../_lib/asset-status";
 import type { OverviewAsset, OverviewCategory } from "../_lib/load-categories";
@@ -16,13 +16,9 @@ const TILE_THUMBS = 6;
 /** A stored image filling its box; the box decides the shape. */
 function Thumb({ fileId }: { fileId: string }) {
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- user media from object storage, sized by the frame
-    <img
+    <StoredImage
       src={fileSrc(fileId)}
       alt=""
-      loading="lazy"
-      decoding="async"
-      draggable={false}
       className="absolute inset-0 size-full object-cover object-top"
     />
   );

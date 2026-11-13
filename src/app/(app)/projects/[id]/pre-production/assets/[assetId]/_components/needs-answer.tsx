@@ -7,7 +7,8 @@ import { answerQuestionAction } from "../actions";
 import { AnswerTiles, QUESTION_TITLE } from "./answer-tiles";
 import { StageHeading, useAssetScreen } from "./asset-context";
 import { Caps } from "./desk";
-import { ErrorLine, formatNumber } from "./shared";
+import { ErrorLine } from "@/app/(app)/_components/values";
+import { formatNumber } from "@/app/(app)/_lib/format";
 
 type Question = NonNullable<LookView["spec"]>["questions"][number];
 

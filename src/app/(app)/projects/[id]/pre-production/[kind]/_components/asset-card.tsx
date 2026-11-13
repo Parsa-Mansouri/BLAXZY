@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fileSrc } from "@/lib/file-src";
 import { Ellipsis } from "lucide-react";
-import { Button, IconButton, Menu, PictureTile, StatusLine, cn, useToast } from "@/ui";
+import { Button, cn, IconButton, Menu, PictureTile, StatusLine, StoredImage, useToast } from "@/ui";
 import { ASSET_STATUS_LABELS } from "../../../_lib/asset-status";
 import { DrawnTick } from "../../_components/drawn-tick";
 import { StageStatus, isWorking } from "../../_components/asset-stage";
@@ -176,13 +176,9 @@ export function AssetCard({
       aspect={KIND_ASPECTS[item.kind]}
       picture={
         item.thumbnailFileId ? (
-          // eslint-disable-next-line @next/next/no-img-element -- user media from object storage, sized by the frame
-          <img
+          <StoredImage
             src={fileSrc(item.thumbnailFileId)}
             alt=""
-            loading="lazy"
-            decoding="async"
-            draggable={false}
             className={KIND_ASPECTS[item.kind] === "portrait" ? "object-top" : undefined}
           />
         ) : undefined

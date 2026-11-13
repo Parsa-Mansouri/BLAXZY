@@ -2,12 +2,11 @@ import type { Metadata } from "next";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, requireUser } from "@/server/auth";
 import { getBalance } from "@/server/billing";
 import { PageHeader, Toolbar, stagger } from "@/ui";
+import { formatNumber } from "../_lib/format";
 import { AccountForms } from "./_components/account-forms";
 import { SignOutButton } from "./_components/sign-out-button";
 
 export const metadata: Metadata = { title: "Account · BLAXZY" };
-
-const creditFormat = new Intl.NumberFormat("en-US");
 
 /** Account (Account.dc.html): profile, password, the credit balance and Sign Out. */
 export default async function AccountPage() {
@@ -37,7 +36,7 @@ export default async function AccountPage() {
                 Credit Balance
               </h2>
               <p className="text-heading text-label tabular-nums">
-                {creditFormat.format(credits)}
+                {formatNumber(credits)}
                 <span className="sr-only"> {credits === 1 ? "credit" : "credits"}</span>
               </p>
               <p className="max-w-(--measure) text-secondary text-pretty text-label-2">

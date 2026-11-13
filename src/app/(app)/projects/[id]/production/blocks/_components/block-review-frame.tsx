@@ -4,22 +4,21 @@ import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode
 import { useParams } from "next/navigation";
 import type { ProductionBlock } from "@/server/production";
 import { PageHeader, StatusLine, SwapFade } from "@/ui";
-import { usePolling } from "../../../_lib/use-polling";
+import { useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
+import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import { blockHref } from "../../../_lib/production-routes";
 import { FillPage } from "../../_components/fill-page";
 import { ReviewLayout } from "../../_components/review-layout";
 import { ReviewListContext } from "../../_components/review-list-context";
 import { ShotList, type ShotListItem } from "../../_components/shot-list";
 import { loadBlocksAction, refreshBlocksAction, type BlocksSnapshot } from "../actions";
+import { mergeBlocksSnapshot } from "../_lib/merge-snapshot";
 import {
   BLOCK_STATE_TONES,
   attentionTone,
   attentionWords,
   blockStateLabel,
 } from "../_lib/block-state";
-
-const FAST_POLL_MS = 2000;
-const SETTLED_POLL_MS = 10000;
 
 /** Fresh rows replace the ones already shown; rows loaded further down are kept. */
 function merge(current: ProductionBlock[], fresh: ProductionBlock[]): ProductionBlock[] {
@@ -57,12 +56,7 @@ export function BlockReviewFrame({
 }) {
   const params = useParams<{ lineageId?: string }>();
   const activeId = params.lineageId ? decodeURIComponent(params.lineageId) : null;
-  const [snapshot, setSnapshot] = useState(initial);
-  const [seen, setSeen] = useState(initial);
-  if (seen !== initial) {
-    setSeen(initial);
-    setSnapshot((current) => ({ ...initial, items: merge(current.items, initial.items) }));
-  }
+  const [snapshot, setSnapshot] = useServerSnapshot(initial, mergeBlocksSnapshot);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
   const busyRef = useRef(false);
@@ -83,7 +77,7 @@ export function BlockReviewFrame({
             : current.nextCursor,
       }));
     },
-    [projectId, items.length],
+    [projectId, items.length, setSnapshot],
   );
 
   usePolling(refresh, true, counts.preparing > 0 ? FAST_POLL_MS : SETTLED_POLL_MS);
@@ -107,7 +101,7 @@ export function BlockReviewFrame({
         busyRef.current = false;
       }
     });
-  }, [nextCursor, projectId]);
+  }, [nextCursor, projectId, setSnapshot]);
 
   // The shot under review may sit further down than the first page: read on until it is listed.
   const found = activeId === null || items.some((b) => b.lineageId === activeId);

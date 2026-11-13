@@ -1,42 +1,33 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { Button, Textarea } from "@/ui";
+import {
+  createDraftStore,
+  stillThere,
+  type DraftComment,
+  type DraftStorage,
+} from "../_lib/draft-store";
 
-export interface DraftComment {
-  id: string;
-  quote: string;
-  start: number;
-  end: number;
-  note: string;
-}
+export type { DraftComment };
 
-const STORAGE_PREFIX = "blaxzy:script-comments:";
 export const MAX_COMMENT_CHARS = 4000;
 /** The server takes quotes of at most 5,000 characters. */
 export const MAX_QUOTE_CHARS = 5000;
 /** The server takes at most 100 comments in one review. */
 export const MAX_REVIEW_COMMENTS = 100;
 
-function readStored(versionId: string): DraftComment[] {
+/** Browser storage, or null where it is not available (private windows, server render). */
+function browserStorage(): DraftStorage | null {
   try {
-    const raw = window.localStorage.getItem(STORAGE_PREFIX + versionId);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (c): c is DraftComment =>
-        typeof c === "object" &&
-        c !== null &&
-        typeof c.id === "string" &&
-        typeof c.quote === "string" &&
-        typeof c.note === "string" &&
-        typeof c.start === "number" &&
-        typeof c.end === "number",
-    );
+    return typeof window === "undefined" ? null : window.localStorage;
   } catch {
-    return [];
+    return null;
   }
 }
+
+const store = createDraftStore(browserStorage());
+const NO_DRAFTS: DraftComment[] = [];
 
 /** A comment the reviser can use: it says something and fits the limits. */
 export const isSendable = (c: DraftComment) =>
@@ -48,29 +39,15 @@ export const isSendable = (c: DraftComment) =>
  * sent, so a reload does not lose them.
  */
 export function useDraftComments(versionId: string, content: string) {
-  const [comments, setComments] = useState<DraftComment[]>([]);
-  const loaded = useRef(false);
-
-  useEffect(() => {
-    // Only comments whose passage is still where it was (the text is the same version's).
-    const stored = readStored(versionId).filter(
-      (c) => content.slice(c.start, c.end) === c.quote && c.note.trim() !== "",
-    );
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- browser storage is read after hydration
-    setComments(stored);
-    loaded.current = true;
-  }, [versionId, content]);
-
-  useEffect(() => {
-    if (!loaded.current) return;
-    try {
-      const kept = comments.filter((c) => c.note.trim() !== "");
-      if (kept.length === 0) window.localStorage.removeItem(STORAGE_PREFIX + versionId);
-      else window.localStorage.setItem(STORAGE_PREFIX + versionId, JSON.stringify(kept));
-    } catch {
-      // Storage may be unavailable (private window); comments still work for this visit.
-    }
-  }, [comments, versionId]);
+  const stored = useSyncExternalStore(
+    store.subscribe,
+    () => store.get(versionId),
+    () => NO_DRAFTS,
+  );
+  const comments = useMemo(() => stored.filter(stillThere(content)), [stored, content]);
+  /** The current list at call time, so two changes in one event both land. */
+  const current = () => store.get(versionId).filter(stillThere(content));
+  const change = (next: DraftComment[]) => store.set(versionId, next);
 
   return {
     comments,
@@ -88,13 +65,13 @@ export function useDraftComments(versionId: string, content: string) {
         end: range.end,
         note: "",
       };
-      setComments((list) => [...list, comment].sort((a, b) => a.start - b.start || a.end - b.end));
+      change([...current(), comment].sort((a, b) => a.start - b.start || a.end - b.end));
       return comment;
     },
     update: (id: string, note: string) =>
-      setComments((list) => list.map((c) => (c.id === id ? { ...c, note } : c))),
-    remove: (id: string) => setComments((list) => list.filter((c) => c.id !== id)),
-    clear: () => setComments([]),
+      change(current().map((c) => (c.id === id ? { ...c, note } : c))),
+    remove: (id: string) => change(current().filter((c) => c.id !== id)),
+    clear: () => change([]),
   };
 }
 

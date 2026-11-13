@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Field, Sheet, Textarea, cn } from "@/ui";
 import {
-  WRITER_REASONS,
-  type WriterReason,
+  WRITER_REASON_VIEWS,
   type WriterReasonCode,
-} from "@/server/damis/script-writer/reasons";
+  type WriterReasonView,
+} from "@/lib/script-reasons";
+import { Button, Field, Sheet, Textarea, cn } from "@/ui";
 import { Fader, type FaderStop } from "./fader";
 
 const MAX_NOTE_CHARS = 8000;
@@ -52,14 +52,14 @@ const FADERS: readonly {
 const ON_FADERS = new Set<string>(FADERS.flatMap((f) => [f.codes[-1], f.codes[1]]));
 
 /** The remaining reasons, as square tiles: things that are wrong, and things to make different. */
-const TILE_GROUPS: readonly { title: string; reasons: WriterReason[] }[] = [
+const TILE_GROUPS: readonly { title: string; reasons: WriterReasonView[] }[] = [
   {
     title: "Something’s Wrong",
-    reasons: WRITER_REASONS.filter((r) => r.type === "technical" && !ON_FADERS.has(r.code)),
+    reasons: WRITER_REASON_VIEWS.filter((r) => r.type === "technical" && !ON_FADERS.has(r.code)),
   },
   {
     title: "Make It Different",
-    reasons: WRITER_REASONS.filter((r) => r.type === "preference" && !ON_FADERS.has(r.code)),
+    reasons: WRITER_REASON_VIEWS.filter((r) => r.type === "preference" && !ON_FADERS.has(r.code)),
   },
 ];
 
@@ -69,7 +69,7 @@ function ReasonTile({
   disabled,
   onToggle,
 }: {
-  reason: WriterReason;
+  reason: WriterReasonView;
   on: boolean;
   disabled: boolean;
   onToggle: () => void;
@@ -81,7 +81,7 @@ function ReasonTile({
       aria-checked={on}
       disabled={disabled}
       onClick={onToggle}
-      title={reason.instruction}
+      title={reason.hint}
       className={cn(
         "relative flex aspect-square flex-col items-start justify-end rounded-item border p-3 text-left text-body transition-colors motion-reduce:transition-none",
         on

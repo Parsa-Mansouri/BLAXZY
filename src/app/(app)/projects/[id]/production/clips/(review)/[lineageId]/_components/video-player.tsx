@@ -20,7 +20,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { fileSrc } from "@/lib/file-src";
-import { Button, IconButton, cn } from "@/ui";
+import { Button, IconButton, cn, isTypingTarget } from "@/ui";
 import { CONTROLS_BOX, FRAME_BOX, FRAME_HEIGHT } from "../../../../_components/frame";
 import { formatClock, type Orientation } from "../../../_lib/clip-view";
 import { focusIsFree } from "../../../_components/clips-context";
@@ -30,16 +30,6 @@ const FRAME = 1 / 24;
 const SECOND_STEP = 1;
 
 type FullscreenVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
-
-function isTyping(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return (
-    target.isContentEditable ||
-    target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA" ||
-    target.tagName === "SELECT"
-  );
-}
 
 function ControlButton({
   label,
@@ -249,7 +239,7 @@ export function VideoPlayer({
   );
 
   function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
+    if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return;
     // Space and Enter on a control button press that button.
     const onButton = event.target instanceof HTMLButtonElement;
     if (onButton && (event.key === " " || event.key === "Enter")) return;

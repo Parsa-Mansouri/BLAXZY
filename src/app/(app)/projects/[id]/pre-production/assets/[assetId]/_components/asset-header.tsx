@@ -19,7 +19,9 @@ import {
 } from "@/ui";
 import { removeAssetAction, updateDetailsAction } from "../actions";
 import { useAssetScreen } from "./asset-context";
-import { ErrorLine, formatNumber, type AssetInfo } from "./shared";
+import { type AssetInfo } from "./shared";
+import { ErrorLine } from "@/app/(app)/_components/values";
+import { formatNumber } from "@/app/(app)/_lib/format";
 
 /** The asset's name (in its own case) as the page title, its state and description, its menu. */
 export function AssetHeader({

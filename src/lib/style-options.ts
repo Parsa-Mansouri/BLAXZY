@@ -121,14 +121,17 @@ export const DURATION_PRESETS = [
   { seconds: 600, label: "10 min" },
 ] as const;
 
-/** Mirrors the server rules in `@/server/projects` (kept here because the client cannot import it). */
+/**
+ * The duration and episode limits, shared by the style form and the server (the server may import
+ * them from here; `@/lib` has no server code). Keep them in step with `@/server/projects` until it does.
+ */
 export const MIN_DURATION_SECONDS = 5;
 export const MAX_DURATION_SECONDS = 4 * 60 * 60;
 export const MAX_EPISODES = 100;
 
-/** Number of episodes a series of this length makes (the server rounds up too). */
-export function episodeCount(total: number, perEpisode: number): number {
-  return Math.ceil(total / perEpisode);
+/** Number of episodes a series of this length makes: the total divided by the episode length, rounded up (the server rounds up too). */
+export function episodeCount(totalSeconds: number, episodeSeconds: number): number {
+  return Math.ceil(totalSeconds / episodeSeconds);
 }
 
 /** Error for a duration field, mirroring the server rules; `null` when the value is fine. */

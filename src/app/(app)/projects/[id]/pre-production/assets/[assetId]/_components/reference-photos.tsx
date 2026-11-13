@@ -11,14 +11,27 @@ import {
 } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { fileSrc } from "@/lib/file-src";
-import { Button, DemoHint, DropScene, IconButton, ProgressBar, Textarea, cn, stagger } from "@/ui";
+import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
+import {
+  Button,
+  cn,
+  DemoHint,
+  DropScene,
+  IconButton,
+  ProgressBar,
+  stagger,
+  StoredImage,
+  Textarea,
+} from "@/ui";
 import type { DesignerInfo } from "../_lib/designer-view";
 import { IMAGE_ACCEPT, uploadReferencePhoto } from "../_lib/reference-upload";
 import { startDesignAction, type ReferencePhoto } from "../actions";
 import { StageHeading, useAssetScreen } from "./asset-context";
 import { Caps, ChoiceTile } from "./desk";
-import { ErrorLine, PriceLine, canAfford, formatNumber, type AssetInfo } from "./shared";
+import { PriceLine, type AssetInfo } from "./shared";
 import { useFileDrop } from "./use-file-drop";
+import { ErrorLine } from "@/app/(app)/_components/values";
+import { canAfford, formatNumber } from "@/app/(app)/_lib/format";
 
 /** Longest note on one photo (the server's limit). */
 const MAX_NOTE = 1000;
@@ -85,12 +98,9 @@ function PhotoCard({
       <div className="flex shrink-0 items-start justify-between gap-3 sm:flex-col">
         <div className="relative size-28 overflow-hidden rounded-item bg-elevated sm:size-36">
           {photo.fileId ? (
-            // eslint-disable-next-line @next/next/no-img-element -- user media from object storage
-            <img
+            <StoredImage
               src={fileSrc(photo.fileId)}
               alt={`Photo ${n}`}
-              decoding="async"
-              draggable={false}
               className="absolute inset-0 size-full object-cover"
             />
           ) : (
@@ -188,6 +198,7 @@ export function ReferencePhotos({
 }) {
   const { moveOn } = useAssetScreen();
   const id = useId();
+  const signal = useAbortOnUnmount();
   const input = useRef<HTMLInputElement>(null);
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const [description, setDescription] = useState("");
@@ -206,12 +217,15 @@ export function ReferencePhotos({
       ...list,
       { key, name: file.name, progress: 0, fileId: null, role: null, note: "" },
     ]);
-    const result = await uploadReferencePhoto(asset.id, file, (progress) =>
-      patch(key, { progress }),
+    const result = await uploadReferencePhoto(
+      asset.id,
+      file,
+      (progress) => patch(key, { progress }),
+      signal(),
     );
     if (!result.ok) {
       setPhotos((list) => list.filter((p) => p.key !== key));
-      setError({ text: result.error });
+      if (!result.aborted) setError({ text: result.error });
       return;
     }
     patch(key, { progress: null, fileId: result.fileId });
@@ -237,6 +251,10 @@ export function ReferencePhotos({
     if (!initialFile || started.current === initialFile) return;
     started.current = initialFile;
     startInitial(initialFile);
+    // Strict Mode's simulated unmount aborts this upload, so the remount starts it again.
+    return () => {
+      started.current = null;
+    };
   }, [initialFile]);
 
   function generate() {

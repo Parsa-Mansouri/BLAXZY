@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition, type KeyboardEvent } from "react";
-import { Button, SwapFade, TextLink, Textarea, stagger } from "@/ui";
+import { Button, SwapFade, TextLink, Textarea, isTypingTarget, stagger } from "@/ui";
 import type { GuidedDraft } from "../_lib/guided-draft";
 import { startFromGuidedAction } from "../actions";
 import { AnswerTiles, LETTERS, QUESTION_TITLE } from "./answer-tiles";
 import { focusIsFree, keepTitleVisible, useAssetScreen } from "./asset-context";
 import { CastingDossier } from "./casting-dossier";
-import { ErrorLine, PriceLine, canAfford, formatNumber, type GuidedQuestion } from "./shared";
+import { PriceLine, type GuidedQuestion } from "./shared";
+import { ErrorLine } from "@/app/(app)/_components/values";
+import { canAfford, formatNumber } from "@/app/(app)/_lib/format";
 
 /**
  * How a question was answered: an offered answer (or, for a text question, written text), "Not
@@ -69,12 +71,8 @@ function sheetWords(question: GuidedQuestion, answer: Answer): string | null {
 }
 
 /** True when a key press belongs to a field, a menu or a dialog rather than to the questions. */
-function typingElsewhere(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  if (target.closest("input, textarea, select, [role='dialog'], [role='menu']")) return true;
-  return false;
-}
+const typingElsewhere = (target: EventTarget | null) =>
+  isTypingTarget(target, "input, textarea, select, [role='dialog'], [role='menu']");
 
 /**
  * The guided questions as a casting session: the casting sheet on the leading side (every field a

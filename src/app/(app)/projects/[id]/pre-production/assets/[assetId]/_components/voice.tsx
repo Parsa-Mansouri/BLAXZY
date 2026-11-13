@@ -7,7 +7,7 @@ import { fileSrc } from "@/lib/file-src";
 import { Button, DemoHint, IconButton, WaveformScene, cn } from "@/ui";
 import { StageHeading } from "./asset-context";
 import { UploadZone } from "./upload-zone";
-import { When } from "./shared";
+import { When } from "@/app/(app)/_components/values";
 
 function clock(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";

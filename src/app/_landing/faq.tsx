@@ -3,7 +3,7 @@
 import { Accordion } from "@base-ui/react/accordion";
 import { Plus } from "lucide-react";
 import { FAQ_ITEMS } from "./content";
-import { Reveal } from "./Reveal";
+import { Reveal } from "./reveal";
 
 /** Questions as typographic rows: a hairline between them, a plus that turns to a cross. */
 export function Faq() {

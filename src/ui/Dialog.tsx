@@ -66,6 +66,3 @@ export function Sheet({
 /** Same component under its previous name. */
 export const Dialog = Sheet;
 export type DialogProps = SheetProps;
-
-export const DialogClose = BaseDialog.Close;
-export const DialogTrigger = BaseDialog.Trigger;

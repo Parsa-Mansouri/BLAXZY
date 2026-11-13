@@ -1,5 +1,5 @@
 import { fileSrc } from "@/lib/file-src";
-import { cn } from "@/ui";
+import { cn, StoredImage } from "@/ui";
 
 /**
  * An asset's sheet as a small frame (6px corners; callers set a larger radius on large frames). The image covers the frame; without one the frame stays
@@ -22,13 +22,9 @@ export function AssetThumb({
       )}
     >
       {fileId ? (
-        // eslint-disable-next-line @next/next/no-img-element -- stored media behind a redirect
-        <img
+        <StoredImage
           src={fileSrc(fileId)}
           alt={alt}
-          loading="lazy"
-          decoding="async"
-          draggable={false}
           className="absolute inset-0 size-full object-cover"
         />
       ) : null}

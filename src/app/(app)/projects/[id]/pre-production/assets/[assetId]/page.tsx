@@ -24,7 +24,8 @@ import {
   REFERENCE_CONFLICTS,
   REFERENCE_ROLES,
   visibleOptions,
-} from "@/server/damis";
+} from "@/server/damis/light";
+import { toClientOptions } from "@/lib/review-option";
 import { quoteGeneration } from "@/server/generation";
 import { ASSET_KIND_LABELS } from "../../../_lib/asset-kinds";
 import { loadProject } from "../../../_lib/load-project";
@@ -45,11 +46,11 @@ function designerInfo(kind: Asset["kind"]): DesignerInfo | null {
   const key = designerFor(kind);
   if (!key) return null;
   const catalog = getReviewCatalog(DESIGNER_CATALOGS[key]);
-  const options = visibleOptions(catalog, { sector: "wizard" });
-  const codes = new Set(options.map((o) => o.code));
+  const visible = visibleOptions(catalog, { sector: "wizard" });
+  const codes = new Set(visible.map((o) => o.code));
   return {
     key,
-    options,
+    options: toClientOptions(visible),
     groups: catalog.groups.map(({ id, label }) => ({ id, label })),
     maxAttempts: catalog.maxAttemptsBeforeSuggestion ?? DEFAULT_MAX_ATTEMPTS,
     attemptMessage: catalog.attemptMessage?.en ?? null,
@@ -66,17 +67,17 @@ function designerInfo(kind: Asset["kind"]): DesignerInfo | null {
 /** "other asset" → "Other Asset". */
 const titleCase = (words: string) => words.replace(/\b\p{Ll}/gu, (c) => c.toUpperCase());
 
-/** The asset, when it belongs to this project; shared by the metadata and the page. */
-const loadDetail = cache(async (projectId: string, assetId: string) => {
+/** The signed-in user's asset (its project is checked by the caller); shared by the metadata and the page. */
+const loadDetail = cache(async (assetId: string) => {
   const user = await requireUser();
-  const detail = await getAssetDetail(assetId, user.id);
-  return detail && detail.asset.projectId === projectId ? detail : null;
+  return getAssetDetail(assetId, user.id);
 });
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { id, assetId } = await params;
   const project = await loadProject(id);
-  const detail = await loadDetail(project.id, assetId).catch(() => null);
+  const found = await loadDetail(assetId).catch(() => null);
+  const detail = found?.asset.projectId === project.id ? found : null;
   return { title: detail ? `${detail.asset.name} · ${project.title} · BLAXZY` : undefined };
 }
 
@@ -89,9 +90,14 @@ export default async function AssetPage({
 }) {
   const { id, assetId } = await params;
   const { open } = await searchParams;
-  const project = await loadProjectForStage(id, "pre_production");
+  // The project (and its stage gate) and the asset are read side by side; loadDetail starts with
+  // requireUser, so nothing is read for a signed-out visitor.
+  const [project, found] = await Promise.all([
+    loadProjectForStage(id, "pre_production"),
+    loadDetail(assetId),
+  ]);
   const user = await requireUser();
-  const detail = await loadDetail(project.id, assetId);
+  const detail = found?.asset.projectId === project.id ? found : null;
   if (!detail) notFound();
 
   const { asset } = detail;

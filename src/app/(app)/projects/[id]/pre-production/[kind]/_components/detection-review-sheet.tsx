@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
-import type { ReviewOption } from "@/server/damis";
+import type { ClientReviewOption } from "@/lib/review-option";
 import { fileSrc } from "@/lib/file-src";
-import { Button, Field, Sheet, Textarea, cn } from "@/ui";
+import { Button, cn, Field, Sheet, StoredImage, Textarea } from "@/ui";
 import type { GalleryItem } from "../../_components/gallery-item";
 import {
   buildSelections,
@@ -103,7 +103,7 @@ function ReasonTile({
   disabled,
   onToggle,
 }: {
-  option: ReviewOption;
+  option: ClientReviewOption;
   on: boolean;
   disabled: boolean;
   onToggle: () => void;
@@ -160,12 +160,9 @@ function TargetRow({
     >
       <CheckMark on={on} round={single} />
       {item.thumbnailFileId ? (
-        // eslint-disable-next-line @next/next/no-img-element -- user media from object storage
-        <img
+        <StoredImage
           src={fileSrc(item.thumbnailFileId)}
           alt=""
-          loading="lazy"
-          decoding="async"
           className="size-7 shrink-0 rounded-[4px] object-cover object-top"
         />
       ) : null}
@@ -186,7 +183,7 @@ function ReasonStrip({
   highlight,
   onChange,
 }: {
-  option: ReviewOption;
+  option: ClientReviewOption;
   draft: ReviewDraft;
   items: GalleryItem[];
   disabled: boolean;
@@ -309,7 +306,7 @@ export function DetectionReviewSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
-  options: ReviewOption[];
+  options: ClientReviewOption[];
   items: GalleryItem[];
   /** The draft to start from (a reason picked from a card's menu or a warning). */
   seed: ReviewDraft;
@@ -377,12 +374,12 @@ export function DetectionReviewSheet({
   const reasons = side ? reasonsFor(options, side) : [];
   const strips = draft.picked
     .map((code) => options.find((o) => o.code === code))
-    .filter((o): o is ReviewOption => o !== undefined)
+    .filter((o): o is ClientReviewOption => o !== undefined)
     .filter((o) => targetsWanted(o) > 0 || chipsOf(o).length > 0 || textPrompt(o) !== null);
   // Picks made on the other side stay picked; say so, so they are not sent by surprise.
   const otherPicks = draft.picked
     .map((code) => options.find((o) => o.code === code))
-    .filter((o): o is ReviewOption => o !== undefined && side !== null && o.kind !== side);
+    .filter((o): o is ClientReviewOption => o !== undefined && side !== null && o.kind !== side);
 
   return (
     <Sheet

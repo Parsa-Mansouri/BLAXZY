@@ -4,21 +4,22 @@ import { useEffect, useRef, useState, useTransition, type ReactNode } from "reac
 import Link from "next/link";
 import { fileSrc } from "@/lib/file-src";
 import { stageHref } from "@/lib/stages";
-import type { FixSelection, ReviewOption } from "@/server/damis";
+import type { FixSelection } from "@/server/damis";
+import type { ClientReviewOption } from "@/lib/review-option";
 import {
   Button,
+  cn,
   FocusLayout,
   PageHeader,
   SelectRow,
   Skeleton,
+  stagger,
   StatusDot,
   StatusLine,
+  StoredImage,
   SwapFade,
-  cn,
-  stagger,
   type StatusTone,
 } from "@/ui";
-import { refreshCredits } from "../../../../../_lib/credits";
 import { assetHref, type AssetKindKey } from "../../../_lib/asset-kinds";
 import { reviewSheetAction } from "../../assets/[assetId]/actions";
 import { PackGallery } from "../../assets/[assetId]/_components/pack-gallery";
@@ -126,7 +127,7 @@ export function SheetsReview({
   /** The character sheet maker's catalog (characters' sheets are sent back with it). */
   characterCatalog: SheetCatalogInfo;
   /** The design route of each pack kind (a locked pack goes back to its design step). */
-  packRoutes: Record<PackKind, ReviewOption | null>;
+  packRoutes: Record<PackKind, ClientReviewOption | null>;
   maxNote: number;
   /** The project has moved on to Production already. */
   moved: boolean;
@@ -252,7 +253,6 @@ export function SheetsReview({
         setPanelError(result.error);
         return;
       }
-      refreshCredits();
       decided("back");
     });
   }
@@ -353,10 +353,10 @@ export function SheetsReview({
                 )}
               >
                 {picture ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- user media from object storage, sized by the frame
-                  <img
+                  <StoredImage
                     ref={imageRef}
                     src={fileSrc(picture)}
+                    loading="eager"
                     alt={
                       sheet?.kind === "pack"
                         ? sheet.contactFileId
@@ -364,7 +364,6 @@ export function SheetsReview({
                           : `${current.name}, Hero`
                         : `Reference sheet of ${current.name}`
                     }
-                    decoding="async"
                     className="absolute inset-0 size-full object-contain"
                   />
                 ) : current.status === "back" || sheet === null || (sheet && !picture) ? (

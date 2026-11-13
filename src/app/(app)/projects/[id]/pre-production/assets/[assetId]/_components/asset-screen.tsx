@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ToolbarBack } from "@/app/(app)/projects/[id]/_components/project-chrome";
-import { refreshCredits, useCreditWatch } from "../../../../../../_lib/credits";
-import { usePolling } from "../../../../_lib/use-polling";
+import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import type { AssetStage } from "@/server/assets";
 import { stageHref } from "@/lib/stages";
 import { useToast } from "@/ui";
@@ -81,8 +80,6 @@ const INTENT_METHODS: Partial<Record<AssetIntent, AddMethod>> = {
 /** Stages that end by themselves: the worker is (or is about to be) producing something. */
 const WORKING_STAGES: readonly AssetStage[] = ["generating", "building_sheet"];
 
-const FAST_POLL_MS = 2000;
-const SETTLED_POLL_MS = 10000;
 /** When to check again after an action: its own refresh may have raced the server. */
 const RECHECK_MS = [1000, 3500];
 
@@ -117,19 +114,17 @@ function useAssetSync(assetId: string, versions: DetailVersions, working: boolea
       // Never after the page was left: the action would be posted from another page.
       if (!isActive() || !alive.current) return;
       const next = await pollAssetAction(assetId);
-      if (isActive() && alive.current && next !== keyRef.current) router.refresh();
+      // null: signed out, rate limited or the poll failed. Not a change, so nothing to refresh.
+      if (isActive() && alive.current && next !== null && next !== keyRef.current) router.refresh();
     },
     [assetId, router],
   );
 
   const unsettled = working || versions.busy || WORKING_STAGES.includes(versions.stage);
   usePolling(check, true, unsettled ? FAST_POLL_MS : SETTLED_POLL_MS);
-  // A generation in flight reserves or returns credits when it settles.
-  useCreditWatch(unsettled);
 
   const refresh = useCallback(() => {
     if (!alive.current) return;
-    refreshCredits();
     router.refresh();
     const pending = timers.current;
     pending.forEach(clearTimeout);
@@ -163,7 +158,6 @@ function useMoveOn(projectId: string, refresh: () => void) {
         refresh();
         return;
       }
-      refreshCredits();
       const next = data.next;
       toast.show({
         kind: "success",

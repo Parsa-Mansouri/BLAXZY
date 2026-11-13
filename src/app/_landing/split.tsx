@@ -1,6 +1,6 @@
 import { stagger } from "@/ui";
 import { WE_HANDLE, YOU_DECIDE, type SplitRow } from "./content";
-import { Reveal } from "./Reveal";
+import { Reveal } from "./reveal";
 
 function Column({
   title,

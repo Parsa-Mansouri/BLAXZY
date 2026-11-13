@@ -5,7 +5,8 @@ import type { LookSpecView } from "@/server/assets";
 import { Button, Input, cn } from "@/ui";
 import { fieldName, groupSpecFields, type SpecField } from "../_lib/look-review";
 import { Caps, CheckMark, ChoiceTile } from "./desk";
-import { ErrorLine, PriceLine } from "./shared";
+import { PriceLine } from "./shared";
+import { ErrorLine } from "@/app/(app)/_components/values";
 
 /** What the user did on the spec card, kept by the review screen. */
 export interface SpecDraft {

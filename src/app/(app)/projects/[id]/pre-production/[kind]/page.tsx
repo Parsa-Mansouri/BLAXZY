@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { toClientOptions } from "@/lib/review-option";
 import { requireUser } from "@/server/auth";
 import { getDetectionPanel, getPreProductionOverview, listAssetCards } from "@/server/assets";
 import { kindFromSlug, kindPlural } from "../../_lib/asset-kinds";
@@ -37,7 +38,7 @@ export default async function CategoryPage({
       initial={page.items.map(toGalleryItem)}
       initialCursor={page.nextCursor}
       counts={counts}
-      panel={panel}
+      panel={panel ? { ...panel, options: toClientOptions(panel.options) } : null}
       previous={previous ? { kind: previous.kind, plural: kindPlural(previous.kind) } : null}
       next={next ? { kind: next.kind, plural: kindPlural(next.kind) } : null}
     />

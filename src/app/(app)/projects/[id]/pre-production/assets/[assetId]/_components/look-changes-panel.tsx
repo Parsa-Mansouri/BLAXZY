@@ -2,7 +2,8 @@
 
 import { useId, useRef, useState, type ComponentType, type ReactNode } from "react";
 import type { LookView } from "@/server/assets";
-import type { FixSelection, ReviewOption } from "@/server/damis";
+import type { FixSelection } from "@/server/damis";
+import type { ClientReviewOption } from "@/lib/review-option";
 import { Button, Field, TextLink, Textarea, cn } from "@/ui";
 import { MarkList } from "../../../_components/request-changes-panel";
 import { focusSoon, markFieldId, type Marking } from "../../../_components/mark-layer";
@@ -28,7 +29,9 @@ import {
 import type { ReferencePhoto } from "../actions";
 import { Caps, CheckTile, ChoiceTile } from "./desk";
 import { ReferenceConflictChoice } from "./reference-conflict";
-import { ErrorLine, PriceLine, canAfford, formatNumber } from "./shared";
+import { PriceLine } from "./shared";
+import { ErrorLine } from "@/app/(app)/_components/values";
+import { canAfford, formatNumber } from "@/app/(app)/_lib/format";
 
 type HeadingProps = { id?: string; className?: string; children: ReactNode };
 
@@ -54,10 +57,10 @@ export interface LookChangesInput {
 
 /** The reasons of one side, in the catalog's groups (props) or as one list. */
 function groupedReasons(
-  options: readonly ReviewOption[],
+  options: readonly ClientReviewOption[],
   groups: DesignerInfo["groups"],
-): { id: string; label: string | null; options: ReviewOption[] }[] {
-  const grouped = new Map<string, ReviewOption[]>();
+): { id: string; label: string | null; options: ClientReviewOption[] }[] {
+  const grouped = new Map<string, ClientReviewOption[]>();
   for (const option of options) {
     const key = option.group ?? "";
     grouped.set(key, [...(grouped.get(key) ?? []), option]);
@@ -85,7 +88,7 @@ function ReasonStrip({
   highlight,
   onChange,
 }: {
-  option: ReviewOption;
+  option: ClientReviewOption;
   draft: LookReviewDraft;
   frames: DesignerInfo["frames"];
   disabled: boolean;
@@ -233,7 +236,7 @@ export function LookChangesPanel({
 
   const picked = draft.picked
     .map((code) => options.find((o) => o.code === code))
-    .filter((o): o is ReviewOption => o !== undefined);
+    .filter((o): o is ClientReviewOption => o !== undefined);
   const strips = picked.filter((o) => hasStrip(o, frames));
   const otherPicks = picked.filter((o) => side !== null && o.kind !== side);
   const given = picked.length > 0 || draft.note.trim().length > 0 || marks.length > 0;

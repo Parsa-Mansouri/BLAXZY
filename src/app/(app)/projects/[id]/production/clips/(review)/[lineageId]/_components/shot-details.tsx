@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type { ProductionBlockAsset } from "@/server/production";
 import { fileSrc } from "@/lib/file-src";
-import { PaperSheet, cn } from "@/ui";
+import { cn, PaperSheet, StoredImage } from "@/ui";
 import { ASSET_KIND_LABELS, assetHref } from "../../../../../_lib/asset-kinds";
 import { promptParts } from "../../../_lib/clip-view";
 
@@ -46,15 +46,11 @@ export function ShotDetails({
                 >
                   <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-paper bg-elevated">
                     {asset.thumbnailFileId ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- a redirect to a presigned URL
-                      <img
+                      <StoredImage
                         src={fileSrc(asset.thumbnailFileId)}
                         alt=""
                         width={44}
                         height={44}
-                        loading="lazy"
-                        decoding="async"
-                        draggable={false}
                         className="absolute inset-0 size-full object-cover"
                       />
                     ) : null}

@@ -2,8 +2,9 @@
 
 import type { ComponentType, ReactNode } from "react";
 import { cn } from "./cn";
-import type { StageStatus } from "./StageList";
 import { Tooltip } from "./Tooltip";
+
+export type StageStatus = "done" | "current" | "upcoming" | "locked";
 
 export interface StageStripItem {
   id: string;

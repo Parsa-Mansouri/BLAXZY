@@ -3,11 +3,11 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Sheet, Skeleton } from "@/ui";
-import { formatNumber, shotsWords } from "../../_components/format";
-import { Credits, Mono } from "../../_components/values";
+import { shotsWords } from "../../_components/format";
 import { clipsHref } from "../../../_lib/production-routes";
 import { quoteAction, startDraftsAction, type Quote } from "../actions";
-import { refreshCredits } from "../../../../../_lib/credits";
+import { formatNumber } from "@/app/(app)/_lib/format";
+import { Credits, Mono } from "@/app/(app)/_components/values";
 
 /**
  * What the drafts will cost, in plain words, then the confirmation. The price is read when the
@@ -50,7 +50,6 @@ export function GenerateSheet({
     startStarting(async () => {
       const result = await startDraftsAction(projectId, quote.credits);
       if (result.ok) {
-        refreshCredits();
         router.push(clipsHref(projectId));
         return;
       }

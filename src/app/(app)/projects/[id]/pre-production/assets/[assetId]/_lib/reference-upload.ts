@@ -1,3 +1,4 @@
+import { fileMime, fileProblem, uploadViaTicket } from "@/lib/upload";
 import { confirmReferenceUploadAction, createAssetUploadAction } from "../actions";
 
 const MB = 1024 * 1024;
@@ -14,65 +15,43 @@ export const IMAGE_ACCEPT = Object.keys(IMAGE_TYPES)
   .map((ext) => `.${ext}`)
   .join(",");
 
-/** PUTs the file to the presigned URL, reporting progress. */
-export function putFile(
-  url: string,
-  headers: Record<string, string>,
-  file: File,
-  onProgress: (percent: number) => void,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress((event.loaded / event.total) * 100);
-    };
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error()));
-    xhr.onerror = () => reject(new Error());
-    xhr.onabort = () => reject(new Error());
-    xhr.send(file);
-  });
-}
-
 /** Why a file cannot be a reference photo, or null when it can. */
 export function photoProblem(file: File): string | null {
-  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (!IMAGE_TYPES[extension]) return "This file type cannot be used. Choose a PNG, JPEG or WebP.";
-  if (file.size === 0) return "This file is empty. Choose another one.";
-  if (file.size > MAX_PHOTO_BYTES) {
-    return "This photo is larger than 25 MB. Export a smaller version and try again.";
-  }
-  return null;
+  return fileProblem(file, {
+    types: IMAGE_TYPES,
+    maxBytes: MAX_PHOTO_BYTES,
+    messages: {
+      type: "This file type cannot be used. Choose a PNG, JPEG or WebP.",
+      empty: "This file is empty. Choose another one.",
+      size: "This photo is larger than 25 MB. Export a smaller version and try again.",
+    },
+  });
 }
 
 /**
  * Uploads one reference photo straight to storage and confirms it; nothing starts on the server.
- * Returns the file's id to send with a design or a review.
+ * Returns the file's id to send with a design or a review. Never throws.
  */
 export async function uploadReferencePhoto(
   assetId: string,
   file: File,
   onProgress: (percent: number) => void,
-): Promise<{ ok: true; fileId: string } | { ok: false; error: string }> {
+  signal?: AbortSignal,
+): Promise<{ ok: true; fileId: string } | { ok: false; error: string; aborted?: boolean }> {
   const problem = photoProblem(file);
   if (problem) return { ok: false, error: problem };
-  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-  const ticket = await createAssetUploadAction(assetId, {
-    name: file.name,
-    type: IMAGE_TYPES[extension] ?? "",
-    size: file.size,
+  const result = await uploadViaTicket({
+    createTicket: () =>
+      createAssetUploadAction(assetId, {
+        name: file.name,
+        type: fileMime(file, IMAGE_TYPES),
+        size: file.size,
+      }),
+    file,
+    confirm: (fileId) => confirmReferenceUploadAction(fileId),
+    onProgress,
+    signal,
+    uploadFailedMessage: "The upload failed. Check your connection and add the photo again.",
   });
-  if (!ticket.ok) return { ok: false, error: ticket.error };
-  try {
-    await putFile(ticket.data.uploadUrl, ticket.data.headers, file, onProgress);
-  } catch {
-    return {
-      ok: false,
-      error: "The upload failed. Check your connection and add the photo again.",
-    };
-  }
-  const confirmed = await confirmReferenceUploadAction(ticket.data.fileId);
-  if (!confirmed.ok) return { ok: false, error: confirmed.error };
-  return { ok: true, fileId: ticket.data.fileId };
+  return result.ok ? { ok: true, fileId: result.fileId } : result;
 }

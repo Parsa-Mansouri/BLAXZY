@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import type { DetectionPanel } from "@/server/assets";
+import type { ClientReviewOption } from "@/lib/review-option";
 import {
   Button,
   MenuItem,
@@ -17,7 +18,8 @@ import {
   useToast,
 } from "@/ui";
 import { ASSET_KIND_LABELS, categoryHref, type AssetKindKey } from "../../../_lib/asset-kinds";
-import { usePolling } from "../../../_lib/use-polling";
+import { usePolling } from "@/app/(app)/_lib/use-polling";
+import { mergeLoadedPages, useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
 import { isWorking } from "../../_components/asset-stage";
 import { KIND_ASPECTS, type GalleryItem } from "../../_components/gallery-item";
 import { FILL_PAGE } from "../../_lib/fill";
@@ -63,6 +65,11 @@ const ASPECT_CLASS = {
   video: "aspect-video",
 } as const;
 
+/** The detection review's state with the options reduced to the client-safe type (no prompts). */
+export type ClientDetectionPanel = Omit<DetectionPanel, "options"> & {
+  options: ClientReviewOption[];
+};
+
 /** One category: picture cards with their actions, Add, Merge, Load More and live status. */
 export function CategoryPanel({
   projectId,
@@ -82,35 +89,42 @@ export function CategoryPanel({
   initialCursor: string | null;
   counts: StageCounts;
   /** The detected list's review state; null hides the review. */
-  panel: DetectionPanel | null;
+  panel: ClientDetectionPanel | null;
   previous: Neighbour | null;
   next: Neighbour | null;
 }) {
   const router = useRouter();
-  const [items, setItems] = useState(initial);
-  const [cursor, setCursor] = useState(initialCursor);
-  const [counts, setCounts] = useState(initialCounts);
+  const first = useMemo(
+    () => ({ items: initial, cursor: initialCursor, counts: initialCounts }),
+    [initial, initialCursor, initialCounts],
+  );
+  // A refresh brings page one again; pages loaded with Load More stay.
+  const [{ items, cursor, counts }, setList] = useServerSnapshot(first, (current, fresh) => {
+    const merged = mergeLoadedPages({
+      current: current.items,
+      currentCursor: current.cursor,
+      fresh: fresh.items,
+      freshCursor: fresh.cursor,
+      id: (item) => item.id,
+    });
+    return { items: merged.items, cursor: merged.cursor, counts: fresh.counts };
+  });
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
   const [addOpen, setAddOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const loadingRef = useRef(false);
-  const [seen, setSeen] = useState(initial);
-  if (seen !== initial) {
-    setSeen(initial);
-    setItems(initial);
-    setCursor(initialCursor);
-    setCounts(initialCounts);
-  }
 
   const working = items.some((item) => isWorking(item.stage));
   usePolling(async (isActive) => {
     if (loadingRef.current) return;
     const result = await refreshCardsAction(projectId, kind, items.length);
     if (!isActive() || !result.ok || loadingRef.current) return;
-    setItems(result.data.items);
-    setCursor(result.data.nextCursor);
-    setCounts(result.data.counts);
+    setList({
+      items: result.data.items,
+      cursor: result.data.nextCursor,
+      counts: result.data.counts,
+    });
   }, working);
 
   function more() {
@@ -124,9 +138,11 @@ export function CategoryPanel({
           setError(result.error);
           return;
         }
-        setItems((list) => [...list, ...result.data.items]);
-        setCursor(result.data.nextCursor);
-        setCounts(result.data.counts);
+        setList((list) => ({
+          items: [...list.items, ...result.data.items],
+          cursor: result.data.nextCursor,
+          counts: result.data.counts,
+        }));
       } finally {
         loadingRef.current = false;
       }
@@ -134,12 +150,7 @@ export function CategoryPanel({
   }
 
   /* The detected list's review ("Something wrong with this list?"). */
-  const [panel, setPanel] = useState(initialPanel);
-  const [seenPanel, setSeenPanel] = useState(initialPanel);
-  if (seenPanel !== initialPanel) {
-    setSeenPanel(initialPanel);
-    setPanel(initialPanel);
-  }
+  const [panel, setPanel] = useServerSnapshot(initialPanel, (_current, fresh) => fresh);
   const [review, setReview] = useState<{ open: boolean; seed: ReviewDraft; key: number }>({
     open: false,
     seed: EMPTY_DRAFT,

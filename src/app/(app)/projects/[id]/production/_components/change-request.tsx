@@ -13,7 +13,7 @@ import {
   stagger,
 } from "@/ui";
 import { shake } from "./feedback";
-import { formatNumber } from "./format";
+import { formatNumber } from "@/app/(app)/_lib/format";
 
 export interface IssueChoice {
   code: string;

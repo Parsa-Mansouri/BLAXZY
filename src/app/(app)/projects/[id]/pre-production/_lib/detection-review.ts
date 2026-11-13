@@ -4,7 +4,8 @@
  * into the selections `submitDetectionReview` takes.
  */
 import type { DetectionWarning } from "@/server/assets";
-import type { FixSelection, ReviewOption } from "@/server/damis";
+import type { FixSelection } from "@/server/damis";
+import type { ClientReviewOption } from "@/lib/review-option";
 import type { AssetKindKey } from "../../_lib/asset-kinds";
 
 /** What the helpers need of an asset. */
@@ -40,36 +41,39 @@ const LABELS: Record<string, string> = {
 };
 
 /** The reason's label as the sheet shows it. */
-export function reasonLabel(option: Pick<ReviewOption, "code" | "label">): string {
+export function reasonLabel(option: Pick<ClientReviewOption, "code" | "label">): string {
   return LABELS[option.code] ?? option.label;
 }
 
 export type ReviewSide = "technical" | "preference";
 
 /** The reasons of one side, in catalog order. */
-export function reasonsFor(options: readonly ReviewOption[], side: ReviewSide): ReviewOption[] {
+export function reasonsFor(
+  options: readonly ClientReviewOption[],
+  side: ReviewSide,
+): ClientReviewOption[] {
   return options.filter((o) => o.kind === side);
 }
 
 /** How many assets a reason is about: 0 none, 1 exactly one, 2 two or more. */
-export function targetsWanted(option: ReviewOption): 0 | 1 | 2 {
+export function targetsWanted(option: ClientReviewOption): 0 | 1 | 2 {
   const n = option.targetCount ?? 0;
   return n <= 0 ? 0 : n === 1 ? 1 : 2;
 }
 
 /** The reason's chips instead of text (Wrong category: Character / Location / Prop). */
-export function chipsOf(option: ReviewOption): { label: string; value: string }[] {
+export function chipsOf(option: ClientReviewOption): { label: string; value: string }[] {
   return option.followup?.type === "chips" ? option.followup.options : [];
 }
 
 /** The question over the reason's text box, or null when it takes no text. */
-export function textPrompt(option: ReviewOption): string | null {
+export function textPrompt(option: ClientReviewOption): string | null {
   if (chipsOf(option).length > 0) return null;
   return TEXT_PROMPTS[option.code] ?? (option.needsText ? "Tell us more" : null);
 }
 
 /** True when the reason cannot be sent without the user's text. */
-export function textRequired(option: ReviewOption): boolean {
+export function textRequired(option: ClientReviewOption): boolean {
   return option.needsText && chipsOf(option).length === 0;
 }
 
@@ -129,7 +133,7 @@ const MAX_TEXT = 4000;
  */
 export function buildSelections(
   draft: ReviewDraft,
-  options: readonly ReviewOption[],
+  options: readonly ClientReviewOption[],
   assets: readonly ReviewAsset[],
 ): BuiltSelections {
   const note = draft.note.trim();
@@ -311,7 +315,7 @@ export function categoryWarnings(
   warnings: readonly DetectionWarning[],
   kind: AssetKindKey,
   assets: readonly ReviewAsset[],
-  options: readonly ReviewOption[],
+  options: readonly ClientReviewOption[],
 ): CategoryWarning[] {
   const available = new Set(options.map((o) => o.code));
   const out: CategoryWarning[] = [];

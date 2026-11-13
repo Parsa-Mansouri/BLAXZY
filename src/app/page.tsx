@@ -2,15 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/server/auth";
 import { Button } from "@/ui";
-import { ClipVsFilm } from "./_landing/ClipVsFilm";
-import { ClosingCta } from "./_landing/ClosingCta";
-import { Faq } from "./_landing/Faq";
-import { Footer } from "./_landing/Footer";
-import { Glows } from "./_landing/Glows";
-import { LandingNav } from "./_landing/LandingNav";
-import { Split } from "./_landing/Split";
-import { StageReel } from "./_landing/StageReel";
-import { Timecode } from "./_landing/Timecode";
+import { ClipVsFilm } from "./_landing/clip-vs-film";
+import { ClosingCta } from "./_landing/closing-cta";
+import { Faq } from "./_landing/faq";
+import { Footer } from "./_landing/footer";
+import { Glows } from "./_landing/glows";
+import { LandingNav } from "./_landing/landing-nav";
+import { Split } from "./_landing/split";
+import { StageReel } from "./_landing/stage-reel";
+import { Timecode } from "./_landing/timecode";
 import { HeroStack } from "./_landing/vignettes";
 
 /**

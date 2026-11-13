@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { Button, stagger } from "@/ui";
-import { Glows } from "./Glows";
-import { Reveal } from "./Reveal";
+import { Glows } from "./glows";
+import { Reveal } from "./reveal";
 
 /** The countdown: each number's delay after the section comes into view. */
 const BEATS = [

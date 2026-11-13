@@ -70,13 +70,6 @@ export function stageLabel(stage: string): string {
   return PROJECT_STAGES.find((s) => s.key === stage)?.label ?? "Style";
 }
 
-/** "Step 2 of 4", or "Finished" once every stage is done. */
-export function stageStep(stage: string): string {
-  const index = stageIndex(stage);
-  if (index >= PROJECT_STAGES.length) return "Finished";
-  return `Step ${index + 1} of ${PROJECT_STAGES.length}`;
-}
-
 /** Earlier stages are done, the current one is current, all later ones are locked. */
 export function stageViews(stage: string, projectId?: string): StageView[] {
   const current = stageIndex(stage);

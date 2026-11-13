@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { fileSrc } from "@/lib/file-src";
-import { ProgressBar, cn } from "@/ui";
+import { cn, ProgressBar, StoredImage } from "@/ui";
 
 export type PosterShape = "landscape" | "portrait";
 
@@ -71,13 +71,9 @@ export function PosterTile({
         )}
       >
         {posterFileId ? (
-          // eslint-disable-next-line @next/next/no-img-element -- a redirect to a presigned URL
-          <img
+          <StoredImage
             src={fileSrc(posterFileId)}
             alt=""
-            loading="lazy"
-            decoding="async"
-            draggable={false}
             className={cn("absolute inset-0 size-full object-contain", dim && "opacity-40")}
           />
         ) : null}

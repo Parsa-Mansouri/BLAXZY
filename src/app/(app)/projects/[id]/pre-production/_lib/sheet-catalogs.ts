@@ -1,9 +1,11 @@
 /**
  * The sheet makers' review catalogs as the screens show them (Wizard options, groups, messages),
- * read on the server from `@/server/damis` and handed to the client as plain data. Server only:
+ * read on the server from `@/server/damis/light`, projected to the client-safe option type (no
+ * prompt text) and handed to the client as plain data. Server only:
  * import it from pages, never from client components.
  */
-import { getReviewCatalog, visibleOptions, type ReviewCatalogKey } from "@/server/damis";
+import { toClientOptions } from "@/lib/review-option";
+import { getReviewCatalog, visibleOptions, type ReviewCatalogKey } from "@/server/damis/light";
 import type { PackKind, SheetCatalogInfo } from "../assets/[assetId]/_lib/sheet-review";
 
 /** Rejected rounds in a row before the catalog's message, when the catalog says none. */
@@ -14,8 +16,10 @@ const CONCEPT_ONLY = /\(concept only\)/i;
 
 function catalogInfo(key: ReviewCatalogKey, context?: Record<string, boolean>): SheetCatalogInfo {
   const catalog = getReviewCatalog(key);
-  const options = visibleOptions(catalog, { sector: "wizard", context }).filter(
-    (o) => !CONCEPT_ONLY.test(o.label),
+  const options = toClientOptions(
+    visibleOptions(catalog, { sector: "wizard", context }).filter(
+      (o) => !CONCEPT_ONLY.test(o.label),
+    ),
   );
   const routing = catalog.rules.design_change_routing;
   const designChangeMessage =

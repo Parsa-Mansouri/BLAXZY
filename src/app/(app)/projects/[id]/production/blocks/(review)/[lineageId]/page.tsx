@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { BLOCK_ISSUE_LIST } from "@/server/damis";
+import { BLOCK_ISSUE_LIST } from "@/server/damis/light";
 import { getBlockDetail, MAX_BLOCK_ASSETS, MAX_REVIEW_NOTE_LENGTH } from "@/server/production";
 import { loadProduction } from "../../../../_lib/load-production";
 import { blockHref, shotMovedHref } from "../../../../_lib/production-routes";

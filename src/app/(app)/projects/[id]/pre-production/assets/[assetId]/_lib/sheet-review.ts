@@ -5,7 +5,8 @@
  * words of a location pack or prop sheet (what a view waits for, what the lock still needs).
  */
 import type { PackView, SheetSpecView, SheetView } from "@/server/assets";
-import type { FixSelection, FollowupStep, ReviewOption } from "@/server/damis";
+import type { FixSelection } from "@/server/damis";
+import type { ClientFollowupStep, ClientReviewOption } from "@/lib/review-option";
 import { followupChips, optionLabel, takesText } from "./look-review";
 
 export type DetailCell = SheetSpecView["detailCells"][number];
@@ -17,10 +18,10 @@ export type PackKind = "location" | "prop";
  */
 export const DESIGN_CHANGE_WARNING = "DESIGN_CHANGE_REQUESTED:";
 
-/** What a sheet maker's catalog looks like on screen; built by the page from `@/server/damis`. */
+/** What a sheet maker's catalog looks like on screen; built by the page from `@/server/damis`, projected to the client-safe option type. */
 export interface SheetCatalogInfo {
   /** The catalog's options visible in the Wizard, in catalog order. */
-  options: ReviewOption[];
+  options: ClientReviewOption[];
   /** The catalog's groups (character sheet: Face, Full-body views ...; props: shape, scale ...). */
   groups: { id: string; label: string }[];
   /** Rejected rounds in a row after which the catalog's message shows. */
@@ -36,7 +37,7 @@ export function cellLabel(cell: Pick<DetailCell, "slot" | "subject">): string {
 }
 
 /** The frame-picking step of a follow-up (the character sheet's SP01 and SP02). */
-function frameStep(option: ReviewOption): FollowupStep | null {
+function frameStep(option: ClientReviewOption): ClientFollowupStep | null {
   return (
     option.followup?.steps?.find(
       (s) => s.type === "select_detail_cell" || /detail_cells/.test(s.dynamicOptionsSource ?? ""),
@@ -45,12 +46,12 @@ function frameStep(option: ReviewOption): FollowupStep | null {
 }
 
 /** True when the option first asks which numbered detail frame it is about. */
-export function picksFrame(option: ReviewOption): boolean {
+export function picksFrame(option: ClientReviewOption): boolean {
   return frameStep(option) !== null;
 }
 
 /** The step after the frame is picked (its chips and its label), or null. */
-function answerStep(option: ReviewOption): FollowupStep | null {
+function answerStep(option: ClientReviewOption): ClientFollowupStep | null {
   const steps = option.followup?.steps;
   if (!steps) return null;
   const frame = frameStep(option);
@@ -58,7 +59,7 @@ function answerStep(option: ReviewOption): FollowupStep | null {
 }
 
 /** The labels of a two-step follow-up: "Which frame?" and "What should it show?". */
-export function stepLabels(option: ReviewOption): { frame: string; answer: string } {
+export function stepLabels(option: ClientReviewOption): { frame: string; answer: string } {
   return {
     frame: frameStep(option)?.label ?? "Which frame?",
     answer: answerStep(option)?.label ?? "How should it change?",
@@ -66,37 +67,39 @@ export function stepLabels(option: ReviewOption): { frame: string; answer: strin
 }
 
 /** The ready answers of an option (a stepped follow-up's answer step included). */
-export function sheetChips(option: ReviewOption): { label: string; value: string }[] {
+export function sheetChips(option: ClientReviewOption): { label: string; value: string }[] {
   const step = answerStep(option);
   if (step) return step.options.map(({ label, value }) => ({ label, value }));
   return followupChips(option);
 }
 
 /** True when anything opens under a picked option: chips, a text box or the frame picker. */
-export function hasSheetStrip(option: ReviewOption): boolean {
+export function hasSheetStrip(option: ClientReviewOption): boolean {
   return picksFrame(option) || sheetChips(option).length > 0 || takesText(option);
 }
 
 /** True when the option cannot be sent without a chip or the user's words. */
-export function needsSheetAnswer(option: ReviewOption): boolean {
-  return option.needsText || (option.instructionTemplate?.includes("{value}") ?? false);
+export function needsSheetAnswer(option: ClientReviewOption): boolean {
+  return option.needsText || option.takesValue;
 }
 
 /** The re-roll ("make it again": SR01, LSR01, ASR01), sent alone; null when there is none. */
-export function rerollOption(options: readonly ReviewOption[]): ReviewOption | null {
+export function rerollOption(options: readonly ClientReviewOption[]): ClientReviewOption | null {
   return options.find((o) => o.kind === "regenerate") ?? null;
 }
 
 /** The design route (SX01, LSX01, ASX01): back to the designer with the user's words. */
-export function designRouteOption(options: readonly ReviewOption[]): ReviewOption | null {
+export function designRouteOption(
+  options: readonly ClientReviewOption[],
+): ClientReviewOption | null {
   return options.find((o) => o.kind === "route") ?? null;
 }
 
 /** The options of one side of the panel, in catalog order (re-rolls and routes stand apart). */
 export function sheetOptionsFor(
-  options: readonly ReviewOption[],
+  options: readonly ClientReviewOption[],
   side: "technical" | "preference",
-): ReviewOption[] {
+): ClientReviewOption[] {
   return options.filter((o) => o.kind === side);
 }
 
@@ -106,9 +109,9 @@ export function sheetOptionsFor(
  */
 export function suggestedFirst(
   picked: readonly string[],
-  options: readonly ReviewOption[],
-): { option: ReviewOption; for: string[] } | null {
-  let found: ReviewOption | null = null;
+  options: readonly ClientReviewOption[],
+): { option: ClientReviewOption; for: string[] } | null {
+  let found: ClientReviewOption | null = null;
   const reasons: string[] = [];
   for (const code of picked) {
     const option = options.find((o) => o.code === code);
@@ -154,7 +157,7 @@ export type BuiltSheetSelections =
  */
 export function buildSheetSelections(
   draft: SheetChangesDraft,
-  options: readonly ReviewOption[],
+  options: readonly ClientReviewOption[],
   cells: readonly DetailCell[],
   maxText: number,
 ): BuiltSheetSelections {
@@ -196,7 +199,7 @@ export function buildSheetSelections(
 
 /** The design route as a selection, with the user's words (required by the server). */
 export function buildDesignChange(
-  route: ReviewOption | null,
+  route: ClientReviewOption | null,
   text: string,
   maxText: number,
 ): BuiltSheetSelections {

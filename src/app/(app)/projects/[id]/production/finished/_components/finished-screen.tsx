@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Download, Play } from "lucide-react";
 import type { ProductionPhase } from "@/server/production";
@@ -16,11 +16,11 @@ import {
   useToast,
 } from "@/ui";
 import { DrawnTick } from "../../_components/feedback";
-import { Mono } from "../../_components/values";
 import { FillPage } from "../../_components/fill-page";
 import { POSTER_SHAPES, PosterTile } from "../../_components/poster-tile";
 import { phaseHref } from "../../../_lib/production-routes";
-import { usePolling } from "../../../_lib/use-polling";
+import { usePolling } from "@/app/(app)/_lib/use-polling";
+import { mergeLoadedPages, useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
 import {
   clipDownloadAction,
   loadClipsAction,
@@ -30,7 +30,9 @@ import {
   type FinishedClip,
 } from "../actions";
 import { shotsWords } from "../../_components/format";
+import { afterExportPoll } from "../_lib/export-poll";
 import { ClipPlayer } from "./clip-player";
+import { Mono } from "@/app/(app)/_components/values";
 
 /** Saves a file from a link the server signed, without leaving the page. */
 function saveFrom(url: string) {
@@ -53,6 +55,7 @@ type ExportState =
 function useExport(projectId: string) {
   const [state, setState] = useState<ExportState>({ phase: "idle" });
   const [starting, startStarting] = useTransition();
+  const pollFailures = useRef(0);
 
   function apply(view: ExportView) {
     if (view.status === "ready" && view.downloadUrl) {
@@ -69,6 +72,7 @@ function useExport(projectId: string) {
   }
 
   function start() {
+    pollFailures.current = 0;
     startStarting(async () => {
       const result = await requestExportAction(projectId);
       if (!result.ok) {
@@ -85,8 +89,11 @@ function useExport(projectId: string) {
       if (!workingId) return;
       const result = await pollExportAction(workingId);
       if (!isActive()) return;
+      // One bad answer (a dropped request, a restart) is not the end of the export.
+      const run = afterExportPoll(pollFailures.current, result.ok);
+      pollFailures.current = run.failures;
       if (!result.ok) {
-        setState({ phase: "failed", reason: result.error });
+        if (run.giveUp) setState({ phase: "failed", reason: result.error });
         return;
       }
       apply(result.data);
@@ -123,8 +130,22 @@ export function FinishedScreen({
   phase: ProductionPhase;
 }) {
   const toast = useToast();
-  const [clips, setClips] = useState(initial);
-  const [cursor, setCursor] = useState(initialCursor);
+  const first = useMemo(
+    () => ({ clips: initial, cursor: initialCursor }),
+    [initial, initialCursor],
+  );
+  // A refresh brings page one again; pages loaded with Load More stay.
+  const [{ clips, cursor }, setShelf] = useServerSnapshot(first, (current, fresh) => {
+    const merged = mergeLoadedPages({
+      current: current.clips,
+      currentCursor: current.cursor,
+      fresh: fresh.clips,
+      freshCursor: fresh.cursor,
+      id: (clip) => clip.lineageId,
+    });
+    return { clips: merged.items, cursor: merged.cursor };
+  });
+  const loadingMore = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
   const [playing, setPlaying] = useState<FinishedClip | null>(null);
@@ -133,16 +154,25 @@ export function FinishedScreen({
   const exporting = useExport(projectId);
 
   function more() {
-    if (!cursor) return;
+    if (!cursor || loadingMore.current) return;
+    loadingMore.current = true;
     setError(null);
     startLoading(async () => {
-      const result = await loadClipsAction(projectId, cursor);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await loadClipsAction(projectId, cursor);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setShelf((shelf) => ({
+          clips: [...shelf.clips, ...result.data.items],
+          cursor: result.data.nextCursor,
+        }));
+      } catch {
+        setError("Could not load more clips. Check your connection and try again.");
+      } finally {
+        loadingMore.current = false;
       }
-      setClips((list) => [...list, ...result.data.items]);
-      setCursor(result.data.nextCursor);
     });
   }
 

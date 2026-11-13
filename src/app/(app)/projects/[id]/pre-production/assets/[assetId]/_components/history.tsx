@@ -2,7 +2,7 @@
 
 import { AudioLines, ImageOff } from "lucide-react";
 import { fileSrc } from "@/lib/file-src";
-import { Button, cn } from "@/ui";
+import { Button, cn, StoredImage } from "@/ui";
 import type { LookView } from "@/server/assets";
 import {
   lookOrigin,
@@ -16,7 +16,7 @@ import { fieldName } from "../_lib/look-review";
 import { StageHeading } from "./asset-context";
 import { StageLayout } from "./stage-panels";
 import { ReferenceThumbs } from "./reference-conflict";
-import { Artwork, MissingImage, When, type GuidedQuestion, type Orientation } from "./shared";
+import { Artwork, MissingImage, type GuidedQuestion, type Orientation } from "./shared";
 
 /** "ai_decides" (I'm not sure) in words. */
 function answerWords(value: string, designer: DesignerInfo | null, label?: string): string {
@@ -76,6 +76,7 @@ function AnswerList({
   );
 }
 import { AudioPlayer } from "./voice";
+import { When } from "@/app/(app)/_components/values";
 
 function itemTitle(item: HistoryItem, voice: boolean): string {
   if (item.kind === "sheet") return `Sheet ${item.version.versionNumber}`;
@@ -136,13 +137,9 @@ export function HistoryStrip({
                         className="size-5 text-label-2"
                       />
                     ) : fileId ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <StoredImage
                         src={fileSrc(fileId)}
                         alt=""
-                        loading="lazy"
-                        decoding="async"
-                        draggable={false}
                         className="absolute inset-0 size-full object-contain"
                       />
                     ) : item.version.status === "failed" ? (

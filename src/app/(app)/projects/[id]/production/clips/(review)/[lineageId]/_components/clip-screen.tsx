@@ -12,13 +12,12 @@ import {
   StatusLine,
   cn,
   formatDurationLong,
+  isTypingTarget,
   useToast,
 } from "@/ui";
 import { FRAME_BOX, FRAME_HEIGHT } from "../../../../_components/frame";
-import { Mono } from "../../../../_components/values";
-import { refreshCredits, useCreditWatch } from "../../../../../../../_lib/credits";
 import { useRefreshReviewList } from "../../../../_components/review-list-context";
-import { usePolling } from "../../../../../_lib/use-polling";
+import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import {
   CLIP_STATE_LABELS,
   CLIP_STATE_TONES,
@@ -51,9 +50,8 @@ import {
 import { TakesStrip } from "./takes-strip";
 import type { IssueChoice } from "./shared";
 import { VideoPlayer } from "./video-player";
+import { Mono } from "@/app/(app)/_components/values";
 
-const FAST_POLL_MS = 2000;
-const SETTLED_POLL_MS = 10000;
 /** When to check again after an action: its own refresh may have raced the server. */
 const RECHECK_MS = [1000, 3500];
 
@@ -124,16 +122,9 @@ function useClipSync(lineageId: string, key: string, unsettled: boolean) {
   }, [check, router]);
 }
 
-function isTyping(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return (
-    target.isContentEditable ||
-    target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA" ||
-    target.tagName === "SELECT" ||
-    target.closest("[role='dialog'],[role='alertdialog'],[data-change-request]") !== null
-  );
-}
+/** A key press in a field, a dialog or the change request is theirs, not the page's. */
+const isTyping = (target: EventTarget | null) =>
+  isTypingTarget(target, "[role='dialog'],[role='alertdialog'],[data-change-request]");
 
 function decisionWords(
   stage: TakeView["stage"],
@@ -189,7 +180,6 @@ export function ClipScreen(props: ClipScreenProps) {
   const refreshList = useRefreshReviewList();
   const unsettled = isUnsettled(shot.stage, shot.busy);
   const refresh = useClipSync(shot.lineageId, detailKey(shot), unsettled);
-  useCreditWatch(unsettled);
 
   // Announce a stage change, but not the stage the page opened on.
   const announcedStage = useRef(shot.stage);
@@ -235,7 +225,6 @@ export function ClipScreen(props: ClipScreenProps) {
         }
         setAsking(false);
         refreshList();
-        refreshCredits();
         const words = decisionWords(take.stage, review.decision, shotNumber(shot.orderIndex));
         const next = result.data.next;
         const after = next
@@ -318,7 +307,6 @@ export function ClipScreen(props: ClipScreenProps) {
           prices={prices}
           balance={balance}
           onDone={() => {
-            refreshCredits();
             refresh();
             refreshList();
           }}

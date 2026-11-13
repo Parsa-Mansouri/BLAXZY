@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ReviewOption } from "@/server/damis";
+import type { ClientReviewOption } from "@/lib/review-option";
 import {
   buildLookSelections,
   EMPTY_LOOK_DRAFT,
@@ -13,24 +13,23 @@ import {
   type SpecField,
 } from "./look-review";
 
-function option(code: string, patch: Partial<ReviewOption> = {}): ReviewOption {
+function option(code: string, patch: Partial<ClientReviewOption> = {}): ClientReviewOption {
   return {
     code,
     kind: "technical",
     label: code,
     needsText: false,
     proOnly: false,
-    callsClaude: true,
-    editEligible: false,
+    takesValue: false,
     ...patch,
   };
 }
 
-const options: ReviewOption[] = [
+const options: ClientReviewOption[] = [
   option("T01"),
   option("P01", {
     kind: "preference",
-    instructionTemplate: "Make them {value}.",
+    takesValue: true,
     followup: {
       type: "chips_or_text",
       allowCustom: true,
@@ -39,7 +38,7 @@ const options: ReviewOption[] = [
     conflictsWithReference: "face",
   }),
   option("LP03", { kind: "preference", needsText: true }),
-  option("R01", { kind: "regenerate", callsClaude: false }),
+  option("R01", { kind: "regenerate" }),
 ];
 
 describe("buildLookSelections", () => {

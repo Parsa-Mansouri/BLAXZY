@@ -4,9 +4,11 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, FeatureBlock, PageHeader, StatusLine, stagger } from "@/ui";
-import { usePolling } from "../../../_lib/use-polling";
+import { useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
+import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import { finishProductionAction, loadBoardAction, refreshBoardAction } from "../actions";
 import type { BoardPage } from "../_lib/clip-data";
+import { mergeBoard } from "../_lib/merge-board";
 import {
   isUnsettled,
   shotsHint,
@@ -15,14 +17,10 @@ import {
   type Orientation,
 } from "../_lib/clip-view";
 import { blocksHref, clipHref, finishedHref } from "../_lib/routes";
-import { useCreditWatch } from "../../../../../_lib/credits";
 import { ClipTile, BoardGrid, FEW_POSTERS, PendingTile } from "./clip-tile";
 import { useChangedKeys } from "../../_components/feedback";
 import { FillPage } from "../../_components/fill-page";
 import { useClips } from "./clips-context";
-
-const FAST_POLL_MS = 2000;
-const SETTLED_POLL_MS = 10000;
 
 /**
  * The board: every shot as a poster card in story order, one status line that says what needs
@@ -40,12 +38,7 @@ export function ClipsBoard({
 }) {
   const router = useRouter();
   const { announce, markArrival, takeArrival } = useClips();
-  const [board, setBoard] = useState(initial);
-  const [seen, setSeen] = useState(initial);
-  if (seen !== initial) {
-    setSeen(initial);
-    setBoard(initial);
-  }
+  const [board, setBoard] = useServerSnapshot(initial, mergeBoard);
   const [error, setError] = useState<string | null>(null);
   const [finishError, setFinishError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
@@ -57,8 +50,6 @@ export function ClipsBoard({
   const line = statusLine(summary.counts);
   const changed = useChangedKeys(tiles.map((t) => [t.lineageId, t.stage] as const));
   const rendering = tiles.some((t) => isUnsettled(t.stage));
-  // Drafts and finals reserve their credits as their jobs start, and refund them if they fail.
-  useCreditWatch(rendering);
 
   // Reached by moving on automatically (no other shot waits): start at the status line.
   useEffect(() => {

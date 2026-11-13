@@ -15,8 +15,9 @@ export default async function AppLayout({
   children: React.ReactNode;
   sidebar: React.ReactNode;
 }) {
-  await requireUser();
-  const collapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
+  // The cookie read does not depend on the user; requireUser still gates the whole window.
+  const [, cookieStore] = await Promise.all([requireUser(), cookies()]);
+  const collapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "collapsed";
   return (
     <AppShell sidebar={sidebar} defaultCollapsed={collapsed}>
       {children}

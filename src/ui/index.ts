@@ -1,7 +1,7 @@
 export { cn } from "./cn";
 
 // Window structure
-export { SplitView, SidebarToggle, useSplitView } from "./SplitView";
+export { SplitView, useSplitView } from "./SplitView";
 export type { SplitViewProps } from "./SplitView";
 export {
   SidebarHeader,
@@ -14,10 +14,8 @@ export {
 export type { SidebarActionProps, SidebarItemProps, SidebarSectionProps } from "./Sidebar";
 export { Toolbar, useScrolled } from "./Toolbar";
 export type { ToolbarProps } from "./Toolbar";
-export { StageList } from "./StageList";
-export type { StageListItem, StageListProps, StageStatus } from "./StageList";
 export { StageStrip } from "./StageStrip";
-export type { StageStripItem, StageStripProps } from "./StageStrip";
+export type { StageStatus, StageStripItem, StageStripProps } from "./StageStrip";
 export { BackControl } from "./BackControl";
 export type { BackControlProps } from "./BackControl";
 export { TitleCard } from "./TitleCard";
@@ -72,8 +70,6 @@ export { ChoiceCards } from "./ChoiceCards";
 export type { ChoiceCardsProps, ChoiceOption } from "./ChoiceCards";
 export { DatePicker } from "./DatePicker";
 export type { DatePickerProps } from "./DatePicker";
-export { Calendar } from "./Calendar";
-export type { CalendarProps } from "./Calendar";
 export { DurationInput } from "./DurationInput";
 export type { DurationInputProps } from "./DurationInput";
 export { formatDuration, formatDurationLong, parseDuration } from "./duration";
@@ -88,11 +84,11 @@ export type {
 } from "./GroupedList";
 
 // Overlays
-export { Sheet, Dialog, DialogClose, DialogTrigger } from "./Dialog";
+export { Sheet, Dialog } from "./Dialog";
 export type { DialogProps, SheetProps } from "./Dialog";
 export { Alert } from "./Alert";
 export type { AlertProps } from "./Alert";
-export { Popover, PopoverClose } from "./Popover";
+export { Popover } from "./Popover";
 export type { PopoverProps } from "./Popover";
 export { Tooltip, TooltipProvider } from "./Tooltip";
 export type { TooltipProps } from "./Tooltip";
@@ -152,3 +148,6 @@ export {
 export type { LengthBarSceneProps, BlockSwapSceneProps, IssueDemoProps } from "./demo-scenes";
 export { samplePrompt, typingPlan, clipText } from "./demo-hint-text";
 export type { TypingOptions, TypingPlan } from "./demo-hint-text";
+export { isTypingTarget } from "./dom";
+export { StoredImage } from "./StoredImage";
+export type { StoredImageProps } from "./StoredImage";

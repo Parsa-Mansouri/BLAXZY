@@ -3,6 +3,9 @@
 import { useId, useRef, useState, useTransition, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { FileText } from "lucide-react";
+import { fileMime, fileProblem, uploadViaTicket } from "@/lib/upload";
+import { formatNumber } from "@/app/(app)/_lib/format";
+import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
 import {
   AnimatedPlaceholder,
   Button,
@@ -32,8 +35,6 @@ const UPLOAD_TYPES: Record<string, string> = {
   pdf: "application/pdf",
 };
 
-const numberFormat = new Intl.NumberFormat("en-US");
-
 /** Premises the empty brief writes, one after another; it rests on the first. */
 const EXAMPLE_BRIEFS = [
   "An old lighthouse keeper refuses to leave her post the night the lamp finally fails.",
@@ -45,27 +46,6 @@ type UploadPhase =
   | { kind: "idle" }
   | { kind: "uploading"; name: string; progress: number }
   | { kind: "starting"; name: string };
-
-/** PUTs the file to the presigned URL, reporting progress. */
-function putFile(
-  url: string,
-  headers: Record<string, string>,
-  file: File,
-  onProgress: (percent: number) => void,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress((event.loaded / event.total) * 100);
-    };
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error()));
-    xhr.onerror = () => reject(new Error());
-    xhr.onabort = () => reject(new Error());
-    xhr.send(file);
-  });
-}
 
 /** A problem shown on the white block: ink text after a red dot (red text fails contrast on white). */
 function ErrorOnWhite({ id, children }: { id?: string; children: string }) {
@@ -99,6 +79,7 @@ export function ScriptStart({
 }) {
   const router = useRouter();
   const id = useId();
+  const signal = useAbortOnUnmount();
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [brief, setBrief] = useState(initialBrief);
@@ -126,7 +107,7 @@ export function ScriptStart({
       return;
     }
     if (idea.length > maxBriefChars) {
-      setIdeaError(`Shorten the idea to ${numberFormat.format(maxBriefChars)} characters.`);
+      setIdeaError(`Shorten the idea to ${formatNumber(maxBriefChars)} characters.`);
       shake(ideaField.current);
       return;
     }
@@ -149,7 +130,7 @@ export function ScriptStart({
       return;
     }
     if (over) {
-      setBriefError(`Shorten the description to ${numberFormat.format(maxBriefChars)} characters.`);
+      setBriefError(`Shorten the description to ${formatNumber(maxBriefChars)} characters.`);
       shake(area.current);
       return;
     }
@@ -166,47 +147,40 @@ export function ScriptStart({
 
   async function uploadFile(file: File) {
     setUploadError(null);
-    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-    const type = UPLOAD_TYPES[extension];
-    if (!type) {
-      setUploadError("This file type cannot be read. Choose a .txt, .md, .docx or .pdf file.");
-      return;
-    }
-    if (file.size === 0) {
-      setUploadError("This file is empty. Choose the file that holds your script.");
-      return;
-    }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setUploadError(
-        "This file is larger than 10 MB. Save the script without images and try again.",
-      );
+    const problem = fileProblem(file, {
+      types: UPLOAD_TYPES,
+      maxBytes: MAX_UPLOAD_BYTES,
+      messages: {
+        type: "This file type cannot be read. Choose a .txt, .md, .docx or .pdf file.",
+        empty: "This file is empty. Choose the file that holds your script.",
+        size: "This file is larger than 10 MB. Save the script without images and try again.",
+      },
+    });
+    if (problem) {
+      setUploadError(problem);
       return;
     }
     setUpload({ kind: "uploading", name: file.name, progress: 0 });
-    const ticket = await createScriptUploadAction(projectId, {
-      name: file.name,
-      type,
-      size: file.size,
+    const result = await uploadViaTicket({
+      createTicket: () =>
+        createScriptUploadAction(projectId, {
+          name: file.name,
+          type: fileMime(file, UPLOAD_TYPES),
+          size: file.size,
+        }),
+      file,
+      confirm: (fileId) => finishScriptUploadAction(projectId, fileId),
+      onProgress: (progress) => setUpload({ kind: "uploading", name: file.name, progress }),
+      onPhase: (phase) => {
+        if (phase === "confirming") setUpload({ kind: "starting", name: file.name });
+      },
+      signal: signal(),
+      uploadFailedMessage: "The upload failed. Check your connection and choose the file again.",
     });
-    if (!ticket.ok) {
+    if (!result.ok) {
+      if (result.aborted) return;
       setUpload({ kind: "idle" });
-      setUploadError(ticket.error);
-      return;
-    }
-    try {
-      await putFile(ticket.data.uploadUrl, ticket.data.headers, file, (progress) =>
-        setUpload({ kind: "uploading", name: file.name, progress }),
-      );
-    } catch {
-      setUpload({ kind: "idle" });
-      setUploadError("The upload failed. Check your connection and choose the file again.");
-      return;
-    }
-    setUpload({ kind: "starting", name: file.name });
-    const started = await finishScriptUploadAction(projectId, ticket.data.fileId);
-    if (!started.ok) {
-      setUpload({ kind: "idle" });
-      setUploadError(started.error);
+      setUploadError(result.error);
       return;
     }
     router.refresh();
@@ -300,8 +274,7 @@ export function ScriptStart({
                     over ? "font-semibold text-on-accent" : "text-on-accent-2",
                   )}
                 >
-                  {numberFormat.format(brief.length)} characters, up to{" "}
-                  {numberFormat.format(maxBriefChars)}
+                  {formatNumber(brief.length)} characters, up to {formatNumber(maxBriefChars)}
                 </p>
               ) : null}
               {briefError ? <ErrorOnWhite id={`${id}-error`}>{briefError}</ErrorOnWhite> : null}

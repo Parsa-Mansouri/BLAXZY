@@ -20,16 +20,11 @@ import { useGuidedDraft } from "../_lib/guided-draft";
 import { startDesignAction } from "../actions";
 import { StageHeading, useAssetScreen, useFocusOnArrival } from "./asset-context";
 import { GuidedFlow } from "./guided-flow";
-import {
-  ErrorLine,
-  PriceLine,
-  canAfford,
-  formatNumber,
-  type AssetInfo,
-  type GuidedQuestion,
-} from "./shared";
+import { PriceLine, type AssetInfo, type GuidedQuestion } from "./shared";
 import { ReferencePhotos } from "./reference-photos";
 import { useFileDrop } from "./use-file-drop";
+import { ErrorLine } from "@/app/(app)/_components/values";
+import { canAfford, formatNumber } from "@/app/(app)/_lib/format";
 
 /** The way of adding the image, full width: no empty picture frame, since there is no image yet. */
 function MethodLayout({ children }: { children: ReactNode }) {

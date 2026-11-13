@@ -28,7 +28,7 @@ import { StageHeading, useAssetScreen } from "./asset-context";
 import { Caps, CheckMark } from "./desk";
 import { DnaCardView } from "./dna-card";
 import { PackGallery } from "./pack-gallery";
-import { Artwork, ErrorLine, PriceLine, canAfford, type Orientation } from "./shared";
+import { Artwork, PriceLine, type Orientation } from "./shared";
 import { SheetChangesPanel, type SheetChangesWords } from "./sheet-changes-panel";
 import {
   DesignChangeNotice,
@@ -38,6 +38,8 @@ import {
   StageLayout,
   VersionLine,
 } from "./stage-panels";
+import { ErrorLine } from "@/app/(app)/_components/values";
+import { canAfford } from "@/app/(app)/_lib/format";
 
 /** A location pack's or prop sheet's state, from `getAssetDetail`. */
 export interface PackInfo {

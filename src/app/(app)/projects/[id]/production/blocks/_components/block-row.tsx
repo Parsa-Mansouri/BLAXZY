@@ -4,9 +4,9 @@ import type { ProductionBlock } from "@/server/production";
 import { Skeleton, StatusLine, formatDurationLong } from "@/ui";
 import { AssetThumb } from "../../_components/asset-thumb";
 import { Settle } from "../../_components/feedback";
-import { Mono } from "../../_components/values";
 import { blockHref } from "../../../_lib/production-routes";
 import { BLOCK_STATE_TONES, blockStateLabel, scriptChangeNotice } from "../_lib/block-state";
+import { Mono } from "@/app/(app)/_components/values";
 
 const SHOWN_THUMBS = 3;
 

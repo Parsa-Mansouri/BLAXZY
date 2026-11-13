@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { PageHeader, StatusLine, SwapFade } from "@/ui";
-import { usePolling } from "../../../_lib/use-polling";
+import { useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
+import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import { FillPage } from "../../_components/fill-page";
 import { ReviewLayout } from "../../_components/review-layout";
 import { ReviewListContext } from "../../_components/review-list-context";
 import { ShotList, type ShotListItem } from "../../_components/shot-list";
 import { loadBoardAction, refreshBoardAction } from "../actions";
 import type { BoardPage } from "../_lib/clip-data";
+import { mergeBoard } from "../_lib/merge-board";
 import {
   CLIP_STATE_LABELS,
   CLIP_STATE_TONES,
@@ -21,9 +23,6 @@ import {
   type ClipTileData,
 } from "../_lib/clip-view";
 import { clipHref } from "../_lib/routes";
-
-const FAST_POLL_MS = 2000;
-const SETTLED_POLL_MS = 10000;
 
 /** Fresh rows replace the ones already shown; rows loaded further down are kept. */
 function merge(current: ClipTileData[], fresh: ClipTileData[]): ClipTileData[] {
@@ -60,12 +59,7 @@ export function ClipReviewFrame({
 }) {
   const params = useParams<{ lineageId?: string }>();
   const activeId = params.lineageId ? decodeURIComponent(params.lineageId) : null;
-  const [board, setBoard] = useState(initial);
-  const [seen, setSeen] = useState(initial);
-  if (seen !== initial) {
-    setSeen(initial);
-    setBoard((current) => ({ ...initial, tiles: merge(current.tiles, initial.tiles) }));
-  }
+  const [board, setBoard] = useServerSnapshot(initial, mergeBoard);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
   const loadingRef = useRef(false);
@@ -86,7 +80,7 @@ export function ClipReviewFrame({
             : current.nextCursor,
       }));
     },
-    [projectId, tiles.length],
+    [projectId, tiles.length, setBoard],
   );
 
   const rendering = tiles.some((t) => isUnsettled(t.stage));
@@ -112,7 +106,7 @@ export function ClipReviewFrame({
         loadingRef.current = false;
       }
     });
-  }, [nextCursor, projectId]);
+  }, [nextCursor, projectId, setBoard]);
 
   // The shot under review may sit further down than the first page: read on until it is listed.
   const found = activeId === null || tiles.some((t) => t.lineageId === activeId);

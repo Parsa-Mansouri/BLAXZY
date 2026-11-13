@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useRef, useState, type ComponentType, type ReactNode } from "react";
-import type { FixSelection, ReviewOption } from "@/server/damis";
+import type { FixSelection } from "@/server/damis";
+import type { ClientReviewOption } from "@/lib/review-option";
 import { Button, Field, TextLink, Textarea, cn } from "@/ui";
 import { MarkList } from "../../../_components/request-changes-panel";
 import { focusSoon, markFieldId, type Marking } from "../../../_components/mark-layer";
@@ -25,7 +26,9 @@ import {
   type SheetChangesDraft,
 } from "../_lib/sheet-review";
 import { Caps, CheckTile, ChoiceTile } from "./desk";
-import { ErrorLine, PriceLine, canAfford, formatNumber } from "./shared";
+import { PriceLine } from "./shared";
+import { ErrorLine } from "@/app/(app)/_components/values";
+import { canAfford, formatNumber } from "@/app/(app)/_lib/format";
 
 type HeadingProps = { id?: string; className?: string; children: ReactNode };
 
@@ -61,10 +64,10 @@ const PROBLEM_SIDES: readonly { side: Side; title: string; line: string }[] = [
 
 /** The reasons of one side, in the catalog's groups when it has them. */
 function groupedReasons(
-  options: readonly ReviewOption[],
+  options: readonly ClientReviewOption[],
   groups: SheetCatalogInfo["groups"],
-): { id: string; label: string | null; options: ReviewOption[] }[] {
-  const grouped = new Map<string, ReviewOption[]>();
+): { id: string; label: string | null; options: ClientReviewOption[] }[] {
+  const grouped = new Map<string, ClientReviewOption[]>();
   for (const option of options) {
     const key = option.group ?? "";
     grouped.set(key, [...(grouped.get(key) ?? []), option]);
@@ -92,7 +95,7 @@ function ReasonStrip({
   highlight,
   onChange,
 }: {
-  option: ReviewOption;
+  option: ClientReviewOption;
   draft: SheetChangesDraft;
   cells: readonly DetailCell[];
   disabled: boolean;
@@ -273,7 +276,7 @@ export function SheetChangesPanel({
 
   const picked = draft.picked
     .map((code) => options.find((o) => o.code === code))
-    .filter((o): o is ReviewOption => o !== undefined);
+    .filter((o): o is ClientReviewOption => o !== undefined);
   const strips = picked.filter((o) => hasSheetStrip(o));
   const otherPicks = picked.filter((o) => side !== null && side !== "design" && o.kind !== side);
   const suggestion = designing ? null : suggestedFirst(draft.picked, options);

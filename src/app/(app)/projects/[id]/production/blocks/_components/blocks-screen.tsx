@@ -14,7 +14,8 @@ import {
   cn,
   stagger,
 } from "@/ui";
-import { usePolling } from "../../../_lib/use-polling";
+import { useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
+import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import { blockHref, phaseHref } from "../../../_lib/production-routes";
 import {
   approveAllAction,
@@ -23,14 +24,12 @@ import {
   type BlocksSnapshot,
 } from "../actions";
 import { takeArrival } from "../_lib/arrival";
+import { mergeBlocksSnapshot } from "../_lib/merge-snapshot";
 import { attentionTone, attentionWords, needsReview } from "../_lib/block-state";
 import { BlockRow, PendingBlockRow } from "./block-row";
 import { useChangedKeys } from "../../_components/feedback";
 import { GenerateSheet } from "./generate-sheet";
 import { FillPage } from "../../_components/fill-page";
-
-const FAST_POLL_MS = 2000;
-const SETTLED_POLL_MS = 10000;
 
 /**
  * The shots of the film in story order. The one next step leads as a white block (review the
@@ -45,14 +44,9 @@ export function BlocksScreen({
   initial: BlocksSnapshot;
 }) {
   const router = useRouter();
-  const [snapshot, setSnapshot] = useState(initial);
-  const [seen, setSeen] = useState(initial);
-  // A fresh server render (a refresh, coming back to the list) replaces the local copy, so the
-  // status line says where the shots stand now.
-  if (seen !== initial) {
-    setSeen(initial);
-    setSnapshot(initial);
-  }
+  // A fresh server render (a refresh, coming back to the list) updates the local copy, so the
+  // status line says where the shots stand now; shots loaded further down stay.
+  const [snapshot, setSnapshot] = useServerSnapshot(initial, mergeBlocksSnapshot);
   const statusRef = useRef<HTMLDivElement>(null);
   // Arriving from Approve on the last shot to review: focus starts at the status line under the
   // title (the page heading itself is not focusable).

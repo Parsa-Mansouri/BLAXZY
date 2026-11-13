@@ -2,13 +2,13 @@
 
 import { useId, useRef, useState } from "react";
 import { fileSrc } from "@/lib/file-src";
-import { ProgressBar, cn } from "@/ui";
+import { cn, ProgressBar, StoredImage } from "@/ui";
 import type { DesignerInfo } from "../_lib/designer-view";
 import type { LookReference } from "../_lib/look-review";
 import { IMAGE_ACCEPT, uploadReferencePhoto } from "../_lib/reference-upload";
 import { Caps, ChoiceTile } from "./desk";
 import { roleLabel } from "./reference-photos";
-import { ErrorLine } from "./shared";
+import { ErrorLine } from "@/app/(app)/_components/values";
 
 /** Small thumbnails of reference photos, each captioned with its role. */
 export function ReferenceThumbs({
@@ -28,13 +28,9 @@ export function ReferenceThumbs({
         return (
           <li key={ref.fileId} className="flex w-20 flex-col gap-1.5">
             <span className="relative block aspect-square overflow-hidden rounded-item bg-elevated">
-              {/* eslint-disable-next-line @next/next/no-img-element -- user media from object storage */}
-              <img
+              <StoredImage
                 src={fileSrc(ref.fileId)}
                 alt={`Reference photo: ${role}`}
-                loading="lazy"
-                decoding="async"
-                draggable={false}
                 className="absolute inset-0 size-full object-cover"
               />
             </span>

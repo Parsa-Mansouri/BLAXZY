@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PROJECT_STAGES } from "@/lib/stages";
 import { cn } from "@/ui";
 import { STAGE_CHAPTERS } from "./content";
-import { Reveal } from "./Reveal";
+import { Reveal } from "./reveal";
 import { StageVignette } from "./vignettes";
 
 const SHELL = "(min-width: 60rem)";

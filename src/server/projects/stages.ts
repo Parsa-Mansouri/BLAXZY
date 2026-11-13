@@ -1,9 +1,8 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { getDb } from "@/server/db/client";
+import { getDb, type DbTx } from "@/server/db/client";
 import {
   episode,
   project,
-  projectEvent,
   WIZARD_STAGES,
   type ProjectStyle,
   type WizardStage,
@@ -11,6 +10,8 @@ import {
 import { z } from "zod";
 import { projectStyleSchema } from "@/server/damis";
 import { episodeCount, episodeCountOf } from "./episodes";
+import { logProjectEvent } from "./events";
+import { findOwnedProject } from "./ownership";
 import type { Project } from "./service";
 import { ProjectInputError, uuidSchema } from "./schemas";
 import { applyStyleReferences, assertReferenceFiles, referenceFileIds } from "./style-references";
@@ -18,7 +19,7 @@ import { applyStyleReferences, assertReferenceFiles, referenceFileIds } from "./
 export type Episode = typeof episode.$inferSelect;
 
 /** A transaction handle, so other services can advance the stage inside their own transaction. */
-export type DbTransaction = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+export type DbTransaction = DbTx;
 
 export type SaveStyleInput = { projectId: string; userId: string; style: unknown };
 export type AdvanceStageInput = { projectId: string; from: WizardStage; to: WizardStage };
@@ -42,6 +43,20 @@ export function canOpenStage(current: Pick<Project, "stage">, stage: WizardStage
 }
 
 /**
+ * Throws `new ErrorClass(message)` unless `stage` can be opened (`canOpenStage`). Projects whose
+ * stage is not a Wizard stage (Pro) are not gated.
+ */
+export function assertStageOpen(
+  row: Pick<Project, "stage">,
+  stage: WizardStage,
+  ErrorClass: new (message: string) => Error,
+  message: string,
+): void {
+  const wizardStage = (WIZARD_STAGES as readonly string[]).includes(row.stage);
+  if (wizardStage && !canOpenStage(row, stage)) throw new ErrorClass(message);
+}
+
+/**
  * Compare-and-set on `project.stage` (`WHERE stage = from`). Returns whether it changed.
  * Pass `tx` to run inside the caller's transaction.
  */
@@ -53,7 +68,7 @@ export async function advanceStage(input: AdvanceStageInput, tx?: DbTransaction)
       .where(and(eq(project.id, input.projectId), eq(project.stage, input.from)))
       .returning({ id: project.id });
     if (changed.length === 0) return false;
-    await db.insert(projectEvent).values({
+    await logProjectEvent(db, {
       projectId: input.projectId,
       userId: null,
       type: "stage.advanced",
@@ -81,7 +96,7 @@ export async function reopenProduction(
       .where(and(eq(project.id, input.projectId), eq(project.stage, "done")))
       .returning({ id: project.id });
     if (changed.length === 0) return false;
-    await db.insert(projectEvent).values({
+    await logProjectEvent(db, {
       projectId: input.projectId,
       userId: input.userId ?? null,
       type: "stage.reopened",
@@ -172,11 +187,7 @@ export async function saveStyle(input: SaveStyleInput): Promise<Project | null> 
   if (!uuidSchema.safeParse(input.projectId).success) return null;
   const answers = applyStyleReferences(validateStyle(input.style));
   return getDb().transaction(async (tx) => {
-    const [existing] = await tx
-      .select()
-      .from(project)
-      .where(and(eq(project.id, input.projectId), eq(project.ownerId, input.userId), notArchived))
-      .for("update");
+    const existing = await findOwnedProject(tx, input.projectId, input.userId, { lock: "update" });
     if (!existing) return null;
     const style = carryStoredFields(answers, existing.style);
     await assertReferenceFiles(referenceFileIds(style), {
@@ -212,7 +223,7 @@ export async function saveStyle(input: SaveStyleInput): Promise<Project | null> 
       .set({ style })
       .where(eq(project.id, existing.id))
       .returning();
-    await tx.insert(projectEvent).values({
+    await logProjectEvent(tx, {
       projectId: existing.id,
       userId: input.userId,
       type: first ? "style.saved" : "style.changed",
@@ -229,13 +240,7 @@ export async function saveStyle(input: SaveStyleInput): Promise<Project | null> 
 
 /** The project's episodes in order (bounded to MAX_EPISODES + leftovers), or null when not the user's. */
 export async function listEpisodes(projectId: string, userId: string): Promise<Episode[] | null> {
-  if (!uuidSchema.safeParse(projectId).success) return null;
-  const [owned] = await getDb()
-    .select({ id: project.id })
-    .from(project)
-    .where(and(eq(project.id, projectId), eq(project.ownerId, userId), notArchived))
-    .limit(1);
-  if (!owned) return null;
+  if (!(await findOwnedProject(getDb(), projectId, userId))) return null;
   return getDb()
     .select()
     .from(episode)
@@ -292,7 +297,7 @@ export async function mergeDamiStyle(
     patch = parsed.data;
     const style: ProjectStyle = { ...current, ...patch };
     await tx.update(project).set({ style }).where(eq(project.id, existing.id));
-    await tx.insert(projectEvent).values({
+    await logProjectEvent(tx, {
       projectId: existing.id,
       userId: null,
       type: "style.enriched",

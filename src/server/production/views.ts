@@ -7,7 +7,7 @@ import { listCurrentBlockStates, listScriptResetBlocks, type PromptBlock } from 
 import { isVoiceRef } from "@/server/damis";
 import type { DbExecutor } from "@/server/db/client";
 import type { AssetKind } from "@/server/db/schema";
-import { deriveBlockStage, emptyCounts, isBusy, type BlockProductionStage } from "./stage";
+import { deriveBlockStage, emptyCounts, type BlockProductionStage } from "./stage";
 import { latestLiveTakes, newestPosters, type TakeRow } from "./takes";
 
 export type ProductionBlockAsset = {
@@ -50,14 +50,6 @@ const SCRIPT_CHANGE_STAGES: readonly BlockProductionStage[] = [
   "block_review",
 ];
 
-export function stageOf(block: PromptBlock, take: TakeRow | null): BlockProductionStage {
-  return deriveBlockStage(block, take);
-}
-
-export function busyOf(block: PromptBlock, take: TakeRow | null): boolean {
-  return isBusy(block, take);
-}
-
 /** The refs a block shows: prepared references, else the image assets it names. */
 function refsOf(block: PromptBlock): string[] {
   if (block.productionState === "ready" && block.productionAssetRefs) {
@@ -83,7 +75,7 @@ export async function toProductionBlocks(
     db,
   );
   return blocks.map((block) => {
-    const stage = stageOf(block, latest.get(block.lineageId) ?? null);
+    const stage = deriveBlockStage(block, latest.get(block.lineageId) ?? null);
     const assets: ProductionBlockAsset[] = [];
     for (const ref of refsOf(block)) {
       const found = refs.get(ref);

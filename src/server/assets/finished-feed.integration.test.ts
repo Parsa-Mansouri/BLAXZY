@@ -188,20 +188,32 @@ describe.skipIf(!reachable)("finished feed (integration)", async () => {
       expect(first.events).toEqual([]);
       expect(assets.parseFinishedCursor(first.cursor)).not.toBeNull();
     }
-    const start = await assets.finishedFeedCursorNow();
-    // Logged now (by the database's clock): held back until it has settled, then listed.
-    const [fresh] = await getDb()
+    // A cursor from ten seconds ago (by the database's clock), and two events after it: one
+    // logged five seconds ago (settled) and one logged now (held back). Explicit times instead of
+    // waiting out the settle window.
+    const { sql } = await import("drizzle-orm");
+    const ago = await getDb().execute<{ at: string }>(
+      sql`select to_char((now() - interval '10 seconds') at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at`,
+    );
+    const start = formatFinishedCursor(ago.rows[0]!.at, "ffffffff-ffff-ffff-ffff-ffffffffffff");
+    const [settled] = await getDb()
       .insert(projectEvent)
       .values({
         projectId: s.projectId,
         type: "asset.look_ready",
         payload: { assetId: s.assetId, lookId: s.lookId },
+        createdAt: sql`now() - interval '5 seconds'`,
       })
       .returning({ id: projectEvent.id });
-    expect((await assets.listFinishedAssetEvents(s.userId, start)).events).toEqual([]);
-    await new Promise((resolve) => setTimeout(resolve, 2300));
-    const settled = await assets.listFinishedAssetEvents(s.userId, start);
-    expect(settled.events.map((e) => e.id)).toEqual([fresh?.id]);
+    await getDb()
+      .insert(projectEvent)
+      .values({
+        projectId: s.projectId,
+        type: "asset.look_ready",
+        payload: { assetId: s.assetId, lookId: s.lookId },
+      });
+    const listed = await assets.listFinishedAssetEvents(s.userId, start);
+    expect(listed.events.map((e) => e.id)).toEqual([settled?.id]);
   });
 
   it("leaves out archived projects", async () => {

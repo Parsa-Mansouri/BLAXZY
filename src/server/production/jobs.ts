@@ -39,11 +39,12 @@ import {
   type ReviewSubject,
 } from "@/server/db/schema";
 import { enqueueGeneration, requestGeneration, type FinishedGeneration } from "@/server/generation";
+import { logProjectEvent } from "@/server/projects";
 import { blockRevise, enqueue, productionPrepare, takeFix, takeGenerate } from "@/server/jobs";
 import { isUuid, STALE_MESSAGE } from "./access";
 import { ProductionInputError } from "./errors";
-import { MAX_BLOCK_ASSETS } from "./service";
-import { getTake, logEvent, type TakeRow } from "./takes";
+import { MAX_BLOCK_ASSETS } from "./inputs";
+import { getTake, type TakeRow } from "./takes";
 
 export type ProductionJobProject = { id: string; ownerId: string; style: ProjectStyle | null };
 export type ProductionJobReview = { issueCodes: string[]; note: string | null };
@@ -264,11 +265,16 @@ export async function storePreparation(input: {
   return getDb().transaction(async (tx) => {
     const row = await storeBlockPreparation(input, tx);
     if (!row) return false;
-    await logEvent(tx, row.projectId, null, "production.block_prepared", {
-      lineageId: row.lineageId,
-      blockId: row.id,
-      assetRefs: input.assetRefs,
-      damiRunId: input.damiRunId,
+    await logProjectEvent(tx, {
+      projectId: row.projectId,
+      userId: null,
+      type: "production.block_prepared",
+      payload: {
+        lineageId: row.lineageId,
+        blockId: row.id,
+        assetRefs: input.assetRefs,
+        damiRunId: input.damiRunId,
+      },
     });
     return true;
   });
@@ -283,10 +289,15 @@ export async function failPreparation(
   return getDb().transaction(async (tx) => {
     const row = await failBlockPreparation({ blockId, failure, damiRunId }, tx);
     if (!row) return false;
-    await logEvent(tx, row.projectId, null, "production.block_prepare_failed", {
-      lineageId: row.lineageId,
-      blockId,
-      failure,
+    await logProjectEvent(tx, {
+      projectId: row.projectId,
+      userId: null,
+      type: "production.block_prepare_failed",
+      payload: {
+        lineageId: row.lineageId,
+        blockId,
+        failure,
+      },
     });
     return true;
   });
@@ -487,11 +498,16 @@ export async function failTake(
       .where(and(eq(blockTake.id, takeId), eq(blockTake.status, "pending")))
       .returning();
     if (!row) return false;
-    await logEvent(tx, row.projectId, null, "production.take_failed", {
-      lineageId: row.lineageId,
-      takeId,
-      stage: row.stage,
-      failure,
+    await logProjectEvent(tx, {
+      projectId: row.projectId,
+      userId: null,
+      type: "production.take_failed",
+      payload: {
+        lineageId: row.lineageId,
+        takeId,
+        stage: row.stage,
+        failure,
+      },
     });
     return true;
   });
@@ -536,13 +552,12 @@ export async function applyTakeGenerationResult(g: FinishedGeneration): Promise<
       )
       .returning({ id: blockTake.id, lineageId: blockTake.lineageId, stage: blockTake.stage });
     if (row) {
-      await logEvent(
-        tx,
+      await logProjectEvent(tx, {
         projectId,
-        null,
-        succeeded ? "production.take_ready" : "production.take_failed",
-        { lineageId: row.lineageId, takeId: row.id, stage: row.stage, generationId: g.id },
-      );
+        userId: null,
+        type: succeeded ? "production.take_ready" : "production.take_failed",
+        payload: { lineageId: row.lineageId, takeId: row.id, stage: row.stage, generationId: g.id },
+      });
     }
   });
 }

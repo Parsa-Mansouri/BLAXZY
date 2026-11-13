@@ -3,13 +3,16 @@
  * the project row first (as block replacement and asset merges do), then the lineage's current
  * block row. Not exported from the module index.
  */
-import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { getCurrentBlock, type PromptBlock } from "@/server/blocks";
 import type { DbExecutor, DbTx } from "@/server/db/client";
-import { project, WIZARD_STAGES, type WizardStage } from "@/server/db/schema";
-import { canOpenStage } from "@/server/projects";
+import type { project, ProjectStyle } from "@/server/db/schema";
+import { makeParser } from "@/server/errors";
+import { assertStageOpen, findOwnedProject } from "@/server/projects";
 import { ProductionInputError } from "./errors";
+import { NEEDS_REASON } from "./messages";
+import { deriveBlockStage, type BlockProductionStage } from "./stage";
+import { latestLiveTake, type TakeRow } from "./takes";
 
 export type ProjectRow = typeof project.$inferSelect;
 
@@ -22,20 +25,11 @@ export const isUuid = (value: string) => uuid.safeParse(value).success;
 export const userIdSchema = z.string().trim().min(1).max(128);
 
 /** Validates input; the first issue's message becomes a `ProductionInputError`. */
-export function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
-  const result = schema.safeParse(input);
-  if (!result.success) {
-    throw new ProductionInputError(result.error.issues[0]?.message ?? "That input is not valid.");
-  }
-  return result.data;
-}
+export const parse = makeParser(ProductionInputError);
 
 /** Wizard projects open Production once pre-production is complete (and keep it open when done). */
 export function assertProductionOpen(row: Pick<ProjectRow, "stage">): void {
-  const wizardStage = (WIZARD_STAGES as readonly string[]).includes(row.stage);
-  if (wizardStage && !canOpenStage(row, "production" satisfies WizardStage)) {
-    throw new ProductionInputError(STAGE_MESSAGE);
-  }
+  assertStageOpen(row, "production", ProductionInputError, STAGE_MESSAGE);
 }
 
 /** The user's project with Production open (row-locked with `lock`), or null when not theirs. */
@@ -45,13 +39,7 @@ export async function openProject(
   userId: string,
   lock = false,
 ): Promise<ProjectRow | null> {
-  if (!isUuid(projectId)) return null;
-  const query = db
-    .select()
-    .from(project)
-    .where(and(eq(project.id, projectId), eq(project.ownerId, userId), isNull(project.archivedAt)))
-    .limit(1);
-  const [row] = lock ? await query.for("update") : await query;
+  const row = await findOwnedProject(db, projectId, userId, lock ? { lock: "update" } : {});
   if (!row) return null;
   assertProductionOpen(row);
   return row;
@@ -88,4 +76,38 @@ export async function lockLineage(
   const block = await getCurrentBlock(lineageId, tx, true);
   if (!block || block.projectId !== owned.id) return null;
   return { project: owned, block };
+}
+
+export function requireStyle(row: ProjectRow): ProjectStyle {
+  if (!row.style) throw new ProductionInputError("Choose the project's style first.");
+  return row.style;
+}
+
+/** Production's writes need the project in the production stage (or done, when revisiting). */
+export function assertWritable(row: ProjectRow): void {
+  if (row.stage !== "production" && row.stage !== "done" && row.mode === "wizard") {
+    throw new ProductionInputError("Finish pre-production before starting production.");
+  }
+}
+
+/** The lineage's stage, from its current block and latest live take. */
+export async function lineageStage(
+  db: DbExecutor,
+  block: PromptBlock,
+): Promise<{ stage: BlockProductionStage; take: TakeRow | null }> {
+  const take = await latestLiveTake(db, block.lineageId);
+  return { stage: deriveBlockStage(block, take), take };
+}
+
+export function reviewReason(
+  decision: "accepted" | "rejected",
+  issueCodes: readonly string[] | undefined,
+  note: string | undefined,
+): { issueCodes: string[]; note: string | null } {
+  const codes = [...new Set(issueCodes ?? [])];
+  const text = note ? note : null;
+  if (decision === "rejected" && codes.length === 0 && !text) {
+    throw new ProductionInputError(NEEDS_REASON);
+  }
+  return { issueCodes: decision === "rejected" ? codes : [], note: text };
 }

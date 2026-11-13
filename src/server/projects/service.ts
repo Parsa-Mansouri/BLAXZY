@@ -1,7 +1,9 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
-import { project, projectEvent } from "@/server/db/schema";
+import { project } from "@/server/db/schema";
 import { decodeTimestampCursor, encodeTimestampCursor } from "./cursor";
+import { logProjectEvent } from "./events";
+import { findOwnedProject } from "./ownership";
 import {
   archiveProjectSchema,
   createProjectSchema,
@@ -41,7 +43,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       .values({ ownerId, title, mode: "wizard", stage: "style" })
       .returning();
     if (!created) throw new Error("Project insert returned no row.");
-    await tx.insert(projectEvent).values({
+    await logProjectEvent(tx, {
       projectId: created.id,
       userId: ownerId,
       type: "project.created",
@@ -84,13 +86,7 @@ export async function getProjectForUser(
   projectId: string,
   userId: string,
 ): Promise<Project | null> {
-  if (!uuidSchema.safeParse(projectId).success) return null;
-  const [row] = await getDb()
-    .select()
-    .from(project)
-    .where(and(eq(project.id, projectId), eq(project.ownerId, userId), notArchived))
-    .limit(1);
-  return row ?? null;
+  return findOwnedProject(getDb(), projectId, userId);
 }
 
 /** Renames an owned project. Returns null (nothing changed) when it is not the user's. */
@@ -98,18 +94,14 @@ export async function renameProject(input: RenameProjectInput): Promise<Project 
   const { projectId, ownerId, title } = parseInput(renameProjectSchema, input);
   if (!uuidSchema.safeParse(projectId).success) return null;
   return getDb().transaction(async (tx) => {
-    const [existing] = await tx
-      .select({ title: project.title })
-      .from(project)
-      .where(and(eq(project.id, projectId), eq(project.ownerId, ownerId), notArchived))
-      .for("update");
+    const existing = await findOwnedProject(tx, projectId, ownerId, { lock: "update" });
     if (!existing) return null;
     const [updated] = await tx
       .update(project)
       .set({ title })
       .where(eq(project.id, projectId))
       .returning();
-    await tx.insert(projectEvent).values({
+    await logProjectEvent(tx, {
       projectId,
       userId: ownerId,
       type: "project.renamed",
@@ -130,7 +122,7 @@ export async function archiveProject(input: ArchiveProjectInput): Promise<boolea
       .where(and(eq(project.id, projectId), eq(project.ownerId, ownerId), notArchived))
       .returning({ id: project.id });
     if (archived.length === 0) return false;
-    await tx.insert(projectEvent).values({
+    await logProjectEvent(tx, {
       projectId,
       userId: ownerId,
       type: "project.archived",

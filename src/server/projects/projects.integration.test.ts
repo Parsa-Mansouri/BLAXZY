@@ -116,6 +116,16 @@ describe.skipIf(!reachable)("projects service (integration)", async () => {
     for (let i = 0; i < 7; i++) {
       created.push(await projects.createProject({ ownerId, title: `Film ${i}` }));
     }
+    // Back-to-back inserts can share an `updated_at` (the order then falls to the id): give each
+    // project its own moment, a second apart and an hour back, so the expected order is fixed and
+    // the rename below (stamped now) is certainly the newest.
+    const base = Date.now() - 60 * 60 * 1000;
+    for (const [i, row] of created.entries()) {
+      await getDb()
+        .update(project)
+        .set({ updatedAt: new Date(base + i * 1000) })
+        .where(eq(project.id, row.id));
+    }
     await projects.archiveProject({ projectId: created[3]!.id, ownerId });
     // Touching a project moves it to the top.
     await projects.renameProject({ projectId: created[0]!.id, ownerId, title: "Film 0 renamed" });

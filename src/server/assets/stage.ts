@@ -98,7 +98,7 @@ export function deriveAssetStage(
 }
 
 /** True when the asset waits for the user: anything but ready or being worked on by a job. */
-export function stageNeedsUser(stage: AssetStage): boolean {
+function stageNeedsUser(stage: AssetStage): boolean {
   return stage !== "ready" && stage !== "generating" && stage !== "building_sheet";
 }
 

@@ -4,28 +4,25 @@
  * `rewriteAssetRefs` (asset merges) are for other services and job handlers; the rest take the
  * acting user and check ownership.
  */
+export { BlocksInputError, type PromptBlock } from "./common";
+export { DEFAULT_BLOCK_PAGE_SIZE, listBlocks, MAX_BLOCK_PAGE_SIZE } from "./list";
 export {
-  BlocksInputError,
-  excerptSimilarity,
-  DEFAULT_BLOCK_PAGE_SIZE,
-  getSectioningStatus,
   hasCurrentBlocksFor,
-  listBlocks,
   markBlocksStale,
-  MAX_BLOCK_PAGE_SIZE,
-  normalizeExcerpt,
-  readSectioningRecord,
   replaceBlocks,
+  type ReplaceBlocksResult,
+} from "./replace";
+export { rewriteAssetRefs } from "./rewrite";
+export {
+  getSectioningStatus,
+  readSectioningRecord,
   retrySectioning,
-  rewriteAssetRefs,
   SECTIONING_STATES,
   setSectioningState,
-  type PromptBlock,
-  type ReplaceBlocksResult,
   type SectioningRecord,
   type SectioningState,
   type SectioningStatus,
-} from "./service";
+} from "./sectioning";
 /** For `@/server/production` and its job handlers (no ownership checks). */
 export {
   approveBlocks,

@@ -12,7 +12,6 @@ import {
   assetSheet,
   damiRun,
   generation,
-  projectEvent,
   type AssetLookStatus,
   type LookAspectRatio,
   type LookReference,
@@ -109,8 +108,15 @@ export type SheetView = {
 /** Looks and sheets listed in an asset's detail, newest first. */
 export const MAX_LISTED_VERSIONS = 20;
 
-function sampleFlag(provider: string | null, model: string | null): boolean {
-  return (provider !== null && isSampleProvider(provider)) || model === SAMPLE_MODEL;
+/**
+ * Placeholder output: made by the sample provider, or from a prompt a dami wrote in sample mode
+ * (the `isSample` of looks, sheets, pack views and Production's takes).
+ */
+export function isSampleOutput(
+  provider: string | null | undefined,
+  model: string | null | undefined,
+): boolean {
+  return (typeof provider === "string" && isSampleProvider(provider)) || model === SAMPLE_MODEL;
 }
 
 export function toLookView(row: LookRow, provider: string | null, model: string | null): LookView {
@@ -129,7 +135,7 @@ export function toLookView(row: LookRow, provider: string | null, model: string 
     parentId: row.parentId,
     started: row.prompt !== null || row.damiRunId !== null || row.generationId !== null,
     failure: row.failure,
-    isSample: sampleFlag(provider, model),
+    isSample: isSampleOutput(provider, model),
     createdAt: row.createdAt,
     decidedAt: row.decidedAt,
   };
@@ -149,7 +155,7 @@ export function toSheetView(
     spec: sheetSpecView(row.spec),
     parentId: row.parentId,
     failure: row.failure,
-    isSample: sampleFlag(provider, model),
+    isSample: isSampleOutput(provider, model),
     createdAt: row.createdAt,
     decidedAt: row.decidedAt,
   };
@@ -278,14 +284,4 @@ export async function newestSheetWithStatus(
     .where(and(inArray(assetSheet.assetId, assetIds), eq(assetSheet.status, status)))
     .orderBy(assetSheet.assetId, desc(assetSheet.versionNumber));
   return new Map(rows.map((s) => [s.assetId, s]));
-}
-
-export async function logEvent(
-  db: DbExecutor,
-  projectId: string,
-  userId: string | null,
-  type: string,
-  payload: Record<string, unknown>,
-): Promise<void> {
-  await db.insert(projectEvent).values({ projectId, userId, type, payload });
 }

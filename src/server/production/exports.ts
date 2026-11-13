@@ -10,7 +10,7 @@ import { pageCurrentBlocks, type PromptBlock } from "@/server/blocks";
 import { getDb, type DbExecutor } from "@/server/db/client";
 import { exportBundle, project, type ExportStatus } from "@/server/db/schema";
 import { exportBuild, enqueue } from "@/server/jobs";
-import { listEpisodes } from "@/server/projects";
+import { listEpisodes, logProjectEvent } from "@/server/projects";
 import { decodeOrderCursor, encodeOrderCursor } from "@/server/projects/cursor";
 import {
   FILE_PURPOSES,
@@ -23,9 +23,9 @@ import {
 import { isUuid, openLineage, openProject, parse, userIdSchema, type ProjectRow } from "./access";
 import { ProductionInputError } from "./errors";
 import { clipDownloadName, exportDownloadName, shotsCsv } from "./names";
-import { notFinalMessage } from "./service";
+import { notFinalMessage } from "./messages";
 import { deriveBlockStage } from "./stage";
-import { latestLiveTake, latestLiveTakes, logEvent, type TakeRow } from "./takes";
+import { latestLiveTake, latestLiveTakes, type TakeRow } from "./takes";
 import { assertZipFits, crc32Of, storedZipStream, ZipLimitError, type StoredEntry } from "./zip";
 
 export type FinishedClip = {
@@ -292,9 +292,14 @@ export async function requestExport(input: {
       })
       .returning();
     if (!bundle) throw new Error("export_bundle insert returned no row");
-    await logEvent(tx, projectId, userId, "production.export_requested", {
-      exportId: bundle.id,
-      clips: film.clips.length,
+    await logProjectEvent(tx, {
+      projectId,
+      userId,
+      type: "production.export_requested",
+      payload: {
+        exportId: bundle.id,
+        clips: film.clips.length,
+      },
     });
     await enqueue(exportBuild, { exportId: bundle.id }, { tx });
     return { bundle, project: owned };
@@ -335,7 +340,12 @@ export async function failExport(exportId: string, failure: string): Promise<boo
       .where(and(eq(exportBundle.id, exportId), eq(exportBundle.status, "pending")))
       .returning();
     if (!row) return false;
-    await logEvent(tx, row.projectId, null, "production.export_failed", { exportId, failure });
+    await logProjectEvent(tx, {
+      projectId: row.projectId,
+      userId: null,
+      type: "production.export_failed",
+      payload: { exportId, failure },
+    });
     return true;
   });
 }
@@ -452,11 +462,16 @@ export async function buildExport(exportId: string, signal?: AbortSignal): Promi
       .where(and(eq(exportBundle.id, exportId), eq(exportBundle.status, "pending")))
       .returning({ id: exportBundle.id });
     if (!ready) return false;
-    await logEvent(tx, row.id, null, "production.export_ready", {
-      exportId,
-      fileId: stored.id,
-      clips: film.clips.length,
-      sizeBytes: total,
+    await logProjectEvent(tx, {
+      projectId: row.id,
+      userId: null,
+      type: "production.export_ready",
+      payload: {
+        exportId,
+        fileId: stored.id,
+        clips: film.clips.length,
+        sizeBytes: total,
+      },
     });
     return true;
   });

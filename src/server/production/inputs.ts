@@ -1,0 +1,67 @@
+/** Input schemas and limits of Production's services (pure: no database). */
+import { z } from "zod";
+import { BLOCK_ISSUE_CODES, MAX_REFERENCE_IMAGES, TAKE_ISSUE_CODES } from "@/server/damis";
+import { MAX_REFERENCES } from "@/server/generation";
+import { userIdSchema } from "./access";
+import { BLOCK_PRODUCTION_STAGES } from "./stage";
+
+/** The most references one take may attach (the engine's limit and the video model's). */
+export const MAX_BLOCK_ASSETS = Math.min(MAX_REFERENCES, MAX_REFERENCE_IMAGES);
+
+export const MAX_REVIEW_NOTE_LENGTH = 2000;
+
+export const DEFAULT_BLOCK_PAGE_SIZE = 50;
+
+export const MAX_BLOCK_PAGE_SIZE = 200;
+
+export const projectInput = z.object({ projectId: z.string(), userId: userIdSchema });
+
+export const lineageInput = z.object({ lineageId: z.string(), userId: userIdSchema });
+
+export const takeInput = z.object({ takeId: z.string(), userId: userIdSchema });
+
+const noteSchema = z
+  .string()
+  .trim()
+  .max(MAX_REVIEW_NOTE_LENGTH, `Keep the note under ${MAX_REVIEW_NOTE_LENGTH} characters.`)
+  .optional();
+
+export const blockReviewInput = lineageInput.extend({
+  decision: z.enum(["accepted", "rejected"], { error: "Approve the shot or ask for changes." }),
+  issueCodes: z
+    .array(z.enum(BLOCK_ISSUE_CODES, { error: "Pick issues from the list." }))
+    .max(BLOCK_ISSUE_CODES.length)
+    .optional(),
+  note: noteSchema,
+});
+
+export const takeReviewInput = takeInput.extend({
+  decision: z.enum(["accepted", "rejected"], { error: "Accept the clip or ask for changes." }),
+  issueCodes: z
+    .array(z.enum(TAKE_ISSUE_CODES, { error: "Pick issues from the list." }))
+    .max(TAKE_ISSUE_CODES.length)
+    .optional(),
+  note: noteSchema,
+});
+
+export const setAssetsInput = lineageInput.extend({
+  assetIds: z
+    .array(z.string(), { error: "Choose the assets of this shot." })
+    .max(MAX_BLOCK_ASSETS, `A shot can use at most ${MAX_BLOCK_ASSETS} assets.`),
+});
+
+export const startDraftsInput = projectInput.extend({
+  expectedCredits: z
+    .number({ error: "Confirm the price first." })
+    .int("Confirm the price first.")
+    .min(0, "Confirm the price first."),
+});
+
+export const listInput = z.object({
+  limit: z.number().int().min(1).max(MAX_BLOCK_PAGE_SIZE).default(DEFAULT_BLOCK_PAGE_SIZE),
+  cursor: z.string().max(200).nullish(),
+  stage: z
+    .array(z.enum(BLOCK_PRODUCTION_STAGES, { error: "Unknown stage." }))
+    .max(BLOCK_PRODUCTION_STAGES.length)
+    .optional(),
+});

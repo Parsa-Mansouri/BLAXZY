@@ -4,17 +4,15 @@
  * module index.
  */
 import { and, desc, eq, inArray, isNotNull, max, ne, notInArray } from "drizzle-orm";
-import { SAMPLE_MODEL } from "@/server/damis";
+import { isSampleOutput } from "@/server/assets";
 import type { DbExecutor, DbTx } from "@/server/db/client";
 import {
   blockTake,
   damiRun,
   generation,
-  projectEvent,
   type LookStatus,
   type TakeStage,
 } from "@/server/db/schema";
-import { isSampleProvider } from "@/server/providers";
 
 export type TakeRow = typeof blockTake.$inferSelect;
 
@@ -55,9 +53,7 @@ export function toTakeView(
     fileId: row.fileId,
     posterFileId: row.posterFileId,
     failure: row.failure,
-    isSample:
-      (joined.provider !== null && isSampleProvider(joined.provider)) ||
-      joined.model === SAMPLE_MODEL,
+    isSample: isSampleOutput(joined.provider, joined.model),
     priceCredits: joined.priceCredits,
     createdAt: row.createdAt,
     decidedAt: row.decidedAt,
@@ -258,14 +254,4 @@ export async function supersedeDroppedLineageTakes(
     )
     .returning({ id: blockTake.id });
   return rows.length;
-}
-
-export async function logEvent(
-  db: DbExecutor,
-  projectId: string,
-  userId: string | null,
-  type: string,
-  payload: Record<string, unknown>,
-): Promise<void> {
-  await db.insert(projectEvent).values({ projectId, userId, type, payload });
 }

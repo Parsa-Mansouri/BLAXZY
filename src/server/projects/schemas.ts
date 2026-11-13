@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { makeParser, UserInputError } from "@/server/errors";
 
 export const MAX_PAGE_SIZE = 50;
 export const DEFAULT_PAGE_SIZE = 12;
@@ -26,17 +27,12 @@ export const listProjectsSchema = z.object({
 });
 
 /** Thrown for input the user can fix; `message` is safe to show. */
-export class ProjectInputError extends Error {
+export class ProjectInputError extends UserInputError {
   constructor(message: string) {
     super(message);
     this.name = "ProjectInputError";
   }
 }
 
-export function parseInput<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
-  const result = schema.safeParse(input);
-  if (!result.success) {
-    throw new ProjectInputError(result.error.issues[0]?.message ?? "That input is not valid.");
-  }
-  return result.data;
-}
+/** Validates input; the first issue's message becomes a `ProjectInputError`. */
+export const parseInput = makeParser(ProjectInputError);

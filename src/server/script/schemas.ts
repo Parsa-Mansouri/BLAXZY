@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { makeParser } from "@/server/errors";
 import { SCRIPT_ISSUE_CODES, WRITER_REASON_CODES } from "@/server/damis";
 import { ScriptInputError } from "./errors";
 import { MAX_SCRIPT_CHARS } from "./extract";
@@ -90,10 +91,5 @@ export const editAcceptedSchema = z.object({
 
 export const retrySchema = z.object({ ...ids, versionId: z.string() });
 
-export function parseInput<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
-  const result = schema.safeParse(input);
-  if (!result.success) {
-    throw new ScriptInputError(result.error.issues[0]?.message ?? "That input is not valid.");
-  }
-  return result.data;
-}
+/** Validates input; the first issue's message becomes a `ScriptInputError`. */
+export const parseInput = makeParser(ScriptInputError);

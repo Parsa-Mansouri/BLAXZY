@@ -1,8 +1,11 @@
-import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { SectionerAsset } from "@/server/damis";
 import { getDb } from "@/server/db/client";
-import { ASSET_KINDS, asset, project, type AssetKind } from "@/server/db/schema";
+import { ASSET_KINDS, asset, type AssetKind } from "@/server/db/schema";
+import { makeParser, UserInputError } from "@/server/errors";
+import { findOwnedProject } from "@/server/projects";
+import { decodeOrderCursor, encodeOrderCursor } from "@/server/projects/cursor";
 
 export type Asset = typeof asset.$inferSelect;
 
@@ -12,23 +15,15 @@ export const MAX_ASSET_PAGE_SIZE = 200;
 const MAX_DAMI_ASSETS = 500;
 
 /** Thrown for input the caller can fix; `message` is safe to show. */
-export class AssetInputError extends Error {
+export class AssetInputError extends UserInputError {
   constructor(message: string) {
     super(message);
     this.name = "AssetInputError";
   }
 }
 
-const uuid = z.uuid();
-
 /** Validates input; the first issue's message becomes an `AssetInputError`. */
-export function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
-  const result = schema.safeParse(input);
-  if (!result.success) {
-    throw new AssetInputError(result.error.issues[0]?.message ?? "That input is not valid.");
-  }
-  return result.data;
-}
+export const parse = makeParser(AssetInputError);
 
 const listAssetsSchema = z.object({
   kind: z.enum(ASSET_KINDS).optional(),
@@ -52,26 +47,14 @@ export async function getSectionerAssets(projectId: string): Promise<SectionerAs
 }
 
 async function ownsProject(projectId: string, userId: string): Promise<boolean> {
-  if (!uuid.safeParse(projectId).success) return false;
-  const [row] = await getDb()
-    .select({ id: project.id })
-    .from(project)
-    .where(and(eq(project.id, projectId), eq(project.ownerId, userId), isNull(project.archivedAt)))
-    .limit(1);
-  return row !== undefined;
+  return (await findOwnedProject(getDb(), projectId, userId)) !== null;
 }
 
-function encodeCursor(order: number, id: string): string {
-  return Buffer.from(`${order}|${id}`, "utf8").toString("base64url");
-}
-
+/** `(displayOrder, id)` keyset cursor, in the shared order-cursor format (`@/server/projects/cursor`). */
 function decodeCursor(cursor: string): { order: number; id: string } {
-  const [order, id, ...rest] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
-  const value = Number(order);
-  if (rest.length > 0 || !Number.isInteger(value) || !uuid.safeParse(id).success) {
-    throw new AssetInputError("That page link is no longer valid. Reload the list.");
-  }
-  return { order: value, id: id as string };
+  const decoded = decodeOrderCursor(cursor);
+  if (!decoded) throw new AssetInputError("That page link is no longer valid. Reload the list.");
+  return { order: decoded.orderIndex, id: decoded.id };
 }
 
 /** The project's assets (active only unless `includeRemoved`), in display order, paginated. */
@@ -119,7 +102,7 @@ export async function listAssetPage(
   const last = items.at(-1);
   return {
     items,
-    nextCursor: rows.length > limit && last ? encodeCursor(last.displayOrder, last.id) : null,
+    nextCursor: rows.length > limit && last ? encodeOrderCursor(last.displayOrder, last.id) : null,
   };
 }
 

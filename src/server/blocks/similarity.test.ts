@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { excerptSimilarity } from "./service";
+import { excerptSimilarity } from "./lineage";
 
 describe("excerptSimilarity", () => {
   it("finds an edited line close and a replaced shot far", () => {

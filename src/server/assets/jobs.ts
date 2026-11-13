@@ -23,10 +23,11 @@ import {
   type SheetSpec,
 } from "@/server/db/schema";
 import { enqueueGeneration, requestGeneration, type FinishedGeneration } from "@/server/generation";
+import { logProjectEvent } from "@/server/projects";
 import { setSectioningState } from "@/server/blocks";
 import { assetSheetViewsAdvance, enqueue, scriptSection } from "@/server/jobs";
 import { wakeWaitingLooks } from "./designs";
-import { logEvent, type AssetRow, type LookRow, type SheetRow } from "./looks";
+import type { AssetRow, LookRow, SheetRow } from "./looks";
 import { applyViewGenerationResult } from "./packs";
 
 export type AssetJobProject = { id: string; ownerId: string; style: ProjectStyle | null };
@@ -196,10 +197,15 @@ export async function markLookNeedsInput(input: {
       )
       .returning();
     if (!row) return false;
-    await logEvent(tx, row.projectId, null, "asset.look_question", {
-      assetId: row.assetId,
-      lookId: row.id,
-      questions: input.spec.questions.filter((q) => q.blocking).map((q) => q.id),
+    await logProjectEvent(tx, {
+      projectId: row.projectId,
+      userId: null,
+      type: "asset.look_question",
+      payload: {
+        assetId: row.assetId,
+        lookId: row.id,
+        questions: input.spec.questions.filter((q) => q.blocking).map((q) => q.id),
+      },
     });
     return true;
   });
@@ -236,10 +242,15 @@ export async function applyUploadedLook(input: {
       )
       .returning();
     if (!row) return false;
-    await logEvent(tx, row.projectId, null, "asset.look_ready", {
-      assetId: row.assetId,
-      lookId: row.id,
-      usedUpload: input.fileId,
+    await logProjectEvent(tx, {
+      projectId: row.projectId,
+      userId: null,
+      type: "asset.look_ready",
+      payload: {
+        assetId: row.assetId,
+        lookId: row.id,
+        usedUpload: input.fileId,
+      },
     });
     return true;
   });
@@ -387,10 +398,15 @@ export async function failLook(
       .where(and(eq(assetLook.id, lookId), eq(assetLook.status, "pending")))
       .returning();
     if (!row) return false;
-    await logEvent(tx, row.projectId, null, "asset.look_failed", {
-      assetId: row.assetId,
-      lookId,
-      failure,
+    await logProjectEvent(tx, {
+      projectId: row.projectId,
+      userId: null,
+      type: "asset.look_failed",
+      payload: {
+        assetId: row.assetId,
+        lookId,
+        failure,
+      },
     });
     await wakeAfterLocation(tx, row.assetId, row.projectId);
     return true;
@@ -409,10 +425,15 @@ export async function failSheet(
       .where(and(eq(assetSheet.id, sheetId), eq(assetSheet.status, "pending")))
       .returning();
     if (!row) return false;
-    await logEvent(tx, row.projectId, null, "asset.sheet_failed", {
-      assetId: row.assetId,
-      sheetId,
-      failure,
+    await logProjectEvent(tx, {
+      projectId: row.projectId,
+      userId: null,
+      type: "asset.sheet_failed",
+      payload: {
+        assetId: row.assetId,
+        sheetId,
+        failure,
+      },
     });
     return true;
   });
@@ -455,10 +476,15 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
         )
         .returning({ id: assetLook.id, assetId: assetLook.assetId });
       if (row) {
-        await logEvent(tx, projectId, null, succeeded ? "asset.look_ready" : "asset.look_failed", {
-          assetId: row.assetId,
-          lookId: row.id,
-          generationId: g.id,
+        await logProjectEvent(tx, {
+          projectId,
+          userId: null,
+          type: succeeded ? "asset.look_ready" : "asset.look_failed",
+          payload: {
+            assetId: row.assetId,
+            lookId: row.id,
+            generationId: g.id,
+          },
         });
         // A failed location look wakes its waiting props, in this transaction.
         if (!succeeded) await wakeAfterLocation(tx, row.assetId, projectId);
@@ -487,10 +513,15 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
       )
       .returning({ id: assetSheet.id, assetId: assetSheet.assetId });
     if (row) {
-      await logEvent(tx, projectId, null, succeeded ? "asset.sheet_ready" : "asset.sheet_failed", {
-        assetId: row.assetId,
-        sheetId: row.id,
-        generationId: g.id,
+      await logProjectEvent(tx, {
+        projectId,
+        userId: null,
+        type: succeeded ? "asset.sheet_ready" : "asset.sheet_failed",
+        payload: {
+          assetId: row.assetId,
+          sheetId: row.id,
+          generationId: g.id,
+        },
       });
       return;
     }

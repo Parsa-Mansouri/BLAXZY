@@ -18,6 +18,16 @@ describe("page cursors", () => {
     expect(decodeOrderCursor(encodeOrderCursor(2_147_483_647, ID))?.orderIndex).toBe(2_147_483_647);
   });
 
+  it("keeps the wire format of the assets list's own cursors (`order|id`)", () => {
+    // What `listAssets` wrote before it used these helpers: links already handed out still work.
+    const legacy = (order: number, id: string) =>
+      Buffer.from(`${order}|${id}`, "utf8").toString("base64url");
+    for (const order of [0, 1, 37, 2_147_483_647]) {
+      expect(encodeOrderCursor(order, ID)).toBe(legacy(order, ID));
+      expect(decodeOrderCursor(legacy(order, ID))).toEqual({ orderIndex: order, id: ID });
+    }
+  });
+
   it("rejects order cursors the database would choke on", () => {
     for (const order of ["1e300", "2147483648", "-1", "1.5", " 1", "0x10", "", "NaN"]) {
       expect(decodeOrderCursor(raw(`${order}|${ID}`))).toBeNull();

@@ -40,15 +40,15 @@ export {
   type KnownRow,
   type PlannedAsset,
 } from "./detection";
+export { deriveAssetState, type AssetStage, type AssetState } from "./stage";
 export {
-  ASSET_STAGES,
-  deriveAssetStage,
-  deriveAssetState,
-  stageNeedsUser,
-  type AssetStage,
-  type AssetState,
-} from "./stage";
-export type { LookSpecView, LookView, SheetSpecView, SheetView } from "./looks";
+  /** For `@/server/production`: the sample flag of its takes. */
+  isSampleOutput,
+  type LookSpecView,
+  type LookView,
+  type SheetSpecView,
+  type SheetView,
+} from "./looks";
 export { MAX_REFERENCE_NOTE, type ReferenceInput } from "./designs";
 export {
   DEFAULT_FINISHED_PAGE_SIZE,
@@ -94,7 +94,6 @@ export {
   submitSheetReview,
   submitSheetViewReview,
   updateAsset,
-  validateGuidedAnswers,
   type AssetCard,
   type AssetDetail,
   type NextAsset,
@@ -129,7 +128,6 @@ export {
 export {
   advanceSheetViews,
   assemblePackSheet,
-  composeContactSheet,
   enqueueAdvance,
   failSheetView,
   heroViewIdOf,
@@ -139,7 +137,6 @@ export {
   packKindOf,
   storePackPlan,
   storeViewFix,
-  viewReferenceFiles,
   type DnaCard,
   type PackJobContext,
   type PackKind,

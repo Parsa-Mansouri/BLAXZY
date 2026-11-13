@@ -9,7 +9,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-or
 import { alias } from "drizzle-orm/pg-core";
 import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
 import { promptBlock } from "@/server/db/schema";
-import type { PromptBlock } from "./service";
+import type { PromptBlock } from "./common";
 
 const current = isNull(promptBlock.supersededAt);
 

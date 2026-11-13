@@ -20,9 +20,12 @@ export {
   isTimestampText,
 } from "./cursor";
 export { episodeCount, episodeCountOf } from "./episodes";
+export { logProjectEvent } from "./events";
+export { findOwnedProject, type ProjectLock } from "./ownership";
 export { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_TITLE_LENGTH, ProjectInputError } from "./schemas";
 export {
   advanceStage,
+  assertStageOpen,
   canOpenStage,
   listEpisodes,
   mergeDamiStyle,

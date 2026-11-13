@@ -7,7 +7,6 @@ import type { StoredScreenplay, SubmitOutline } from "@/server/damis";
 import { getDb } from "@/server/db/client";
 import {
   project,
-  projectEvent,
   review,
   scriptVersion,
   type ProjectStyle,
@@ -15,6 +14,7 @@ import {
   type ReviewFixRequest,
 } from "@/server/db/schema";
 import { enqueue, scriptWriteSegment } from "@/server/jobs";
+import { logProjectEvent } from "@/server/projects";
 import { getOwnedFileInfo, type FileInfo } from "@/server/storage";
 import { uuidSchema } from "./schemas";
 import {
@@ -140,7 +140,7 @@ export async function completeScriptVersion(input: {
         damiNotes: { ...previous, ...input.notes, failure: null },
       })
       .where(eq(scriptVersion.id, input.versionId));
-    await tx.insert(projectEvent).values({
+    await logProjectEvent(tx, {
       projectId: row.projectId,
       userId: null,
       type: "script.ready",
@@ -178,7 +178,7 @@ export async function completeOutline(input: {
       .update(scriptVersion)
       .set({ status: "in_review", damiRunId: input.damiRunId, damiNotes: notes })
       .where(eq(scriptVersion.id, input.versionId));
-    await tx.insert(projectEvent).values({
+    await logProjectEvent(tx, {
       projectId: row.projectId,
       userId: null,
       type: "script.outline-ready",

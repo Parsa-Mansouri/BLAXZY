@@ -285,7 +285,10 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
   });
 
   describe("sweep", () => {
-    const hours = (n: number) => new Date(Date.now() - n * 60 * 60 * 1000);
+    // One fixed "now" for the rows' ages and for the sweep, so the cutoffs never depend on how long
+    // the test took to set up.
+    const NOW = new Date();
+    const hours = (n: number) => new Date(NOW.getTime() - n * 60 * 60 * 1000);
 
     async function stuck(
       userId: string,
@@ -322,7 +325,7 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
         calls.push(`${g.id}:${g.status}`);
       });
       try {
-        const first = await gen.sweepStuckGenerations({ userId, stuckAfterMinutes: 120 });
+        const first = await gen.sweepStuckGenerations({ userId, stuckAfterMinutes: 120, now: NOW });
         expect(first.failed.sort()).toEqual([stuckRunning, stuckQueued].sort());
         // Waiting behind the per-user limit is not a failure; its run job is sent again.
         expect((await row(waitingQueued)).status).toBe("queued");
@@ -341,7 +344,11 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
         expect(await billing.getBalance(userId)).toBe(8);
 
         // Twice: nothing more changes, no hook is called again.
-        const second = await gen.sweepStuckGenerations({ userId, stuckAfterMinutes: 120 });
+        const second = await gen.sweepStuckGenerations({
+          userId,
+          stuckAfterMinutes: 120,
+          now: NOW,
+        });
         expect(second.failed).toEqual([]);
         expect(calls).toHaveLength(2);
         expect(await billing.getBalance(userId)).toBe(8);

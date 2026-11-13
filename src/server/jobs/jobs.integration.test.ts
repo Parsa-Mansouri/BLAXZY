@@ -8,6 +8,7 @@ import { randomBytes } from "node:crypto";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { databaseReachable } from "@/server/test-support/integration";
+import { waitFor, waitForValue } from "@/server/test-support/wait-for";
 import { z } from "zod";
 
 const runId = randomBytes(4).toString("hex");
@@ -24,14 +25,6 @@ async function dropSchemas(): Promise<void> {
     await client.query(`drop schema if exists ${raceSchema} cascade`);
   } finally {
     await client.end();
-  }
-}
-
-async function waitFor(condition: () => boolean, timeoutMs = 10_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!condition()) {
-    if (Date.now() > deadline) throw new Error("timed out waiting for condition");
-    await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
 
@@ -82,17 +75,19 @@ describe.skipIf(!reachable)("jobs (integration)", async () => {
     options: { retryLimit: 0 },
   });
 
-  /** Polls the job's state until it equals `expected` (or 10s pass); returns the last state. */
-  async function waitForState(name: string, id: string | null, expected: string) {
+  /** The job's state in the queue, or undefined when there is no such job. */
+  async function jobState(name: string, id: string | null): Promise<string | undefined> {
     const backend = await getBackend("web");
-    let state: string | undefined;
-    const deadline = Date.now() + 10_000;
-    while (state !== expected && Date.now() < deadline) {
-      const [job] = await backend.boss.findJobs(name, { id: id ?? undefined });
-      state = job?.state;
-      if (state !== expected) await sleep(250);
-    }
-    return state;
+    const [job] = await backend.boss.findJobs(name, { id: id ?? undefined });
+    return job?.state;
+  }
+
+  /** Polls the job's state until it equals `expected` (or 10s pass); returns the last state. */
+  function waitForState(name: string, id: string | null, expected: string) {
+    return waitForValue(
+      () => jobState(name, id),
+      (state) => state === expected,
+    );
   }
 
   const handled: string[] = [];
@@ -168,9 +163,11 @@ describe.skipIf(!reachable)("jobs (integration)", async () => {
   it("handles an enqueued job exactly once", async () => {
     const id = await enqueue(once, { message: "hello" });
     expect(id).toEqual(expect.any(String));
-    await waitFor(() => handled.includes("hello"));
-    await sleep(1_500);
-    expect(handled.filter((m) => m === "hello")).toHaveLength(1);
+    // "Exactly once" is proven by absence, so wait until the job is finished (the queue marks it
+    // completed only after its handler returned, and a completed job is never delivered again),
+    // then read the final count.
+    expect(await waitForState(once.name, id, "completed")).toBe("completed");
+    expect(handled.filter((m) => m === "hello")).toEqual(["hello"]);
   }, 20_000);
 
   it("retries a throwing handler and then succeeds", async () => {
@@ -236,28 +233,32 @@ describe.skipIf(!reachable)("jobs (integration)", async () => {
       }),
     ).rejects.toBeInstanceOf(Rollback);
     expect(sentId).toEqual(expect.any(String));
-    await sleep(2_000);
-    expect(handled).not.toContain("rolled-back");
+    // The rolled-back job must not exist in the queue at all...
     const backend = await getBackend("web");
     expect(await backend.boss.findJobs(transactional.name, { id: sentId ?? undefined })).toEqual(
       [],
     );
+    // ...and the worker must not deliver it. A job sent afterwards on the same queue is handled
+    // once it is finished, which shows the worker has been polling this queue since the rollback.
+    const sentinel = await enqueue(transactional, { message: "after-rollback" });
+    expect(await waitForState(transactional.name, sentinel, "completed")).toBe("completed");
+    expect(handled).toContain("after-rollback");
+    expect(handled).not.toContain("rolled-back");
   }, 20_000);
 
   it("delivers a job sent on a transaction once it commits (and dedupes inside it)", async () => {
     const ids = await getDb().transaction(async (tx) => {
       const first = await enqueue(transactional, { message: "committed" }, { tx });
       const duplicate = await enqueue(transactional, { message: "committed" }, { tx });
-      // Not visible to the queue before the commit.
-      await sleep(1_500);
+      // Not visible to the queue (another connection) before the commit, so no worker can take it.
+      expect(await jobState(transactional.name, first)).toBeUndefined();
       expect(handled).not.toContain("committed");
       return { first, duplicate };
     });
     expect(ids.first).toEqual(expect.any(String));
     expect(ids.duplicate).toBeNull();
-    await waitFor(() => handled.includes("committed"));
-    await sleep(1_000);
-    expect(handled.filter((m) => m === "committed")).toHaveLength(1);
+    expect(await waitForState(transactional.name, ids.first, "completed")).toBe("completed");
+    expect(handled.filter((m) => m === "committed")).toEqual(["committed"]);
   }, 20_000);
 
   it("retries a handler whose nested enqueue has an invalid payload (not a poison job)", async () => {

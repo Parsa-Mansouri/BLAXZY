@@ -7,6 +7,7 @@ import {
 } from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { waitFor } from "../../test-support/wait-for";
 import { FakeClaudeClient, fakeResponse, jsonResponse, testDeps } from "../test-utils";
 import { Semaphore } from "./concurrency";
 import { defineDami } from "./define";
@@ -46,6 +47,15 @@ const echo = defineDami({
 });
 
 const headers = () => new Headers({ "retry-after": "0" });
+
+/** A promise the test resolves by hand, so ordering never depends on a timer. */
+function deferred() {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
 
 describe("runDami", () => {
   it("runs, validates, finalizes and records a successful run", async () => {
@@ -268,17 +278,39 @@ describe("runDami", () => {
   it("respects the concurrency limit", async () => {
     let active = 0;
     let peak = 0;
-    const slow = async () => {
+    let started = 0;
+    // Each call holds its slot until the test releases it.
+    const gates = Array.from({ length: 6 }, deferred);
+    const slow = (gate: ReturnType<typeof deferred>) => async () => {
       active++;
+      started++;
       peak = Math.max(peak, active);
-      await new Promise((r) => setTimeout(r, 10));
+      await gate.promise;
       active--;
       return jsonResponse({ upper: "HI", length: 2 });
     };
-    const client = new FakeClaudeClient(Array.from({ length: 6 }, () => slow));
-    const { deps } = testDeps(client, { limiter: new Semaphore(2) });
-    await Promise.all(Array.from({ length: 6 }, () => runDami(echo, { word: "hi" }, {}, deps)));
+    const client = new FakeClaudeClient(gates.map(slow));
+    const limiter = new Semaphore(2);
+    const { deps } = testDeps(client, { limiter });
+    const runs = Array.from({ length: 6 }, () => runDami(echo, { word: "hi" }, {}, deps));
+
+    // Two calls hold the slots and the other four wait for them: nothing else may start.
+    await waitFor(() => limiter.active === 2 && limiter.pending === 4, {
+      description: "two running calls and four waiting",
+    });
+    expect(started).toBe(2);
+    expect(active).toBe(2);
+
+    // Freeing one slot lets exactly one more call in.
+    gates[0]?.release();
+    await waitFor(() => started === 3, { description: "a third call to start" });
+    await waitFor(() => limiter.pending === 3);
+    expect(active).toBe(2);
+
+    for (const gate of gates) gate.release();
+    await Promise.all(runs);
     expect(peak).toBe(2);
+    expect(started).toBe(6);
     expect(client.requests).toHaveLength(6);
   });
 });
@@ -287,14 +319,22 @@ describe("Semaphore", () => {
   it("runs at most max tasks and keeps FIFO order", async () => {
     const semaphore = new Semaphore(1);
     const order: number[] = [];
-    await Promise.all(
-      [1, 2, 3].map((n) =>
-        semaphore.run(async () => {
-          order.push(n);
-          await new Promise((r) => setTimeout(r, 1));
-        }),
-      ),
+    const gates = [1, 2, 3].map(deferred);
+    const runs = [1, 2, 3].map((n) =>
+      semaphore.run(async () => {
+        order.push(n);
+        await gates[n - 1]?.promise;
+      }),
     );
+    // Each task starts only after the previous one finished, in the order they asked.
+    for (const n of [1, 2, 3]) {
+      await waitFor(() => order.length === n, { description: `task ${n} to start` });
+      expect(order).toEqual([1, 2, 3].slice(0, n));
+      expect(semaphore.active).toBe(1);
+      expect(semaphore.pending).toBe(3 - n);
+      gates[n - 1]?.release();
+    }
+    await Promise.all(runs);
     expect(order).toEqual([1, 2, 3]);
     expect(semaphore.active).toBe(0);
   });

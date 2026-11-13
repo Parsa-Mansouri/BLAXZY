@@ -15,7 +15,6 @@ import {
 
 const jobSchema = pointQueueAtThrowawaySchema();
 const reachable = await servicesReachable();
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe.skipIf(!reachable)("generation engine (integration, sample provider)", async () => {
   const sharp = (await import("sharp")).default;
@@ -59,6 +58,22 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
     const [r] = await getDb().select().from(generation).where(eq(generation.id, generationId));
     if (!r) throw new Error("generation row missing");
     return r;
+  }
+
+  /**
+   * Freezes `Date.now()` (what the sample provider's clock and the run's deferral read; `new
+   * Date()` is untouched) and returns a function that moves it forward, so provider windows and
+   * delays are tested without sleeping or depending on how slow the machine is.
+   */
+  function freezeClock(): { now: () => number; advance: (ms: number) => void } {
+    let current = Date.now();
+    vi.spyOn(Date, "now").mockImplementation(() => current);
+    return {
+      now: () => current,
+      advance: (ms) => {
+        current += ms;
+      },
+    };
   }
 
   async function entries(generationId: string) {
@@ -249,12 +264,16 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
       prompt: "a lighthouse [[flaky]]",
       style: TEST_STYLE,
     });
+    // The job is ready the instant it is created (sample delay 0) and reports its transient
+    // failure for FLAKY_WINDOW_MS after that: with the clock frozen, attempt 1 is always inside
+    // the window and attempt 2 always outside it.
+    const clock = freezeClock();
     await expect(run(generationId, 1)).rejects.toThrow(/temporary problem/);
     const between = await row(generationId);
     expect(between.status).toBe("running");
     expect(between.providerJobId).not.toBeNull();
 
-    await sleep(FLAKY_WINDOW_MS + 100);
+    clock.advance(FLAKY_WINDOW_MS + 1);
     await run(generationId, 2);
     const done = await row(generationId);
     expect(done).toMatchObject({ status: "succeeded", attempts: 2 });
@@ -368,8 +387,9 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
           `and data->>'generationId' = '${generationId}'`,
       ),
     );
-    const before = Date.now();
+    const clock = freezeClock();
     await run(generationId);
+    vi.restoreAllMocks();
     const waiting = await row(generationId);
     expect(waiting).toMatchObject({ status: "queued", attempts: 0, providerJobId: null });
     expect(create).not.toHaveBeenCalled();
@@ -382,7 +402,10 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
     );
     expect(jobs.rows).toHaveLength(1);
     expect(jobs.rows[0]?.state).toBe("created");
-    expect(new Date(jobs.rows[0]?.start_after ?? 0).getTime()).toBeGreaterThan(before + 5_000);
+    // The follow-up is scheduled 10 to 20 s after the (frozen) moment of the deferral.
+    const startAfter = new Date(jobs.rows[0]?.start_after ?? 0).getTime();
+    expect(startAfter).toBeGreaterThanOrEqual(clock.now() + 10_000);
+    expect(startAfter).toBeLessThanOrEqual(clock.now() + 20_000);
 
     // Once a slot frees up, the follow-up runs it.
     await getDb()

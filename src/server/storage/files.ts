@@ -1,7 +1,9 @@
-import { eq } from "drizzle-orm";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { file, type FileStatus } from "@/server/db/schema";
+import { getBucket, getS3 } from "./client";
 import { StorageError } from "./errors";
 import { sanitizeFileName } from "./sanitize";
 
@@ -18,6 +20,37 @@ export type FileInfo = {
   status: FileStatus;
   createdAt: Date;
 };
+
+/**
+ * Terminal status of an upload that never completed (ticket expired unused, or a server-side
+ * write failed). The row is kept (data is append-only) but every reader treats it as missing.
+ * The `status` column is free text; `FileStatus` should list this value.
+ */
+export const ABANDONED_STATUS = "abandoned";
+
+function isAbandoned(row: FileRow): boolean {
+  return (row.status as string) === ABANDONED_STATUS;
+}
+
+/** Move a `pending` row to `abandoned`. False when it was no longer pending (someone else won). */
+export async function markAbandoned(fileId: string): Promise<boolean> {
+  const rows = await getDb()
+    .update(file)
+    .set({ status: sql<FileStatus>`${ABANDONED_STATUS}` })
+    .where(and(eq(file.id, fileId), eq(file.status, "pending")))
+    .returning({ id: file.id });
+  return rows.length > 0;
+}
+
+/** Delete an object; a missing object is fine. Returns false (never throws) when the store fails. */
+export async function deleteObjectQuietly(key: string): Promise<boolean> {
+  try {
+    await getS3().send(new DeleteObjectCommand({ Bucket: getBucket(), Key: key }));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function toFileInfo(row: FileRow): FileInfo {
   return {
@@ -59,12 +92,13 @@ export async function findFile(fileId: string): Promise<FileRow | undefined> {
 /** The file's record when it exists and belongs to the user, else null (for other modules). */
 export async function getOwnedFileInfo(fileId: string, userId: string): Promise<FileInfo | null> {
   const row = await findFile(fileId);
-  return row && row.ownerId === userId ? toFileInfo(row) : null;
+  return row && row.ownerId === userId && !isAbandoned(row) ? toFileInfo(row) : null;
 }
 
 /** The row if it exists and belongs to the user; otherwise the same `not_found` either way. */
 export async function findOwnedFile(fileId: string, userId: string): Promise<FileRow> {
   const row = await findFile(fileId);
-  if (!row || row.ownerId !== userId) throw new StorageError("not_found", "File not found");
+  if (!row || row.ownerId !== userId || isAbandoned(row))
+    throw new StorageError("not_found", "File not found");
   return row;
 }

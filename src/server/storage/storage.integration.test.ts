@@ -6,38 +6,9 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
-import { DeleteObjectCommand, HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
-import { Client } from "pg";
+import { DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-
-async function servicesReachable(): Promise<boolean> {
-  const { DATABASE_URL, S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY } =
-    process.env;
-  if (!DATABASE_URL || !S3_ENDPOINT || !S3_BUCKET || !S3_ACCESS_KEY_ID || !S3_SECRET_ACCESS_KEY) {
-    return false;
-  }
-  const client = new Client({ connectionString: DATABASE_URL, connectionTimeoutMillis: 2000 });
-  const s3 = new S3Client({
-    endpoint: S3_ENDPOINT,
-    region: process.env.S3_REGION ?? "us-east-1",
-    forcePathStyle: true,
-    credentials: { accessKeyId: S3_ACCESS_KEY_ID, secretAccessKey: S3_SECRET_ACCESS_KEY },
-    maxAttempts: 1,
-  });
-  try {
-    await client.connect();
-    await client.query("select 1 from file limit 1");
-    await s3.send(new HeadBucketCommand({ Bucket: S3_BUCKET }), {
-      abortSignal: AbortSignal.timeout(2000),
-    });
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await client.end().catch(() => undefined);
-    s3.destroy();
-  }
-}
+import { servicesReachable } from "@/server/test-support/integration";
 
 const reachable = await servicesReachable();
 const text = (value: string) => new TextEncoder().encode(value);
@@ -51,26 +22,23 @@ describe.skipIf(!reachable)("storage (integration)", async () => {
 
   const owner = `it-storage-${randomUUID()}`;
   const stranger = `it-storage-${randomUUID()}`;
+  const capped = `it-storage-${randomUUID()}`;
+  const users = [owner, stranger, capped];
 
   beforeAll(async () => {
     await getDb()
       .insert(user)
-      .values(
-        [owner, stranger].map((id) => ({ id, name: "Storage Test", email: `${id}@example.test` })),
-      );
+      .values(users.map((id) => ({ id, name: "Storage Test", email: `${id}@example.test` })));
   });
 
   afterAll(async () => {
     const db = getDb();
-    const rows = await db
-      .select()
-      .from(file)
-      .where(inArray(file.ownerId, [owner, stranger]));
+    const rows = await db.select().from(file).where(inArray(file.ownerId, users));
     for (const row of rows) {
       await getS3().send(new DeleteObjectCommand({ Bucket: getBucket(), Key: row.storageKey }));
     }
-    await db.delete(file).where(inArray(file.ownerId, [owner, stranger]));
-    await db.delete(user).where(inArray(user.id, [owner, stranger]));
+    await db.delete(file).where(inArray(file.ownerId, users));
+    await db.delete(user).where(inArray(user.id, users));
     await closeDb();
   });
 
@@ -227,8 +195,290 @@ describe.skipIf(!reachable)("storage (integration)", async () => {
     expect(rows.filter((r) => r.ownerId === owner)).toHaveLength(0);
   });
 
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  const MiB = 1024 * 1024;
+
+  async function objectExists(fileId: string): Promise<boolean> {
+    const [row] = await getDb().select().from(file).where(eq(file.id, fileId));
+    try {
+      await getS3().send(
+        new HeadObjectCommand({ Bucket: getBucket(), Key: row?.storageKey ?? "" }),
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function statusOf(fileId: string): Promise<string | undefined> {
+    const [row] = await getDb().select().from(file).where(eq(file.id, fileId));
+    return row?.status;
+  }
+
+  it("discards an upload whose content is not what its type claims", async () => {
+    const html = text("<html><script>alert(1)</script></html>");
+    const ticket = await storage.createUpload({
+      ownerId: owner,
+      originalName: "innocent.png",
+      mimeType: "image/png",
+      sizeBytes: html.byteLength,
+      purpose: "asset_image",
+    });
+    expect((await upload(ticket, html)).status).toBe(200);
+    await expectCode(
+      storage.confirmUpload({ fileId: ticket.fileId, ownerId: owner }),
+      "upload_mismatch",
+    );
+    expect(await objectExists(ticket.fileId)).toBe(false);
+    expect(await statusOf(ticket.fileId)).toBe("pending");
+    await expectCode(storage.getDownloadUrl({ fileId: ticket.fileId, userId: owner }), "not_found");
+  });
+
+  it("cannot be overwritten through the presigned URL, before or after confirm", async () => {
+    const original = new Uint8Array([...png.slice(0, 8), 1, 1, 1, 1]);
+    const ticket = await storage.createUpload({
+      ownerId: owner,
+      originalName: "locked.png",
+      mimeType: "image/png",
+      sizeBytes: original.byteLength,
+      purpose: "asset_image",
+    });
+    expect((await upload(ticket, original)).status).toBe(200);
+    const second = await upload(ticket, new Uint8Array([...png.slice(0, 8), 2, 2, 2, 2]));
+    expect(second.status).toBe(412);
+    await storage.confirmUpload({ fileId: ticket.fileId, ownerId: owner });
+    const third = await upload(ticket, new Uint8Array([...png.slice(0, 8), 3, 3, 3, 3]));
+    expect(third.status).toBe(412);
+    expect(await storage.readFileBytes(ticket.fileId)).toEqual(original);
+    // A PUT that leaves out the condition is refused by the signature.
+    const bare = await fetch(ticket.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "image/png" },
+      body: original,
+    });
+    expect(bare.ok).toBe(false);
+  });
+
+  it("caps the unfinished tickets one user may hold", async () => {
+    await getDb()
+      .insert(file)
+      .values(
+        Array.from({ length: storage.MAX_PENDING_UPLOADS_PER_OWNER }, () => {
+          const id = randomUUID();
+          return {
+            id,
+            ownerId: capped,
+            storageKey: `u/${capped}/_/${id}/x.png`,
+            mimeType: "image/png",
+            sizeBytes: 10,
+            status: "pending" as const,
+          };
+        }),
+      );
+    await expectCode(
+      storage.createUpload({
+        ownerId: capped,
+        originalName: "one-more.png",
+        mimeType: "image/png",
+        sizeBytes: 10,
+        purpose: "asset_image",
+      }),
+      "too_many_uploads",
+    );
+    // Other users are unaffected.
+    await expect(
+      storage.createUpload({
+        ownerId: owner,
+        originalName: "fine.png",
+        mimeType: "image/png",
+        sizeBytes: 10,
+        purpose: "asset_image",
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("sweeps abandoned tickets: object gone, row kept as abandoned, readers see nothing", async () => {
+    const bytes = png.slice(0, 8);
+    const ticket = await storage.createUpload({
+      ownerId: owner,
+      originalName: "stale.png",
+      mimeType: "image/png",
+      sizeBytes: bytes.byteLength,
+      purpose: "asset_image",
+    });
+    expect((await upload(ticket, bytes)).status).toBe(200);
+    await getDb()
+      .update(file)
+      .set({ createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
+      .where(eq(file.id, ticket.fileId));
+    const fresh = await storage.createUpload({
+      ownerId: owner,
+      originalName: "fresh.png",
+      mimeType: "image/png",
+      sizeBytes: 10,
+      purpose: "asset_image",
+    });
+
+    // Two sweepers at once: the row is retired exactly once.
+    const results = await Promise.all([
+      storage.sweepAbandonedUploads({ batchSize: 1000 }),
+      storage.sweepAbandonedUploads({ batchSize: 1000 }),
+    ]);
+    expect(results.reduce((sum, r) => sum + r.swept, 0)).toBeGreaterThanOrEqual(1);
+    expect(await statusOf(ticket.fileId)).toBe("abandoned");
+    expect(await objectExists(ticket.fileId)).toBe(false);
+    expect(await statusOf(fresh.fileId)).toBe("pending");
+    await expectCode(storage.confirmUpload({ fileId: ticket.fileId, ownerId: owner }), "not_found");
+    await expectCode(storage.getDownloadUrl({ fileId: ticket.fileId, userId: owner }), "not_found");
+    await expect(storage.openFileStream(ticket.fileId)).rejects.toMatchObject({
+      code: "not_found",
+    });
+    expect(await storage.getOwnedFileInfo(ticket.fileId, owner)).toBeNull();
+  });
+
+  it("leaves a terminal row, not a pending one, when a server-side write fails", async () => {
+    await expect(
+      storage.putFileBytes({
+        ownerId: owner,
+        name: "doomed.png",
+        mimeType: "image/png",
+        purpose: "asset_image",
+        bytes: png,
+        signal: AbortSignal.abort(),
+      }),
+    ).rejects.toBeDefined();
+    const rows = await getDb().select().from(file).where(eq(file.originalName, "doomed.png"));
+    const mine = rows.filter((r) => r.ownerId === owner);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.status).toBe("abandoned");
+    expect(await objectExists(mine[0]?.id ?? "")).toBe(false);
+  });
+
+  it("refuses worker bytes that do not fit their type, before writing anything", async () => {
+    await expectCode(
+      storage.putFileBytes({
+        ownerId: owner,
+        name: "fake.png",
+        mimeType: "image/png",
+        purpose: "asset_image",
+        bytes: text("<svg onload=alert(1)>"),
+      }),
+      "upload_mismatch",
+    );
+    const rows = await getDb().select().from(file).where(eq(file.originalName, "fake.png"));
+    expect(rows.filter((r) => r.ownerId === owner)).toHaveLength(0);
+  });
+
+  it("uploads a large stream in parts and reads it back intact", async () => {
+    const size = 11 * MiB + 123;
+    const payload = new Uint8Array(size);
+    for (let i = 0; i < size; i += 4096) payload[i] = (i / 4096) % 251;
+    const chunks: Buffer[] = [];
+    for (let i = 0; i < size; i += 1_000_003) {
+      chunks.push(Buffer.from(payload.subarray(i, Math.min(size, i + 1_000_003))));
+    }
+    const info = await storage.putFileBytes({
+      ownerId: owner,
+      name: "bundle.zip",
+      mimeType: "application/zip",
+      purpose: "export_zip",
+      bytes: Readable.from(chunks),
+      sizeBytes: size,
+      multipart: { thresholdBytes: 5 * MiB, partSizeBytes: 5 * MiB },
+    });
+    expect(info).toMatchObject({ status: "ready", sizeBytes: size });
+    const back = await storage.readFileBytes(info.id);
+    expect(back.byteLength).toBe(size);
+    expect(Buffer.compare(Buffer.from(back), Buffer.from(payload))).toBe(0);
+  });
+
+  it("abandons a multipart upload whose stream fails or has the wrong length", async () => {
+    const multipart = { thresholdBytes: 5 * MiB, partSizeBytes: 5 * MiB };
+    async function* short() {
+      yield Buffer.alloc(6 * MiB, 1);
+    }
+    await expectCode(
+      storage.putFileBytes({
+        ownerId: owner,
+        name: "short.zip",
+        mimeType: "application/zip",
+        purpose: "export_zip",
+        bytes: Readable.from(short()),
+        sizeBytes: 8 * MiB,
+        multipart,
+      }),
+      "upload_mismatch",
+    );
+    async function* broken() {
+      yield Buffer.alloc(6 * MiB, 1);
+      throw new Error("source died");
+    }
+    await expect(
+      storage.putFileBytes({
+        ownerId: owner,
+        name: "broken.zip",
+        mimeType: "application/zip",
+        purpose: "export_zip",
+        bytes: Readable.from(broken()),
+        sizeBytes: 8 * MiB,
+        multipart,
+      }),
+    ).rejects.toThrow("source died");
+    const rows = await getDb()
+      .select()
+      .from(file)
+      .where(inArray(file.originalName, ["short.zip", "broken.zip"]));
+    const mine = rows.filter((r) => r.ownerId === owner);
+    expect(mine).toHaveLength(2);
+    expect(mine.every((r) => r.status === "abandoned")).toBe(true);
+    for (const row of mine) expect(await objectExists(row.id)).toBe(false);
+  });
+
+  it("pins the response type and forces a download for anything that is not media", async () => {
+    const pdf = await storage.putFileBytes({
+      ownerId: owner,
+      name: "notes.pdf",
+      mimeType: "application/pdf",
+      purpose: "script_document",
+      bytes: text("%PDF-1.4 test"),
+    });
+    const pdfResponse = await fetch(
+      (await storage.getDownloadUrl({ fileId: pdf.id, userId: owner })).url,
+    );
+    expect(pdfResponse.headers.get("content-type")).toBe("application/pdf");
+    expect(pdfResponse.headers.get("content-disposition")).toContain("attachment;");
+    expect(pdfResponse.headers.get("cache-control")).toContain("private");
+    await pdfResponse.arrayBuffer();
+
+    const image = await storage.putFileBytes({
+      ownerId: owner,
+      name: "still.png",
+      mimeType: "image/png",
+      purpose: "asset_image",
+      bytes: png,
+    });
+    const imageResponse = await fetch(
+      (await storage.getDownloadUrl({ fileId: image.id, userId: owner })).url,
+    );
+    expect(imageResponse.headers.get("content-type")).toBe("image/png");
+    expect(imageResponse.headers.get("content-disposition")).toBeNull();
+    await imageResponse.arrayBuffer();
+  });
+
+  it("can require the reader to be the owner", async () => {
+    const info = await storage.putFileBytes({
+      ownerId: owner,
+      name: "mine.png",
+      mimeType: "image/png",
+      purpose: "asset_image",
+      bytes: png,
+    });
+    await expectCode(storage.readFileBytes(info.id, { ownerId: stranger }), "not_found");
+    await expectCode(storage.openFileStream(info.id, { ownerId: stranger }), "not_found");
+    expect(await storage.readFileBytes(info.id, { ownerId: owner })).toEqual(png);
+  });
+
   it("stores worker output from bytes and from a stream", async () => {
-    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
     const fromBytes = await storage.putFileBytes({
       ownerId: owner,
       name: "sheet.png",

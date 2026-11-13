@@ -71,8 +71,8 @@ export const FILE_PURPOSES = {
     },
   },
   /**
-   * A ZIP of a project's finished clips, written by streaming. Note: `putFileBytes` sends one
-   * PUT, which S3 caps at 5 GB; a bundle larger than that needs a multipart upload.
+   * A ZIP of a project's finished clips, written by streaming. `putFileBytes` switches to a
+   * multipart upload for large streams, so this may exceed S3's 5 GB single-PUT cap.
    */
   export_zip: {
     maxBytes: 20 * GB,
@@ -140,4 +140,88 @@ export function checkFileAllowed(input: {
     );
   }
   return mimeType;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Content signatures (magic bytes)                                            */
+/* -------------------------------------------------------------------------- */
+
+/** How many leading bytes the signature check reads from an object. */
+export const SIGNATURE_SAMPLE_BYTES = 4096;
+
+type SignatureCheck = (sample: Uint8Array, complete: boolean) => boolean;
+
+function startsWith(sample: Uint8Array, bytes: readonly number[], offset = 0): boolean {
+  return bytes.every((byte, i) => sample[offset + i] === byte);
+}
+
+const ascii = (text: string): number[] => [...text].map((c) => c.charCodeAt(0));
+
+const isPng: SignatureCheck = (s) => startsWith(s, [0x89, 0x50, 0x4e, 0x47]);
+const isJpeg: SignatureCheck = (s) => startsWith(s, [0xff, 0xd8, 0xff]);
+const isWebp: SignatureCheck = (s) =>
+  startsWith(s, ascii("RIFF")) && startsWith(s, ascii("WEBP"), 8);
+const isWav: SignatureCheck = (s) =>
+  startsWith(s, ascii("RIFF")) && startsWith(s, ascii("WAVE"), 8);
+/** ISO base media (MP4, M4A): a `ftyp` box right after its 4-byte size. */
+const isIsoBaseMedia: SignatureCheck = (s) => startsWith(s, ascii("ftyp"), 4);
+const isMp3: SignatureCheck = (s) =>
+  startsWith(s, ascii("ID3")) || (s[0] === 0xff && ((s[1] ?? 0) & 0xe0) === 0xe0);
+const isPdf: SignatureCheck = (s) => {
+  const head = s.subarray(0, 1024);
+  const needle = ascii("%PDF-");
+  for (let i = 0; i + needle.length <= head.length; i++)
+    if (startsWith(head, needle, i)) return true;
+  return false;
+};
+/** A local file header (`PK\x03\x04`). */
+const isZipArchive: SignatureCheck = (s) => startsWith(s, [0x50, 0x4b, 0x03, 0x04]);
+/** The exports bundle may legitimately be an empty archive (`PK\x05\x06`). */
+const isZipOrEmptyZip: SignatureCheck = (s) =>
+  isZipArchive(s, true) || startsWith(s, [0x50, 0x4b, 0x05, 0x06]);
+/** No NUL bytes and valid UTF-8 (a character cut off by the end of the sample is tolerated). */
+const isUtf8Text: SignatureCheck = (s, complete) => {
+  if (s.includes(0)) return false;
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(s, { stream: !complete });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** One check per allowed MIME type; `purposes.test.ts` asserts every allowed type has one. */
+export const CONTENT_SIGNATURES: Readonly<Record<string, SignatureCheck>> = {
+  "text/plain": isUtf8Text,
+  "text/markdown": isUtf8Text,
+  "text/x-markdown": isUtf8Text,
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": isZipArchive,
+  "application/pdf": isPdf,
+  "image/png": isPng,
+  "image/jpeg": isJpeg,
+  "image/webp": isWebp,
+  "video/mp4": isIsoBaseMedia,
+  "application/zip": isZipOrEmptyZip,
+  "application/x-zip-compressed": isZipOrEmptyZip,
+  "audio/mpeg": isMp3,
+  "audio/mp3": isMp3,
+  "audio/wav": isWav,
+  "audio/x-wav": isWav,
+  "audio/wave": isWav,
+  "audio/mp4": isIsoBaseMedia,
+  "audio/x-m4a": isIsoBaseMedia,
+  "audio/m4a": isIsoBaseMedia,
+};
+
+/**
+ * Whether the leading bytes of a file fit its (normalized) MIME type. `complete` says the sample
+ * is the whole file (matters for UTF-8 text cut mid-character). Unknown types never match.
+ */
+export function matchesContentSignature(
+  mimeType: string,
+  sample: Uint8Array,
+  complete: boolean,
+): boolean {
+  const check = CONTENT_SIGNATURES[normalizeMimeType(mimeType)];
+  return check ? check(sample, complete) : false;
 }

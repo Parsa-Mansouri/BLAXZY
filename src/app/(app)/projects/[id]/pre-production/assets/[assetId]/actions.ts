@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import {
-  AssetInputError,
   getAssetDetail,
   lockSheet,
   nextAssetNeedingInput,
@@ -22,21 +21,25 @@ import {
   answerLookQuestion,
   type AssetStage,
 } from "@/server/assets";
-import { requireUser } from "@/server/auth";
 import type { FixSelection } from "@/server/damis";
-import { confirmUpload, createUpload, StorageError } from "@/server/storage";
+import { confirmUpload } from "@/server/storage";
+import {
+  isUuid,
+  logActionError,
+  pollAction,
+  pollNull,
+  userAction,
+  type ActionResult,
+} from "../../../../../_lib/action";
+import {
+  issueUploadTicket,
+  uploadIncomplete,
+  type UploadTicketData,
+} from "../../../../../_lib/upload-ticket";
 import { versionsKey } from "./_lib/asset-view";
 
-export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: string };
-
 const MISSING = "This asset is no longer available. Go back to its category and reload.";
-const SERVER_PROBLEM = "The server had a problem. Try again in a moment.";
-
-function failure(error: unknown): { ok: false; error: string } {
-  if (error instanceof AssetInputError) return { ok: false, error: error.message };
-  console.error("[asset actions]", error);
-  return { ok: false, error: SERVER_PROBLEM };
-}
+const MISSING_RESULT = { ok: false, error: MISSING } as const;
 
 /**
  * An asset change shows in Pre-production's screens (this asset, its category, the overview); the
@@ -73,7 +76,7 @@ async function movedOn(
     return { ok: true, data: { next: next ? { assetId: next.id, name: next.name } : null } };
   } catch (error) {
     // The action itself succeeded: stay on the asset rather than report a failure.
-    console.error("[asset actions] next asset", error);
+    logActionError("asset.nextAsset", error);
     return { ok: true, data: null };
   }
 }
@@ -89,16 +92,15 @@ async function afterStage(
   return done(projectId);
 }
 
-/** A fingerprint of the asset's state, polled while something is being produced. */
+/**
+ * A fingerprint of the asset's state, polled while something is being produced. Null when the
+ * asset is gone, and when signed out, rate limited or failing (a background poll never redirects).
+ */
 export async function pollAssetAction(assetId: string): Promise<string | null> {
-  const user = await requireUser();
-  try {
+  return pollAction("asset.poll", pollNull, async (user) => {
     const detail = await getAssetDetail(assetId, user.id);
     return detail ? versionsKey(detail) : null;
-  } catch (error) {
-    if (error instanceof AssetInputError) return null;
-    throw error;
-  }
+  });
 }
 
 /** A reference photo of a design: an uploaded image, the role picked for it, what to keep. */
@@ -117,13 +119,11 @@ export async function startDesignAction(
   assetId: string,
   input: { prompt?: string; answers?: Record<string, string>; references?: ReferencePhoto[] },
 ): Promise<ActionResult<MoveOn | null>> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "asset.startDesign", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const look = await startDesign({ assetId, userId: user.id, ...input });
-    return look ? await movedOn(projectId, user.id, assetId) : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return look ? await movedOn(projectId, user.id, assetId) : MISSING_RESULT;
+  });
 }
 
 /** A prop waiting for its locations' Heroes is designed now, without them. */
@@ -131,15 +131,11 @@ export async function startWithoutWaitingAction(
   projectId: string,
   assetId: string,
 ): Promise<ActionResult<MoveOn | null>> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "asset.startWithoutWaiting", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const stage = await startWithoutWaiting({ assetId, userId: user.id });
-    return stage
-      ? await afterStage(projectId, user.id, stage, assetId)
-      : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
+  });
 }
 
 /**
@@ -152,15 +148,11 @@ export async function answerQuestionAction(
   answers: Record<string, string>,
   assetId?: string,
 ): Promise<ActionResult<MoveOn | null>> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "asset.answerQuestion", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const stage = await answerLookQuestion({ lookId, userId: user.id, answers });
-    return stage
-      ? await afterStage(projectId, user.id, stage, assetId)
-      : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
+  });
 }
 
 export async function startFromGuidedAction(
@@ -168,19 +160,11 @@ export async function startFromGuidedAction(
   assetId: string,
   answers: Record<string, string>,
 ): Promise<ActionResult<MoveOn | null>> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "asset.startFromGuided", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const look = await startLookFromGuided({ assetId, userId: user.id, answers });
-    return look ? await movedOn(projectId, user.id, assetId) : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
-}
-
-export interface UploadTicketData {
-  fileId: string;
-  uploadUrl: string;
-  headers: Record<string, string>;
+    return look ? await movedOn(projectId, user.id, assetId) : MISSING_RESULT;
+  });
 }
 
 /**
@@ -191,38 +175,24 @@ export async function createAssetUploadAction(
   assetId: string,
   file: { name: string; type: string; size: number },
 ): Promise<ActionResult<UploadTicketData>> {
-  const user = await requireUser();
-  try {
+  return userAction("upload", "asset.createUpload", async (user) => {
     const detail = await getAssetDetail(assetId, user.id);
-    if (!detail || detail.asset.status !== "active") return { ok: false, error: MISSING };
+    if (!detail || detail.asset.status !== "active") return MISSING_RESULT;
     const voice = detail.asset.kind === "voice";
-    try {
-      const ticket = await createUpload({
+    return issueUploadTicket(
+      {
         ownerId: user.id,
         projectId: detail.asset.projectId,
         originalName: file.name,
         mimeType: file.type,
         sizeBytes: file.size,
         purpose: voice ? "asset_audio" : "asset_image",
-      });
-      return {
-        ok: true,
-        data: { fileId: ticket.fileId, uploadUrl: ticket.uploadUrl, headers: ticket.headers },
-      };
-    } catch (error) {
-      if (error instanceof StorageError && error.code === "invalid_file") {
-        return {
-          ok: false,
-          error: voice
-            ? "This file cannot be used. Choose an .mp3, .wav or .m4a file up to 25 MB."
-            : "This file cannot be used. Choose a .png, .jpg or .webp image up to 25 MB.",
-        };
-      }
-      throw error;
-    }
-  } catch (error) {
-    return failure(error);
-  }
+      },
+      voice
+        ? "This file cannot be used. Choose an .mp3, .wav or .m4a file up to 25 MB."
+        : "This file cannot be used. Choose a .png, .jpg or .webp image up to 25 MB.",
+    );
+  });
 }
 
 /**
@@ -230,16 +200,15 @@ export async function createAssetUploadAction(
  * the photo is sent with a design or a review.
  */
 export async function confirmReferenceUploadAction(fileId: string): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
-    await confirmUpload({ fileId, ownerId: user.id });
-    return { ok: true, data: null };
-  } catch (error) {
-    if (error instanceof StorageError) {
-      return { ok: false, error: "The upload did not complete. Choose the photo again." };
-    }
-    return failure(error);
-  }
+  return userAction(
+    "mutate",
+    "asset.confirmReferenceUpload",
+    async (user): Promise<ActionResult> => {
+      await confirmUpload({ fileId, ownerId: user.id });
+      return { ok: true, data: null };
+    },
+    { mapError: uploadIncomplete("The upload did not complete. Choose the photo again.") },
+  );
 }
 
 /** Checks the uploaded bytes, then uses the file as the voice's recording. */
@@ -248,21 +217,21 @@ export async function finishAssetUploadAction(
   assetId: string,
   fileId: string,
 ): Promise<ActionResult<MoveOn | null>> {
-  const user = await requireUser();
-  try {
-    await confirmUpload({ fileId, ownerId: user.id });
-    const look = await startLookFromUpload({ assetId, userId: user.id, fileId });
-    if (!look) return { ok: false, error: MISSING };
-    // A recording is accepted on upload: the voice is ready. An image goes to review: stay.
-    return look.status === "accepted"
-      ? await movedOn(projectId, user.id, assetId)
-      : done(projectId);
-  } catch (error) {
-    if (error instanceof StorageError) {
-      return { ok: false, error: "The upload did not complete. Choose the file again." };
-    }
-    return failure(error);
-  }
+  return userAction(
+    "expensive",
+    "asset.finishUpload",
+    async (user): Promise<ActionResult<MoveOn | null>> => {
+      if (!isUuid(projectId)) return MISSING_RESULT;
+      await confirmUpload({ fileId, ownerId: user.id });
+      const look = await startLookFromUpload({ assetId, userId: user.id, fileId });
+      if (!look) return MISSING_RESULT;
+      // A recording is accepted on upload: the voice is ready. An image goes to review: stay.
+      return look.status === "accepted"
+        ? await movedOn(projectId, user.id, assetId)
+        : done(projectId);
+    },
+    { mapError: uploadIncomplete("The upload did not complete. Choose the file again.") },
+  );
 }
 
 /**
@@ -305,15 +274,11 @@ export async function reviewLookAction(
   /** The look's asset: when given, a decision that starts a job moves on (see `MoveOn`). */
   assetId?: string,
 ): Promise<ActionResult<MoveOn | null>> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "asset.reviewLook", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const stage = await submitLookReview({ lookId, userId: user.id, ...review });
-    return stage
-      ? await afterStage(projectId, user.id, stage, assetId)
-      : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
+  });
 }
 
 export async function reviewSheetAction(
@@ -323,15 +288,11 @@ export async function reviewSheetAction(
   /** The sheet's asset: when given, the decision moves on (see `MoveOn`). */
   assetId?: string,
 ): Promise<ActionResult<MoveOn | null>> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "asset.reviewSheet", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const stage = await submitSheetReview({ sheetId, userId: user.id, ...review });
-    return stage
-      ? await afterStage(projectId, user.id, stage, assetId)
-      : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
+  });
 }
 
 /** Approves one view of a location pack or prop sheet, or asks for changes on it. */
@@ -342,15 +303,11 @@ export async function reviewSheetViewAction(
   /** The view's asset: when given, a design change moves on (see `MoveOn`). */
   assetId?: string,
 ): Promise<ActionResult<MoveOn | null>> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "asset.reviewSheetView", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const stage = await submitSheetViewReview({ viewRowId, userId: user.id, ...review });
-    return stage
-      ? await afterStage(projectId, user.id, stage, assetId)
-      : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
+  });
 }
 
 /** Makes a view that could not be made again. */
@@ -358,13 +315,11 @@ export async function retrySheetViewAction(
   projectId: string,
   viewRowId: string,
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "asset.retrySheetView", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const stage = await retrySheetView({ viewRowId, userId: user.id });
-    return stage ? done(projectId) : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return stage ? done(projectId) : MISSING_RESULT;
+  });
 }
 
 /** Locks a location pack or prop sheet: the asset is ready and moves on. */
@@ -373,15 +328,11 @@ export async function lockSheetAction(
   sheetId: string,
   assetId?: string,
 ): Promise<ActionResult<MoveOn | null>> {
-  const user = await requireUser();
-  try {
+  return userAction("mutate", "asset.lockSheet", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const stage = await lockSheet({ sheetId, userId: user.id });
-    return stage
-      ? await afterStage(projectId, user.id, stage, assetId)
-      : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
+  });
 }
 
 export async function retryAction(
@@ -390,28 +341,22 @@ export async function retryAction(
   /** The asset tried again: when given, the restarted job moves on (see `MoveOn`). */
   assetId?: string,
 ): Promise<ActionResult<MoveOn | null>> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "asset.retry", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const stage =
       target.kind === "look"
         ? await retryLook({ lookId: target.id, userId: user.id })
         : await retrySheet({ sheetId: target.id, userId: user.id });
-    return stage
-      ? await afterStage(projectId, user.id, stage, assetId)
-      : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
+  });
 }
 
 export async function startOverAction(projectId: string, assetId: string): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("mutate", "asset.startOver", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const stage = await replaceLook({ assetId, userId: user.id });
-    return stage ? done(projectId) : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return stage ? done(projectId) : MISSING_RESULT;
+  });
 }
 
 export async function updateDetailsAction(
@@ -419,21 +364,17 @@ export async function updateDetailsAction(
   assetId: string,
   details: { name: string; description: string },
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("mutate", "asset.updateDetails", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const asset = await updateAsset({ assetId, userId: user.id, ...details });
-    return asset ? done(projectId) : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return asset ? done(projectId) : MISSING_RESULT;
+  });
 }
 
 export async function removeAssetAction(projectId: string, assetId: string): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("mutate", "asset.remove", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const removed = await removeAsset({ assetId, userId: user.id });
-    return removed ? done(projectId) : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return removed ? done(projectId) : MISSING_RESULT;
+  });
 }

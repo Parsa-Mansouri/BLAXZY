@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/server/auth";
-import { BlocksInputError, retrySectioning } from "@/server/blocks";
+import { retrySectioning } from "@/server/blocks";
 import { getProjectForUser } from "@/server/projects";
 import {
   editAcceptedScript,
@@ -10,28 +9,23 @@ import {
   getScriptVersion,
   approveOutline,
   retryScriptVersion,
-  ScriptInputError,
   startFromBrief,
   startFromIdea,
   startFromUpload,
   submitScriptReview,
   type ScriptVersionView,
 } from "@/server/script";
-import { confirmUpload, createUpload, StorageError } from "@/server/storage";
+import { confirmUpload } from "@/server/storage";
+import { isUuid, pollAction, pollNull, userAction, type ActionResult } from "../../../_lib/action";
+import {
+  issueUploadTicket,
+  uploadIncomplete,
+  type UploadTicketData,
+} from "../../../_lib/upload-ticket";
 import { loadBackgroundStatus, type BackgroundStatus } from "../_lib/background-status";
 
-export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: string };
-
 const MISSING = "This project no longer exists. It may have been archived.";
-const SERVER_PROBLEM = "The server had a problem. Try again in a moment.";
-
-function failure(error: unknown): { ok: false; error: string } {
-  if (error instanceof ScriptInputError || error instanceof BlocksInputError) {
-    return { ok: false, error: error.message };
-  }
-  console.error("[script actions]", error);
-  return { ok: false, error: SERVER_PROBLEM };
-}
+const MISSING_RESULT = { ok: false, error: MISSING } as const;
 
 /** The sidebar and toolbar show the stage, so a stage change refreshes the whole project. */
 function refreshProject(projectId: string) {
@@ -42,28 +36,24 @@ export async function startFromBriefAction(
   projectId: string,
   brief: string,
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "script.startFromBrief", async (user): Promise<ActionResult> => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const version = await startFromBrief({ projectId, userId: user.id, brief });
-    if (!version) return { ok: false, error: MISSING };
+    if (!version) return MISSING_RESULT;
     refreshProject(projectId);
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 /** Starts the Enhancer on the user's quick idea. */
 export async function startFromIdeaAction(projectId: string, idea: string): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "script.startFromIdea", async (user): Promise<ActionResult> => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const version = await startFromIdea({ projectId, userId: user.id, idea });
-    if (!version) return { ok: false, error: MISSING };
+    if (!version) return MISSING_RESULT;
     refreshProject(projectId);
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 /** Approves a long piece's outline (with the proposed additions the user ticked). */
@@ -72,26 +62,18 @@ export async function approveOutlineAction(
   versionId: string,
   approvedAdditions: number[],
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "script.approveOutline", async (user): Promise<ActionResult> => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const version = await approveOutline({
       projectId,
       userId: user.id,
       versionId,
       approvedAdditions,
     });
-    if (!version) return { ok: false, error: MISSING };
+    if (!version) return MISSING_RESULT;
     refreshProject(projectId);
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
-}
-
-export interface UploadTicketData {
-  fileId: string;
-  uploadUrl: string;
-  headers: Record<string, string>;
+  });
 }
 
 /** Records the file and returns where the browser sends its bytes. */
@@ -99,30 +81,21 @@ export async function createScriptUploadAction(
   projectId: string,
   file: { name: string; type: string; size: number },
 ): Promise<ActionResult<UploadTicketData>> {
-  const user = await requireUser();
-  try {
-    if (!(await getProjectForUser(projectId, user.id))) return { ok: false, error: MISSING };
-    const ticket = await createUpload({
-      ownerId: user.id,
-      projectId,
-      originalName: file.name,
-      mimeType: file.type,
-      sizeBytes: file.size,
-      purpose: "script_document",
-    });
-    return {
-      ok: true,
-      data: { fileId: ticket.fileId, uploadUrl: ticket.uploadUrl, headers: ticket.headers },
-    };
-  } catch (error) {
-    if (error instanceof StorageError && error.code === "invalid_file") {
-      return {
-        ok: false,
-        error: "This file cannot be used. Choose a .txt, .md, .docx or .pdf file up to 10 MB.",
-      };
-    }
-    return failure(error);
-  }
+  return userAction("upload", "script.createUpload", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
+    if (!(await getProjectForUser(projectId, user.id))) return MISSING_RESULT;
+    return issueUploadTicket(
+      {
+        ownerId: user.id,
+        projectId,
+        originalName: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        purpose: "script_document",
+      },
+      "This file cannot be used. Choose a .txt, .md, .docx or .pdf file up to 10 MB.",
+    );
+  });
 }
 
 /** Checks the uploaded bytes, then starts reading the script. */
@@ -130,19 +103,19 @@ export async function finishScriptUploadAction(
   projectId: string,
   fileId: string,
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
-    await confirmUpload({ fileId, ownerId: user.id });
-    const version = await startFromUpload({ projectId, userId: user.id, fileId });
-    if (!version) return { ok: false, error: MISSING };
-    refreshProject(projectId);
-    return { ok: true, data: null };
-  } catch (error) {
-    if (error instanceof StorageError) {
-      return { ok: false, error: "The upload did not complete. Choose the file again." };
-    }
-    return failure(error);
-  }
+  return userAction(
+    "expensive",
+    "script.finishUpload",
+    async (user): Promise<ActionResult> => {
+      if (!isUuid(projectId)) return MISSING_RESULT;
+      await confirmUpload({ fileId, ownerId: user.id });
+      const version = await startFromUpload({ projectId, userId: user.id, fileId });
+      if (!version) return MISSING_RESULT;
+      refreshProject(projectId);
+      return { ok: true, data: null };
+    },
+    { mapError: uploadIncomplete("The upload did not complete. Choose the file again.") },
+  );
 }
 
 export interface ScriptPoll {
@@ -150,12 +123,17 @@ export interface ScriptPoll {
   status: ScriptVersionView["status"] | null;
 }
 
-/** The latest version and its status, for the waiting screen. */
+/**
+ * The latest version and its status, for the waiting screen. Null when the project is gone, and
+ * when signed out, rate limited or failing (a background poll never redirects).
+ */
 export async function pollScriptAction(projectId: string): Promise<ScriptPoll | null> {
-  const user = await requireUser();
-  const state = await getScriptState(projectId, user.id);
-  if (!state) return null;
-  return { versionId: state.current?.id ?? null, status: state.current?.status ?? null };
+  return pollAction("script.poll", pollNull, async (user) => {
+    if (!isUuid(projectId)) return null;
+    const state = await getScriptState(projectId, user.id);
+    if (!state) return null;
+    return { versionId: state.current?.id ?? null, status: state.current?.status ?? null };
+  });
 }
 
 /** One version of the project's script, read-only. */
@@ -163,12 +141,16 @@ export async function loadVersionAction(
   projectId: string,
   versionId: string,
 ): Promise<ActionResult<ScriptVersionView>> {
-  const user = await requireUser();
-  const version = await getScriptVersion(versionId, user.id);
-  if (!version || !(await getProjectForUser(projectId, user.id))) {
-    return { ok: false, error: "That version is not available. Reload the page." };
-  }
-  return { ok: true, data: version };
+  return userAction("read", "script.loadVersion", async (user) => {
+    const unavailable = {
+      ok: false,
+      error: "That version is not available. Reload the page.",
+    } as const;
+    if (!isUuid(projectId) || !isUuid(versionId)) return unavailable;
+    const version = await getScriptVersion(versionId, user.id);
+    if (!version || !(await getProjectForUser(projectId, user.id))) return unavailable;
+    return { ok: true, data: version };
+  });
 }
 
 export interface ReviewInput {
@@ -183,8 +165,8 @@ export async function submitReviewAction(
   versionId: string,
   review: ReviewInput,
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "script.submitReview", async (user): Promise<ActionResult> => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const version = await submitScriptReview({
       projectId,
       userId: user.id,
@@ -194,61 +176,60 @@ export async function submitReviewAction(
       note: review.note,
       comments: review.comments,
     });
-    if (!version) return { ok: false, error: MISSING };
+    if (!version) return MISSING_RESULT;
     refreshProject(projectId);
     if (review.decision === "accepted") revalidatePath("/dashboard");
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 export async function retryVersionAction(
   projectId: string,
   versionId: string,
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "script.retryVersion", async (user): Promise<ActionResult> => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const version = await retryScriptVersion({ projectId, userId: user.id, versionId });
-    if (!version) return { ok: false, error: MISSING };
+    if (!version) return MISSING_RESULT;
     refreshProject(projectId);
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 export async function editAcceptedAction(
   projectId: string,
   content: string,
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "script.editAccepted", async (user): Promise<ActionResult> => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const version = await editAcceptedScript({ projectId, userId: user.id, content });
-    if (!version) return { ok: false, error: MISSING };
+    if (!version) return MISSING_RESULT;
     refreshProject(projectId);
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
-/** Where detection and sectioning stand for the accepted script. */
+/**
+ * Where detection and sectioning stand for the accepted script. Null when the project is gone,
+ * and when signed out, rate limited or failing (a background poll never redirects).
+ */
 export async function backgroundStatusAction(
   projectId: string,
   acceptedVersionId: string | null,
 ): Promise<BackgroundStatus | null> {
-  const user = await requireUser();
-  return loadBackgroundStatus(projectId, user.id, acceptedVersionId);
+  return pollAction("script.backgroundStatus", pollNull, async (user) => {
+    // A malformed id would reach Postgres as a failed uuid cast.
+    if (!isUuid(projectId)) return null;
+    if (acceptedVersionId !== null && !isUuid(acceptedVersionId)) return null;
+    return loadBackgroundStatus(projectId, user.id, acceptedVersionId);
+  });
 }
 
 export async function retrySectioningAction(projectId: string): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "script.retrySectioning", async (user): Promise<ActionResult> => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const status = await retrySectioning({ projectId, userId: user.id });
-    if (!status) return { ok: false, error: MISSING };
+    if (!status) return MISSING_RESULT;
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }

@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/server/auth";
 import {
   AssetInputError,
   completePreProduction,
@@ -14,12 +13,11 @@ import {
   type AssetStage,
 } from "@/server/assets";
 import type { FixSelection } from "@/server/damis";
+import { isUuid, userAction, type ActionResult } from "../../../../_lib/action";
 import { ASSET_KIND_LABELS, type AssetKindKey } from "../../_lib/asset-kinds";
 import { toReviewSheet, type ReviewSheet } from "./_lib/review-sheet";
 
 export type { ReviewSheet };
-
-export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: string };
 
 export interface NotReadyAsset {
   id: string;
@@ -30,15 +28,9 @@ export interface NotReadyAsset {
 
 export type ContinueResult = { ok: true } | { ok: false; error: string; notReady: NotReadyAsset[] };
 
-const SERVER_PROBLEM = "The server had a problem. Try again in a moment.";
+const GONE = { ok: false, error: "This asset no longer exists." } as const;
 /** Most assets the pass or the not-ready list reads. */
 const MAX_ASSETS = 500;
-
-function failure(error: unknown): { ok: false; error: string } {
-  if (error instanceof AssetInputError) return { ok: false, error: error.message };
-  console.error("[review actions]", error);
-  return { ok: false, error: SERVER_PROBLEM };
-}
 
 /**
  * The sheet of an asset: the accepted one of a ready asset, or the one in review. Null data when
@@ -47,14 +39,11 @@ function failure(error: unknown): { ok: false; error: string } {
 export async function loadReviewSheetAction(
   assetId: string,
 ): Promise<ActionResult<ReviewSheet | null>> {
-  const user = await requireUser();
-  try {
+  return userAction("read", "review.loadSheet", async (user) => {
     const detail = await getAssetDetail(assetId, user.id);
-    if (!detail) return { ok: false, error: "This asset no longer exists." };
+    if (!detail) return GONE;
     return { ok: true, data: toReviewSheet(detail, packKindOf(detail.asset.kind)) };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 /**
@@ -66,8 +55,8 @@ export async function requestSheetChangesAction(
   sheetId: string,
   input: { selections: FixSelection[]; note: string },
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "review.requestSheetChanges", async (user) => {
+    if (!isUuid(projectId)) return GONE;
     const stage = await submitSheetReview({
       sheetId,
       userId: user.id,
@@ -75,12 +64,10 @@ export async function requestSheetChangesAction(
       selections: input.selections,
       note: input.note || undefined,
     });
-    if (!stage) return { ok: false, error: "This asset no longer exists." };
+    if (!stage) return GONE;
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 async function findNotReady(projectId: string, userId: string): Promise<NotReadyAsset[]> {
@@ -111,21 +98,33 @@ async function findNotReady(projectId: string, userId: string): Promise<NotReady
 
 /** Finishes Pre-production. When an asset is no longer ready, says which. */
 export async function continueToProductionAction(projectId: string): Promise<ContinueResult> {
-  const user = await requireUser();
-  try {
-    const done = await completePreProduction({ projectId, userId: user.id });
-    if (!done) {
-      return {
+  const result = await userAction(
+    "expensive",
+    "review.continueToProduction",
+    async (user): Promise<ContinueResult> => {
+      const cannot: ContinueResult = {
         ok: false,
         error: "Pre-production cannot be finished from here.",
         notReady: [],
       };
-    }
-    revalidatePath(`/projects/${projectId}`, "layout");
-    return { ok: true };
-  } catch (error) {
-    const result = failure(error);
-    const notReady = error instanceof AssetInputError ? await findNotReady(projectId, user.id) : [];
-    return { ...result, notReady };
-  }
+      if (!isUuid(projectId)) return cannot;
+      try {
+        const done = await completePreProduction({ projectId, userId: user.id });
+        if (!done) return cannot;
+      } catch (error) {
+        // An asset is no longer ready: say which ones.
+        if (error instanceof AssetInputError) {
+          return {
+            ok: false,
+            error: error.message,
+            notReady: await findNotReady(projectId, user.id),
+          };
+        }
+        throw error;
+      }
+      revalidatePath(`/projects/${projectId}`, "layout");
+      return { ok: true };
+    },
+  );
+  return result.ok || "notReady" in result ? result : { ...result, notReady: [] };
 }

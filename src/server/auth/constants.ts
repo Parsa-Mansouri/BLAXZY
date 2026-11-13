@@ -18,8 +18,12 @@ export const HEALTH_PATH = "/api/health";
 export const LOGIN_PATH = "/login";
 export const VERIFY_EMAIL_PATH = "/verify-email";
 
+export const FORGOT_PASSWORD_PATH = "/forgot-password";
+
 export const MIN_PASSWORD_LENGTH = 10;
 export const MAX_PASSWORD_LENGTH = 128;
+/** Longest display name accepted at sign-up and on update-user. */
+export const MAX_NAME_LENGTH = 100;
 
 /** Pages reachable without a session. Everything else under the app redirects to login. */
 const PUBLIC_PAGES = new Set([
@@ -27,7 +31,7 @@ const PUBLIC_PAGES = new Set([
   LOGIN_PATH,
   "/signup",
   VERIFY_EMAIL_PATH,
-  "/forgot-password",
+  FORGOT_PASSWORD_PATH,
   "/reset-password",
 ]);
 

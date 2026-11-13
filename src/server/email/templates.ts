@@ -54,3 +54,34 @@ export function passwordResetEmail(to: Recipient, url: string): EmailMessage {
     ].join("\n"),
   };
 }
+
+/**
+ * Sent when someone signs up with an address that already has an account. The sign-up answer is
+ * the same as for a new address (no account enumeration), so this mail is how the owner finds out.
+ * It carries no token: only where to sign in or reset the password.
+ */
+export function existingAccountEmail(
+  to: Recipient,
+  links: { signInUrl: string; resetPasswordUrl: string },
+): EmailMessage {
+  return {
+    to: to.email,
+    subject: "You already have a BLAXZY account",
+    text: [
+      GREETING,
+      "",
+      "Someone tried to sign up for BLAXZY with this email address, but it already has an",
+      "account. To use it, sign in:",
+      "",
+      links.signInUrl,
+      "",
+      "If you do not remember your password, you can choose a new one here:",
+      "",
+      links.resetPasswordUrl,
+      "",
+      "If this was not you, you can ignore this email; nothing has changed on your account.",
+      "",
+      "BLAXZY",
+    ].join("\n"),
+  };
+}

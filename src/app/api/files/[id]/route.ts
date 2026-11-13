@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/server/auth";
+import { checkRateLimit } from "@/server/ratelimit";
 import { getDownloadUrl, StorageError } from "@/server/storage";
 
 const SECURITY_HEADERS = { "X-Content-Type-Options": "nosniff" } as const;
@@ -9,12 +10,20 @@ const SECURITY_HEADERS = { "X-Content-Type-Options": "nosniff" } as const;
  * URL, so pages can use `/api/files/<id>` as an image or audio source without holding URLs that
  * expire. The bytes never pass through the web server. Use `fileSrc()` to build the address.
  *
- * 401 without a session; 404 for a missing, foreign, pending or abandoned file (one answer for
- * all). Any other error is not caught, so it surfaces as a 500 and is logged by Next.
+ * 401 without a session; 429 (with Retry-After) over the user's `read` rate limit; 404 for a
+ * missing, foreign, pending or abandoned file (one answer for all). Any other error is not
+ * caught, so it surfaces as a 500 and is logged by Next.
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return new NextResponse(null, { status: 401, headers: SECURITY_HEADERS });
+  const limit = await checkRateLimit({ userId: session.user.id, bucket: "file" });
+  if (!limit.ok) {
+    return new NextResponse(null, {
+      status: 429,
+      headers: { "Retry-After": String(limit.retryAfterSeconds), ...SECURITY_HEADERS },
+    });
+  }
   const { id } = await params;
   try {
     const { url } = await getDownloadUrl({ fileId: id, userId: session.user.id });

@@ -2,14 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { listAssetCards } from "@/server/assets";
-import { requireUser } from "@/server/auth";
 import {
   approveAllBlocks,
   getBlockDetail,
   getProductionOverview,
   listProductionBlocks,
   MAX_BLOCK_PAGE_SIZE,
-  ProductionInputError,
+  PriceChangedError,
   quoteProduction,
   retryPreparation,
   setBlockAssets,
@@ -19,12 +18,19 @@ import {
   type ProductionBlock,
   type ProductionPhase,
 } from "@/server/production";
+import {
+  clampCount,
+  isUuid,
+  pollAction,
+  pollFailure,
+  pollNull,
+  userAction,
+  type ActionResult,
+} from "../../../../_lib/action";
 import { ASSET_KIND_LABELS } from "../../_lib/asset-kinds";
 import { blockHref } from "../../_lib/production-routes";
 import { blockKey } from "./_lib/block-key";
 import { nextToReviewHref } from "./_lib/navigation";
-
-export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: string };
 
 export interface BlocksSnapshot {
   items: ProductionBlock[];
@@ -50,14 +56,9 @@ export interface Quote {
 }
 
 const MISSING = "This shot is no longer available. Go back to the shots and reload.";
-const SERVER_PROBLEM = "The server had a problem. Try again in a moment.";
+const MISSING_RESULT = { ok: false, error: MISSING } as const;
+const PROJECT_GONE = { ok: false, error: "This project is no longer available." } as const;
 const PAGE = 50;
-
-function failure(error: unknown): { ok: false; error: string } {
-  if (error instanceof ProductionInputError) return { ok: false, error: error.message };
-  console.error("[block actions]", error);
-  return { ok: false, error: SERVER_PROBLEM };
-}
 
 /** Starting the drafts shows in Production's screens; the sidebar's balance refreshes itself. */
 function refreshProduction(projectId: string) {
@@ -93,23 +94,15 @@ async function readSnapshot(
   };
 }
 
-/** The first `count` shots again with the counts, for polling and after an action. */
+/** The first `count` shots again with the counts, for polling (never redirects). */
 export async function refreshBlocksAction(
   projectId: string,
   count: number,
 ): Promise<ActionResult<BlocksSnapshot>> {
-  const user = await requireUser();
-  try {
-    const snapshot = await readSnapshot(
-      projectId,
-      user.id,
-      null,
-      Math.max(PAGE, Math.min(count, 500)),
-    );
-    return snapshot ? { ok: true, data: snapshot } : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+  return pollAction("blocks.refresh", pollFailure, async (user) => {
+    const snapshot = await readSnapshot(projectId, user.id, null, clampCount(count, PAGE, 500));
+    return snapshot ? { ok: true, data: snapshot } : MISSING_RESULT;
+  });
 }
 
 /** The next page of shots. */
@@ -117,39 +110,27 @@ export async function loadBlocksAction(
   projectId: string,
   cursor: string,
 ): Promise<ActionResult<BlocksSnapshot>> {
-  const user = await requireUser();
-  try {
+  return userAction("read", "blocks.load", async (user) => {
     const snapshot = await readSnapshot(projectId, user.id, cursor, PAGE);
-    return snapshot ? { ok: true, data: snapshot } : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    return snapshot ? { ok: true, data: snapshot } : MISSING_RESULT;
+  });
 }
 
 export async function approveAllAction(
   projectId: string,
   loaded: number,
 ): Promise<ActionResult<BlocksSnapshot>> {
-  const user = await requireUser();
-  try {
+  return userAction("mutate", "blocks.approveAll", async (user) => {
     await approveAllBlocks({ projectId, userId: user.id });
-    const snapshot = await readSnapshot(
-      projectId,
-      user.id,
-      null,
-      Math.max(PAGE, Math.min(loaded, 500)),
-    );
-    return snapshot ? { ok: true, data: snapshot } : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    const snapshot = await readSnapshot(projectId, user.id, null, clampCount(loaded, PAGE, 500));
+    return snapshot ? { ok: true, data: snapshot } : MISSING_RESULT;
+  });
 }
 
 export async function quoteAction(projectId: string): Promise<ActionResult<Quote>> {
-  const user = await requireUser();
-  try {
+  return userAction("read", "blocks.quote", async (user) => {
     const quote = await quoteProduction(projectId, user.id);
-    if (!quote) return { ok: false, error: "This project is no longer available." };
+    if (!quote) return PROJECT_GONE;
     return {
       ok: true,
       data: {
@@ -159,9 +140,7 @@ export async function quoteAction(projectId: string): Promise<ActionResult<Quote
         balance: quote.balance,
       },
     };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 export type StartResult =
@@ -171,40 +150,43 @@ export async function startDraftsAction(
   projectId: string,
   expectedCredits: number,
 ): Promise<StartResult> {
-  const user = await requireUser();
-  try {
-    await startDrafts({ projectId, userId: user.id, expectedCredits });
+  return userAction("expensive", "blocks.startDrafts", async (user): Promise<StartResult> => {
+    if (!isUuid(projectId)) return PROJECT_GONE;
+    try {
+      await startDrafts({ projectId, userId: user.id, expectedCredits });
+    } catch (error) {
+      if (error instanceof PriceChangedError) {
+        return { ok: false, error: error.message, priceChanged: true };
+      }
+      throw error;
+    }
     refreshProduction(projectId);
     return { ok: true, data: null };
-  } catch (error) {
-    const result = failure(error);
-    return error instanceof ProductionInputError && error.message.startsWith("The price changed")
-      ? { ...result, priceChanged: true }
-      : result;
-  }
+  });
 }
 
-/** A fingerprint of a shot's state, polled while it is being prepared. */
+/**
+ * A fingerprint of a shot's state, polled while it is being prepared. Null when the shot is gone,
+ * and when signed out, rate limited or failing (a background poll never redirects).
+ */
 export async function pollBlockAction(lineageId: string): Promise<string | null> {
-  const user = await requireUser();
-  const detail = await getBlockDetail(lineageId, user.id).catch(() => null);
-  if (!detail) return null;
-  return blockKey(detail);
+  return pollAction("blocks.poll", pollNull, async (user) => {
+    const detail = await getBlockDetail(lineageId, user.id);
+    return detail ? blockKey(detail) : null;
+  });
 }
 
 export async function retryPreparationAction(
   projectId: string,
   lineageId: string,
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "blocks.retryPreparation", async (user) => {
+    if (!isUuid(projectId) || !isUuid(lineageId)) return MISSING_RESULT;
     const stage = await retryPreparation({ lineageId, userId: user.id });
-    if (!stage) return { ok: false, error: MISSING };
+    if (!stage) return MISSING_RESULT;
     revalidatePath(blockHref(projectId, lineageId));
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 export async function setAssetsAction(
@@ -212,15 +194,13 @@ export async function setAssetsAction(
   lineageId: string,
   assetIds: string[],
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("mutate", "blocks.setAssets", async (user) => {
+    if (!isUuid(projectId) || !isUuid(lineageId)) return MISSING_RESULT;
     const block = await setBlockAssets({ lineageId, userId: user.id, assetIds });
-    if (!block) return { ok: false, error: MISSING };
+    if (!block) return MISSING_RESULT;
     revalidatePath(blockHref(projectId, lineageId));
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 export interface ReviewOutcome {
@@ -233,21 +213,19 @@ export async function reviewBlockAction(
   lineageId: string,
   review: { decision: "accepted" | "rejected"; issueCodes?: string[]; note?: string },
 ): Promise<ActionResult<ReviewOutcome>> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "blocks.review", async (user) => {
+    if (!isUuid(projectId) || !isUuid(lineageId)) return MISSING_RESULT;
     const before = await getBlockDetail(lineageId, user.id);
-    if (!before) return { ok: false, error: MISSING };
+    if (!before) return MISSING_RESULT;
     const stage = await submitBlockReview({ lineageId, userId: user.id, ...review });
-    if (!stage) return { ok: false, error: MISSING };
+    if (!stage) return MISSING_RESULT;
     revalidatePath(blockHref(projectId, lineageId));
     const nextHref =
       review.decision === "accepted"
         ? await nextToReviewHref(projectId, user.id, before.orderIndex, lineageId)
         : blockHref(projectId, lineageId);
     return { ok: true, data: { nextHref } };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 const PICKER_PAGE = 30;
@@ -261,8 +239,7 @@ export async function loadPickerAssetsAction(
   projectId: string,
   cursor: string | null,
 ): Promise<ActionResult<{ items: PickerAsset[]; nextCursor: string | null }>> {
-  const user = await requireUser();
-  try {
+  return userAction("read", "blocks.loadPickerAssets", async (user) => {
     let kindIndex = 0;
     let inner: string | null = null;
     if (cursor) {
@@ -275,7 +252,7 @@ export async function loadPickerAssetsAction(
     while (kindIndex < KIND_LIST.length && items.length < PICKER_PAGE) {
       const kind = KIND_LIST[kindIndex];
       const page = await listAssetCards(projectId, user.id, { kind, cursor: inner, limit: 50 });
-      if (!page) return { ok: false, error: "This project is no longer available." };
+      if (!page) return PROJECT_GONE;
       for (const card of page.items) {
         if (card.stage !== "ready") continue;
         items.push({
@@ -293,7 +270,5 @@ export async function loadPickerAssetsAction(
     }
     const nextCursor = kindIndex < KIND_LIST.length ? `${kindIndex}:${inner ?? ""}` : null;
     return { ok: true, data: { items, nextCursor } };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }

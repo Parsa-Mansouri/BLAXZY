@@ -50,7 +50,7 @@ export function CheckEmail({
     if (result.ok) {
       setMessage({
         tone: "success",
-        text: "A new link was sent. The previous link no longer works.",
+        text: "A new link was sent. Earlier links also work until they expire.",
       });
       setCooldown(RESEND_COOLDOWN_SECONDS);
     } else {

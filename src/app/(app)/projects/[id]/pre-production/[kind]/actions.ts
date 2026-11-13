@@ -1,10 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/server/auth";
 import {
   addAsset,
-  AssetInputError,
   getAssetDetail,
   getDetectionPanel,
   includeSkippedAsset,
@@ -15,15 +13,22 @@ import {
   submitDetectionReview,
   submitSheetReview,
   updateAsset,
-  type DetectionPanel,
 } from "@/server/assets";
 import type { FixSelection } from "@/server/damis";
+import { toClientOptions } from "@/lib/review-option";
+import {
+  clampCount,
+  isUuid,
+  pollAction,
+  pollFailure,
+  userAction,
+  type ActionResult,
+} from "../../../../_lib/action";
 import { ASSET_KIND_LABELS, type AssetKindKey } from "../../_lib/asset-kinds";
+import type { ClientDetectionPanel } from "./_components/category-panel";
 import { toGalleryItem, type GalleryItem } from "../_components/gallery-item";
 import { countKindStages } from "../_lib/load-categories";
 import type { StageCounts } from "../_lib/status-words";
-
-export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: string };
 
 export interface CardsPage {
   items: GalleryItem[];
@@ -33,13 +38,10 @@ export interface CardsPage {
 }
 
 const MISSING = "This project no longer exists. It may have been archived.";
-const SERVER_PROBLEM = "The server had a problem. Try again in a moment.";
-
-function failure(error: unknown): { ok: false; error: string } {
-  if (error instanceof AssetInputError) return { ok: false, error: error.message };
-  console.error("[category actions]", error);
-  return { ok: false, error: SERVER_PROBLEM };
-}
+const MISSING_RESULT = { ok: false, error: MISSING } as const;
+const GONE = { ok: false, error: "This asset no longer exists." } as const;
+const NO_SUCH_KIND = { ok: false, error: "This kind of asset does not exist." } as const;
+const PAGE = 24;
 
 function asKind(value: string): AssetKindKey | null {
   return ASSET_KIND_LABELS.find((k) => k.kind === value)?.kind ?? null;
@@ -75,32 +77,26 @@ export async function loadCardsAction(
   kind: string,
   cursor: string,
 ): Promise<ActionResult<CardsPage>> {
-  const user = await requireUser();
-  const key = asKind(kind);
-  if (!key) return { ok: false, error: "This kind of asset does not exist." };
-  try {
-    const page = await readCards(projectId, user.id, key, cursor, 24);
-    return page ? { ok: true, data: page } : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+  return userAction("read", "category.loadCards", async (user) => {
+    const key = asKind(kind);
+    if (!key) return NO_SUCH_KIND;
+    const page = await readCards(projectId, user.id, key, cursor, PAGE);
+    return page ? { ok: true, data: page } : MISSING_RESULT;
+  });
 }
 
-/** The first `count` assets again, for polling. */
+/** The first `count` assets again, for polling (never redirects; see `pollAction`). */
 export async function refreshCardsAction(
   projectId: string,
   kind: string,
   count: number,
 ): Promise<ActionResult<CardsPage>> {
-  const user = await requireUser();
-  const key = asKind(kind);
-  if (!key) return { ok: false, error: "This kind of asset does not exist." };
-  try {
-    const page = await readCards(projectId, user.id, key, null, Math.max(24, Math.min(count, 500)));
-    return page ? { ok: true, data: page } : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+  return pollAction("category.refreshCards", pollFailure, async (user) => {
+    const key = asKind(kind);
+    if (!key) return NO_SUCH_KIND;
+    const page = await readCards(projectId, user.id, key, null, clampCount(count, PAGE, 500));
+    return page ? { ok: true, data: page } : MISSING_RESULT;
+  });
 }
 
 /**
@@ -108,12 +104,9 @@ export async function refreshCardsAction(
  * the asset, so the sheet in review is looked up here.
  */
 export async function acceptSheetAction(projectId: string, assetId: string): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "category.acceptSheet", async (user) => {
     const detail = await getAssetDetail(assetId, user.id);
-    if (!detail || detail.asset.projectId !== projectId) {
-      return { ok: false, error: "This asset no longer exists." };
-    }
+    if (!detail || detail.asset.projectId !== projectId) return GONE;
     const sheet = detail.sheets[0];
     if (detail.stage !== "sheet_review" || !sheet || sheet.status !== "in_review") {
       return { ok: false, error: "This sheet was already reviewed. Open the asset to see it." };
@@ -123,12 +116,10 @@ export async function acceptSheetAction(projectId: string, assetId: string): Pro
       userId: user.id,
       decision: "accepted",
     });
-    if (!stage) return { ok: false, error: "This asset no longer exists." };
+    if (!stage) return GONE;
     revalidatePath(`/projects/${projectId}`, "layout");
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 export async function addAssetAction(
@@ -136,10 +127,10 @@ export async function addAssetAction(
   kind: string,
   input: { name: string; description: string },
 ): Promise<ActionResult<{ name: string }>> {
-  const user = await requireUser();
-  const key = asKind(kind);
-  if (!key) return { ok: false, error: "This kind of asset does not exist." };
-  try {
+  return userAction("mutate", "category.addAsset", async (user) => {
+    const key = asKind(kind);
+    if (!key) return NO_SUCH_KIND;
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const created = await addAsset({
       projectId,
       userId: user.id,
@@ -147,12 +138,10 @@ export async function addAssetAction(
       name: input.name,
       description: input.description.trim() || undefined,
     });
-    if (!created) return { ok: false, error: MISSING };
+    if (!created) return MISSING_RESULT;
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");
     return { ok: true, data: { name: created.name } };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 export async function mergeAssetsAction(
@@ -160,28 +149,29 @@ export async function mergeAssetsAction(
   keepId: string,
   mergeId: string,
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("mutate", "category.mergeAssets", async (user) => {
+    const gone = { ok: false, error: "One of these assets no longer exists." } as const;
+    if (!isUuid(projectId)) return gone;
     const kept = await mergeAssets({ keepId, mergeId, userId: user.id });
-    if (!kept) return { ok: false, error: "One of these assets no longer exists." };
+    if (!kept) return gone;
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
-/** What the category screens show about the detected list ("Something wrong with this list?"). */
+/**
+ * What the category screens show about the detected list ("Something wrong with this list?"). The
+ * options are projected to the client-safe shape: the fix instructions sent to the model stay on
+ * the server.
+ */
 export async function detectionPanelAction(
   projectId: string,
-): Promise<ActionResult<DetectionPanel>> {
-  const user = await requireUser();
-  try {
+): Promise<ActionResult<ClientDetectionPanel>> {
+  return userAction("read", "category.detectionPanel", async (user) => {
     const panel = await getDetectionPanel(projectId, user.id);
-    return panel ? { ok: true, data: panel } : { ok: false, error: MISSING };
-  } catch (error) {
-    return failure(error);
-  }
+    if (!panel) return MISSING_RESULT;
+    return { ok: true, data: { ...panel, options: toClientOptions(panel.options) } };
+  });
 }
 
 /**
@@ -193,15 +183,13 @@ export async function submitDetectionReviewAction(
   selections: FixSelection[],
   note?: string,
 ): Promise<ActionResult<{ skipped: number; started: boolean }>> {
-  const user = await requireUser();
-  try {
+  return userAction("expensive", "category.submitDetectionReview", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
     const result = await submitDetectionReview({ projectId, userId: user.id, selections, note });
-    if (!result) return { ok: false, error: MISSING };
+    if (!result) return MISSING_RESULT;
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");
     return { ok: true, data: result };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 /** Renames an asset (its old name is kept as an alias). */
@@ -210,28 +198,24 @@ export async function renameAssetAction(
   assetId: string,
   name: string,
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("mutate", "category.renameAsset", async (user) => {
+    if (!isUuid(projectId)) return GONE;
     const updated = await updateAsset({ assetId, userId: user.id, name });
-    if (!updated) return { ok: false, error: "This asset no longer exists." };
+    if (!updated) return GONE;
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 /** Removes an asset from Pre-production (its images and sheets are kept). */
 export async function removeAssetAction(projectId: string, assetId: string): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("mutate", "category.removeAsset", async (user) => {
+    if (!isUuid(projectId)) return GONE;
     const removed = await removeAsset({ assetId, userId: user.id });
-    if (!removed) return { ok: false, error: "This asset no longer exists." };
+    if (!removed) return GONE;
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }
 
 /** Includes a skipped asset again (it will be designed). */
@@ -239,13 +223,11 @@ export async function includeAssetAction(
   projectId: string,
   assetId: string,
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
+  return userAction("mutate", "category.includeAsset", async (user) => {
+    if (!isUuid(projectId)) return GONE;
     const included = await includeSkippedAsset({ assetId, userId: user.id });
-    if (!included) return { ok: false, error: "This asset no longer exists." };
+    if (!included) return GONE;
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");
     return { ok: true, data: null };
-  } catch (error) {
-    return failure(error);
-  }
+  });
 }

@@ -17,9 +17,11 @@ type Errors = { name?: string; email?: string; password?: string };
 export function SignupForm({
   minPasswordLength,
   maxPasswordLength,
+  maxNameLength,
 }: {
   minPasswordLength: number;
   maxPasswordLength: number;
+  maxNameLength: number;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -95,6 +97,7 @@ export function SignupForm({
           value={name}
           onChange={setName}
           autoComplete="name"
+          maxLength={maxNameLength}
           error={errors.name}
           autoFocus
           style={stagger(0)}

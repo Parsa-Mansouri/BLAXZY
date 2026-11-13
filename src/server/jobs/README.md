@@ -77,6 +77,20 @@ which honours `ctx.retryLimit`. Every attempt logs one JSON line with
 worker processes evaluate cron, and pg-boss sends each occurrence once across them. Give the job a
 dedupe key so a slow run and the next occurrence never overlap (`generation.sweep`).
 
+Schedules registered by every worker (`worker/handlers`, all UTC):
+
+| Job                | Cron           | Does                                                                        |
+| ------------------ | -------------- | --------------------------------------------------------------------------- |
+| `generation.sweep` | `*/5 * * * *`  | fails and refunds stuck generations, re-queues lost runs, re-notifies hooks |
+| `dami.sweep`       | `*/15 * * * *` | marks dami runs still `running` after 90 minutes as `aborted`               |
+| `file.sweep`       | `*/15 * * * *` | abandons uploads still `pending` after 6 hours and deletes their objects    |
+| `ratelimit.prune`  | `*/5 * * * *`  | deletes expired server-action rate-limit windows                            |
+
+`production.dispatch` (`{ projectId, kind: "prepare" | "takes" }`) is not scheduled: a service sends
+it on the transaction that claimed the blocks or created the drafts, and the handler fans out one
+per-row job (`production.prepare` / `block.revise`, `take.generate`) for each pending row. It has
+`allowFollowUp`, so one may wait beside a running one and rows claimed meanwhile are not missed.
+
 ## Idempotency (required)
 
 Delivery is at-least-once: a job can run again after a crash, an expired attempt, a worker shutdown

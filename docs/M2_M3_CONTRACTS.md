@@ -20,19 +20,33 @@ type GenerationRequest = {
   references: { bytes: Uint8Array; mimeType: string; name: string }[];
   /** Shown on sample output only. */
   label?: string;
+  /** block_final only: the provider job of the accepted draft (see docs/M4_CONTRACTS.md). */
+  draftProviderJobId?: string;
 };
 type ProviderJobStatus =
-  | { state: "running" }
+  | { state: "running"; retryAfterMs?: number }   // ask again after retryAfterMs when given
   | { state: "succeeded" }
   | { state: "failed"; reason: string; retryable: boolean };
+  // retryable: the same provider job may still be asked again later; false: dead for good
+type ProviderResult = ({ bytes: Uint8Array } | { stream: Readable; sizeBytes: number }) & {
+  mimeType: string;
+  poster?: { bytes: Uint8Array; mimeType: string };   // video
+  dispose?: () => Promise<void>;                      // the caller runs it once the result is used
+};
 
 interface GenerationProvider {
   readonly id: string;                                   // "sample" | "higgsfield"
   price(request: Omit<GenerationRequest, "references">): Promise<number>;   // credits, creates nothing
-  create(request: GenerationRequest): Promise<{ providerJobId: string }>;
-  getStatus(providerJobId: string): Promise<ProviderJobStatus>;
-  fetchResult(providerJobId: string): Promise<{ bytes: Uint8Array; mimeType: string }>;
+  create(request: GenerationRequest, options: { idempotencyKey: string; signal?: AbortSignal }):
+    Promise<{ providerJobId: string }>;
+  getStatus(providerJobId: string, options?: { signal?: AbortSignal }): Promise<ProviderJobStatus>;
+  fetchResult(providerJobId: string, options?: { signal?: AbortSignal }): Promise<ProviderResult>;
 }
+// price runs on every quote and before a request's transaction opens: it must be answerable
+// locally (no network call, no side effect). create gets the generation id as idempotencyKey: a
+// backend whose API takes an idempotency key must send it, so a create repeated after a crash
+// returns the same provider job instead of a new, paid one (the platform never runs two creates
+// of one generation at once). signal aborts the request (job expiry, worker shutdown).
 getProvider(): GenerationProvider      // from GENERATION_PROVIDER=sample|higgsfield (default sample)
 pickModel(purpose: GenerationPurpose, style: ProjectStyle):
   { kind; model: string; params: Record<string, unknown> }   // the platform's choice, never the user's
@@ -40,9 +54,9 @@ pickModel(purpose: GenerationPurpose, style: ProjectStyle):
 
 `SampleProvider`: deterministic placeholder PNG rendered with `sharp` (label, purpose, a visible
 "Sample" mark, the request's aspect ratio; sheets look like a sheet: several panels), finishes
-after `GENERATION_SAMPLE_DELAY_MS` (default 2500; 0 in tests). Prices (made up): look 4, sheet 6,
+after `GENERATION_SAMPLE_DELAY_MS` (default 3000; 0 in tests). Prices (made up): look 4, sheet 6,
 video draft 20, video final 60 credits. A prompt containing `[[fail]]` fails with a
-non-retryable reason and `[[flaky]]` fails once with a retryable one (for tests and demos).
+non-retryable reason and `[[flaky]]` fails with a retryable one for 1 s (`FLAKY_WINDOW_MS`) after it is ready, then succeeds (for tests and demos).
 Sample job state must survive across processes (web enqueues, any worker runs): keep it in the
 provider job id or the `generation` row, never in memory.
 
@@ -72,27 +86,42 @@ requestGeneration(input: {
   referenceFileIds?: string[]; label?: string; style: ProjectStyle;
   aspectRatio?: AspectRatio;   // instead of the policy's ratio (props, pack views)
   variant?: string;            // a re-roll's nonce: same request, new seed
+  durationSeconds?: number; sound?: boolean; draftGenerationId?: string;   // video (docs/M4_CONTRACTS.md)
 }, tx?: DbTransaction): Promise<{ generationId: string; priceCredits: number }>
-  // pickModel → price → insert row (queued) → reserve, in one transaction; enqueue
-  // generation.run after commit (callers passing tx enqueue themselves via enqueueGeneration).
-enqueueGeneration(generationId): Promise<void>
+  // pickModel → price → insert row (queued) → reserve → send generation.run, all in one
+  // transaction: the job exists exactly when the generation does. With tx everything runs on the
+  // caller's transaction and connection and the run starts when the caller commits. If the send
+  // fails the transaction rolls back (nothing is created, no credits are held).
+enqueueGeneration(generationId, options?: { tx?: DbTransaction }): Promise<void>   // idempotent
 getGeneration(generationId, userId): Promise<GenerationView | null>
 ```
 
-Job `generation.run` `{ generationId }`, dedupe key generation id: skip if already finished;
-`create` at the provider once (store `providerJobId` before polling so a retry resumes instead of
-creating again); poll with backoff until done or the job's time budget ends; on success store the
-bytes with `putFileBytes` (purpose `generated_image` / `sheet_image`), set `resultFileId`,
+Job `generation.run` `{ generationId }`, dedupe key generation id (with a follow-up: one queued job
+may wait beside the running one): skip if already finished; claim under a per-user lock
+(`queued` → `running`, or defer); take a lease on the row (`provider_claimed_at`, 2 minutes) and
+`create` at the provider once, outside any transaction (store `providerJobId` before polling so a
+retry resumes instead of creating again); poll with backoff until done or the job's time budget ends; on success store the
+result with `putFileBytes` (purpose `generated_image` / `sheet_image`; video: `generated_video` and
+`video_poster`), set `resultFileId`,
 `settle`; on a non-retryable failure or the last attempt set `failed` with a user-readable
-`error` and `refund`. After finishing either way, call the registered completion hook:
+`error` and `refund`. After finishing either way, call the registered completion hooks and then set
+`notified_at` on the row:
 
 ```ts
-onGenerationFinished(handler: (g: { id; purpose; status; resultFileId; error }) => Promise<void>): void
+onGenerationFinished(handler: (g: { id; purpose; status; resultFileId; posterFileId?; error }) => Promise<void>): () => void
 ```
 
-(registered by the worker; pre-production uses it to move its look, sheet or sheet view forward). Limits:
-`GENERATION_MAX_PER_USER` (default 3 running per user; extra jobs are rescheduled, not failed) and
-the job type's worker concurrency as the global cap.
+(registered by the worker; pre-production uses it to move its look, sheet or sheet view forward;
+at-least-once, so hooks must be idempotent). Limits: `GENERATION_MAX_PER_USER` (default 3 running
+per user; extra jobs are rescheduled 10 to 20 s later, not failed and without using an attempt;
+running rows older than 2 hours are ignored; queued generations start oldest first, and a queued
+row older than 6 hours no longer holds younger ones back) and the job type's worker concurrency as
+the global cap.
+
+`generation.sweep` (scheduled, every 5 minutes; see `docs/M4_CONTRACTS.md`) fails and refunds
+generations stuck `running` past `GENERATION_STUCK_AFTER_MINUTES` and generations that were
+`queued` and never started for 12 hours, re-sends the run job of queued generations older than 30
+minutes, and calls the hooks again for finished generations whose `notified_at` is still null.
 
 ## New damis: `@/server/damis`
 
@@ -133,8 +162,9 @@ sheet is `pending` while planned, `in_review` while its views are made and revie
 model).
 
 ```ts
-type AssetStage = "needs_image" | "generating" | "look_review" | "building_sheet"
-                | "sheet_review" | "ready" | "failed";
+type AssetStage = "needs_image" | "needs_recording" | "generating" | "needs_answer" | "look_review"
+                | "building_sheet" | "sheet_review" | "ready" | "failed";
+  // needs_answer: the prop designer asked a blocking question
 type AssetCard = { asset: Asset; stage: AssetStage; thumbnailFileId: string | null };
 type LookView  = { id; versionNumber; source; status; fileId; userPrompt; guidedAnswers; failure;
                    isSample: boolean; createdAt; decidedAt };
@@ -156,7 +186,10 @@ getAssetDetail(assetId, userId): Promise<{
   asset: Asset; stage: AssetStage;
   looks: LookView[];            // newest first, capped at 20
   sheets: SheetView[];          // newest first, capped at 20
-  busy: boolean; questions; waitingFor; rejectedInARow;
+  busy: boolean; questions;
+  waitingFor: string[];            // a prop designed after its locations: their names while they are in flight
+  canStartWithoutWaiting: boolean; // the latest look is untouched and waiting: offer startWithoutWaiting
+  rejectedInARow;
   packViews: PackView[];        // locations and props: the latest sheet's views (latest versions)
   lockGate: { canLock: boolean; missing: string[] } | null;
   dnaCard: { summary; anchors; identity; constraints; mutable } | null;
@@ -194,7 +227,12 @@ replaceLook(input: { assetId; userId }): Promise<AssetStage | null>
 
 addAsset(input: { projectId; userId; kind; name; description? }): Promise<Asset | null>   // origin manual
 updateAsset(input: { assetId; userId; name?; description? }): Promise<Asset | null>
-removeAsset(input: { assetId; userId }): Promise<boolean>          // status removed, never deleted
+removeAsset(input: { assetId; userId }): Promise<boolean>
+  // status removed, never deleted; recorded as removed by the user (details.removedBy), so a later
+  // detection never revives it. Props waiting for a removed location are woken on the same
+  // transaction. A removed asset cannot be worked on
+startWithoutWaiting(input: { assetId; userId }): Promise<AssetStage | null>
+  // a prop waiting for its locations' Heroes is designed now, without them
 mergeAssets(input: { keepId; mergeId; userId }): Promise<Asset | null>
   // same project and kind; merged one becomes removed; blocks' assetRefs and tags are rewritten to the kept name
 
@@ -202,7 +240,19 @@ completePreProduction(input: { projectId; userId }): Promise<boolean>
   // all active assets ready → advance pre_production → production
 ```
 
-Jobs (handlers in `worker/handlers/`), each `{ lookId }` or `{ sheetId }` (plus `viewRowId`), dedupe key that id:
+A prop that stands in a location still being designed waits (no job is sent) until that location's
+look is accepted or fails, or the location is removed, merged away, skipped or dropped by the
+detector (the waiting looks are woken on that change's transaction), or the user starts it anyway
+(`startWithoutWaiting`).
+
+Every job below is sent on the transaction that writes its row (see `docs/M1_CONTRACTS.md`). A send
+that fails rolls the whole change back and the service throws `AssetInputError` "This step could
+not start. Try again in a moment.": no look, sheet or review is left pending without its job, and
+no failed row is recorded for a job that was never sent.
+
+Jobs (handlers in `worker/handlers/`), each `{ lookId }` or `{ sheetId }` (plus `viewRowId`), dedupe key that id
+(`asset.sheet.plan`: `<sheetId>:plan`, or `<sheetId>:<viewRowId>` for a view fix; `asset.detect.fix`, `{ reviewId }`,
+is described in `docs/M1_CONTRACTS.md`):
 
 | Job | Does |
 |---|---|

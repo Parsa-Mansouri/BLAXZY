@@ -13,7 +13,10 @@ Credits (`@/server/billing`, contract in `docs/M2_M3_CONTRACTS.md`). Owns `credi
   exclude each other (a second, different close throws `BillingInputError`; the unique index on
   generation + type is the backstop).
 - `reserve`, `settle` and `refund` take an optional `tx` to run inside the caller's transaction.
+- `generation.sweep` (or a failed run) closes a reservation with `refund`; a generation is only
+  ever settled or refunded once.
 - Amounts are whole numbers: grants 1 to 1,000,000, prices 0 to 1,000,000, balances at most
   1,000,000,000. `listLedger` is keyset-paginated, newest first.
 
-Development: `pnpm dev:credits <email> <amount> [note]` (refuses in production).
+Development: `pnpm dev:credits <email> <amount> [note]` (refuses `NODE_ENV=production` and a non-local
+database or object store unless `ALLOW_DEV_SCRIPTS=1`).

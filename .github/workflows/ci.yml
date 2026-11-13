@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # CI=true makes the vitest global setup fail (not skip) when Postgres, the bucket or
+      # ffmpeg is missing. NODE_ENV is deliberately not set here: vitest sets "test" itself and
+      # `next build` forces "production" itself; see the build step below.
+      CI: "true"
+      # Same values as the docker-compose defaults in .env.example.
+      DATABASE_URL: postgresql://blaxzy:blaxzy@localhost:5432/blaxzy
+      DATABASE_POOL_MAX: "3"
+      JOBS_WEB_POOL_MAX: "2"
+      JOBS_WORKER_POOL_MAX: "3"
+      S3_ENDPOINT: http://localhost:9100
+      S3_REGION: us-east-1
+      S3_BUCKET: blaxzy
+      S3_ACCESS_KEY_ID: blaxzy
+      S3_SECRET_ACCESS_KEY: blaxzy-secret
+      S3_FORCE_PATH_STYLE: "true"
+      # CI-only value (not the .env.example one, not a secret).
+      BETTER_AUTH_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+      BETTER_AUTH_URL: http://localhost:3000
+      DAMI_MODE: sample
+      GENERATION_PROVIDER: sample
+      FFMPEG_PATH: /usr/bin/ffmpeg
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      # The pnpm version comes from the packageManager field of package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start Postgres and the object store
+        run: docker compose up -d --wait postgres minio
+
+      - name: Create the bucket and its CORS rules
+        run: docker compose run --rm minio-init
+
+      - name: Apply migrations
+        run: pnpm db:migrate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build web
+        run: pnpm build
+        env:
+          # next.config.ts bakes the CSP in at build time and reads this origin.
+          S3_PUBLIC_ENDPOINT: http://localhost:9100
+
+      - name: Build worker
+        run: pnpm worker:build
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level=high

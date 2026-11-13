@@ -18,6 +18,43 @@ pnpm worker:dev               # background worker (separate terminal)
 Default host ports (override in `.env`): Postgres `5432`, S3 API `9100`, S3 console `9101`.
 The S3 store is RustFS (the official MinIO images are no longer published); console login is `blaxzy` / `blaxzy-secret`.
 
+## Tests and checks
+
+`pnpm check` runs typecheck, lint, format check and the tests; CI (`.github/workflows/ci.yml`) adds the
+builds and a dependency audit. `pnpm test` is vitest. The integration tests (the files named
+`*.integration.test.ts`) need three things: Postgres with the migrations applied, the S3 bucket and
+ffmpeg (for the video tests). A global setup probes them once:
+
+- By default a missing service skips the integration tests and prints one summary line saying what
+  is missing.
+- `CI` set to any non-empty value (most CI systems do) or `REQUIRE_INTEGRATION=1`: a missing service
+  fails the whole run instead.
+- `SKIP_INTEGRATION=1`: skip the integration tests on purpose.
+- `TEST_DATABASE_URL`: run against a separate database instead of `DATABASE_URL` (apply the migrations
+  to it first: `DATABASE_URL=... pnpm db:migrate`).
+- The tests write to and hard-delete from the database, so the run is refused unless the database
+  and `S3_ENDPOINT` are on a local host (`localhost`, loopback, the compose service names `postgres` and
+  `minio`, `host.docker.internal`). `ALLOW_REMOTE_TEST_DB=1` overrides the check; never point it at a
+  database you care about.
+
+Damis and generations use their sample modes in tests (`DAMI_MODE=sample`, `GENERATION_PROVIDER=sample`,
+no delays), so no Claude key is needed.
+
+## Development scripts
+
+The scripts in `scripts/` (`dev:*`, `dami:run`) write to the database. They refuse to run with
+`NODE_ENV=production`, or when `DATABASE_URL` or `S3_ENDPOINT` points at a non-local host, unless
+`ALLOW_DEV_SCRIPTS=1` is set (the script then prints a warning). They read `.env`.
+
+```bash
+pnpm dev:user you@example.com "Your Name" [--update-existing]   # a verified admin account
+```
+
+The password comes from `DEV_USER_PASSWORD`, else a hidden prompt (or the first line of stdin); it is
+never a command-line argument. An existing account with that email is left alone unless
+`--update-existing` is given (it then becomes a verified admin with the new password). The script
+skips email verification and the password length rule.
+
 ## Environment
 
 All configuration is read from the environment (see `.env.example` and `src/server/env.ts`).
@@ -126,12 +163,15 @@ serves no port and has no heartbeat, so its image has no health check; rely on a
 
 ## Damis
 
-Damis are the Claude-powered processes (`src/server/damis`, see its README). To run one for real
-once `ANTHROPIC_API_KEY` is set (the run is recorded in `dami_run`):
+Damis are the Claude-powered processes (`src/server/damis`, see its README). To run one by hand
+(the run is recorded in `dami_run`):
 
 ```bash
-pnpm dami:run script-writer src/server/damis/script-writer/fixtures/input.json [--project <id>]
+pnpm dami:run script-writer src/server/damis/script-writer/fixtures/input.json [--project <id>] [--live]
 ```
+
+With `DAMI_MODE=live` (or `auto` and an `ANTHROPIC_API_KEY` set) this makes **paid** Claude calls, and
+`dami:run` refuses to start them unless `--live` is given.
 
 By default (`DAMI_MODE=sample`, the testing-phase setting) every dami answers in **sample mode**: output is
 generated from the actual input by small deterministic generators (`src/server/damis/sample/`),
@@ -158,25 +198,94 @@ pnpm dev:preprod-flow                     # a character (look, sheet), a locatio
 pnpm dev:production-flow [email] [title]  # drafts and finals on a project in production (default "QA Run 14:03")
 ```
 
-## Background jobs and storage
+## Background jobs
 
 Long work runs in workers through the typed job queue in `src/server/jobs` (pg-boss on Postgres):
 web code calls `enqueue(job, payload)`, handlers live in `worker/handlers/`. Run as many web and
 worker processes as needed; see `src/server/jobs/README.md` for concurrency and the idempotency
 rule every handler must follow.
 
+A job that exists because of a row is sent on the transaction that writes the row, so the job exists
+exactly when the row does. If the send fails the request fails (the user sees "could not start, try
+again") and nothing is left half-written. A request that touches many rows sends one
+`production.dispatch` job (`prepare` or `takes`) and the worker fans it out into one job per row.
+
+Every worker registers these schedules (UTC; pg-boss keeps one schedule per job and sends each
+occurrence once, however many workers run):
+
+| Job                | Schedule         | What it does                                                                                                                                                                                                                               |
+| ------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `generation.sweep` | every 5 minutes  | Fails and refunds generations running longer than `GENERATION_STUCK_AFTER_MINUTES` or queued and never started for 12 hours; re-sends lost run jobs; re-runs completion hooks that did not finish. `pnpm dev:sweep` runs one sweep by hand |
+| `dami.sweep`       | every 15 minutes | Marks dami runs still `running` after 90 minutes (their process died) as `aborted`                                                                                                                                                         |
+| `file.sweep`       | every 15 minutes | Marks uploads still `pending` after 6 hours as `abandoned` and deletes their objects                                                                                                                                                       |
+| `ratelimit.prune`  | every 5 minutes  | Deletes rate-limit windows older than 10 minutes                                                                                                                                                                                           |
+
+## Uploads and storage
+
 Files go straight from the browser to the S3 store through presigned URLs
 (`src/server/storage`, see its README). The bucket needs CORS for the app origins; locally
 `minio-init` applies it (`docker compose up --no-deps minio-init` after changing
 `S3_CORS_ORIGINS`).
 
+- **Write-once.** An upload URL is signed with `If-None-Match: *`, so the store refuses a second PUT
+  to the same key. The store must implement conditional writes (AWS S3 and RustFS do). A store that
+  ignores the header lets a user replace a file after it was confirmed for as long as the upload
+  link is valid (15 minutes); nothing else prevents that.
+- **Content check.** On confirm the server compares size and type with what was declared and checks
+  the first bytes against the declared type's signature; a mismatching object is deleted.
+- **Unfinished uploads.** A user may hold at most 50 unconfirmed upload tickets; `file.sweep` retires
+  the ones nobody finished (the row is kept, as `abandoned`).
+- **Large files.** Streams above 64 MiB that a worker writes (export ZIPs) are uploaded in parts, so
+  memory stays flat.
+- **Downloads.** Download links last 5 minutes. Images (not SVG), video and audio display inline;
+  every other type is forced to download.
+
+## Exports
+
+A project's finished clips are packed into one ZIP by the `export.build` job, streamed from and to
+the object store. The ZIP uses ZIP64 where a size or offset needs it. The limit is 20 GB per ZIP; a
+larger film is refused with a message telling the user to download the clips one by one.
+
 ## Accounts
 
 better-auth (email + password) is served at `/api/auth/*`. Sign-up is open; the email must be
 verified before signing in. In development the verification and password-reset links appear in
-the `pnpm dev` log (console transport); production sends them over SMTP. Auth endpoints are rate limited per client IP, with counters in the
+the `pnpm dev` log (console transport); production sends them over SMTP. Auth endpoints are rate limited per client IP (better-auth's defaults, for example 3 per 10 s for
+sign-in, sign-up and password change), with counters in the
 `rate_limit` table so all web replicas share them. Behind a reverse proxy, make sure it sets
 `X-Forwarded-For` to the single client address and configure `AUTH_TRUSTED_PROXIES` or `AUTH_IP_HEADER` (see above).
+
+## Rate limits
+
+Server actions, polls and file reads are limited per user in fixed 60-second windows. The counters
+are in the `action_rate_limit` table, shared by all replicas (`ratelimit.prune` cleans it up). Over the
+limit the request is refused with a retry-after time. If the counter cannot be read, the buckets that
+start paid work refuse the request and the others allow it (and log).
+
+| Bucket      | Per minute | Used for                                                            | If the counter fails |
+| ----------- | ---------- | ------------------------------------------------------------------- | -------------------- |
+| `mutate`    | 60         | Ordinary writes: rename, review decisions that start nothing        | allow                |
+| `upload`    | 30         | Upload tickets                                                      | refuse               |
+| `expensive` | 20         | Anything that enqueues model or generation work or spends credits   | refuse               |
+| `poll`      | 600        | Background polls                                                    | allow                |
+| `read`      | 240        | Pagination loads and one-off reads                                  | allow                |
+| `file`      | 1200       | `/api/files/[id]` (every stored picture on a screen is one request) | allow                |
+
+The limits are constants in `src/server/ratelimit/buckets.ts`. Auth endpoints have their own per-IP
+limit (see Accounts).
+
+## Security headers
+
+Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, a
+`Referrer-Policy`, a `Permissions-Policy`, a Content-Security-Policy and, in production builds,
+`Strict-Transport-Security`. The policy (`next.config.ts`) is static, with no nonces: it allows inline
+scripts and styles (`'unsafe-inline'`, which Next's bootstrap scripts and React `style` attributes
+need) and closes everything else (`default-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'`,
+`form-action 'self'`). Images, media and connections are allowed from `'self'` and from the S3 origin.
+That origin is fixed **at `next build` time** from `S3_PUBLIC_ENDPOINT` (else `S3_ENDPOINT`): build with
+`--build-arg S3_PUBLIC_ENDPOINT=https://s3.example.com`. If neither is set in a production build the
+policy falls back to any `https:` origin for images, media and connections, which works but is
+looser. Changing the S3 origin later means rebuilding the web image.
 
 ## Production image
 
@@ -194,8 +303,7 @@ The web build bakes the Content-Security-Policy in, so pass the S3 browser origi
 `docker build --build-arg S3_PUBLIC_ENDPOINT=https://s3.example.com -t blaxzy .` (see the environment table).
 
 Locally, sample video uses the `ffmpeg-static` package (a dev dependency), or
-`ffmpeg` on the PATH. Every worker registers the `generation.sweep` schedule (every 5 minutes);
-there is one schedule however many workers run, and `pnpm dev:sweep` runs one sweep by hand.
+`ffmpeg` on the PATH (`FFMPEG_PATH` overrides both).
 
 The worker drains in-flight jobs on SIGTERM for up to `WORKER_SHUTDOWN_TIMEOUT_SECONDS`; give the
 container a longer stop timeout (Docker's default is 10 s).

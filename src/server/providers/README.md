@@ -10,7 +10,14 @@ is the only module that knows which backend is active; everything else calls `ge
   view follows the object). Video params also carry `durationSeconds`
   (whole seconds, clamped to 1..15, default 5), `resolution` (`480p` draft, `1080p` final) and
   `sound` (default false).
-- `types.ts`: `GenerationProvider` (`price`, `create`, `getStatus`, `fetchResult`). A running
+- `types.ts`: `GenerationProvider`: `price(request)`, `create(request, { idempotencyKey, signal })`,
+  `getStatus(id, { signal })` and `fetchResult(id, { signal })`. `price` runs on every quote and
+  before the request's transaction opens, so it must be answerable locally (from the request and a
+  local price table, no network call, no side effect). `create` receives the generation id as
+  `idempotencyKey`: a backend whose API takes an idempotency key must send it, so a `create`
+  repeated after a crash returns the same provider job instead of a new, paid one (the platform
+  never runs two `create` calls for one generation at once; it holds a lease on the row). The
+  `signal` aborts the request (job expiry, worker shutdown). A running
   status may carry `retryAfterMs`. A `failed` status with `retryable: true` means "ask the same
   provider job again later"; a provider whose job is dead for good returns `retryable: false`.
   A final's request carries `draftProviderJobId` (the accepted draft's provider job).
@@ -28,7 +35,7 @@ is the only module that knows which backend is active; everything else calls `ge
   duration, resolution and sound; a final with `draftProviderJobId` takes the draft's digest as
   its seed, so it is the same clip in higher quality. Output is streamed from a temp dir that
   `dispose` removes. Prompt switches: `[[fail]]` fails for good; `[[flaky]]` reports one
-  retryable failure for `FLAKY_WINDOW_MS` after it is ready, then succeeds. Prices: look 4,
+  retryable failure for `FLAKY_WINDOW_MS` (1 s) after it is ready, then succeeds. Prices: look 4,
   sheet 6, video draft 20, final 60.
 - `ffmpeg.ts`: `resolveFfmpeg` (`FFMPEG_PATH`, else the `ffmpeg-static` package, else `ffmpeg` on
   the PATH; `FfmpegUnavailableError`, a non-retryable `ProviderError`, when none works),

@@ -5,6 +5,13 @@ All functions are server-only, validate input with Zod, take the acting `userId`
 (or throw the module's `*InputError` with a user-safe message) when the project is missing,
 archived or not the user's. Never leak existence.
 
+A job that exists because of a row is sent on the transaction that writes the row
+(`enqueue(job, payload, { tx })`, see `src/server/jobs/README.md`): the row and its job commit
+together or not at all. If the send fails the transaction rolls back and the request fails, so a
+service never leaves a pending row without its job and never records a failed row for a job that
+was not sent (the user sees an error, or "This step could not start. Try again in a moment." where
+a service maps it to its own error, and tries again).
+
 ## Stage flow
 
 `style → script → pre_production → production → done` (stored in `project.stage`).
@@ -43,10 +50,16 @@ type ScriptVersionView = {
 };
 
 startFromBrief(input: { projectId; userId; brief: string }): Promise<ScriptVersionView | null>
-// new version (source generated, status pending), enqueues script.write
+// new version (source generated, status pending), enqueues script.write (on the same transaction)
 startFromUpload(input: { projectId; userId; fileId: string }): Promise<ScriptVersionView | null>
-// file must be ready and owned; new version (source uploaded, pending), enqueues script.check
-// (the job extracts the text first)
+// file must be ready (not pending or abandoned) and owned; new version (source uploaded, pending),
+// enqueues script.check (the job extracts the text first)
+startFromIdea(input: { projectId; userId; idea: string }): Promise<ScriptVersionView | null>
+// new version (source enhanced, pending), enqueues script.enhance: the Enhancer rewrites the quick
+// idea as prose; review, acceptance, detection and sectioning then work as for an upload
+approveOutline(input: { projectId; userId; versionId; approvedAdditions?: number[] }): Promise<ScriptVersionView | null>
+// long pieces: the outline version in review is superseded and the next version (generated,
+// pending) is written sequence by sequence (script.write-segment) from it
 getScriptState(projectId, userId): Promise<{
   current: ScriptVersionView | null;                  // latest version
   accepted: ScriptVersionView | null;                 // the accepted one, if any
@@ -74,12 +87,17 @@ retryScriptVersion(input: { projectId; userId; versionId }): Promise<ScriptVersi
 ## `@/server/assets`
 
 ```ts
-applyDetection(input: { projectId; scriptVersionId; damiRunId; assets: DetectedAsset[] }): Promise<{
-  added: number; kept: number; removed: number;
+applyDetection(input: { projectId; scriptVersionId; damiRunId: string | null; mode: AssetDetectionMode;
+  output: AssetDetectorOutput; byTemp: ReadonlyMap<string, Asset> }): Promise<{
+  detectionId: string; added: number; kept: number; removed: number; diff: DetectionPlan["diff"];
 }>
-// the detector's diff by (kind, name; ids are real names, "Mara (2)" for a duplicate): new →
-// insert active; present → update details/lastScriptVersionId (and reactivate if removed); an
-// approved asset the detector drops is only flagged in a warning. Manual assets untouched.
+// byTemp: the run's temporary ids (char_1, loc_1 ...) from detectorView → stored assets. One
+// transaction under the project lock; the answer is recorded in the append-only asset_detection
+// table. The detector's diff by (kind, name; names never change, new names are made unique):
+// new → insert active; present → update details/lastScriptVersionId; an approved asset the
+// detector drops is only flagged in a warning. Manual assets and skipped priorities are kept as
+// the user left them. An asset the user removed (details.removedBy = "user") is never revived by
+// a detection: an entry that matches it is dropped. Legacy creature/costume/other rows untouched.
 listAssets(projectId, userId, opts?: { kind?: AssetKind; includeRemoved?: boolean; limit?; cursor? }):
   Promise<{ items: Asset[]; nextCursor: string | null } | null>
 countAssetsByKind(projectId, userId): Promise<Record<AssetKind, number> | null>
@@ -89,7 +107,9 @@ countAssetsByKind(projectId, userId): Promise<Record<AssetKind, number> | null>
 
 ```ts
 replaceBlocks(input: { projectId; scriptVersionId; blocks: SectionedBlock[]; damiRunIds: string[] }):
-  Promise<{ created: number; carried: number; superseded: number; reset: number }>
+  Promise<{ created: number; carried: number; superseded: number; reset: number; skipped?: "not_latest" }>
+// `skipped: "not_latest"`: the version is no longer the newest accepted one (checked under the
+// project lock), so nothing changed.
 // A current block whose scriptExcerpt (whitespace-normalised) equals a new block's keeps its
 // lineageId (new row, versionNumber + 1 only if prompt/assets differ, else the row is re-pointed by
 // inserting an identical next version), and so does an edited shot (a similar excerpt, word Dice
@@ -111,21 +131,25 @@ Sectioning state lives in `project.stageState.sectioning`
 
 | Job | Payload | Dedupe key | Handler does |
 |---|---|---|---|
+| `script.enhance` | `{ scriptVersionId }` | version id | runDami(enhancer) on the quick idea → content (the user's own text is kept if it fails) → `in_review` |
+| `script.write-segment` | `{ scriptVersionId, segmentIndex }` | `<version id>:<segmentIndex>` | long pieces: write one sequence of the approved outline, then queue the next; the last one stitches the script |
 | `script.write` | `{ scriptVersionId }` | version id | runDami(scriptWriter) → content, title/logline/notes → `in_review` |
 | `script.check` | `{ scriptVersionId }` | version id | extract text from the file → content; runDami(scriptChecker) → findings → `in_review` |
 | `script.revise` | `{ scriptVersionId }` | version id | runDami(scriptReviser) on the parent's content + its review → content, notes → `in_review` |
-| `script.detect-assets` | `{ scriptVersionId }` | none (handler skips a version that is no longer the accepted one) | runDami(assetDetector, knownAssets) → `applyDetection`; mark blocks stale; enqueue `script.section` |
-| `script.section` | `{ scriptVersionId }` | none (handler skips a version that is no longer the accepted one) | `sectionScript` → `replaceBlocks`; sectioning state done |
+| `script.detect-assets` | `{ scriptVersionId }` | version id (one paid detection per version at a time; the handler also skips a version that is no longer the accepted one) | runDami(assetDetector, knownAssets) → `applyDetection`; mark blocks stale; enqueue `script.section` |
+| `script.section` | `{ scriptVersionId, resection? }` | `<version id>:section`, or `<version id>:resection` when `resection` is set (a re-cut although blocks exist, after a correction round changed the detected assets); one cut per key at a time | `sectionScript` → `replaceBlocks`; sectioning state done. The handler also skips a version that is no longer the accepted one |
+| `asset.detect.fix` | `{ reviewId }` | review id | one correction round of the detected asset list ("Something wrong with this list?"): the Asset Detector in fix mode or a re-scan → `applyDetection`; may send `script.section` with `resection` |
 
 Every handler first loads the row and returns if the work is already done (idempotent), stores
 `damiRunId` on what it produced, and on a non-retryable failure (or the last attempt) records a
 user-readable `failure` and status `failed`. A handler for a version that is no longer the latest
-does nothing.
+does nothing. The queues of `script.detect-assets` and `script.section` predate their dedupe keys;
+`ensureQueue` upgrades them in place (`standard` to `exclusive`).
 
 ## Dami mode
 
-`DAMI_MODE=auto|live|sample` (default `auto`: sample when `ANTHROPIC_API_KEY` is unset).
-`getDamiMode(): "live" | "sample"` from `@/server/damis`. In sample mode `runDami` uses a sample
+`DAMI_MODE=auto|live|sample` (default `sample`; `auto` is sample when `ANTHROPIC_API_KEY` is unset).
+`getDamiMode(): "live" | "sample"` from `@/server/damis` (or `@/server/damis/light`). In sample mode `runDami` uses a sample
 client; rows in `dami_run` carry model `sample` and cost null.
 
 ## Text extraction

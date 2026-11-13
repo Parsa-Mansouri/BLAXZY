@@ -26,7 +26,8 @@ running one, never two running).
 1. Finished generation: skip (hooks are called again).
 2. Claim under a per-user advisory lock: a queued generation becomes `running` unless the user
    already has `GENERATION_MAX_PER_USER` running (running rows older than 2 h are ignored) or
-   older queued generations of the user wait for the free slots (first come, first served); then
+   older queued generations of the user (created within the last 6 h; an older one no longer holds
+   others back) wait for the free slots (first come, first served); then
    the job enqueues a follow-up of itself 10 to 20 s later and completes. Rescheduled, not failed;
    no attempt is used.
 3. The provider job is created once: references are read (ownership checked again), a lease on

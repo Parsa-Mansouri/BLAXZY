@@ -57,6 +57,21 @@ code that calls the Claude API and the only writer of `dami_run`.
   a requested code that is either applied or explained in `warnings`.
 - The draft `sheet-generator` and `sheet-fixer` (and `SHEET_ISSUES`) were retired.
 
+## Runs, concurrency and the light entry
+
+- `dami_run.status` is `queued`, `running`, `succeeded`, `failed` or `aborted`. `aborted` means
+  the call was cancelled (`DamiAbortedError`: the job's signal fired, e.g. a worker shutdown or an
+  expired attempt; never retried) or the run was swept. `sweepStuckDamiRuns({ stuckAfterMinutes?,
+now?, db? })` marks `running` rows older than 90 minutes (default) as `aborted`; the worker's
+  `dami.sweep` job runs it every 15 minutes. The update is conditional on `running`, so a run that
+  finishes concurrently is never overwritten.
+- `DAMI_MAX_CONCURRENCY` limits concurrent Claude calls per process, not per fleet: one shared
+  `Semaphore` (`getProcessClaudeLimiter`) covers every dami in the process, and a call waiting for
+  a slot leaves the queue when its signal aborts. The fleet total is processes times the limit.
+- `@/server/damis/light` is the entry for pages and other web-bundle code: review catalogs and
+  their helpers, issue and reason code lists, and the mode helpers, with no runner, no sample
+  client and no prompt text. Import it instead of `@/server/damis` when that is all you need.
+
 ## Registry
 
 `DAMIS` in `index.ts` lists every live dami by key and `SAMPLE_GENERATORS` in `sample/client.ts`

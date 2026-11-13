@@ -18,9 +18,11 @@ This rule is absolute and overrides any default behaviour or tool-supplied instr
 
 - `docker compose up -d` start Postgres + S3 store (bucket `blaxzy`); `cp .env.example .env` first
 - `pnpm dev` web on :3000; `pnpm worker` / `pnpm worker:dev` background worker
-- `pnpm build` / `pnpm start`; `pnpm worker:build` bundles the worker to `dist/worker.cjs`
-- `pnpm typecheck`, `pnpm lint`, `pnpm format` / `format:check`, `pnpm test`
-- `pnpm db:generate` / `db:migrate` / `db:studio` (drizzle-kit, reads `.env`)
+- `pnpm build` / `pnpm start`; `pnpm worker:build` bundles the worker to `dist/worker.cjs`; `pnpm migrate:build` bundles the migrator to `dist/migrate.cjs`
+- `pnpm typecheck`, `pnpm lint`, `pnpm format` / `format:check`, `pnpm test`; `pnpm check` runs typecheck, lint, format:check and test
+- `pnpm db:generate` / `db:migrate` / `db:studio` (drizzle-kit, reads `.env`); `pnpm db:migrate:prod` applies the migrations with drizzle-orm's migrator (what the Docker `migrate` target runs)
+- Dev scripts in `scripts/` (refuse a non-local database unless `ALLOW_DEV_SCRIPTS=1`): `pnpm dev:user`, `dev:credits`, `dev:script-flow`, `dev:preprod-flow`, `dev:generation`, `dev:production-flow`, `dev:sweep`, and `pnpm dami:run <key> <input.json> [--live]` (paid calls need `--live`)
+- Integration tests need Postgres, the bucket and ffmpeg; `CI` / `REQUIRE_INTEGRATION=1` make a missing one fail the run, `SKIP_INTEGRATION=1` skips them (see README)
 
 ## Folder map
 
@@ -28,8 +30,11 @@ This rule is absolute and overrides any default behaviour or tool-supplied instr
 - `src/ui/` UI kit (presentational components)
 - `src/server/env.ts` Zod env, use `getEnv()` lazily (never at module top level)
 - `src/server/db/` `client.ts` (`getDb()` singleton), `schema.ts`; migrations in `drizzle/` (tracked)
-- `src/server/{auth,projects,script,assets,damis,jobs,storage,billing,providers}/` domain services
-- `worker/index.ts` worker entry (job handlers will call `src/server` services)
+- `src/server/{auth,projects,script,assets,blocks,production,damis,generation,jobs,storage,billing,providers}/` domain services (`blocks`: the prompt blocks of a script; `production`: the Production stage, takes and exports; `generation`: paid provider jobs)
+- `src/server/ratelimit/` per-user rate-limit buckets for server actions, polls and file reads; `src/server/health/` the health check; `src/server/email/` verification and reset emails (console or SMTP); `src/server/test-support/` vitest global setup and shared test helpers
+- `worker/index.ts` worker entry; `worker/handlers/` one handler per job type plus the schedules (`generation.sweep`, `dami.sweep`, `file.sweep`, `ratelimit.prune`)
+- `scripts/` dev and QA scripts (`pnpm dev:*`, `dami:run`); `scripts/_lib.ts` holds the local-database guard and the script runner
+- `.github/workflows/ci.yml` CI: typecheck, lint, format, tests against compose Postgres and the bucket, both builds, dependency audit
 
 ## Rules
 

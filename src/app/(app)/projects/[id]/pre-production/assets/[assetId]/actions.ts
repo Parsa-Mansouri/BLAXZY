@@ -23,20 +23,12 @@ import {
 } from "@/server/assets";
 import type { FixSelection } from "@/server/damis";
 import { confirmUpload } from "@/server/storage";
-import {
-  isUuid,
-  logActionError,
-  pollAction,
-  pollNull,
-  userAction,
-  type ActionResult,
-} from "../../../../../_lib/action";
+import { isUuid, logActionError, userAction, type ActionResult } from "../../../../../_lib/action";
 import {
   issueUploadTicket,
   uploadIncomplete,
   type UploadTicketData,
 } from "../../../../../_lib/upload-ticket";
-import { versionsKey } from "./_lib/asset-view";
 
 const MISSING = "This asset is no longer available. Go back to its category and reload.";
 const MISSING_RESULT = { ok: false, error: MISSING } as const;
@@ -90,17 +82,6 @@ async function afterStage(
 ): Promise<ActionResult<MoveOn | null>> {
   if (assetId && MOVE_ON_STAGES.includes(stage)) return movedOn(projectId, userId, assetId);
   return done(projectId);
-}
-
-/**
- * A fingerprint of the asset's state, polled while something is being produced. Null when the
- * asset is gone, and when signed out, rate limited or failing (a background poll never redirects).
- */
-export async function pollAssetAction(assetId: string): Promise<string | null> {
-  return pollAction("asset.poll", pollNull, async (user) => {
-    const detail = await getAssetDetail(assetId, user.id);
-    return detail ? versionsKey(detail) : null;
-  });
 }
 
 /** A reference photo of a design: an uploaded image, the role picked for it, what to keep. */

@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { Button, FeatureBlock, PageHeader, StatusLine, stagger } from "@/ui";
 import { useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
 import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
-import { finishProductionAction, loadBoardAction, refreshBoardAction } from "../actions";
+import { refreshBoard } from "@/app/(app)/_lib/poll-client";
+import { finishProductionAction, loadBoardAction } from "../actions";
 import type { BoardPage } from "../_lib/clip-data";
 import { mergeBoard } from "../_lib/merge-board";
 import {
@@ -65,9 +66,9 @@ export function ClipsBoard({
   }, [announce, line]);
 
   usePolling(
-    async (isActive) => {
+    async (isActive, signal) => {
       if (loadingRef.current) return;
-      const result = await refreshBoardAction(projectId, tiles.length);
+      const result = await refreshBoard(projectId, tiles.length, { signal });
       if (!isActive() || !result.ok || loadingRef.current) return;
       setBoard(result.data);
     },

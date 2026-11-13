@@ -11,7 +11,8 @@ import { FillPage } from "../../_components/fill-page";
 import { ReviewLayout } from "../../_components/review-layout";
 import { ReviewListContext } from "../../_components/review-list-context";
 import { ShotList, type ShotListItem } from "../../_components/shot-list";
-import { loadBlocksAction, refreshBlocksAction, type BlocksSnapshot } from "../actions";
+import { refreshBlocks } from "@/app/(app)/_lib/poll-client";
+import { loadBlocksAction, type BlocksSnapshot } from "../actions";
 import { mergeBlocksSnapshot } from "../_lib/merge-snapshot";
 import {
   BLOCK_STATE_TONES,
@@ -64,9 +65,9 @@ export function BlockReviewFrame({
   const { items, nextCursor, counts } = snapshot;
 
   const refresh = useCallback(
-    async (isActive: () => boolean = () => true) => {
+    async (isActive: () => boolean = () => true, signal?: AbortSignal) => {
       if (busyRef.current) return;
-      const result = await refreshBlocksAction(projectId, items.length);
+      const result = await refreshBlocks(projectId, items.length, { signal });
       if (!isActive() || busyRef.current || !result.ok) return;
       setSnapshot((current) => ({
         ...result.data,

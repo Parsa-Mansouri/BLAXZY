@@ -2,16 +2,16 @@
 
 import {
   getClipDownloadUrl,
-  getExport,
   listFinishedClips,
   MAX_CLIP_PAGE_SIZE,
   requestExport,
   type ExportView,
   type FinishedClip,
 } from "@/server/production";
-import { pollAction, pollFailure, userAction, type ActionResult } from "../../../../_lib/action";
+import { userAction, type ActionResult } from "../../../../_lib/action";
+import { FILM_MISSING } from "./_lib/read-export";
 
-const MISSING = "This film is no longer available. Reload the page.";
+const MISSING = FILM_MISSING;
 const PAGE = 24;
 
 export type { ExportView, FinishedClip };
@@ -42,13 +42,6 @@ export async function clipDownloadAction(lineageId: string): Promise<ActionResul
 export async function requestExportAction(projectId: string): Promise<ActionResult<ExportView>> {
   return userAction("expensive", "finished.requestExport", async (user) => {
     const view = await requestExport({ projectId, userId: user.id });
-    return view ? { ok: true, data: view } : { ok: false, error: MISSING };
-  });
-}
-
-export async function pollExportAction(exportId: string): Promise<ActionResult<ExportView>> {
-  return pollAction("finished.pollExport", pollFailure, async (user) => {
-    const view = await getExport(exportId, user.id);
     return view ? { ok: true, data: view } : { ok: false, error: MISSING };
   });
 }

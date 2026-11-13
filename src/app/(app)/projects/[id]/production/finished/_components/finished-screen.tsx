@@ -19,12 +19,12 @@ import { DrawnTick } from "../../_components/feedback";
 import { FillPage } from "../../_components/fill-page";
 import { POSTER_SHAPES, PosterTile } from "../../_components/poster-tile";
 import { phaseHref } from "../../../_lib/production-routes";
+import { pollExport } from "@/app/(app)/_lib/poll-client";
 import { usePolling } from "@/app/(app)/_lib/use-polling";
 import { mergeLoadedPages, useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
 import {
   clipDownloadAction,
   loadClipsAction,
-  pollExportAction,
   requestExportAction,
   type ExportView,
   type FinishedClip,
@@ -85,9 +85,9 @@ function useExport(projectId: string) {
 
   const workingId = state.phase === "working" ? state.id : null;
   usePolling(
-    async (isActive) => {
+    async (isActive, signal) => {
       if (!workingId) return;
-      const result = await pollExportAction(workingId);
+      const result = await pollExport(workingId, { signal });
       if (!isActive()) return;
       // One bad answer (a dropped request, a restart) is not the end of the export.
       const run = afterExportPoll(pollFailures.current, result.ok);

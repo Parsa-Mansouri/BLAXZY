@@ -1,22 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import {
-  completeProduction,
-  getBlockDetail,
-  retryTake,
-  submitTakeReview,
-} from "@/server/production";
-import {
-  clampCount,
-  isUuid,
-  logActionError,
-  pollAction,
-  pollFailure,
-  pollNull,
-  userAction,
-  type ActionResult,
-} from "../../../../_lib/action";
+import { completeProduction, retryTake, submitTakeReview } from "@/server/production";
+import { isUuid, logActionError, userAction, type ActionResult } from "../../../../_lib/action";
 import {
   readBoard,
   findNextToReview,
@@ -24,7 +10,6 @@ import {
   type BoardPage,
   type ShotRef,
 } from "./_lib/clip-data";
-import { detailKey } from "./_lib/clip-view";
 
 const MISSING = "This shot is no longer available. Go back to the clips and reload.";
 const MISSING_RESULT = { ok: false, error: MISSING } as const;
@@ -52,18 +37,6 @@ export async function loadBoardAction(
   });
 }
 
-/** The first `count` tiles again with the status line's counts, for polling (never redirects). */
-export async function refreshBoardAction(
-  projectId: string,
-  count: number,
-): Promise<ActionResult<BoardPage>> {
-  return pollAction("clips.refreshBoard", pollFailure, async (user) => {
-    const want = clampCount(count, BOARD_PAGE_SIZE, 500);
-    const page = await readBoard(projectId, user.id, null, want);
-    return page ? { ok: true, data: page } : PROJECT_MISSING_RESULT;
-  });
-}
-
 /** Moves the project to done once every shot is final. */
 export async function finishProductionAction(projectId: string): Promise<ActionResult> {
   return userAction("mutate", "clips.finishProduction", async (user) => {
@@ -72,17 +45,6 @@ export async function finishProductionAction(projectId: string): Promise<ActionR
     if (!finished) return PROJECT_MISSING_RESULT;
     refreshProject(projectId);
     return { ok: true, data: null };
-  });
-}
-
-/**
- * A fingerprint of the shot's state, polled by the clip page. Null when the shot is gone, and
- * when signed out, rate limited or failing (a background poll never redirects).
- */
-export async function pollClipAction(lineageId: string): Promise<string | null> {
-  return pollAction("clips.poll", pollNull, async (user) => {
-    const detail = await getBlockDetail(lineageId, user.id);
-    return detail ? detailKey(detail) : null;
   });
 }
 

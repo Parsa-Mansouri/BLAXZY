@@ -18,6 +18,7 @@ import {
   useToast,
 } from "@/ui";
 import { ASSET_KIND_LABELS, categoryHref, type AssetKindKey } from "../../../_lib/asset-kinds";
+import { pollDetectionPanel, refreshCards } from "@/app/(app)/_lib/poll-client";
 import { usePolling } from "@/app/(app)/_lib/use-polling";
 import { mergeLoadedPages, useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
 import { isWorking } from "../../_components/asset-stage";
@@ -33,13 +34,7 @@ import {
   type ReviewDraft,
   type WarningFix,
 } from "../../_lib/detection-review";
-import {
-  detectionPanelAction,
-  includeAssetAction,
-  loadCardsAction,
-  refreshCardsAction,
-  submitDetectionReviewAction,
-} from "../actions";
+import { includeAssetAction, loadCardsAction, submitDetectionReviewAction } from "../actions";
 import { AddAssetSheet } from "./add-asset-sheet";
 import { AssetCard } from "./asset-card";
 import { RemoveAssetAlert, RenameAssetSheet } from "./asset-edits";
@@ -116,9 +111,9 @@ export function CategoryPanel({
   const loadingRef = useRef(false);
 
   const working = items.some((item) => isWorking(item.stage));
-  usePolling(async (isActive) => {
+  usePolling(async (isActive, signal) => {
     if (loadingRef.current) return;
-    const result = await refreshCardsAction(projectId, kind, items.length);
+    const result = await refreshCards(projectId, kind, items.length, { signal });
     if (!isActive() || !result.ok || loadingRef.current) return;
     setList({
       items: result.data.items,
@@ -163,8 +158,8 @@ export function CategoryPanel({
   const toast = useToast();
 
   const correcting = panel?.busy ?? false;
-  usePolling(async (isActive) => {
-    const result = await detectionPanelAction(projectId);
+  usePolling(async (isActive, signal) => {
+    const result = await pollDetectionPanel(projectId, { signal });
     if (!isActive() || !result.ok) return;
     setPanel(result.data);
     if (!result.data.busy) router.refresh();

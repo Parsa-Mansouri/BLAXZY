@@ -7,7 +7,8 @@ import { Button, StatusLine } from "@/ui";
 import type { BackgroundStatus } from "../../_lib/background-status";
 import { productionHref } from "../../_lib/production-routes";
 import { usePolling } from "@/app/(app)/_lib/use-polling";
-import { backgroundStatusAction, retrySectioningAction } from "../actions";
+import { pollBackgroundStatus } from "@/app/(app)/_lib/poll-client";
+import { retrySectioningAction } from "../actions";
 
 /** Live status of what runs after acceptance; polls while it runs. */
 export function useBackgroundStatus(
@@ -23,8 +24,8 @@ export function useBackgroundStatus(
     setStatus(initial);
   }
   const router = useRouter();
-  usePolling(async (isActive) => {
-    const next = await backgroundStatusAction(projectId, acceptedId);
+  usePolling(async (isActive, signal) => {
+    const next = await pollBackgroundStatus(projectId, acceptedId, { signal });
     if (!isActive() || !next) return;
     setStatus(next);
     // Cutting the shots can reopen a finished film: show the stage as it is now.

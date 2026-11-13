@@ -6,7 +6,8 @@ import { ChevronRight } from "lucide-react";
 import { Button, ProgressBar, Skeleton, StatusLine, formatDurationLong } from "@/ui";
 import { usePolling } from "@/app/(app)/_lib/use-polling";
 import { mergeLoadedPages, useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
-import { loadShotsAction, pollPreProductionAction } from "../actions";
+import { pollPreProduction } from "@/app/(app)/_lib/poll-client";
+import { loadShotsAction } from "../actions";
 import type { ShotRow } from "./shot-types";
 
 /** Refreshes the page when the background run changes state; polls only while it runs. */
@@ -20,8 +21,8 @@ export function PreProductionPoller({
   blockCount: number;
 }) {
   const router = useRouter();
-  usePolling(async (isActive) => {
-    const next = await pollPreProductionAction(projectId);
+  usePolling(async (isActive, signal) => {
+    const next = await pollPreProduction(projectId, { signal });
     if (isActive() && next && (next.state !== state || next.blockCount !== blockCount))
       router.refresh();
   }, state === "running");

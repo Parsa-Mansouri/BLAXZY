@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button, PageHeader, ProgressBar, StatusDot } from "@/ui";
 import { usePolling } from "@/app/(app)/_lib/use-polling";
 import { splitScenes } from "../_lib/scenes";
-import { pollScriptAction, retryVersionAction } from "../actions";
+import { pollScript } from "@/app/(app)/_lib/poll-client";
+import { retryVersionAction } from "../actions";
 import { ReadingSheet } from "./screenplay-sheet";
 import type { VersionView } from "./shared";
 
@@ -46,8 +47,8 @@ const FAILED_HEADING: Record<Source, string> = {
 /** Polls until the latest version leaves `pending`, then refreshes the page. */
 function useRefreshWhenDone(projectId: string, versionId: string) {
   const router = useRouter();
-  usePolling(async (isActive) => {
-    const poll = await pollScriptAction(projectId);
+  usePolling(async (isActive, signal) => {
+    const poll = await pollScript(projectId, { signal });
     if (!isActive()) return;
     // No answer (signed out, rate limited, a failed poll) is not a change.
     if (!poll) return;

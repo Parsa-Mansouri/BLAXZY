@@ -4,72 +4,29 @@ import { revalidatePath } from "next/cache";
 import {
   addAsset,
   getAssetDetail,
-  getDetectionPanel,
   includeSkippedAsset,
-  listAssetCards,
   mergeAssets,
-  MAX_CARD_PAGE_SIZE,
   removeAsset,
   submitDetectionReview,
   submitSheetReview,
   updateAsset,
 } from "@/server/assets";
 import type { FixSelection } from "@/server/damis";
-import { toClientOptions } from "@/lib/review-option";
+import { isUuid, userAction, type ActionResult } from "../../../../_lib/action";
 import {
-  clampCount,
-  isUuid,
-  pollAction,
-  pollFailure,
-  userAction,
-  type ActionResult,
-} from "../../../../_lib/action";
-import { ASSET_KIND_LABELS, type AssetKindKey } from "../../_lib/asset-kinds";
-import type { ClientDetectionPanel } from "./_components/category-panel";
-import { toGalleryItem, type GalleryItem } from "../_components/gallery-item";
-import { countKindStages } from "../_lib/load-categories";
-import type { StageCounts } from "../_lib/status-words";
+  asKind,
+  CARD_PAGE,
+  CARDS_MISSING_RESULT,
+  NO_SUCH_KIND,
+  readCards,
+  type CardsPage,
+} from "./_lib/read-cards";
 
-export interface CardsPage {
-  items: GalleryItem[];
-  nextCursor: string | null;
-  /** How many assets of the kind are at each stage (all of them, not only this page). */
-  counts: StageCounts;
-}
+export type { CardsPage };
 
-const MISSING = "This project no longer exists. It may have been archived.";
-const MISSING_RESULT = { ok: false, error: MISSING } as const;
+const MISSING_RESULT = CARDS_MISSING_RESULT;
 const GONE = { ok: false, error: "This asset no longer exists." } as const;
-const NO_SUCH_KIND = { ok: false, error: "This kind of asset does not exist." } as const;
-const PAGE = 24;
-
-function asKind(value: string): AssetKindKey | null {
-  return ASSET_KIND_LABELS.find((k) => k.kind === value)?.kind ?? null;
-}
-
-async function readCards(
-  projectId: string,
-  userId: string,
-  kind: AssetKindKey,
-  cursor: string | null,
-  want: number,
-): Promise<CardsPage | null> {
-  const counts = await countKindStages(projectId, userId, kind);
-  if (!counts) return null;
-  const items: GalleryItem[] = [];
-  let next = cursor;
-  do {
-    const page = await listAssetCards(projectId, userId, {
-      kind,
-      cursor: next,
-      limit: Math.min(want - items.length, MAX_CARD_PAGE_SIZE),
-    });
-    if (!page) return null;
-    items.push(...page.items.map(toGalleryItem));
-    next = page.nextCursor;
-  } while (next && items.length < want);
-  return { items, nextCursor: next, counts };
-}
+const PAGE = CARD_PAGE;
 
 /** The next page of a category. */
 export async function loadCardsAction(
@@ -81,20 +38,6 @@ export async function loadCardsAction(
     const key = asKind(kind);
     if (!key) return NO_SUCH_KIND;
     const page = await readCards(projectId, user.id, key, cursor, PAGE);
-    return page ? { ok: true, data: page } : MISSING_RESULT;
-  });
-}
-
-/** The first `count` assets again, for polling (never redirects; see `pollAction`). */
-export async function refreshCardsAction(
-  projectId: string,
-  kind: string,
-  count: number,
-): Promise<ActionResult<CardsPage>> {
-  return pollAction("category.refreshCards", pollFailure, async (user) => {
-    const key = asKind(kind);
-    if (!key) return NO_SUCH_KIND;
-    const page = await readCards(projectId, user.id, key, null, clampCount(count, PAGE, 500));
     return page ? { ok: true, data: page } : MISSING_RESULT;
   });
 }
@@ -156,21 +99,6 @@ export async function mergeAssetsAction(
     if (!kept) return gone;
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");
     return { ok: true, data: null };
-  });
-}
-
-/**
- * What the category screens show about the detected list ("Something wrong with this list?"). The
- * options are projected to the client-safe shape: the fix instructions sent to the model stay on
- * the server.
- */
-export async function detectionPanelAction(
-  projectId: string,
-): Promise<ActionResult<ClientDetectionPanel>> {
-  return userAction("read", "category.detectionPanel", async (user) => {
-    const panel = await getDetectionPanel(projectId, user.id);
-    if (!panel) return MISSING_RESULT;
-    return { ok: true, data: { ...panel, options: toClientOptions(panel.options) } };
   });
 }
 

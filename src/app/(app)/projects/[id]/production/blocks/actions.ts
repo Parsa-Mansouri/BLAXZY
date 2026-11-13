@@ -5,41 +5,20 @@ import { listAssetCards } from "@/server/assets";
 import {
   approveAllBlocks,
   getBlockDetail,
-  getProductionOverview,
-  listProductionBlocks,
-  MAX_BLOCK_PAGE_SIZE,
   PriceChangedError,
   quoteProduction,
   retryPreparation,
   setBlockAssets,
   startDrafts,
   submitBlockReview,
-  type BlockProductionStage,
-  type ProductionBlock,
-  type ProductionPhase,
 } from "@/server/production";
-import {
-  clampCount,
-  isUuid,
-  pollAction,
-  pollFailure,
-  pollNull,
-  userAction,
-  type ActionResult,
-} from "../../../../_lib/action";
+import { clampCount, isUuid, userAction, type ActionResult } from "../../../../_lib/action";
 import { ASSET_KIND_LABELS } from "../../_lib/asset-kinds";
 import { blockHref } from "../../_lib/production-routes";
-import { blockKey } from "./_lib/block-key";
+import { readSnapshot, SHOTS_MISSING, SHOT_PAGE, type BlocksSnapshot } from "./_lib/read-snapshot";
 import { nextToReviewHref } from "./_lib/navigation";
 
-export interface BlocksSnapshot {
-  items: ProductionBlock[];
-  nextCursor: string | null;
-  counts: Record<BlockProductionStage, number>;
-  phase: ProductionPhase;
-  projectStage: "production" | "done";
-  canStartDrafts: boolean;
-}
+export type { BlocksSnapshot };
 
 export interface PickerAsset {
   id: string;
@@ -55,54 +34,14 @@ export interface Quote {
   balance: number;
 }
 
-const MISSING = "This shot is no longer available. Go back to the shots and reload.";
+const MISSING = SHOTS_MISSING;
 const MISSING_RESULT = { ok: false, error: MISSING } as const;
 const PROJECT_GONE = { ok: false, error: "This project is no longer available." } as const;
-const PAGE = 50;
+const PAGE = SHOT_PAGE;
 
 /** Starting the drafts shows in Production's screens; the sidebar's balance refreshes itself. */
 function refreshProduction(projectId: string) {
   revalidatePath(`/projects/${projectId}/production`, "layout");
-}
-
-async function readSnapshot(
-  projectId: string,
-  userId: string,
-  cursor: string | null,
-  want: number,
-): Promise<BlocksSnapshot | null> {
-  const overview = await getProductionOverview(projectId, userId);
-  if (!overview) return null;
-  const items: ProductionBlock[] = [];
-  let next = cursor;
-  do {
-    const page = await listProductionBlocks(projectId, userId, {
-      cursor: next,
-      limit: Math.min(want - items.length, MAX_BLOCK_PAGE_SIZE),
-    });
-    if (!page) return null;
-    items.push(...page.items);
-    next = page.nextCursor;
-  } while (next && items.length < want);
-  return {
-    items,
-    nextCursor: next,
-    counts: overview.counts,
-    phase: overview.phase,
-    projectStage: overview.projectStage,
-    canStartDrafts: overview.canStartDrafts,
-  };
-}
-
-/** The first `count` shots again with the counts, for polling (never redirects). */
-export async function refreshBlocksAction(
-  projectId: string,
-  count: number,
-): Promise<ActionResult<BlocksSnapshot>> {
-  return pollAction("blocks.refresh", pollFailure, async (user) => {
-    const snapshot = await readSnapshot(projectId, user.id, null, clampCount(count, PAGE, 500));
-    return snapshot ? { ok: true, data: snapshot } : MISSING_RESULT;
-  });
 }
 
 /** The next page of shots. */
@@ -162,17 +101,6 @@ export async function startDraftsAction(
     }
     refreshProduction(projectId);
     return { ok: true, data: null };
-  });
-}
-
-/**
- * A fingerprint of a shot's state, polled while it is being prepared. Null when the shot is gone,
- * and when signed out, rate limited or failing (a background poll never redirects).
- */
-export async function pollBlockAction(lineageId: string): Promise<string | null> {
-  return pollAction("blocks.poll", pollNull, async (user) => {
-    const detail = await getBlockDetail(lineageId, user.id);
-    return detail ? blockKey(detail) : null;
   });
 }
 

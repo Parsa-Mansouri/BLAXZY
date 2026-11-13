@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** Poll gap while something is being made. */
 export const FAST_POLL_MS = 2000;
@@ -45,6 +45,26 @@ export function shouldWakePoll({
 }
 
 /**
+ * The abort handle of the poll in flight: `begin()` starts a poll's signal (and aborts a previous
+ * one that is somehow still running), `abort()` aborts the current one. Pure, so it is tested
+ * without React.
+ */
+export function createAbortSlot() {
+  let controller: AbortController | null = null;
+  return {
+    begin(): AbortSignal {
+      controller?.abort();
+      controller = new AbortController();
+      return controller.signal;
+    },
+    abort() {
+      controller?.abort();
+      controller = null;
+    },
+  };
+}
+
+/**
  * Calls `poll` every `intervalMs` while `enabled`, one call at a time (also across a change of
  * interval). Pauses while the tab is hidden and polls again when it becomes visible or focused,
  * at most once per `MIN_WAKE_GAP_MS`. A poll that throws backs the next one off exponentially
@@ -54,9 +74,13 @@ export function shouldWakePoll({
  * `poll` receives `isActive`, which turns false once the poller is disabled or its component has
  * unmounted. A poll that was in flight when the user navigated away must check it before calling
  * `router.refresh()`: refreshing the page that is being navigated to races its navigation.
+ *
+ * It also receives an `AbortSignal`, aborted when the component unmounts or `enabled` turns
+ * false (not on a change of interval: that poll is let finish). Pass it to the poll client so the
+ * request is cancelled; a cancelled poll answers the quiet value.
  */
 export function usePolling(
-  poll: (isActive: () => boolean) => Promise<void>,
+  poll: (isActive: () => boolean, signal: AbortSignal) => Promise<void>,
   enabled: boolean,
   intervalMs = FAST_POLL_MS,
   immediate = false,
@@ -67,19 +91,23 @@ export function usePolling(
   const lastStartedAt = useRef<number | null>(null);
   const mounted = useRef(true);
   const enabledRef = useRef(enabled);
+  const [slot] = useState(createAbortSlot);
 
   useEffect(() => {
     latest.current = poll;
   });
   useEffect(() => {
     enabledRef.current = enabled;
-  }, [enabled]);
+    // Switched off: the poll in flight has nothing left to say.
+    if (!enabled) slot.abort();
+  }, [enabled, slot]);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      slot.abort();
     };
-  }, []);
+  }, [slot]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -103,7 +131,7 @@ export function usePolling(
       inFlight.current = true;
       lastStartedAt.current = Date.now();
       try {
-        await latest.current(isActive);
+        await latest.current(isActive, slot.begin());
         failures.current = 0;
       } catch {
         failures.current += 1;
@@ -136,5 +164,5 @@ export function usePolling(
       document.removeEventListener("visibilitychange", wake);
       window.removeEventListener("focus", wake);
     };
-  }, [enabled, intervalMs, immediate]);
+  }, [enabled, intervalMs, immediate, slot]);
 }

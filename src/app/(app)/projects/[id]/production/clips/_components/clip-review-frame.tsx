@@ -9,7 +9,8 @@ import { FillPage } from "../../_components/fill-page";
 import { ReviewLayout } from "../../_components/review-layout";
 import { ReviewListContext } from "../../_components/review-list-context";
 import { ShotList, type ShotListItem } from "../../_components/shot-list";
-import { loadBoardAction, refreshBoardAction } from "../actions";
+import { refreshBoard } from "@/app/(app)/_lib/poll-client";
+import { loadBoardAction } from "../actions";
 import type { BoardPage } from "../_lib/clip-data";
 import { mergeBoard } from "../_lib/merge-board";
 import {
@@ -67,9 +68,9 @@ export function ClipReviewFrame({
   const { tiles, nextCursor, summary } = board;
 
   const refresh = useCallback(
-    async (isActive: () => boolean = () => true) => {
+    async (isActive: () => boolean = () => true, signal?: AbortSignal) => {
       if (loadingRef.current) return;
-      const result = await refreshBoardAction(projectId, tiles.length);
+      const result = await refreshBoard(projectId, tiles.length, { signal });
       if (!isActive() || !result.ok || loadingRef.current) return;
       setBoard((current) => ({
         ...result.data,

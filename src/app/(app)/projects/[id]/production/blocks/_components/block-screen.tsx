@@ -1,5 +1,6 @@
 "use client";
 
+import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
 import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -19,14 +20,10 @@ import {
 import { fileSrc } from "@/lib/file-src";
 import { ChangeRequest, type IssueChoice } from "../../_components/change-request";
 import { useRefreshReviewList } from "../../_components/review-list-context";
+import { pollBlock } from "@/app/(app)/_lib/poll-client";
 import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import { blocksHref } from "../../../_lib/production-routes";
-import {
-  pollBlockAction,
-  retryPreparationAction,
-  reviewBlockAction,
-  setAssetsAction,
-} from "../actions";
+import { retryPreparationAction, reviewBlockAction, setAssetsAction } from "../actions";
 import { focusIsFree, markArrival, takeArrival } from "../_lib/arrival";
 import { blockKey } from "../_lib/block-key";
 import { BLOCK_STATE_TONES, blockStateLabel, scriptChangeNotice } from "../_lib/block-state";
@@ -50,6 +47,7 @@ function useBlockSync(lineageId: string, block: BlockView) {
   const key = blockKey(block);
   const keyRef = useRef(key);
   const alive = useRef(true);
+  const signalOf = useAbortOnUnmount();
   // One set for the component's life, so the unmount cleanup clears the timers set last.
   const timers = useRef(new Set<number>());
   useEffect(() => {
@@ -66,10 +64,10 @@ function useBlockSync(lineageId: string, block: BlockView) {
   }, []);
 
   const check = useCallback(
-    async (isActive: () => boolean) => {
-      // Never after the page was left: the action would be posted from another page.
+    async (isActive: () => boolean, signal: AbortSignal) => {
+      // Never after the page was left: the request would be sent from another page.
       if (!isActive() || !alive.current) return;
-      const next = await pollBlockAction(lineageId);
+      const next = await pollBlock(lineageId, { signal });
       // null: signed out, rate limited or the poll failed. Not a change, so nothing to refresh.
       if (isActive() && alive.current && next !== null && next !== keyRef.current) router.refresh();
     },
@@ -88,11 +86,11 @@ function useBlockSync(lineageId: string, block: BlockView) {
     for (const ms of RECHECK_MS) {
       const timer = window.setTimeout(() => {
         pending.delete(timer);
-        void check(() => alive.current).catch(() => {});
+        void check(() => alive.current, signalOf()).catch(() => {});
       }, ms);
       pending.add(timer);
     }
-  }, [check, router]);
+  }, [check, router, signalOf]);
 }
 
 const ANNOUNCEMENTS: Partial<Record<BlockView["stage"], string>> = {

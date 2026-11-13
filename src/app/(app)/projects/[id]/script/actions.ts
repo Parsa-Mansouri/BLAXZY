@@ -5,7 +5,6 @@ import { retrySectioning } from "@/server/blocks";
 import { getProjectForUser } from "@/server/projects";
 import {
   editAcceptedScript,
-  getScriptState,
   getScriptVersion,
   approveOutline,
   retryScriptVersion,
@@ -16,13 +15,12 @@ import {
   type ScriptVersionView,
 } from "@/server/script";
 import { confirmUpload } from "@/server/storage";
-import { isUuid, pollAction, pollNull, userAction, type ActionResult } from "../../../_lib/action";
+import { isUuid, userAction, type ActionResult } from "../../../_lib/action";
 import {
   issueUploadTicket,
   uploadIncomplete,
   type UploadTicketData,
 } from "../../../_lib/upload-ticket";
-import { loadBackgroundStatus, type BackgroundStatus } from "../_lib/background-status";
 
 const MISSING = "This project no longer exists. It may have been archived.";
 const MISSING_RESULT = { ok: false, error: MISSING } as const;
@@ -118,24 +116,6 @@ export async function finishScriptUploadAction(
   );
 }
 
-export interface ScriptPoll {
-  versionId: string | null;
-  status: ScriptVersionView["status"] | null;
-}
-
-/**
- * The latest version and its status, for the waiting screen. Null when the project is gone, and
- * when signed out, rate limited or failing (a background poll never redirects).
- */
-export async function pollScriptAction(projectId: string): Promise<ScriptPoll | null> {
-  return pollAction("script.poll", pollNull, async (user) => {
-    if (!isUuid(projectId)) return null;
-    const state = await getScriptState(projectId, user.id);
-    if (!state) return null;
-    return { versionId: state.current?.id ?? null, status: state.current?.status ?? null };
-  });
-}
-
 /** One version of the project's script, read-only. */
 export async function loadVersionAction(
   projectId: string,
@@ -206,22 +186,6 @@ export async function editAcceptedAction(
     if (!version) return MISSING_RESULT;
     refreshProject(projectId);
     return { ok: true, data: null };
-  });
-}
-
-/**
- * Where detection and sectioning stand for the accepted script. Null when the project is gone,
- * and when signed out, rate limited or failing (a background poll never redirects).
- */
-export async function backgroundStatusAction(
-  projectId: string,
-  acceptedVersionId: string | null,
-): Promise<BackgroundStatus | null> {
-  return pollAction("script.backgroundStatus", pollNull, async (user) => {
-    // A malformed id would reach Postgres as a failed uuid cast.
-    if (!isUuid(projectId)) return null;
-    if (acceptedVersionId !== null && !isUuid(acceptedVersionId)) return null;
-    return loadBackgroundStatus(projectId, user.id, acceptedVersionId);
   });
 }
 

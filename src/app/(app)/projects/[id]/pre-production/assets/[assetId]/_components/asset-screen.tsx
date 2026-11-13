@@ -1,8 +1,10 @@
 "use client";
 
+import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ToolbarBack } from "@/app/(app)/projects/[id]/_components/project-chrome";
+import { pollAsset } from "@/app/(app)/_lib/poll-client";
 import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import type { AssetStage } from "@/server/assets";
 import { stageHref } from "@/lib/stages";
@@ -21,7 +23,7 @@ import type { DesignerInfo } from "../_lib/designer-view";
 import { packWorking, sheetRejectedInARow, type SheetCatalogInfo } from "../_lib/sheet-review";
 import type { AssetIntent } from "../_lib/intent";
 import { FILL_PAGE } from "../../../_lib/fill";
-import { pollAssetAction, type MoveOn } from "../actions";
+import type { MoveOn } from "../actions";
 import { AddImage, type AddMethod } from "./add-image";
 import { AssetScreenProvider } from "./asset-context";
 import { AssetHeader } from "./asset-header";
@@ -94,6 +96,7 @@ function useAssetSync(assetId: string, versions: DetailVersions, working: boolea
   const key = versionsKey(versions);
   const keyRef = useRef(key);
   const alive = useRef(true);
+  const signalOf = useAbortOnUnmount();
   // One set for the component's life, so the unmount cleanup clears the timers set last.
   const timers = useRef(new Set<number>());
   useEffect(() => {
@@ -110,10 +113,10 @@ function useAssetSync(assetId: string, versions: DetailVersions, working: boolea
   }, []);
 
   const check = useCallback(
-    async (isActive: () => boolean) => {
-      // Never after the page was left: the action would be posted from another page.
+    async (isActive: () => boolean, signal: AbortSignal) => {
+      // Never after the page was left: the request would be sent from another page.
       if (!isActive() || !alive.current) return;
-      const next = await pollAssetAction(assetId);
+      const next = await pollAsset(assetId, { signal });
       // null: signed out, rate limited or the poll failed. Not a change, so nothing to refresh.
       if (isActive() && alive.current && next !== null && next !== keyRef.current) router.refresh();
     },
@@ -132,11 +135,11 @@ function useAssetSync(assetId: string, versions: DetailVersions, working: boolea
     for (const ms of RECHECK_MS) {
       const timer = window.setTimeout(() => {
         pending.delete(timer);
-        void check(() => alive.current).catch(() => {});
+        void check(() => alive.current, signalOf()).catch(() => {});
       }, ms);
       pending.add(timer);
     }
-  }, [check, router]);
+  }, [check, router, signalOf]);
 
   return refresh;
 }

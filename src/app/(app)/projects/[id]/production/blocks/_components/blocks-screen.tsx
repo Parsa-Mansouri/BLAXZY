@@ -15,14 +15,10 @@ import {
   stagger,
 } from "@/ui";
 import { useServerSnapshot } from "@/app/(app)/_lib/use-server-snapshot";
+import { refreshBlocks } from "@/app/(app)/_lib/poll-client";
 import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import { blockHref, phaseHref } from "../../../_lib/production-routes";
-import {
-  approveAllAction,
-  loadBlocksAction,
-  refreshBlocksAction,
-  type BlocksSnapshot,
-} from "../actions";
+import { approveAllAction, loadBlocksAction, type BlocksSnapshot } from "../actions";
 import { takeArrival } from "../_lib/arrival";
 import { mergeBlocksSnapshot } from "../_lib/merge-snapshot";
 import { attentionTone, attentionWords, needsReview } from "../_lib/block-state";
@@ -76,9 +72,9 @@ export function BlocksScreen({
   }
 
   usePolling(
-    async (isActive) => {
+    async (isActive, signal) => {
       if (busyRef.current) return;
-      const result = await refreshBlocksAction(projectId, items.length);
+      const result = await refreshBlocks(projectId, items.length, { signal });
       if (!isActive() || busyRef.current || !result.ok) return;
       adopt(result.data);
     },

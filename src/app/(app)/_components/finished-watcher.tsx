@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { FinishedAssetEvent } from "@/server/assets";
 import { fileSrc } from "@/lib/file-src";
 import { useToast } from "@/ui";
-import { pollFinishedAction } from "../_lib/finished-actions";
+import { pollFinished } from "../_lib/poll-client";
 import { usePolling } from "@/app/(app)/_lib/use-polling";
 import { assetHref } from "../projects/[id]/_lib/asset-kinds";
 
@@ -94,26 +94,29 @@ export function FinishedWatcher() {
     [router, toast],
   );
 
-  const poll = useCallback(async () => {
-    if (!started.current) {
-      started.current = true;
-      cursor.current = readStoredCursor();
-    }
-    const result = await pollFinishedAction(cursor.current);
-    if (!result) return;
-    cursor.current = result.cursor;
-    storeCursor(result.cursor);
-    for (const event of result.events) {
-      if (seen.current.has(event.id)) continue;
-      seen.current.add(event.id);
-      if (page.current === assetHref(event.projectId, event.assetId)) continue;
-      announce(event);
-    }
-    if (seen.current.size > MAX_REMEMBERED_EVENTS) {
-      seen.current = new Set([...seen.current].slice(-MAX_REMEMBERED_EVENTS / 2));
-      for (const id of shown.current.keys()) if (!seen.current.has(id)) shown.current.delete(id);
-    }
-  }, [announce]);
+  const poll = useCallback(
+    async (_isActive: () => boolean, signal: AbortSignal) => {
+      if (!started.current) {
+        started.current = true;
+        cursor.current = readStoredCursor();
+      }
+      const result = await pollFinished(cursor.current, { signal });
+      if (!result) return;
+      cursor.current = result.cursor;
+      storeCursor(result.cursor);
+      for (const event of result.events) {
+        if (seen.current.has(event.id)) continue;
+        seen.current.add(event.id);
+        if (page.current === assetHref(event.projectId, event.assetId)) continue;
+        announce(event);
+      }
+      if (seen.current.size > MAX_REMEMBERED_EVENTS) {
+        seen.current = new Set([...seen.current].slice(-MAX_REMEMBERED_EVENTS / 2));
+        for (const id of shown.current.keys()) if (!seen.current.has(id)) shown.current.delete(id);
+      }
+    },
+    [announce],
+  );
 
   usePolling(poll, true, POLL_MS, true);
 

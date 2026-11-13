@@ -1,5 +1,6 @@
 "use client";
 
+import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -35,7 +36,8 @@ import {
 } from "../../../_lib/clip-view";
 import type { ShotRef } from "../../../_lib/clip-data";
 import { boardHref, clipHref } from "../../../_lib/routes";
-import { pollClipAction, reviewTakeAction } from "../../../actions";
+import { pollClip } from "@/app/(app)/_lib/poll-client";
+import { reviewTakeAction } from "../../../actions";
 import { useClips, useShown } from "../../../_components/clips-context";
 import { ShotDetails } from "./shot-details";
 import {
@@ -77,6 +79,7 @@ function useClipSync(lineageId: string, key: string, unsettled: boolean) {
   const router = useRouter();
   const keyRef = useRef(key);
   const alive = useRef(true);
+  const signalOf = useAbortOnUnmount();
   // One set for the component's life, so the unmount cleanup clears the timers set last.
   const timers = useRef(new Set<number>());
   useEffect(() => {
@@ -93,10 +96,10 @@ function useClipSync(lineageId: string, key: string, unsettled: boolean) {
   }, []);
 
   const check = useCallback(
-    async (isActive: () => boolean) => {
-      // Never after the page was left: the action would be posted from another page.
+    async (isActive: () => boolean, signal: AbortSignal) => {
+      // Never after the page was left: the request would be sent from another page.
       if (!isActive() || !alive.current) return;
-      const next = await pollClipAction(lineageId);
+      const next = await pollClip(lineageId, { signal });
       if (isActive() && alive.current && next !== null && next !== keyRef.current) {
         router.refresh();
       }
@@ -115,11 +118,11 @@ function useClipSync(lineageId: string, key: string, unsettled: boolean) {
     for (const ms of RECHECK_MS) {
       const timer = window.setTimeout(() => {
         pending.delete(timer);
-        void check(() => alive.current).catch(() => {});
+        void check(() => alive.current, signalOf()).catch(() => {});
       }, ms);
       pending.add(timer);
     }
-  }, [check, router]);
+  }, [check, router, signalOf]);
 }
 
 /** A key press in a field, a dialog or the change request is theirs, not the page's. */

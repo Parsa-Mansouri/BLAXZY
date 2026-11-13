@@ -6,9 +6,7 @@ const mocks = vi.hoisted(() => ({
   checkRateLimit: vi.fn(),
   revalidatePath: vi.fn(),
   completeProduction: vi.fn(),
-  loadBackgroundStatus: vi.fn(),
   createUpload: vi.fn(),
-  getDetectionPanel: vi.fn(),
   startDrafts: vi.fn(),
 }));
 
@@ -25,16 +23,9 @@ vi.mock("@/server/production", async (importOriginal) => ({
   completeProduction: (input: unknown) => mocks.completeProduction(input),
   startDrafts: (input: unknown) => mocks.startDrafts(input),
 }));
-vi.mock("@/server/assets", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/server/assets")>()),
-  getDetectionPanel: (...args: unknown[]) => mocks.getDetectionPanel(...args),
-}));
 vi.mock("@/server/storage", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/storage")>()),
   createUpload: (input: unknown) => mocks.createUpload(input),
-}));
-vi.mock("../projects/[id]/_lib/background-status", () => ({
-  loadBackgroundStatus: (...args: unknown[]) => mocks.loadBackgroundStatus(...args),
 }));
 
 const {
@@ -258,64 +249,6 @@ describe("converted actions", () => {
     expect(result.ok).toBe(false);
     expect(mocks.completeProduction).not.toHaveBeenCalled();
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
-  });
-
-  it("backgroundStatusAction answers null for a malformed version id and when signed out", async () => {
-    const { backgroundStatusAction } = await import("../projects/[id]/script/actions");
-    await expect(backgroundStatusAction(PROJECT, "not-a-uuid")).resolves.toBeNull();
-    expect(mocks.loadBackgroundStatus).not.toHaveBeenCalled();
-
-    mocks.getSession.mockResolvedValue(null);
-    await expect(backgroundStatusAction(PROJECT, null)).resolves.toBeNull();
-    expect(mocks.requireUser).not.toHaveBeenCalled();
-  });
-});
-
-/** Every key of `value`, at any depth. */
-function allKeys(value: unknown): string[] {
-  if (Array.isArray(value)) return value.flatMap(allKeys);
-  if (typeof value !== "object" || value === null) return [];
-  return Object.entries(value).flatMap(([key, inner]) => [key, ...allKeys(inner)]);
-}
-
-describe("action payloads stay client-safe", () => {
-  it("detectionPanelAction never sends the fix instructions", async () => {
-    const { detectionPanelAction } = await import("../projects/[id]/pre-production/[kind]/actions");
-    const followupChoice = { label: "Merge", value: "merge", instruction: "secret choice" };
-    mocks.getDetectionPanel.mockResolvedValue({
-      options: [
-        {
-          code: "D1",
-          kind: "technical",
-          label: "Two names are one person",
-          needsText: false,
-          proOnly: false,
-          instruction: "SECRET fix prompt",
-          instructionTemplate: "Merge {value} SECRET",
-          instructionTemplateAuto: "SECRET auto",
-          followup: {
-            type: "choice",
-            allowCustom: true,
-            options: [followupChoice],
-            steps: [{ type: "pick", allowCustom: false, options: [followupChoice] }],
-          },
-        },
-      ],
-      warnings: [{ tag: "MERGE_CHECK", text: "Ana and Anna" }],
-      rounds: 0,
-      maxRounds: 3,
-      suggestion: null,
-      busy: false,
-      failure: null,
-    });
-    const result = await detectionPanelAction(PROJECT);
-    expect(result.ok).toBe(true);
-    expect(allKeys(result).filter((key) => key.startsWith("instruction"))).toEqual([]);
-    expect(JSON.stringify(result)).not.toContain("SECRET");
-    if (result.ok) {
-      expect(result.data.options[0]).toMatchObject({ code: "D1", takesValue: true });
-      expect(result.data.warnings).toEqual([{ tag: "MERGE_CHECK", text: "Ana and Anna" }]);
-    }
   });
 });
 

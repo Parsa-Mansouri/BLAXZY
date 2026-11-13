@@ -17,13 +17,12 @@ import { ProjectInputError } from "@/server/projects";
 import { checkRateLimit, type RateLimitBucket } from "@/server/ratelimit";
 import { ScriptInputError } from "@/server/script";
 import { StorageError } from "@/server/storage";
+import { SERVER_PROBLEM, SIGNED_OUT, TOO_MANY_REQUESTS } from "./messages";
 
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: string };
 export type ActionFailure = { ok: false; error: string };
 
-export const SERVER_PROBLEM = "The server had a problem. Try again in a moment.";
-export const TOO_MANY_REQUESTS = "Too many requests; try again in a moment.";
-export const SIGNED_OUT = "You are signed out. Sign in again to continue.";
+export { SERVER_PROBLEM, SIGNED_OUT, TOO_MANY_REQUESTS };
 export const TOO_MANY_UPLOADS =
   "Too many uploads are still finishing. Wait a few minutes, then try again.";
 

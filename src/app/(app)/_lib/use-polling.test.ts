@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_BACKOFF_MS, nextDelay, shouldWakePoll } from "./use-polling";
+import { createAbortSlot, MAX_BACKOFF_MS, nextDelay, shouldWakePoll } from "./use-polling";
 
 describe("nextDelay", () => {
   it("is the interval after a success", () => {
@@ -36,5 +36,32 @@ describe("shouldWakePoll", () => {
   it("polls once the minimum gap has passed", () => {
     expect(shouldWakePoll({ now: 2000, lastStartedAt: 1000 })).toBe(true);
     expect(shouldWakePoll({ now: 1999, lastStartedAt: 1000, minGapMs: 500 })).toBe(true);
+  });
+});
+
+describe("createAbortSlot", () => {
+  it("hands out a live signal and aborts it on abort()", () => {
+    const slot = createAbortSlot();
+    const signal = slot.begin();
+    expect(signal.aborted).toBe(false);
+    slot.abort();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("aborts a previous poll's signal when the next one begins", () => {
+    const slot = createAbortSlot();
+    const first = slot.begin();
+    const second = slot.begin();
+    expect(first.aborted).toBe(true);
+    expect(second.aborted).toBe(false);
+  });
+
+  it("does nothing on abort() when no poll ever began, and twice is harmless", () => {
+    const slot = createAbortSlot();
+    expect(() => slot.abort()).not.toThrow();
+    const signal = slot.begin();
+    slot.abort();
+    expect(() => slot.abort()).not.toThrow();
+    expect(signal.aborted).toBe(true);
   });
 });

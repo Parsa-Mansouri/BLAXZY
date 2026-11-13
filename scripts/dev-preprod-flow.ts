@@ -36,40 +36,37 @@ import {
 } from "../src/server/assets";
 import { getBalance, grantCredits } from "../src/server/billing";
 import { AI_DECIDES, getDamiMode, type GuidedQuestion } from "../src/server/damis";
-import { closeDb, getDb } from "../src/server/db/client";
-import { ASSET_KINDS, project, user, type AssetKind } from "../src/server/db/schema";
-import { closeJobQueue } from "../src/server/jobs";
+import { getDb } from "../src/server/db/client";
+import { ASSET_KINDS, project, type AssetKind } from "../src/server/db/schema";
 import { putFileBytes } from "../src/server/storage";
+import { assertDevOnly, findOwnerId, pollUntil, runScript } from "./_lib";
 
 const PROJECT_TITLE = "The Lighthouse Keeper";
 /** Looks and sheets for the character, the location pack's and prop sheet's views, plus room. */
 const CREDITS_NEEDED = 250;
 const TIMEOUT_MS = 3 * 60 * 1000;
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function waitFor(
+function waitFor(
   label: string,
   assetId: string,
   userId: string,
   done: (d: AssetDetail) => boolean,
 ): Promise<AssetDetail> {
-  const started = Date.now();
-  for (;;) {
-    const detail = await getAssetDetail(assetId, userId);
-    if (!detail) throw new Error("The asset disappeared.");
-    if (detail.stage === "failed") {
-      const failure = detail.sheets[0]?.failure ?? detail.looks[0]?.failure ?? "unknown";
-      throw new Error(`${label} failed: ${failure}`);
-    }
-    if (done(detail)) {
-      console.log(`   ${label} after ${((Date.now() - started) / 1000).toFixed(1)} s`);
-      return detail;
-    }
-    if (Date.now() - started > TIMEOUT_MS) {
-      throw new Error(`Timed out waiting for: ${label}. Is \`pnpm worker\` running?`);
-    }
-    await sleep(500);
-  }
+  return pollUntil({
+    check: async () => {
+      const detail = await getAssetDetail(assetId, userId);
+      if (!detail) throw new Error("The asset disappeared.");
+      if (detail.stage === "failed") {
+        const failure = detail.sheets[0]?.failure ?? detail.looks[0]?.failure ?? "unknown";
+        throw new Error(`${label} failed: ${failure}`);
+      }
+      return done(detail) ? detail : null;
+    },
+    timeoutMs: TIMEOUT_MS,
+    intervalMs: 500,
+    timeoutMessage: `Timed out waiting for: ${label}. Is \`pnpm worker\` running?`,
+    report: (_detail, seconds) => console.log(`   ${label} after ${seconds} s`),
+  });
 }
 
 const OPEN_VIEW = ["planned", "pending", "in_review"];
@@ -177,15 +174,10 @@ async function firstWaiting(
 }
 
 async function main(): Promise<void> {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("dev:preprod-flow is for development only.");
-  }
+  assertDevOnly("dev:preprod-flow");
   const email = (process.argv[2] ?? "testuser@gmail.com").toLowerCase();
   const db = getDb();
-  const [owner] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
-  if (!owner)
-    throw new Error(`No user ${email}. Create it first: pnpm dev:user ${email} <password>`);
-  const userId = owner.id;
+  const userId = await findOwnerId(email);
   const [found] = await db
     .select({ id: project.id, stage: project.stage })
     .from(project)
@@ -349,12 +341,4 @@ async function main(): Promise<void> {
   console.log(`Credits after: ${await getBalance(userId)}`);
 }
 
-main()
-  .catch((err: unknown) => {
-    console.error(err instanceof Error ? err.message : err);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await closeJobQueue();
-    await closeDb();
-  });
+runScript(main, { queue: true });

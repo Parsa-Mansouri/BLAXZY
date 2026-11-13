@@ -8,13 +8,9 @@
  * accepts the revision, then prints the detected assets and the block count. Works in sample mode.
  */
 import "dotenv/config";
-import { eq } from "drizzle-orm";
 import { countAssetsByKind, listAssets } from "../src/server/assets";
 import { getSectioningStatus } from "../src/server/blocks";
 import { getDamiMode } from "../src/server/damis";
-import { closeDb, getDb } from "../src/server/db/client";
-import { user } from "../src/server/db/schema";
-import { closeJobQueue } from "../src/server/jobs";
 import { createProject, saveStyle } from "../src/server/projects";
 import {
   getScriptState,
@@ -22,23 +18,18 @@ import {
   submitScriptReview,
   type ScriptVersionView,
 } from "../src/server/script";
+import { assertDevOnly, findOwnerId, pollUntil, runScript } from "./_lib";
 
 const TIMEOUT_MS = 3 * 60 * 1000;
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function waitFor<T>(label: string, check: () => Promise<T | null>): Promise<T> {
-  const started = Date.now();
-  for (;;) {
-    const value = await check();
-    if (value !== null) {
-      console.log(`  ${label} after ${((Date.now() - started) / 1000).toFixed(1)} s`);
-      return value;
-    }
-    if (Date.now() - started > TIMEOUT_MS) {
-      throw new Error(`Timed out waiting for: ${label}. Is \`pnpm worker\` running?`);
-    }
-    await sleep(500);
-  }
+function waitFor<T>(label: string, check: () => Promise<T | null>): Promise<T> {
+  return pollUntil({
+    check,
+    timeoutMs: TIMEOUT_MS,
+    intervalMs: 500,
+    timeoutMessage: `Timed out waiting for: ${label}. Is \`pnpm worker\` running?`,
+    report: (_value, seconds) => console.log(`  ${label} after ${seconds} s`),
+  });
 }
 
 async function waitForReview(projectId: string, userId: string, versionId: string) {
@@ -52,13 +43,9 @@ async function waitForReview(projectId: string, userId: string, versionId: strin
 }
 
 async function main(): Promise<void> {
-  if (process.env.NODE_ENV === "production")
-    throw new Error("dev:script-flow is for development only.");
+  assertDevOnly("dev:script-flow");
   const email = (process.argv[2] ?? "testuser@gmail.com").toLowerCase();
-  const [owner] = await getDb().select({ id: user.id }).from(user).where(eq(user.email, email));
-  if (!owner)
-    throw new Error(`No user ${email}. Create it first: pnpm dev:user ${email} <password>`);
-  const userId = owner.id;
+  const userId = await findOwnerId(email);
   console.log(`Dami mode: ${getDamiMode()}`);
 
   const project = await createProject({
@@ -125,12 +112,4 @@ async function main(): Promise<void> {
   console.log(`5. Prompt blocks: ${status.blockCount}`);
 }
 
-main()
-  .catch((err: unknown) => {
-    console.error(err instanceof Error ? err.message : err);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await closeJobQueue();
-    await closeDb();
-  });
+runScript(main, { queue: true });

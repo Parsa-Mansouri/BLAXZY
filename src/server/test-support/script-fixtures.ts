@@ -14,20 +14,7 @@ export const TEST_STYLE: ProjectStyle = {
   totalDurationSeconds: 90,
 };
 
-export async function databaseReachable(): Promise<boolean> {
-  const url = process.env.DATABASE_URL;
-  if (!url) return false;
-  const client = new Client({ connectionString: url, connectionTimeoutMillis: 2000 });
-  try {
-    await client.connect();
-    await client.query("select 1 from script_version limit 1");
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await client.end().catch(() => undefined);
-  }
-}
+export { databaseReachable } from "./integration";
 
 /** Points the job queue at a throwaway schema; call before the env is first read. */
 export function pointQueueAtThrowawaySchema(): string {

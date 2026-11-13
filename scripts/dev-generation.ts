@@ -17,10 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import "dotenv/config";
-import { eq } from "drizzle-orm";
 import { getBalance, grantCredits } from "../src/server/billing";
-import { closeDb, getDb } from "../src/server/db/client";
-import { user } from "../src/server/db/schema";
 import { getEnv } from "../src/server/env";
 import {
   getGeneration,
@@ -28,14 +25,13 @@ import {
   requestGeneration,
   type GenerationView,
 } from "../src/server/generation";
-import { closeJobQueue } from "../src/server/jobs";
 import { listProjects, type Project } from "../src/server/projects";
 import { probeMedia } from "../src/server/providers/ffmpeg";
 import { getOwnedFileInfo, openFileStream } from "../src/server/storage";
+import { assertDevOnly, findOwnerId, pollUntil, runScript } from "./_lib";
 
 const TIMEOUT_MS = 3 * 60 * 1000;
 const CLIP_SECONDS = 10;
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function findStyledProject(userId: string): Promise<Project | null> {
   let cursor: string | null = null;
@@ -49,20 +45,20 @@ async function findStyledProject(userId: string): Promise<Project | null> {
   return null;
 }
 
-async function waitFinished(generationId: string, userId: string): Promise<GenerationView> {
-  const started = Date.now();
-  for (;;) {
-    const g = await getGeneration(generationId, userId);
-    if (!g) throw new Error(`Generation ${generationId} disappeared`);
-    if (g.status === "succeeded" || g.status === "failed" || g.status === "cancelled") {
-      console.log(`  ${g.status} after ${((Date.now() - started) / 1000).toFixed(1)} s`);
-      return g;
-    }
-    if (Date.now() - started > TIMEOUT_MS) {
-      throw new Error(`Timed out waiting for ${generationId}. Is \`pnpm worker\` running?`);
-    }
-    await sleep(500);
-  }
+function waitFinished(generationId: string, userId: string): Promise<GenerationView> {
+  return pollUntil({
+    check: async () => {
+      const g = await getGeneration(generationId, userId);
+      if (!g) throw new Error(`Generation ${generationId} disappeared`);
+      return g.status === "succeeded" || g.status === "failed" || g.status === "cancelled"
+        ? g
+        : null;
+    },
+    timeoutMs: TIMEOUT_MS,
+    intervalMs: 500,
+    timeoutMessage: `Timed out waiting for ${generationId}. Is \`pnpm worker\` running?`,
+    report: (g, seconds) => console.log(`  ${g.status} after ${seconds} s`),
+  });
 }
 
 async function report(label: string, g: GenerationView, userId: string): Promise<void> {
@@ -99,14 +95,9 @@ async function report(label: string, g: GenerationView, userId: string): Promise
 }
 
 async function main(): Promise<void> {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("dev:generation is for development only.");
-  }
+  assertDevOnly("dev:generation");
   const email = (process.argv[2] ?? "testuser@gmail.com").toLowerCase();
-  const [owner] = await getDb().select({ id: user.id }).from(user).where(eq(user.email, email));
-  if (!owner)
-    throw new Error(`No user ${email}. Create it first: pnpm dev:user ${email} <password>`);
-  const userId = owner.id;
+  const userId = await findOwnerId(email);
   const project = await findStyledProject(userId);
   if (!project?.style) {
     throw new Error(`${email} has no project with a style yet. Run pnpm dev:script-flow first.`);
@@ -195,12 +186,4 @@ async function main(): Promise<void> {
   if (finalDone.status !== "succeeded") throw new Error("The final did not succeed");
 }
 
-main()
-  .catch((err: unknown) => {
-    console.error(err instanceof Error ? err.message : err);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await closeJobQueue();
-    await closeDb();
-  });
+runScript(main, { queue: true });

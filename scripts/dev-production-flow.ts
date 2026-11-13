@@ -15,9 +15,8 @@ import "dotenv/config";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { getBalance, grantCredits } from "../src/server/billing";
 import { getDamiMode } from "../src/server/damis";
-import { closeDb, getDb } from "../src/server/db/client";
-import { project, user } from "../src/server/db/schema";
-import { closeJobQueue } from "../src/server/jobs";
+import { getDb } from "../src/server/db/client";
+import { project } from "../src/server/db/schema";
 import {
   approveAllBlocks,
   ensurePrepared,
@@ -31,12 +30,12 @@ import {
   type ProductionBlock,
   type ProductionOverview,
 } from "../src/server/production";
+import { assertDevOnly, findOwnerId, pollUntil, runScript } from "./_lib";
 
 const PROJECT_TITLE = process.argv[3] ?? "QA Run 14:03";
 /** Seven drafts (20 each), one fixed draft, seven finals (60 each), plus room. */
 const CREDITS_NEEDED = 650;
 const TIMEOUT_MS = 10 * 60 * 1000;
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const startedAt = Date.now();
 const elapsed = () => `${((Date.now() - startedAt) / 1000).toFixed(1)} s`;
 
@@ -83,29 +82,29 @@ async function printBlocks(projectId: string, userId: string): Promise<void> {
 
 /** Waits until no block is preparing or generating; fails on a failed preparation or take. */
 async function settle(label: string, projectId: string, userId: string): Promise<void> {
-  const started = Date.now();
-  for (;;) {
-    const o = await overview(projectId, userId);
-    if (o.counts.prepare_failed > 0 || o.counts.failed > 0) {
-      const failed = (await allBlocks(projectId, userId)).filter(
-        (b) => b.stage === "prepare_failed" || b.stage === "failed",
-      );
-      for (const b of failed) {
-        const detail = await getBlockDetail(b.lineageId, userId);
-        console.log(`     ${b.title}: ${b.failure ?? detail?.takes[0]?.failure ?? "unknown"}`);
+  await pollUntil({
+    check: async () => {
+      const o = await overview(projectId, userId);
+      if (o.counts.prepare_failed > 0 || o.counts.failed > 0) {
+        const failed = (await allBlocks(projectId, userId)).filter(
+          (b) => b.stage === "prepare_failed" || b.stage === "failed",
+        );
+        for (const b of failed) {
+          const detail = await getBlockDetail(b.lineageId, userId);
+          console.log(`     ${b.title}: ${b.failure ?? detail?.takes[0]?.failure ?? "unknown"}`);
+        }
+        throw new Error(`${label}: some blocks failed`);
       }
-      throw new Error(`${label}: some blocks failed`);
-    }
-    if (BUSY.every((stage) => o.counts[stage] === 0)) {
-      console.log(`   ${label} after ${((Date.now() - started) / 1000).toFixed(1)} s`);
+      return BUSY.every((stage) => o.counts[stage] === 0) ? o : null;
+    },
+    timeoutMs: TIMEOUT_MS,
+    intervalMs: 1000,
+    timeoutMessage: `Timed out waiting for: ${label}. Is \`pnpm worker\` running?`,
+    report: (o, seconds) => {
+      console.log(`   ${label} after ${seconds} s`);
       console.log(`   overview: ${describeOverview(o)}`);
-      return;
-    }
-    if (Date.now() - started > TIMEOUT_MS) {
-      throw new Error(`Timed out waiting for: ${label}. Is \`pnpm worker\` running?`);
-    }
-    await sleep(1000);
-  }
+    },
+  });
 }
 
 async function latestTakeId(lineageId: string, userId: string): Promise<string> {
@@ -116,19 +115,13 @@ async function latestTakeId(lineageId: string, userId: string): Promise<string> 
 }
 
 async function main(): Promise<void> {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("dev:production-flow is for development only.");
-  }
+  assertDevOnly("dev:production-flow");
   if (getDamiMode() !== "sample") {
     throw new Error("dev:production-flow runs in sample mode only (DAMI_MODE=sample).");
   }
   const email = (process.argv[2] ?? "testuser@gmail.com").toLowerCase();
   const db = getDb();
-  const [owner] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
-  if (!owner) {
-    throw new Error(`No user ${email}. Create it first: pnpm dev:user ${email} <password>`);
-  }
-  const userId = owner.id;
+  const userId = await findOwnerId(email);
   const [found] = await db
     .select({ id: project.id, stage: project.stage })
     .from(project)
@@ -240,12 +233,4 @@ async function main(): Promise<void> {
   console.log(`Credits after: ${await getBalance(userId)} (total ${elapsed()})`);
 }
 
-main()
-  .catch((err: unknown) => {
-    console.error(err instanceof Error ? err.message : err);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await closeJobQueue();
-    await closeDb();
-  });
+runScript(main, { queue: true });

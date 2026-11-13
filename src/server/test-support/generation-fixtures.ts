@@ -3,31 +3,9 @@
  * store, raw generation rows, and a cleanup of everything the users own (ledger, generations,
  * stored objects) before the script fixtures remove users and projects. Tests only.
  */
-import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
-import { createFixtures, databaseReachable } from "./script-fixtures";
+import { createFixtures } from "./script-fixtures";
 
-export async function servicesReachable(): Promise<boolean> {
-  if (!(await databaseReachable())) return false;
-  const { S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY } = process.env;
-  if (!S3_ENDPOINT || !S3_BUCKET || !S3_ACCESS_KEY_ID || !S3_SECRET_ACCESS_KEY) return false;
-  const s3 = new S3Client({
-    endpoint: S3_ENDPOINT,
-    region: process.env.S3_REGION ?? "us-east-1",
-    forcePathStyle: true,
-    credentials: { accessKeyId: S3_ACCESS_KEY_ID, secretAccessKey: S3_SECRET_ACCESS_KEY },
-    maxAttempts: 1,
-  });
-  try {
-    await s3.send(new HeadBucketCommand({ Bucket: S3_BUCKET }), {
-      abortSignal: AbortSignal.timeout(2000),
-    });
-    return true;
-  } catch {
-    return false;
-  } finally {
-    s3.destroy();
-  }
-}
+export { servicesReachable } from "./integration";
 
 export function createGenerationFixtures() {
   const base = createFixtures();

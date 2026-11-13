@@ -1,30 +1,75 @@
 /**
- * Development only: create (or reset) a verified admin account for local testing.
+ * Development only: create a verified admin account for local testing.
  *
- *   pnpm dev:user <email> <password> [name]
+ *   pnpm dev:user <email> [name] [--update-existing]
  *
- * It writes the user directly, so it skips email verification and the password length rule.
- * It refuses to run when NODE_ENV is "production". Credentials are never stored in the repo.
+ * The password is read from the DEV_USER_PASSWORD environment variable, else prompted for (hidden
+ * on a terminal, first line of stdin when piped). It is never taken from the command line, where
+ * it would end up in the shell history. It writes the user directly, so it skips email
+ * verification and the password length rule. An existing user with that email is left alone
+ * unless --update-existing is passed (then it becomes a verified admin with the new password).
+ * Refuses to run in production or against a non-local database (see assertDevOnly in
+ * scripts/_lib.ts). Credentials are never stored in the repo.
  */
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
+import { createInterface } from "node:readline";
+import { Writable } from "node:stream";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq } from "drizzle-orm";
 import { getAuth } from "../src/server/auth";
-import { closeDb, getDb } from "../src/server/db/client";
+import { getDb } from "../src/server/db/client";
 import { account, session, user } from "../src/server/db/schema";
+import { assertDevOnly, runScript } from "./_lib";
+
+async function readPassword(): Promise<string> {
+  const fromEnv = process.env.DEV_USER_PASSWORD;
+  if (fromEnv) return fromEnv;
+  let muted = false;
+  const output = new Writable({
+    write(chunk, _encoding, callback) {
+      if (!muted) process.stderr.write(chunk);
+      callback();
+    },
+  });
+  const rl = createInterface({
+    input: process.stdin,
+    output,
+    terminal: Boolean(process.stdin.isTTY),
+  });
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      rl.once("close", () => reject(new Error("No password given (set DEV_USER_PASSWORD).")));
+      rl.question("Password: ", (answer) => {
+        resolve(answer);
+      });
+      muted = true;
+    });
+  } finally {
+    rl.close();
+    if (process.stdin.isTTY) process.stderr.write("\n");
+  }
+}
 
 async function main(): Promise<void> {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("dev:user must never run in production.");
-  }
-  const [emailArg, password, name = "Test User"] = process.argv.slice(2);
-  if (!emailArg || !password) {
-    throw new Error("Usage: pnpm dev:user <email> <password> [name]");
+  assertDevOnly("dev:user");
+  const args = process.argv.slice(2).filter((arg) => arg !== "--");
+  const updateExisting = args.includes("--update-existing");
+  const [emailArg, name = "Test User", ...extra] = args.filter((arg) => !arg.startsWith("--"));
+  if (!emailArg || extra.length > 0) {
+    throw new Error("Usage: pnpm dev:user <email> [name] [--update-existing]");
   }
   const email = emailArg.trim().toLowerCase();
-  const passwordHash = await hashPassword(password);
   const db = getDb();
+  const [existingUser] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
+  if (existingUser && !updateExisting) {
+    throw new Error(
+      `User ${email} already exists. Pass --update-existing to make it a verified admin with a new password.`,
+    );
+  }
+  const password = await readPassword();
+  if (!password) throw new Error("The password is empty.");
+  const passwordHash = await hashPassword(password);
 
   const userId = await db.transaction(async (tx) => {
     const [existing] = await tx.select({ id: user.id }).from(user).where(eq(user.email, email));
@@ -63,9 +108,4 @@ async function main(): Promise<void> {
   console.log(`Dev admin ready: ${email} (id ${userId}), sign-in verified.`);
 }
 
-main()
-  .catch((err: unknown) => {
-    console.error(err instanceof Error ? err.message : err);
-    process.exitCode = 1;
-  })
-  .finally(() => closeDb());
+runScript(main);

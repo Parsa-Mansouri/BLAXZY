@@ -5,24 +5,9 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
-import { Client } from "pg";
 import { afterAll, describe, expect, it, vi } from "vitest";
+import { databaseReachable } from "@/server/test-support/integration";
 import { ConsoleEmailSender, type EmailMessage } from "@/server/email";
-
-async function databaseReachable(): Promise<boolean> {
-  const url = process.env.DATABASE_URL;
-  if (!url) return false;
-  const client = new Client({ connectionString: url, connectionTimeoutMillis: 2000 });
-  try {
-    await client.connect();
-    await client.query("select 1 from rate_limit limit 1");
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await client.end().catch(() => undefined);
-  }
-}
 
 const reachable = await databaseReachable();
 

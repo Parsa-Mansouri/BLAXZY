@@ -110,8 +110,8 @@ A physically buildable miniature set: handmade surfaces, visible fingerprints an
 
 ## 4. Conflict rules
 
-| Pair                                                                              | Result                                                                                                                               |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Genre vs style on the same attribute                                              | Style wins on look, genre wins on layout and dramaturgy                                                                              |
+| Pair | Result |
+|---|---|
+| Genre vs style on the same attribute | Style wins on look, genre wins on layout and dramaturgy |
 | User says something the lens would not (for example "bright daylight" under Noir) | The user wins on content; the style is expressed through the open dimensions (shadow shape, contrast, composition, palette, texture) |
-| Lens vs script-required fact                                                      | The script-required fact stays; the lens shapes everything around it                                                                 |
+| Lens vs script-required fact | The script-required fact stays; the lens shapes everything around it |

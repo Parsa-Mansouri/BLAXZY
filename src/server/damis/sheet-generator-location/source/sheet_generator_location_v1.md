@@ -57,25 +57,42 @@ Unlike the character sheet, a location is **not** put on a grey studio backdrop,
       },
       "mode": {
         "type": "string",
-        "enum": ["concept", "lock"]
+        "enum": [
+          "concept",
+          "lock"
+        ]
       },
       "concept_sheet": {
-        "type": ["object", "null"],
+        "type": [
+          "object",
+          "null"
+        ],
         "description": "Concept mode only; null in lock mode.",
-        "required": ["image_prompt", "aspect_ratio", "reference_order", "panel_plan", "edit_mode"],
+        "required": [
+          "image_prompt",
+          "aspect_ratio",
+          "reference_order",
+          "panel_plan",
+          "edit_mode"
+        ],
         "properties": {
           "image_prompt": {
             "type": "string"
           },
           "aspect_ratio": {
             "type": "string",
-            "enum": ["16:9"]
+            "enum": [
+              "16:9"
+            ]
           },
           "reference_order": {
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["index", "source_view_id"],
+              "required": [
+                "index",
+                "source_view_id"
+              ],
               "properties": {
                 "index": {
                   "type": "integer"
@@ -91,11 +108,19 @@ Unlike the character sheet, a location is **not** put on a grey studio backdrop,
             "description": "Exactly 4: hero, alternate, detail_1, detail_2.",
             "items": {
               "type": "object",
-              "required": ["panel", "content"],
+              "required": [
+                "panel",
+                "content"
+              ],
               "properties": {
                 "panel": {
                   "type": "string",
-                  "enum": ["hero", "alternate", "detail_1", "detail_2"]
+                  "enum": [
+                    "hero",
+                    "alternate",
+                    "detail_1",
+                    "detail_2"
+                  ]
                 },
                 "content": {
                   "type": "string"
@@ -105,7 +130,10 @@ Unlike the character sheet, a location is **not** put on a grey studio backdrop,
           },
           "edit_mode": {
             "type": "string",
-            "enum": ["full", "edit_previous_view"],
+            "enum": [
+              "full",
+              "edit_previous_view"
+            ],
             "description": "edit_previous_view: the backend attaches the previous version as a reference and the prompt is an edit instruction."
           }
         }
@@ -140,13 +168,18 @@ Unlike the character sheet, a location is **not** put on a grey studio backdrop,
             },
             "aspect_ratio": {
               "type": "string",
-              "enum": ["16:9"]
+              "enum": [
+                "16:9"
+              ]
             },
             "reference_order": {
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["index", "source_view_id"],
+                "required": [
+                  "index",
+                  "source_view_id"
+                ],
                 "properties": {
                   "index": {
                     "type": "integer"
@@ -167,7 +200,10 @@ Unlike the character sheet, a location is **not** put on a grey studio backdrop,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["anchor_id", "expected_position"],
+                "required": [
+                  "anchor_id",
+                  "expected_position"
+                ],
                 "properties": {
                   "anchor_id": {
                     "type": "string"
@@ -201,7 +237,10 @@ Unlike the character sheet, a location is **not** put on a grey studio backdrop,
             },
             "edit_mode": {
               "type": "string",
-              "enum": ["full", "edit_previous_view"],
+              "enum": [
+                "full",
+                "edit_previous_view"
+              ],
               "description": "edit_previous_view: the backend attaches the previous version as a reference and the prompt is an edit instruction."
             }
           }
@@ -315,12 +354,12 @@ After each view is approved, the backend builds the pack from stored images and 
 1. **Individual views** (the model-facing assets): the approved Hero and every approved view stay separate images. Downstream damis (Text Blocks, Director) pick the right view per shot, for example the Reverse Wide for a shot looking back across the room, and attach it as a reference to Higgsfield together with the DNA text.
 2. **Layout Summary (`layout_summary.svg`)**, drawn by code from `layout`: a rectangle scaled by `approx_size` with north up; each opening drawn on its wall; fixed objects as small rectangles; each camera as a marker with an arrow from `stands_at` toward `looks_toward`; ids as labels. `position_pct` converts to drawing coordinates like this:
 
-   | Side            | Drawing coordinate |
-   | --------------- | ------------------ |
-   | N (top edge)    | x = pct            |
-   | E (right edge)  | y = pct (top is 0) |
-   | S (bottom edge) | x = 100 - pct      |
-   | W (left edge)   | y = 100 - pct      |
+   | Side | Drawing coordinate |
+   |---|---|
+   | N (top edge) | x = pct |
+   | E (right edge) | y = pct (top is 0) |
+   | S (bottom edge) | x = 100 - pct |
+   | W (left edge) | y = 100 - pct |
 
 3. **DNA card:** `location_summary`, fixed anchors with positions, visual identity, continuity constraints, mutable elements, rendered from `dna`.
 4. **Contact sheet (`pack_contact_sheet.png`)**, composed with an image library (for example `sharp`): a fixed template with the Hero large on the left and the other views around it, plus the Layout Summary and DNA card. This is a **human-facing** artifact for the director's review and for the archive. It is never sent to a video model.

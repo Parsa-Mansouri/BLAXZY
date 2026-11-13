@@ -15,10 +15,10 @@ The registry said the prop sheet would reuse the character skeleton (grey studio
 - **Changed:** no single fixed canvas. The spec asks for an **adaptive** sheet whose number of views depends on complexity, importance and interaction. Every view is **one separate image**, generated in order with references to the approved views (same principle as the Location Pack). Views are addressed by `view_id` (Front, Right, Back, Left, Top, Detail 1…) instead of numbered frames.
 - **Labels and numbers are drawn by the backend, never by the image model.** The spec requires clearly labeled angles and stated dimensions; image models garble text, so labels and the scale card are composed by code.
 
-| Level      | Images (including the approved Hero)                                                                                                              |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Simple     | Hero; back_34 only if needed; scale card as data                                                                                                  |
-| Standard   | Hero, one complementary view, 1 to 3 details, scale_ref, interaction if needed                                                                    |
+| Level | Images (including the approved Hero) |
+|---|---|
+| Simple | Hero; back_34 only if needed; scale card as data |
+| Standard | Hero, one complementary view, 1 to 3 details, scale_ref, interaction if needed |
 | Production | Hero, front / right / back / left (top or bottom if useful), 2 to 4 details, materials if needed, every non-default state, interaction, scale_ref |
 
 ---
@@ -32,140 +32,54 @@ The registry said the prop sheet would reuse the character skeleton (grey studio
   "input_schema": {
     "type": "object",
     "properties": {
-      "asset_id": { "type": "string" },
-      "asset_name": { "type": "string" },
-      "sheet_level": { "type": "string", "enum": ["simple", "standard", "production"] },
+      "asset_id": {"type": "string"},
+      "asset_name": {"type": "string"},
+      "sheet_level": {"type": "string", "enum": ["simple", "standard", "production"]},
       "views": {
         "type": "array",
         "maxItems": 13,
         "items": {
           "type": "object",
           "properties": {
-            "view_id": { "type": "string" },
-            "label": {
-              "type": "string",
-              "description": "From the VIEW_LIBRARY, drawn on the sheet by the backend."
-            },
-            "purpose": { "type": "string" },
-            "state_id": { "type": "string" },
-            "image_prompt": { "type": "string" },
-            "aspect_ratio": { "type": "string", "enum": ["1:1", "4:3", "3:4", "16:9", "9:16"] },
-            "reference_order": {
-              "type": "array",
-              "maxItems": 4,
-              "items": {
-                "type": "object",
-                "properties": {
-                  "index": { "type": "integer" },
-                  "source": {
-                    "type": "string",
-                    "description": "approved_hero | approved_view:<view_id> | previous:<view_id> | user_reference:<n>"
-                  },
-                  "role": { "type": "string" }
-                },
-                "required": ["index", "source", "role"]
-              }
-            },
-            "depends_on": { "type": "array", "items": { "type": "string" } },
-            "must_show": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Concrete checks, with viewer's left/right for asymmetric details."
-            },
-            "must_not_show": { "type": "array", "items": { "type": "string" } },
-            "new_hypotheses": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "area": { "type": "string" },
-                  "proposal": { "type": "string" }
-                },
-                "required": ["area", "proposal"]
-              },
-              "description": "Parts this view reveals that neither the Hero nor the DNA defines. Proposed, need approval."
-            },
-            "review_focus": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "shape",
-                  "scale",
-                  "material",
-                  "directional",
-                  "functional",
-                  "reference_fidelity"
-                ]
-              }
-            },
-            "edit_mode": { "type": "string", "enum": ["full", "edit_previous_view"] }
+            "view_id": {"type": "string"},
+            "label": {"type": "string", "description": "From the VIEW_LIBRARY, drawn on the sheet by the backend."},
+            "purpose": {"type": "string"},
+            "state_id": {"type": "string"},
+            "image_prompt": {"type": "string"},
+            "aspect_ratio": {"type": "string", "enum": ["1:1", "4:3", "3:4", "16:9", "9:16"]},
+            "reference_order": {"type": "array", "maxItems": 4, "items": {"type": "object", "properties": {
+              "index": {"type": "integer"},
+              "source": {"type": "string", "description": "approved_hero | approved_view:<view_id> | previous:<view_id> | user_reference:<n>"},
+              "role": {"type": "string"}}, "required": ["index", "source", "role"]}},
+            "depends_on": {"type": "array", "items": {"type": "string"}},
+            "must_show": {"type": "array", "items": {"type": "string"}, "description": "Concrete checks, with viewer's left/right for asymmetric details."},
+            "must_not_show": {"type": "array", "items": {"type": "string"}},
+            "new_hypotheses": {"type": "array", "items": {"type": "object", "properties": {
+              "area": {"type": "string"}, "proposal": {"type": "string"}}, "required": ["area", "proposal"]},
+              "description": "Parts this view reveals that neither the Hero nor the DNA defines. Proposed, need approval."},
+            "review_focus": {"type": "array", "items": {"type": "string", "enum": ["shape", "scale", "material", "directional", "functional", "reference_fidelity"]}},
+            "edit_mode": {"type": "string", "enum": ["full", "edit_previous_view"]}
           },
-          "required": [
-            "view_id",
-            "label",
-            "purpose",
-            "state_id",
-            "image_prompt",
-            "aspect_ratio",
-            "reference_order",
-            "depends_on",
-            "must_show",
-            "must_not_show",
-            "new_hypotheses",
-            "review_focus",
-            "edit_mode"
-          ]
+          "required": ["view_id", "label", "purpose", "state_id", "image_prompt", "aspect_ratio", "reference_order", "depends_on", "must_show", "must_not_show", "new_hypotheses", "review_focus", "edit_mode"]
         }
       },
-      "generation_order": { "type": "array", "items": { "type": "string" } },
+      "generation_order": {"type": "array", "items": {"type": "string"}},
       "scale_card": {
         "type": "object",
         "description": "Data for the backend-drawn scale card. Never drawn by the image model.",
         "properties": {
-          "dimensions_cm": {
-            "type": ["object", "null"],
-            "properties": {
-              "height": { "type": "number" },
-              "width": { "type": "number" },
-              "depth": { "type": "number" }
-            }
-          },
-          "dimensions_status": { "type": "string", "enum": ["confirmed", "inferred", "unknown"] },
-          "relative_reference": { "type": "string" },
-          "text": {
-            "type": "string",
-            "description": "One line for the card. Numbers only if dimensions_status is confirmed; otherwise relative wording."
-          }
+          "dimensions_cm": {"type": ["object", "null"], "properties": {"height": {"type": "number"}, "width": {"type": "number"}, "depth": {"type": "number"}}},
+          "dimensions_status": {"type": "string", "enum": ["confirmed", "inferred", "unknown"]},
+          "relative_reference": {"type": "string"},
+          "text": {"type": "string", "description": "One line for the card. Numbers only if dimensions_status is confirmed; otherwise relative wording."}
         },
         "required": ["dimensions_cm", "dimensions_status", "relative_reference", "text"]
       },
-      "applied_fixes": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "code": { "type": "string" },
-            "view_id": { "type": "string" },
-            "change": { "type": "string" }
-          },
-          "required": ["code", "view_id", "change"]
-        }
-      },
-      "assumptions": { "type": "array", "items": { "type": "string" } },
-      "warnings": { "type": "array", "items": { "type": "string" } }
+      "applied_fixes": {"type": "array", "items": {"type": "object", "properties": {"code": {"type": "string"}, "view_id": {"type": "string"}, "change": {"type": "string"}}, "required": ["code", "view_id", "change"]}},
+      "assumptions": {"type": "array", "items": {"type": "string"}},
+      "warnings": {"type": "array", "items": {"type": "string"}}
     },
-    "required": [
-      "asset_id",
-      "asset_name",
-      "sheet_level",
-      "views",
-      "generation_order",
-      "scale_card",
-      "applied_fixes",
-      "assumptions",
-      "warnings"
-    ]
+    "required": ["asset_id", "asset_name", "sheet_level", "views", "generation_order", "scale_card", "applied_fixes", "assumptions", "warnings"]
   }
 }
 ```

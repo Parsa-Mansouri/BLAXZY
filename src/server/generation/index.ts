@@ -19,4 +19,9 @@ export {
 /** Worker only: the work of one `generation.run` attempt. */
 export { runGeneration, type RunOutcome } from "./run";
 /** Worker only: the work of one `generation.sweep` run. */
-export { STUCK_FAILURE, sweepStuckGenerations, type SweepResult } from "./sweep";
+export {
+  QUEUED_STUCK_AFTER_MINUTES,
+  STUCK_FAILURE,
+  sweepStuckGenerations,
+  type SweepResult,
+} from "./sweep";

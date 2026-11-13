@@ -3,21 +3,34 @@
  *
  * 1. A finished generation is skipped (its completion hooks are called again).
  * 2. Claim: under a per-user advisory lock, a queued generation becomes running unless the user
- *    already has `GENERATION_MAX_PER_USER` running; then the job schedules a follow-up of itself
- *    and ends (rescheduled, not failed).
- * 3. The provider job is created once: `create` runs while the row is locked and its id is stored
- *    before any polling, so a retry (or a duplicate run) resumes the same provider job.
- * 4. Poll with backoff within the attempt's time budget; on success store the output (streamed
- *    when the provider streams it; a video's poster too), mark the generation succeeded and settle
- *    its credits in one transaction (conditional on `running`).
+ *    already has `GENERATION_MAX_PER_USER` running, or older queued generations of the user are
+ *    waiting for the free slots (first come, first served); then the job schedules a follow-up of
+ *    itself and ends (rescheduled, not failed).
+ * 3. The provider job is created once: a short lease on the row (`provider_claimed_at`) makes a
+ *    concurrent run wait, `create` runs outside any transaction with the generation id as its
+ *    idempotency key, and its id is stored before any polling, so a retry (or a duplicate run)
+ *    resumes the same provider job.
+ * 4. Poll with backoff within the attempt's time budget; on success upload the output (streamed
+ *    when the provider streams it; a video's poster too), record the uploaded files on the row (a
+ *    retry reuses them), then mark the generation succeeded and settle its credits in one
+ *    transaction (conditional on `running`).
  * 5. A non-retryable failure, or any failure on the last attempt, marks it failed and refunds.
+ *    An attempt interrupted by a worker shutdown changes nothing: the queue delivers it again.
+ * 6. The completion hooks run; once they all return, `notified_at` is set. The sweep calls the
+ *    hooks again for finished generations that never got there.
  */
-import { and, eq, gt, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { settle } from "@/server/billing";
 import { getDb } from "@/server/db/client";
-import { generation } from "@/server/db/schema";
+import { file, generation } from "@/server/db/schema";
 import { getEnv } from "@/server/env";
-import { enqueue, generationRun, type JobContext } from "@/server/jobs";
+import {
+  enqueue,
+  generationRun,
+  isLastAttempt,
+  isShutdownAbort,
+  type JobContext,
+} from "@/server/jobs";
 import { errorMessage, logLine } from "@/server/jobs/log";
 import {
   getProvider,
@@ -26,13 +39,7 @@ import {
   type GenerationReference,
   type GenerationRequest,
 } from "@/server/providers";
-import {
-  getOwnedFileInfo,
-  putFileBytes,
-  readFileBytes,
-  StorageError,
-  type FileInfo,
-} from "@/server/storage";
+import { getOwnedFileInfo, putFileBytes, readFileBytes, StorageError } from "@/server/storage";
 import { GenerationRunError } from "./errors";
 import { notifyGenerationFinished } from "./hooks";
 import {
@@ -45,6 +52,8 @@ import {
   posterFileIdOf,
   RESERVED_PARAMS,
   RESULT_FILE_PURPOSE,
+  UPLOADED_POSTER_PARAM,
+  UPLOADED_RESULT_PARAM,
   type GenerationRow,
 } from "./service";
 
@@ -52,6 +61,11 @@ export type RunOutcome = "skipped" | "deferred" | "succeeded" | "failed";
 
 /** A running generation older than this no longer counts against the per-user limit. */
 const STALE_RUNNING_MS = 2 * 60 * 60 * 1000;
+/**
+ * A queued generation older than this no longer holds younger ones back (first come, first
+ * served); the sweep fails it soon after (`QUEUED_STUCK_AFTER_MINUTES`).
+ */
+export const QUEUED_AHEAD_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 /** Follow-up delay when the user is at the limit: base plus jitter. */
 const DEFER_BASE_MS = 10_000;
 const DEFER_JITTER_MS = 10_000;
@@ -61,8 +75,18 @@ const POLL_MAX_MS = 15_000;
 const POLL_MIN_MS = 200;
 /** Time kept free at the end of an attempt (storing the result, bookkeeping). */
 const BUDGET_RESERVE_MS = 60_000;
+/**
+ * How long a run's right to create the provider job lasts. A run that crashed while creating
+ * blocks the next one this long at most; the provider's idempotency key covers a create repeated
+ * after that.
+ */
+export const PROVIDER_CLAIM_LEASE_MS = 2 * 60_000;
+/** Wait between two looks at a provider job another run is creating. */
+const PROVIDER_CLAIM_POLL_MS = 1_000;
 
 const GENERIC_FAILURE = "The generation failed. Your credits were returned; try again.";
+const TOO_LONG =
+  "The generation is taking longer than expected. Your credits were returned; try again.";
 
 const MIME_EXTENSIONS: Record<string, string> = {
   "image/png": "png",
@@ -101,7 +125,11 @@ async function loadRow(generationId: string): Promise<GenerationRow | undefined>
   return row;
 }
 
-/** Calls the completion hooks for a finished generation (also used by the sweep). */
+/**
+ * Calls the completion hooks for a finished generation (also used by the sweep), then records
+ * that they all returned (`notified_at`). A hook that throws leaves it unset: the job's retry or a
+ * later sweep calls the hooks again (they are idempotent).
+ */
 export async function notify(row: GenerationRow): Promise<void> {
   await notifyGenerationFinished({
     id: row.id,
@@ -111,11 +139,18 @@ export async function notify(row: GenerationRow): Promise<void> {
     posterFileId: posterFileIdOf(row),
     error: row.error,
   });
+  await getDb()
+    .update(generation)
+    .set({ notifiedAt: new Date() })
+    .where(and(eq(generation.id, row.id), isNull(generation.notifiedAt)));
 }
 
 type Claim = { kind: "claimed"; row: GenerationRow } | { kind: "deferred" } | { kind: "finished" };
 
-/** queued → running (or a resumed running one), unless the user is at the limit. */
+/**
+ * queued → running (or a resumed running one), unless the user is at the limit or older queued
+ * generations of the user are waiting for the free slots (first come, first served).
+ */
 async function claim(generationId: string, userId: string, maxPerUser: number): Promise<Claim> {
   return getDb().transaction(async (tx) => {
     // Serialises claims per user, so the limit holds across worker processes.
@@ -129,6 +164,7 @@ async function claim(generationId: string, userId: string, maxPerUser: number): 
       .for("update");
     if (!row || isFinished(row.status)) return { kind: "finished" };
     if (row.status === "queued") {
+      const now = Date.now();
       const [{ running } = { running: 0 }] = await tx
         .select({ running: sql<number>`count(*)::int` })
         .from(generation)
@@ -137,10 +173,29 @@ async function claim(generationId: string, userId: string, maxPerUser: number): 
             eq(generation.userId, userId),
             eq(generation.status, "running"),
             ne(generation.id, generationId),
-            gt(generation.startedAt, new Date(Date.now() - STALE_RUNNING_MS)),
+            gt(generation.startedAt, new Date(now - STALE_RUNNING_MS)),
           ),
         );
-      if (running >= maxPerUser) return { kind: "deferred" };
+      const free = maxPerUser - running;
+      if (free <= 0) return { kind: "deferred" };
+      // Older queued generations of the user go first: this one starts only if it is among the
+      // `free` oldest (by creation, then id).
+      const [{ ahead } = { ahead: 0 }] = await tx
+        .select({ ahead: sql<number>`count(*)::int` })
+        .from(generation)
+        .where(
+          and(
+            eq(generation.userId, userId),
+            eq(generation.status, "queued"),
+            ne(generation.id, generationId),
+            gt(generation.createdAt, new Date(now - QUEUED_AHEAD_MAX_AGE_MS)),
+            or(
+              lt(generation.createdAt, row.createdAt),
+              and(eq(generation.createdAt, row.createdAt), lt(generation.id, row.id)),
+            ),
+          ),
+        );
+      if (ahead >= free) return { kind: "deferred" };
     }
     const [claimed] = await tx
       .update(generation)
@@ -218,29 +273,97 @@ function buildRequest(
   };
 }
 
-/** The stored provider job id, creating the provider job if there is none yet (once). */
+/** Takes the right to create the provider job: the time of the lease, or null if another holds it. */
+async function claimProviderCreate(generationId: string): Promise<Date | null> {
+  const claimedAt = new Date();
+  const [claimed] = await getDb()
+    .update(generation)
+    .set({ providerClaimedAt: claimedAt })
+    .where(
+      and(
+        eq(generation.id, generationId),
+        eq(generation.status, "running"),
+        isNull(generation.providerJobId),
+        or(
+          isNull(generation.providerClaimedAt),
+          lt(generation.providerClaimedAt, new Date(claimedAt.getTime() - PROVIDER_CLAIM_LEASE_MS)),
+        ),
+      ),
+    )
+    .returning({ id: generation.id });
+  return claimed ? claimedAt : null;
+}
+
+/**
+ * The stored provider job id, creating the provider job if there is none yet (once). No row lock
+ * or connection is held while the provider is called: a lease on the row makes a concurrent run
+ * wait for the stored id instead of creating a second job.
+ */
 async function ensureProviderJob(
   row: GenerationRow,
   provider: GenerationProvider,
+  deadline: number,
   signal: AbortSignal,
   log: Log,
 ): Promise<string> {
   if (row.providerJobId) return row.providerJobId;
   const draftProviderJobId = await loadDraftProviderJobId(row);
   const request = buildRequest(row, await loadReferences(row, signal), draftProviderJobId);
-  return getDb().transaction(async (tx) => {
-    // The row lock makes a concurrent duplicate run wait here, then reuse the stored id.
-    const [locked] = await tx
-      .select({ providerJobId: generation.providerJobId })
+  let claimedAt = await claimProviderCreate(row.id);
+  while (!claimedAt) {
+    const [current] = await getDb()
+      .select({ status: generation.status, providerJobId: generation.providerJobId })
       .from(generation)
       .where(eq(generation.id, row.id))
-      .for("update");
-    if (locked?.providerJobId) return locked.providerJobId;
-    const { providerJobId } = await provider.create(request);
-    await tx.update(generation).set({ providerJobId }).where(eq(generation.id, row.id));
-    log("info", "provider job created", { provider: provider.id, providerJobId });
-    return providerJobId;
-  });
+      .limit(1);
+    if (current?.providerJobId) return current.providerJobId;
+    if (!current || current.status !== "running") {
+      throw new GenerationRunError("The generation was stopped.", false);
+    }
+    if (Date.now() + PROVIDER_CLAIM_POLL_MS > deadline)
+      throw new GenerationRunError(TOO_LONG, true);
+    await sleep(PROVIDER_CLAIM_POLL_MS, signal);
+    claimedAt = await claimProviderCreate(row.id);
+  }
+  let providerJobId: string;
+  try {
+    ({ providerJobId } = await provider.create(request, { idempotencyKey: row.id, signal }));
+  } catch (error) {
+    // Give the lease back, so the retry does not wait for it to run out.
+    await getDb()
+      .update(generation)
+      .set({ providerClaimedAt: null })
+      .where(
+        and(
+          eq(generation.id, row.id),
+          eq(generation.providerClaimedAt, claimedAt),
+          isNull(generation.providerJobId),
+        ),
+      )
+      .catch((releaseError: unknown) =>
+        log("warn", "could not release the provider lease", { error: errorMessage(releaseError) }),
+      );
+    throw error;
+  }
+  const [stored] = await getDb()
+    .update(generation)
+    .set({ providerJobId })
+    .where(and(eq(generation.id, row.id), isNull(generation.providerJobId)))
+    .returning({ id: generation.id });
+  if (!stored) {
+    // Only after the lease ran out mid-create: keep the job stored first (same idempotency key).
+    const current = await loadRow(row.id);
+    if (current?.providerJobId) {
+      log("warn", "provider job already stored by another run", {
+        provider: provider.id,
+        providerJobId: current.providerJobId,
+        discarded: providerJobId,
+      });
+      return current.providerJobId;
+    }
+  }
+  log("info", "provider job created", { provider: provider.id, providerJobId });
+  return providerJobId;
 }
 
 type PollResult = { state: "succeeded" } | { state: "failed"; reason: string; retryable: boolean };
@@ -254,35 +377,46 @@ async function pollUntilDone(
   let delay = POLL_FIRST_MS;
   for (;;) {
     if (signal.aborted) throw signal.reason ?? new Error("aborted");
-    const status = await provider.getStatus(providerJobId);
+    const status = await provider.getStatus(providerJobId, { signal });
     if (status.state !== "running") return status;
     const wait = Math.min(Math.max(status.retryAfterMs ?? delay, POLL_MIN_MS), POLL_MAX_MS);
-    if (Date.now() + wait > deadline) {
-      throw new GenerationRunError(
-        "The generation is taking longer than expected. Your credits were returned; try again.",
-        true,
-      );
-    }
+    if (Date.now() + wait > deadline) throw new GenerationRunError(TOO_LONG, true);
     await sleep(wait, signal);
     delay = Math.min(delay * 2, POLL_MAX_MS);
   }
 }
 
-/** Stores the result and marks the generation succeeded + settled. False if another run won. */
-async function storeResult(
+type Uploaded = { resultId: string; posterId: string | null; sizeBytes: number | null };
+
+/** The files a previous attempt uploaded and recorded on the row, if they are still ready. */
+async function previousUpload(row: GenerationRow): Promise<Uploaded | null> {
+  const resultId = row.params[UPLOADED_RESULT_PARAM];
+  if (typeof resultId !== "string") return null;
+  const posterValue = row.params[UPLOADED_POSTER_PARAM];
+  const posterId = typeof posterValue === "string" ? posterValue : null;
+  const ids = posterId ? [resultId, posterId] : [resultId];
+  const rows = await getDb()
+    .select({ id: file.id, status: file.status, sizeBytes: file.sizeBytes })
+    .from(file)
+    .where(and(eq(file.ownerId, row.userId), inArray(file.id, ids)));
+  const ready = new Map(rows.filter((r) => r.status === "ready").map((r) => [r.id, r]));
+  const result = ready.get(resultId);
+  if (!result || (posterId && !ready.has(posterId))) return null;
+  return { resultId, posterId, sizeBytes: result.sizeBytes };
+}
+
+/** Downloads the provider's output and uploads it (and a video's poster) to the store. */
+async function upload(
   row: GenerationRow,
   provider: GenerationProvider,
   providerJobId: string,
   signal: AbortSignal,
-  log: Log,
-): Promise<boolean> {
+): Promise<Uploaded> {
   const purpose = RESULT_FILE_PURPOSE[row.purpose];
   if (!purpose)
     throw new GenerationRunError("This kind of generation cannot be stored yet.", false);
   const baseName = `${row.purpose.replace("_", "-")}-${row.id}`;
   const result = await provider.fetchResult(providerJobId, { signal });
-  let stored: FileInfo;
-  let poster: FileInfo | null = null;
   try {
     const extension = MIME_EXTENSIONS[result.mimeType.toLowerCase()] ?? "bin";
     const common = {
@@ -294,14 +428,15 @@ async function storeResult(
       signal,
     };
     // A streamed result goes to the store as a stream of known length (no copy in memory).
-    stored = await putFileBytes(
+    const stored = await putFileBytes(
       "stream" in result
         ? { ...common, bytes: result.stream, sizeBytes: result.sizeBytes }
         : { ...common, bytes: result.bytes },
     );
+    let posterId: string | null = null;
     if (row.kind === "video" && result.poster) {
       const posterExtension = MIME_EXTENSIONS[result.poster.mimeType.toLowerCase()] ?? "bin";
-      poster = await putFileBytes({
+      const poster = await putFileBytes({
         ownerId: row.userId,
         projectId: row.projectId,
         name: `${baseName}-poster.${posterExtension}`,
@@ -310,20 +445,79 @@ async function storeResult(
         bytes: result.poster.bytes,
         signal,
       });
+      posterId = poster.id;
     }
+    return { resultId: stored.id, posterId, sizeBytes: stored.sizeBytes };
   } finally {
     await result.dispose?.();
   }
-  const posterId = poster?.id;
+}
+
+/**
+ * Stores the result and marks the generation succeeded + settled. False if another run won.
+ *
+ * The uploaded files are recorded on the row (`params`) before the final update, so a retry after
+ * a crash or a failed update reuses them instead of downloading and uploading again; a run that
+ * loses the recording race uses the winner's files (its own stay unreferenced, and are logged).
+ */
+async function storeResult(
+  row: GenerationRow,
+  provider: GenerationProvider,
+  providerJobId: string,
+  signal: AbortSignal,
+  log: Log,
+): Promise<boolean> {
+  let files = await previousUpload(row);
+  if (files) {
+    log("info", "reusing the uploaded result", { fileId: files.resultId });
+  } else {
+    const uploaded = await upload(row, provider, providerJobId, signal);
+    // A recorded upload whose files are gone (unusable) is replaced; any other one is kept.
+    const unusable = row.params[UPLOADED_RESULT_PARAM];
+    const [recorded] = await getDb()
+      .update(generation)
+      .set({
+        params: sql`${generation.params} || ${JSON.stringify({
+          [UPLOADED_RESULT_PARAM]: uploaded.resultId,
+          [UPLOADED_POSTER_PARAM]: uploaded.posterId,
+        })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(generation.id, row.id),
+          eq(generation.status, "running"),
+          typeof unusable === "string"
+            ? sql`${generation.params} ->> ${UPLOADED_RESULT_PARAM} = ${unusable}`
+            : sql`not (${generation.params} ? ${UPLOADED_RESULT_PARAM})`,
+        ),
+      )
+      .returning({ id: generation.id });
+    if (recorded) {
+      files = uploaded;
+    } else {
+      const current = await loadRow(row.id);
+      files = current?.status === "running" ? await previousUpload(current) : null;
+      log("warn", "uploaded result not used: another run recorded or finished first", {
+        fileId: uploaded.resultId,
+        posterFileId: uploaded.posterId,
+      });
+      if (!files) return false;
+    }
+  }
+  const { resultId, posterId } = files;
   const won = await getDb().transaction(async (tx) => {
     const updated = await tx
       .update(generation)
       .set({
         status: "succeeded",
-        resultFileId: stored.id,
+        resultFileId: resultId,
         error: null,
         finishedAt: new Date(),
-        ...(posterId ? { params: { ...row.params, [POSTER_PARAM]: posterId } } : {}),
+        ...(posterId
+          ? {
+              params: sql`${generation.params} || ${JSON.stringify({ [POSTER_PARAM]: posterId })}::jsonb`,
+            }
+          : {}),
       })
       .where(and(eq(generation.id, row.id), eq(generation.status, "running")))
       .returning({ id: generation.id });
@@ -331,9 +525,9 @@ async function storeResult(
     await settle({ generationId: row.id }, tx);
     return true;
   });
-  const fields = { fileId: stored.id, posterFileId: posterId ?? null };
+  const fields = { fileId: resultId, posterFileId: posterId };
   if (!won) log("warn", "generation already finished by another run", fields);
-  else log("info", "generation result stored", { ...fields, bytes: stored.sizeBytes });
+  else log("info", "generation result stored", { ...fields, bytes: files.sizeBytes });
   return won;
 }
 
@@ -373,11 +567,11 @@ async function finishFailed(
 
 /**
  * Runs one attempt of `generation.run`. Throws to have the queue retry the attempt (transient
- * failures before the last attempt, an aborted attempt); returns otherwise.
+ * failures before the last attempt, an expired or interrupted attempt); returns otherwise.
  */
 export async function runGeneration(generationId: string, ctx: JobContext): Promise<RunOutcome> {
   const env = getEnv();
-  const last = ctx.attempt > generationRun.options.retryLimit;
+  const last = isLastAttempt(generationRun, ctx);
   const base = { generationId, jobId: ctx.jobId, attempt: ctx.attempt };
   const log: Log = (level, msg, fields = {}) => logLine(level, msg, { ...base, ...fields });
 
@@ -419,7 +613,7 @@ export async function runGeneration(generationId: string, ctx: JobContext): Prom
 
   let outcome: RunOutcome;
   try {
-    const providerJobId = await ensureProviderJob(row, provider, ctx.signal, log);
+    const providerJobId = await ensureProviderJob(row, provider, deadline, ctx.signal, log);
     const status = await pollUntilDone(provider, providerJobId, deadline, ctx.signal);
     if (status.state === "failed") {
       if (status.retryable && !last) throw new GenerationRunError(status.reason, true);
@@ -431,6 +625,12 @@ export async function runGeneration(generationId: string, ctx: JobContext): Prom
       outcome = won ? "succeeded" : "skipped";
     }
   } catch (error) {
+    if (isShutdownAbort(ctx.signal)) {
+      // The worker is stopping: nothing failed. The generation stays running with its provider
+      // job; the queue delivers the job again and that attempt resumes it.
+      log("warn", "generation attempt interrupted by shutdown", fields);
+      throw error;
+    }
     const aborted = ctx.signal.aborted;
     const decision = classify(error, aborted);
     if (decision.retryable && !last) {
@@ -445,7 +645,8 @@ export async function runGeneration(generationId: string, ctx: JobContext): Prom
     outcome = "failed";
   }
 
-  // Outside the try: a hook that throws fails the attempt, and the retry calls the hooks again.
+  // Outside the try: a hook that throws fails the attempt, and the retry (or, after the last one,
+  // the sweep) calls the hooks again.
   const finished = await loadRow(row.id);
   if (finished && isFinished(finished.status)) await notify(finished);
   return outcome;

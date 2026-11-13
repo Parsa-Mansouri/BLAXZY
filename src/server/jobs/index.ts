@@ -7,6 +7,7 @@ export {
   type JobPayload,
 } from "./define";
 export {
+  ALL_JOBS,
   assetDetectFix,
   assetLookFix,
   assetLookGenerate,
@@ -16,7 +17,9 @@ export {
   assetSheetPlan,
   assetSheetViewsAdvance,
   blockRevise,
+  damiSweep,
   exportBuild,
+  fileSweep,
   generationRun,
   productionPrepare,
   takeFix,
@@ -34,6 +37,9 @@ export {
 export { closeJobQueue, enqueue, InvalidJobPayloadError, type EnqueueOptions } from "./enqueue";
 export {
   defineHandler,
+  isLastAttempt,
+  isShutdownAbort,
+  JobShutdownError,
   startWorker,
   stopWorker,
   type JobContext,

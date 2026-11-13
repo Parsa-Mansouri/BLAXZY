@@ -16,7 +16,7 @@ import {
   takeFixerInput,
 } from "../../src/server/production";
 import { classifyProductionFailure } from "./production-failure";
-import { handleFailure } from "./script-failure";
+import { handleFailure } from "./failure";
 
 /**
  * Produces a pending take: `fix` first writes its prompt with the take-fixer from the rejected

@@ -3,7 +3,8 @@ import { hasCurrentBlocksFor, markBlocksStale, setSectioningState } from "../../
 import { defineHandler, enqueue, scriptDetectAssets, scriptSection } from "../../src/server/jobs";
 import { loadScriptJob, ScriptInputError } from "../../src/server/script";
 import { detectorProject, detectorScript, runDetector, viewFor } from "./asset-detection";
-import { handleFailure } from "./script-failure";
+import { handleFailure } from "./failure";
+import { classifyFailure } from "./script-failure";
 
 /**
  * Detects the assets of the accepted script with Asset Detector v1, applies the result, marks the
@@ -59,15 +60,21 @@ export const scriptDetectAssetsHandler = defineHandler(
       });
       await enqueue(scriptSection, { scriptVersionId: versionId });
     } catch (error) {
-      await handleFailure(error, scriptDetectAssets, context, async (d) => {
-        await setSectioningState({
-          projectId: project.id,
-          state: "failed",
-          scriptVersionId: versionId,
-          failure: d.message,
-          onlyFor: versionId,
-        });
-      });
+      await handleFailure(
+        error,
+        scriptDetectAssets,
+        context,
+        async (d) => {
+          await setSectioningState({
+            projectId: project.id,
+            state: "failed",
+            scriptVersionId: versionId,
+            failure: d.message,
+            onlyFor: versionId,
+          });
+        },
+        classifyFailure,
+      );
     }
   },
 );

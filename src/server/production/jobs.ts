@@ -402,7 +402,8 @@ type RequestOutcome = "requested" | "already_requested" | "not_pending";
 
 /**
  * Requests the take's generation and records it on the take, in one transaction with the take
- * locked: a duplicate run finds the generation and only makes sure it is queued. A draft attaches
+ * locked (the generation's run job is sent in it too): a duplicate run finds the generation and
+ * only makes sure it is queued. A draft attaches
  * the block's references; a final finishes its accepted draft (same prompt and references, the
  * draft's generation). Throws `ProductionInputError`, `InsufficientCreditsError` or
  * `GenerationInputError` (nothing is created).
@@ -437,11 +438,14 @@ export async function requestTakeGeneration(takeId: string): Promise<RequestOutc
   );
   const style = owner.style;
 
-  const outcome = await getDb().transaction(async (tx) => {
+  // The generation, its reserved credits, its run job and the take's link to it are written in
+  // one transaction: none of them can exist without the others.
+  return getDb().transaction(async (tx): Promise<RequestOutcome> => {
     const [row] = await tx.select().from(blockTake).where(eq(blockTake.id, takeId)).for("update");
-    if (!row || row.status !== "pending") return { kind: "not_pending" as const };
+    if (!row || row.status !== "pending") return "not_pending";
     if (row.generationId) {
-      return { kind: "already_requested" as const, generationId: row.generationId };
+      await enqueueGeneration(row.generationId, { tx });
+      return "already_requested";
     }
     const { generationId } = await requestGeneration(
       {
@@ -462,11 +466,8 @@ export async function requestTakeGeneration(takeId: string): Promise<RequestOutc
       .update(blockTake)
       .set({ generationId, referenceFileIds })
       .where(eq(blockTake.id, takeId));
-    return { kind: "requested" as const, generationId };
+    return "requested";
   });
-  if (outcome.kind === "not_pending") return "not_pending";
-  await enqueueGeneration(outcome.generationId);
-  return outcome.kind;
 }
 
 /** pending → failed with a user-readable reason. Returns whether this call changed it. */

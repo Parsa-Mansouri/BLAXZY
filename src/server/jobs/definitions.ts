@@ -62,11 +62,15 @@ export const scriptRevise = defineJob({
   dedupeKey: (p) => p.scriptVersionId,
 });
 
-/** Detect the assets of an accepted script, then queue sectioning. */
+/**
+ * Detect the assets of an accepted script, then queue sectioning. One run per version at a time
+ * (the detector is paid). The queue predates the dedupe key; `ensureQueue` upgrades it in place.
+ */
 export const scriptDetectAssets = defineJob({
   name: "script.detect-assets",
   payload: scriptPayload,
   options: damiJob,
+  dedupeKey: (p) => p.scriptVersionId,
 });
 
 /**
@@ -88,6 +92,9 @@ export const scriptSection = defineJob({
   name: "script.section",
   payload: scriptPayload.extend({ resection: z.boolean().optional() }),
   options: { ...damiJob, expireInSeconds: 90 * 60 },
+  // One cut per version (and kind of cut) at a time: the sectioner is paid. The queue predates
+  // the dedupe key; `ensureQueue` upgrades it in place.
+  dedupeKey: (p) => `${p.scriptVersionId}:${p.resection ? "resection" : "section"}`,
 });
 
 /*
@@ -115,6 +122,28 @@ export const generationRun = defineJob({
  */
 export const generationSweep = defineJob({
   name: "generation.sweep",
+  payload: z.object({}),
+  options: { retryLimit: 1, retryDelaySeconds: 60, retryBackoff: false, expireInSeconds: 10 * 60 },
+  dedupeKey: () => "sweep",
+});
+
+/**
+ * Marks dami runs stuck in `running` (their process died) as aborted. Run by the worker's schedule
+ * every 15 minutes (one schedule for the whole fleet); one sweep at a time.
+ */
+export const damiSweep = defineJob({
+  name: "dami.sweep",
+  payload: z.object({}),
+  options: { retryLimit: 1, retryDelaySeconds: 60, retryBackoff: false, expireInSeconds: 10 * 60 },
+  dedupeKey: () => "sweep",
+});
+
+/**
+ * Marks uploads still `pending` long after they started as abandoned and removes their objects.
+ * Every 15 minutes, one sweep at a time.
+ */
+export const fileSweep = defineJob({
+  name: "file.sweep",
   payload: z.object({}),
   options: { retryLimit: 1, retryDelaySeconds: 60, retryBackoff: false, expireInSeconds: 10 * 60 },
   dedupeKey: () => "sweep",
@@ -240,3 +269,35 @@ export const exportBuild = defineJob({
   options: { retryLimit: 2, retryDelaySeconds: 30, retryBackoff: true, expireInSeconds: 60 * 60 },
   dedupeKey: (p) => p.exportId,
 });
+
+/**
+ * Every job type. Their queues are created once per process before the first send, so a send on a
+ * caller's transaction (`enqueue(..., { tx })`) never creates a queue inside it.
+ */
+export const ALL_JOBS = [
+  systemPing,
+  scriptWrite,
+  scriptWriteSegment,
+  scriptEnhance,
+  scriptCheck,
+  scriptRevise,
+  scriptDetectAssets,
+  assetDetectFix,
+  scriptSection,
+  generationRun,
+  generationSweep,
+  damiSweep,
+  fileSweep,
+  assetLookGenerate,
+  assetLookFix,
+  assetSheetGenerate,
+  assetSheetFix,
+  assetSheetPlan,
+  assetSheetViewsAdvance,
+  assetSheetAssemble,
+  productionPrepare,
+  blockRevise,
+  takeGenerate,
+  takeFix,
+  exportBuild,
+] as const;

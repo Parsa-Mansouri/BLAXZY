@@ -14,6 +14,7 @@ import {
   type ReviewComment,
   type ReviewFixRequest,
 } from "@/server/db/schema";
+import { enqueue, scriptWriteSegment } from "@/server/jobs";
 import { getOwnedFileInfo, type FileInfo } from "@/server/storage";
 import { uuidSchema } from "./schemas";
 import {
@@ -189,7 +190,9 @@ export async function completeOutline(input: {
 
 /**
  * Stores the progress of a version written sequence by sequence, only while the version is
- * pending and its stored progress is still at `expectedIndex` (a duplicate run changes nothing).
+ * pending and its stored progress is still at `expectedIndex` (a duplicate run changes nothing),
+ * and queues the job of the next sequence (`progress.nextIndex`) in the same transaction, so the
+ * progress is never stored without its continuation.
  */
 export async function storeSegmentProgress(input: {
   versionId: string;
@@ -209,6 +212,11 @@ export async function storeSegmentProgress(input: {
       .update(scriptVersion)
       .set({ damiNotes: { ...notes, segmentProgress: input.progress } })
       .where(eq(scriptVersion.id, input.versionId));
+    await enqueue(
+      scriptWriteSegment,
+      { scriptVersionId: input.versionId, segmentIndex: input.progress.nextIndex },
+      { tx },
+    );
     return true;
   });
 }

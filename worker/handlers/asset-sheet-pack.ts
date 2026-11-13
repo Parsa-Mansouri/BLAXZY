@@ -10,7 +10,6 @@ import {
   advanceSheetViews,
   AssetInputError,
   assemblePackSheet,
-  enqueueAdvance,
   failSheet,
   failSheetView,
   heroViewIdOf,
@@ -44,11 +43,12 @@ import {
   assetSheetPlan,
   assetSheetViewsAdvance,
   defineHandler,
+  enqueue,
   type JobContext,
 } from "../../src/server/jobs";
 import { z } from "zod";
 import { classifyAssetFailure } from "./asset-failure";
-import { handleFailure } from "./script-failure";
+import { handleFailure } from "./failure";
 
 const CATALOG = {
   location: "sheet-generator-location",
@@ -310,6 +310,14 @@ async function fixRoundOf(view: PackViewRow, kind: PackKind): Promise<FixRound |
   };
 }
 
+/**
+ * Queues an advance of the pack (deduplicated per sheet; a follow-up may wait beside a run).
+ * Throws when it cannot be queued, so the job is retried and its retry queues it again.
+ */
+async function queueAdvance(sheetId: string): Promise<void> {
+  await enqueue(assetSheetViewsAdvance, { sheetId });
+}
+
 async function planPack(sheetId: string, viewRowId: string | undefined, context: JobContext) {
   const ctx = await loadPackJob(sheetId);
   if (!ctx) return;
@@ -318,11 +326,20 @@ async function planPack(sheetId: string, viewRowId: string | undefined, context:
   const fixView = viewRowId ? await loadViewRow(viewRowId) : null;
   if (viewRowId) {
     // A fix round: only while the view still waits for its prompt and the pack is in review.
-    if (!fixView || fixView.sheetId !== sheetId || fixView.status !== "planned" || fixView.prompt) {
+    if (!fixView || fixView.sheetId !== sheetId || fixView.status !== "planned") return;
+    if (ctx.sheet.status !== "in_review") return;
+    if (fixView.prompt) {
+      // Written already (a retry): the advance that requests it may not have been queued.
+      await queueAdvance(sheetId);
       return;
     }
-    if (ctx.sheet.status !== "in_review") return;
-  } else if (ctx.sheet.status !== "pending" || ctx.sheet.spec) {
+  } else if (ctx.sheet.spec) {
+    // Planned already (a retry): the advance that requests the views may not have been queued.
+    if (ctx.sheet.status === "pending" || ctx.sheet.status === "in_review") {
+      await queueAdvance(sheetId);
+    }
+    return;
+  } else if (ctx.sheet.status !== "pending") {
     return;
   }
   try {
@@ -363,7 +380,7 @@ async function planPack(sheetId: string, viewRowId: string | undefined, context:
         damiRunId: result.runId,
       });
     }
-    await enqueueAdvance(sheetId);
+    await queueAdvance(sheetId);
   } catch (error) {
     await handleFailure(
       error,

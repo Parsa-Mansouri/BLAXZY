@@ -7,7 +7,7 @@
  */
 import "dotenv/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ffmpegAvailable } from "../../src/server/providers/ffmpeg";
+import { ffmpegReady } from "../../src/server/test-support/integration";
 import { servicesReachable } from "../../src/server/test-support/generation-fixtures";
 import {
   dropSchema,
@@ -17,10 +17,7 @@ import {
 
 const jobSchema = pointQueueAtThrowawaySchema();
 const reachable = await servicesReachable();
-const hasFfmpeg = reachable && (await ffmpegAvailable());
-if (reachable && !hasFfmpeg) {
-  console.warn("ffmpeg is not available: Production integration tests skipped");
-}
+const hasFfmpeg = reachable && (await ffmpegReady());
 
 describe.skipIf(!hasFfmpeg)(
   "production (integration, sample mode)",

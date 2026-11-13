@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { afterAll, describe, expect, it } from "vitest";
-import { ffmpegAvailable } from "../../src/server/providers/ffmpeg";
+import { ffmpegReady } from "../../src/server/test-support/integration";
 import { servicesReachable } from "../../src/server/test-support/generation-fixtures";
 import {
   dropSchema,
@@ -22,12 +22,7 @@ import {
 
 const jobSchema = pointQueueAtThrowawaySchema();
 const reachable = await servicesReachable();
-const hasFfmpeg = reachable && (await ffmpegAvailable());
-if (reachable && !hasFfmpeg) {
-  console.warn(
-    "ffmpeg is not available (FFMPEG_PATH, ffmpeg-static, PATH): video rendering tests skipped",
-  );
-}
+const hasFfmpeg = reachable && (await ffmpegReady());
 
 describe.skipIf(!reachable)("video generations and the sweep (integration)", async () => {
   const sharp = (await import("sharp")).default;
@@ -310,7 +305,9 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
     it("fails and refunds stuck generations once, calls the hook once, leaves fresh ones", async () => {
       const { userId, projectId } = await funded(20);
       const stuckRunning = await stuck(userId, projectId, "running", hours(3));
-      const stuckQueued = await stuck(userId, projectId, "queued", hours(5));
+      // Queued and never started: stuck only after the much longer queued limit (12 h).
+      const stuckQueued = await stuck(userId, projectId, "queued", hours(13));
+      const waitingQueued = await stuck(userId, projectId, "queued", hours(5));
       const fresh = await stuck(userId, projectId, "running", hours(0.5));
       // Queued long ago but started recently: not stuck.
       const restarted = await stuck(userId, projectId, "running", hours(0.2));
@@ -318,7 +315,7 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
         .update(generation)
         .set({ createdAt: hours(4) })
         .where(eq(generation.id, restarted));
-      expect(await billing.getBalance(userId)).toBe(4);
+      expect(await billing.getBalance(userId)).toBe(0);
 
       const calls: string[] = [];
       const off = gen.onGenerationFinished(async (g) => {
@@ -327,6 +324,9 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
       try {
         const first = await gen.sweepStuckGenerations({ userId, stuckAfterMinutes: 120 });
         expect(first.failed.sort()).toEqual([stuckRunning, stuckQueued].sort());
+        // Waiting behind the per-user limit is not a failure; its run job is sent again.
+        expect((await row(waitingQueued)).status).toBe("queued");
+        expect(first.requeued).toEqual([waitingQueued]);
         for (const id of [stuckRunning, stuckQueued]) {
           const r = await row(id);
           expect(r).toMatchObject({ status: "failed", error: gen.STUCK_FAILURE });
@@ -338,13 +338,13 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
           expect((await row(id)).status).toBe("running");
           expect(await entries(id)).toEqual(["reserve:-4"]);
         }
-        expect(await billing.getBalance(userId)).toBe(12);
+        expect(await billing.getBalance(userId)).toBe(8);
 
         // Twice: nothing more changes, no hook is called again.
         const second = await gen.sweepStuckGenerations({ userId, stuckAfterMinutes: 120 });
         expect(second.failed).toEqual([]);
         expect(calls).toHaveLength(2);
-        expect(await billing.getBalance(userId)).toBe(12);
+        expect(await billing.getBalance(userId)).toBe(8);
 
         // A run that arrives afterwards finds the generation finished and changes nothing.
         await run(stuckRunning);

@@ -12,6 +12,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -98,7 +99,8 @@ export type AssetPriority = (typeof ASSET_PRIORITIES)[number];
 export const ASSET_ORIGINS = ["detected", "manual"] as const;
 export type AssetOrigin = (typeof ASSET_ORIGINS)[number];
 
-export const DAMI_RUN_STATUSES = ["queued", "running", "succeeded", "failed"] as const;
+/** `aborted`: stopped before it finished (job expired or worker shutdown); not a dami failure. */
+export const DAMI_RUN_STATUSES = ["queued", "running", "succeeded", "failed", "aborted"] as const;
 export type DamiRunStatus = (typeof DAMI_RUN_STATUSES)[number];
 
 export const REVIEW_SUBJECTS = [
@@ -116,7 +118,8 @@ export type ReviewSubject = (typeof REVIEW_SUBJECTS)[number];
 export const REVIEW_DECISIONS = ["accepted", "rejected"] as const;
 export type ReviewDecision = (typeof REVIEW_DECISIONS)[number];
 
-export const FILE_STATUSES = ["pending", "ready"] as const;
+/** `abandoned`: a pending upload that was never confirmed and was swept (the row is kept). */
+export const FILE_STATUSES = ["pending", "ready", "abandoned"] as const;
 export type FileStatus = (typeof FILE_STATUSES)[number];
 
 /* -------------------------------------------------------------------------- */
@@ -525,7 +528,11 @@ export const projectEvent = pgTable(
     payload: jsonb("payload").$type<Record<string, unknown>>(),
     createdAt: createdAt(),
   },
-  (t) => [index("project_event_project_created_idx").on(t.projectId, t.createdAt.desc())],
+  (t) => [
+    index("project_event_project_created_idx").on(t.projectId, t.createdAt.desc()),
+    // A project's events of one type (for example the last failed correction round).
+    index("project_event_project_type_created_idx").on(t.projectId, t.type, t.createdAt),
+  ],
 );
 
 /* -------------------------------------------------------------------------- */
@@ -548,7 +555,12 @@ export const file = pgTable(
     status: text("status").$type<FileStatus>().notNull().default("pending"),
     createdAt: createdAt(),
   },
-  (t) => [index("file_project_idx").on(t.projectId), index("file_owner_idx").on(t.ownerId)],
+  (t) => [
+    index("file_project_idx").on(t.projectId),
+    index("file_owner_idx").on(t.ownerId),
+    // Cleanup scans (old pending or abandoned uploads).
+    index("file_status_created_idx").on(t.status, t.createdAt),
+  ],
 );
 
 /* -------------------------------------------------------------------------- */
@@ -794,6 +806,10 @@ export const promptBlock = pgTable(
     uniqueIndex("prompt_block_lineage_version_unique").on(t.lineageId, t.versionNumber),
     index("prompt_block_project_order_idx").on(t.projectId, t.episodeId, t.orderIndex),
     index("prompt_block_script_version_idx").on(t.scriptVersionId),
+    // The current blocks of a project in film order (keyset pagination by order, then id).
+    index("prompt_block_project_current_order_idx")
+      .on(t.projectId, t.orderIndex, t.id)
+      .where(sql`${t.supersededAt} is null`),
   ],
 );
 
@@ -903,14 +919,31 @@ export const generation = pgTable(
     /** User-readable reason when failed. */
     error: text("error"),
     attempts: integer("attempts").notNull().default(0),
+    /**
+     * When a run took the right to create the provider job (a lease): set before `create` is
+     * called, outside any transaction, so a concurrent run waits instead of creating a second
+     * provider job. Expires after a while, so a crashed run does not block the generation.
+     */
+    providerClaimedAt: ts("provider_claimed_at"),
     createdAt: createdAt(),
     startedAt: ts("started_at"),
     finishedAt: ts("finished_at"),
+    /**
+     * When the completion hooks last ran to the end for this finished generation. Null on a
+     * finished generation means its look, sheet, view or take may not know yet: the sweep calls
+     * the hooks again.
+     */
+    notifiedAt: ts("notified_at"),
   },
   (t) => [
     index("generation_project_created_idx").on(t.projectId, t.createdAt.desc()),
     index("generation_user_status_idx").on(t.userId, t.status),
     index("generation_status_idx").on(t.status),
+    // The sweep's "finished but the hooks never completed" scan.
+    index("generation_unnotified_idx")
+      .on(t.finishedAt)
+      .where(sql`${t.notifiedAt} is null and ${t.finishedAt} is not null`),
+    check("generation_price_credits_nonnegative", sql`${t.priceCredits} >= 0`),
   ],
 );
 
@@ -939,17 +972,25 @@ export const creditLedger = pgTable(
     index("credit_ledger_user_created_idx").on(t.userId, t.createdAt.desc()),
     // A generation is reserved, settled and refunded at most once each.
     uniqueIndex("credit_ledger_generation_type_unique").on(t.generationId, t.type),
+    // ... and a reservation is closed once: settled or refunded, never both.
+    uniqueIndex("credit_ledger_generation_closed_unique")
+      .on(t.generationId)
+      .where(sql`${t.type} in ('settle', 'refund')`),
   ],
 );
 
 /** Current balance per user, updated in the same transaction as every ledger entry (row-locked). */
-export const creditBalance = pgTable("credit_balance", {
-  userId: text("user_id")
-    .primaryKey()
-    .references(() => user.id),
-  balance: integer("balance").notNull().default(0),
-  updatedAt: updatedAt(),
-});
+export const creditBalance = pgTable(
+  "credit_balance",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => user.id),
+    balance: integer("balance").notNull().default(0),
+    updatedAt: updatedAt(),
+  },
+  (t) => [check("credit_balance_nonnegative", sql`${t.balance} >= 0`)],
+);
 
 /* -------------------------------------------------------------------------- */
 /* Pre-production: looks and sheets of an asset                                */
@@ -1190,6 +1231,12 @@ export const blockTake = pgTable(
     uniqueIndex("block_take_lineage_number_unique").on(t.lineageId, t.takeNumber),
     index("block_take_project_status_idx").on(t.projectId, t.status),
     index("block_take_block_idx").on(t.blockId),
+    // A block's takes, newest first (per project).
+    index("block_take_project_lineage_number_idx").on(
+      t.projectId,
+      t.lineageId,
+      t.takeNumber.desc(),
+    ),
   ],
 );
 

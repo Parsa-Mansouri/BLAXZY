@@ -3,16 +3,18 @@
  * load what a job needs, store a dami's prompt, request the generation, and record the outcome,
  * always with conditional updates so a duplicate or stale run cannot overwrite newer state.
  */
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, lt } from "drizzle-orm";
 import { z } from "zod";
 import { designerFor } from "@/server/damis";
 import { getDb, type DbTx } from "@/server/db/client";
 import {
   asset,
+  assetDetection,
   assetLook,
   assetSheet,
   generation,
   project,
+  promptBlock,
   review,
   type LookSpec,
   type ProjectStyle,
@@ -21,9 +23,11 @@ import {
   type SheetSpec,
 } from "@/server/db/schema";
 import { enqueueGeneration, requestGeneration, type FinishedGeneration } from "@/server/generation";
+import { setSectioningState } from "@/server/blocks";
+import { assetSheetViewsAdvance, enqueue, scriptSection } from "@/server/jobs";
 import { wakeWaitingLooks } from "./designs";
 import { logEvent, type AssetRow, type LookRow, type SheetRow } from "./looks";
-import { applyViewGenerationResult, enqueueAdvance } from "./packs";
+import { applyViewGenerationResult } from "./packs";
 
 export type AssetJobProject = { id: string; ownerId: string; style: ProjectStyle | null };
 export type AssetJobReview = {
@@ -269,12 +273,13 @@ type RequestOutcome = "requested" | "already_requested" | "not_pending";
 
 /**
  * Requests the look's image with its stored prompt (label = the asset's name) and records the
- * generation on the look, in one transaction with the look locked: a duplicate run finds the
- * generation and only makes sure it is queued. Throws `InsufficientCreditsError` /
- * `GenerationInputError` (nothing is created).
+ * generation on the look, in one transaction with the look locked; the generation's run job is
+ * sent in that transaction too, so a generation (and its reserved credits) never exists without
+ * its job. A duplicate run finds the generation and only makes sure it is queued. Throws
+ * `InsufficientCreditsError` / `GenerationInputError` (nothing is created).
  */
 export async function requestLookGeneration(lookId: string): Promise<RequestOutcome> {
-  const outcome = await getDb().transaction(async (tx: DbTx) => {
+  return getDb().transaction(async (tx: DbTx): Promise<RequestOutcome> => {
     const [row] = await tx
       .select({ look: assetLook, asset, project })
       .from(assetLook)
@@ -282,9 +287,10 @@ export async function requestLookGeneration(lookId: string): Promise<RequestOutc
       .innerJoin(project, eq(project.id, assetLook.projectId))
       .where(eq(assetLook.id, lookId))
       .for("update", { of: assetLook });
-    if (!row || row.look.status !== "pending") return { kind: "not_pending" as const };
+    if (!row || row.look.status !== "pending") return "not_pending";
     if (row.look.generationId) {
-      return { kind: "already_requested" as const, generationId: row.look.generationId };
+      await enqueueGeneration(row.look.generationId, { tx });
+      return "already_requested";
     }
     if (!row.look.prompt) throw new Error(`look ${lookId} has no prompt to generate from`);
     if (!row.project.style) throw new Error(`project ${row.project.id} has no style`);
@@ -308,11 +314,8 @@ export async function requestLookGeneration(lookId: string): Promise<RequestOutc
       tx,
     );
     await tx.update(assetLook).set({ generationId }).where(eq(assetLook.id, lookId));
-    return { kind: "requested" as const, generationId };
+    return "requested";
   });
-  if (outcome.kind === "not_pending") return "not_pending";
-  await enqueueGeneration(outcome.generationId);
-  return outcome.kind;
 }
 
 /**
@@ -321,7 +324,7 @@ export async function requestLookGeneration(lookId: string): Promise<RequestOutc
  * sheet"); see `requestLookGeneration`.
  */
 export async function requestSheetGeneration(sheetId: string): Promise<RequestOutcome> {
-  const outcome = await getDb().transaction(async (tx: DbTx) => {
+  return getDb().transaction(async (tx: DbTx): Promise<RequestOutcome> => {
     const [row] = await tx
       .select({ sheet: assetSheet, look: assetLook, asset, project })
       .from(assetSheet)
@@ -330,9 +333,10 @@ export async function requestSheetGeneration(sheetId: string): Promise<RequestOu
       .innerJoin(project, eq(project.id, assetSheet.projectId))
       .where(eq(assetSheet.id, sheetId))
       .for("update", { of: assetSheet });
-    if (!row || row.sheet.status !== "pending") return { kind: "not_pending" as const };
+    if (!row || row.sheet.status !== "pending") return "not_pending";
     if (row.sheet.generationId) {
-      return { kind: "already_requested" as const, generationId: row.sheet.generationId };
+      await enqueueGeneration(row.sheet.generationId, { tx });
+      return "already_requested";
     }
     if (!row.sheet.prompt) throw new Error(`sheet ${sheetId} has no prompt to generate from`);
     if (!row.project.style) throw new Error(`project ${row.project.id} has no style`);
@@ -353,11 +357,8 @@ export async function requestSheetGeneration(sheetId: string): Promise<RequestOu
       tx,
     );
     await tx.update(assetSheet).set({ generationId }).where(eq(assetSheet.id, sheetId));
-    return { kind: "requested" as const, generationId };
+    return "requested";
   });
-  if (outcome.kind === "not_pending") return "not_pending";
-  await enqueueGeneration(outcome.generationId);
-  return outcome.kind;
 }
 
 /** A location's look settled without a Hero: props waiting for it go ahead without it. */
@@ -419,9 +420,10 @@ export async function failSheet(
 /**
  * The generation completion hook: moves the pending look, sheet or sheet view that requested this
  * generation to `in_review` with its file, or to `failed` with the generation's user-readable
- * error. A settled view advances its pack.
+ * error. A settled view advances its pack (the advance job is sent in the same transaction).
  * Idempotent (only a pending row with this generation changes), so it may be called any number of
- * times per generation. Generations of other purposes are ignored.
+ * times per generation; a repeated call still wakes the props waiting for a failed location look
+ * (the first call may have died before doing it). Generations of other purposes are ignored.
  */
 export async function applyGenerationResult(g: FinishedGeneration): Promise<void> {
   if (g.purpose !== "asset_look" && g.purpose !== "asset_sheet") return;
@@ -457,8 +459,16 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
           lookId: row.id,
           generationId: g.id,
         });
+        return { failedLook: succeeded ? null : row.assetId };
       }
-      return { failedLook: row && !succeeded ? row.assetId : null, advance: null };
+      if (succeeded) return { failedLook: null };
+      // Applied before: the look this generation failed still wakes its waiting props.
+      const [done] = await tx
+        .select({ assetId: assetLook.assetId, status: assetLook.status })
+        .from(assetLook)
+        .where(and(eq(assetLook.projectId, projectId), eq(assetLook.generationId, g.id)))
+        .limit(1);
+      return { failedLook: done?.status === "failed" ? done.assetId : null };
     }
     const [row] = await tx
       .update(assetSheet)
@@ -477,12 +487,76 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
         sheetId: row.id,
         generationId: g.id,
       });
-      return { failedLook: null, advance: null };
+      return { failedLook: null };
     }
-    // Not a sheet: a view of a location pack or a prop sheet.
+    // Not a sheet: a view of a location pack or a prop sheet. Its pack advances: the job is sent
+    // with the view's update, so a crash cannot lose it (a repeated call finds no pending view).
     const advance = await applyViewGenerationResult(tx, projectId, g.id, values);
-    return { failedLook: null, advance };
+    if (advance) await enqueue(assetSheetViewsAdvance, { sheetId: advance }, { tx });
+    return { failedLook: null };
   });
   if (settled.failedLook) await wakeAfterLocation(settled.failedLook, projectId);
-  if (settled.advance) await enqueueAdvance(settled.advance);
+}
+
+/**
+ * After a correction round's detection: marks sectioning running for the version and queues the
+ * re-cut, in one transaction (the state never says "running" without its job).
+ */
+export async function queueResection(projectId: string, scriptVersionId: string): Promise<void> {
+  await getDb().transaction(async (tx) => {
+    await setSectioningState({ projectId, state: "running", scriptVersionId, failure: null }, tx);
+    await enqueue(scriptSection, { scriptVersionId, resection: true }, { tx });
+  });
+}
+
+/** When the project's latest asset detection was applied, or null (none yet). */
+export async function latestDetectionAt(projectId: string): Promise<Date | null> {
+  const [latest] = await getDb()
+    .select({ createdAt: assetDetection.createdAt })
+    .from(assetDetection)
+    .where(eq(assetDetection.projectId, projectId))
+    .orderBy(desc(assetDetection.createdAt))
+    .limit(1);
+  return latest?.createdAt ?? null;
+}
+
+/** The part of `project.stageState.sectioning` read here (written by the blocks service). */
+const sectioningRecord = z.object({ state: z.string(), scriptVersionId: z.string() });
+
+/**
+ * After a correction round's detection was applied: whether the project's blocks still have to be
+ * cut again for it. True when some current block is older than the latest detection (every
+ * re-cut replaces all current blocks) or there are none, unless sectioning of this version
+ * failed (the user retries that). A handler retry uses it to re-issue the sectioning job the
+ * first attempt may not have sent.
+ */
+export async function sectioningOwedAfterDetection(
+  projectId: string,
+  scriptVersionId: string,
+): Promise<boolean> {
+  const db = getDb();
+  const latest = await latestDetectionAt(projectId);
+  if (!latest) return false;
+  const [owner] = await db
+    .select({ stageState: project.stageState })
+    .from(project)
+    .where(eq(project.id, projectId))
+    .limit(1);
+  const record = sectioningRecord.safeParse(owner?.stageState.sectioning);
+  if (
+    record.success &&
+    record.data.state === "failed" &&
+    record.data.scriptVersionId === scriptVersionId
+  ) {
+    return false;
+  }
+  const current = and(eq(promptBlock.projectId, projectId), isNull(promptBlock.supersededAt));
+  const [any] = await db.select({ id: promptBlock.id }).from(promptBlock).where(current).limit(1);
+  if (!any) return true;
+  const [older] = await db
+    .select({ id: promptBlock.id })
+    .from(promptBlock)
+    .where(and(current, lt(promptBlock.createdAt, latest)))
+    .limit(1);
+  return older !== undefined;
 }

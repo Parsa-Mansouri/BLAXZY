@@ -19,7 +19,7 @@ import {
 import { mergeDamiStyle } from "../../src/server/projects";
 import { classifyAssetFailure } from "./asset-failure";
 import { runDesigner } from "./asset-design";
-import { handleFailure } from "./script-failure";
+import { handleFailure } from "./failure";
 
 /** The project's style descriptor is at most this long (see `projectStyleSchema`). */
 const MAX_STYLE_DESCRIPTOR = 2000;

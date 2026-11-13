@@ -20,7 +20,8 @@ import {
   readScriptNotes,
   ScriptInputError,
 } from "../../src/server/script";
-import { handleFailure } from "./script-failure";
+import { handleFailure } from "./failure";
+import { classifyFailure } from "./script-failure";
 import { assumptionsOf, generateFitted, notesFor, stitchEpisodes } from "./script-writing";
 
 /**
@@ -124,8 +125,14 @@ export const scriptWriteHandler = defineHandler(scriptWrite, async (payload, con
       }),
     });
   } catch (error) {
-    await handleFailure(error, scriptWrite, context, async (d) => {
-      await failScriptVersion(versionId, d.message, d.runId);
-    });
+    await handleFailure(
+      error,
+      scriptWrite,
+      context,
+      async (d) => {
+        await failScriptVersion(versionId, d.message, d.runId);
+      },
+      classifyFailure,
+    );
   }
 });

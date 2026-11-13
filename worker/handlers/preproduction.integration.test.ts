@@ -28,7 +28,7 @@ describe.skipIf(!reachable)(
     const { closeJobQueue } = await import("../../src/server/jobs");
     const { closeDb, getDb } = await import("../../src/server/db/client");
     const s = await import("../../src/server/db/schema");
-    const { and, eq } = await import("drizzle-orm");
+    const { and, eq, sql } = await import("drizzle-orm");
     const { assetLookFixHandler, assetLookGenerateHandler } = await import("./asset-look");
     const { assetSheetFixHandler, assetSheetGenerateHandler } = await import("./asset-sheet");
     const { assetSheetAssembleHandler, assetSheetPlanHandler, assetSheetViewsAdvanceHandler } =
@@ -83,6 +83,17 @@ describe.skipIf(!reachable)(
       });
       if (!created) throw new Error("addAsset returned null");
       return created;
+    }
+
+    /** Jobs of a queue in the throwaway schema whose payload has `field` = `value`. */
+    async function queued(name: string, field: string, value: string): Promise<number> {
+      const result = await getDb().execute<{ n: number }>(
+        sql.raw(
+          `select count(*)::int as n from ${jobSchema}.job where name = '${name}' ` +
+            `and data->>'${field}' = '${value}'`,
+        ),
+      );
+      return result.rows[0]?.n ?? 0;
     }
 
     async function lookRow(lookId: string) {
@@ -734,6 +745,8 @@ describe.skipIf(!reachable)(
         .where(eq(s.generation.projectId, projectId));
       expect(gens).toHaveLength(1);
       expect(await billing.getBalance(userId)).toBe(46);
+      // The run job was sent with the generation (same transaction), once.
+      expect(await queued("generation.run", "generationId", gens[0]?.id ?? "")).toBe(1);
       await generationRunHandler.run({ generationId: gens[0]?.id ?? "" }, jobContext());
       await expect(
         assets.startLookFromPrompt({ assetId: tomas.id, userId, prompt: "Another man" }),
@@ -1027,6 +1040,16 @@ describe.skipIf(!reachable)(
       await assetSheetPlanHandler.run({ sheetId }, jobContext());
       const planned = await sheetRow(sheetId);
       expect(planned.status).toBe("in_review");
+      // A retry after the plan was stored queues the advance again (the first attempt may have
+      // died before queueing it).
+      await getDb().execute(
+        sql.raw(
+          `delete from ${jobSchema}.job where name = 'asset.sheet.views.advance' ` +
+            `and data->>'sheetId' = '${sheetId}'`,
+        ),
+      );
+      await assetSheetPlanHandler.run({ sheetId }, jobContext(2));
+      expect(await queued("asset.sheet.views.advance", "sheetId", sheetId)).toBe(1);
       expect(planned.spec?.maker).toBe("sheet-generator-location");
       let d = await detail(cabin.id, userId);
       expect(d.stage).toBe("sheet_review");

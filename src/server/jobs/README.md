@@ -25,7 +25,32 @@ one per key, so a running handler can enqueue a delayed follow-up of itself (`ge
 this to wait for a free per-user slot); two jobs with the same key still never run at once.
 
 `enqueue` validates the payload (throws `InvalidJobPayloadError`) and connects lazily on first use,
-so importing this module never opens a connection (`next build` needs no env).
+so importing this module never opens a connection (`next build` needs no env). On the first send a
+process creates the queue of every job type in `ALL_JOBS` (`definitions.ts`; add new job types
+there), so no send ever creates a queue inside a caller's transaction.
+
+## Transactional enqueue (required pattern)
+
+pg-boss lives in the same Postgres, so a job can be written in the caller's transaction:
+
+```ts
+await getDb().transaction(async (tx) => {
+  await tx.update(scriptVersion).set({ damiNotes }).where(eq(scriptVersion.id, id)); // the change
+  await enqueue(scriptWriteSegment, { scriptVersionId: id, segmentIndex }, { tx }); // its follow-up
+});
+```
+
+The job exists only if the transaction commits, and no worker sees it before. **Whenever a job is
+enqueued because of a row written in the same unit of work, send it with `{ tx }`**: committing the
+row and enqueueing afterwards leaves the row waiting forever if the process dies (or the enqueue
+fails) in between, and a retry usually finds the row done and returns early. Dedupe keys behave as
+without `tx` (a duplicate returns `null`; a concurrent transaction sending the same key waits for
+this one). `enqueueGeneration(id, { tx })` does the same for `generation.run`, and
+`requestGeneration(input, tx)` sends the run job on `tx` itself.
+
+A retry that finds its state already written should still re-issue the follow-up it owes (a no-op
+while it is queued, thanks to the dedupe key): this also covers rows written before the follow-up
+was transactional.
 
 ## Handlers (worker only)
 
@@ -33,7 +58,16 @@ Handlers are bound in `worker/handlers/` with `defineHandler(job, async (payload
 listed in `worker/handlers/index.ts`. The worker validates the payload again on receipt: an invalid
 payload fails the job without retries. A thrown error fails the attempt and pg-boss retries it with
 the job type's `retryLimit` / `retryDelaySeconds` / `retryBackoff`. An attempt running longer than
-`expireInSeconds` is aborted (`ctx.signal`) and retried. Every attempt logs one JSON line with
+`expireInSeconds` is aborted (`ctx.signal`) and retried. Only an invalid payload on receipt fails
+the job for good; an `InvalidJobPayloadError` thrown inside a handler (a nested enqueue) is an
+ordinary, retried failure.
+
+Aborts have two reasons. An expired attempt is a failure: on the last attempt record a "took too
+long" failure on the domain row, then rethrow (`handleFailure` in `worker/handlers/failure.ts`). A
+worker shutdown aborts with a `JobShutdownError` reason (`isShutdownAbort(ctx.signal)`): it is not
+a failure, the attempt is given back (the job's retry limit is raised by one, see `ctx.retryLimit`)
+and the queue delivers it again; never record a failure for it. Use `isLastAttempt(job, ctx)`,
+which honours `ctx.retryLimit`. Every attempt logs one JSON line with
 `job`, `id`, `attempt`, `ms` and `outcome` (`completed`, `failed`, `rejected`).
 
 ## Recurring jobs
@@ -69,6 +103,13 @@ or a second enqueue. Every handler must be safe to run twice. The pattern:
   with an advisory lock, so replicas can start together. Queues are created on first use per
   process (idempotent). Only workers run pg-boss maintenance; web replicas keep a small pool
   (`JOBS_WEB_POOL_MAX`).
-- `stopWorker(timeoutMs)` stops fetching, waits for running jobs, then fails the rest so another
-  worker retries them. Keep the orchestrator's stop grace period above
+- `stopWorker(timeoutMs)` stops fetching, waits for running jobs, aborts the ones still running
+  with a shutdown reason (their attempt is given back) and waits for them to unwind, all within
+  `timeoutMs`; only then does it close the queue, so the caller can close the database after it. Keep the orchestrator's stop grace period above
   `WORKER_SHUTDOWN_TIMEOUT_SECONDS`.
+
+## Changing a queue's policy
+
+pg-boss cannot change an existing queue's policy. The one change that is safe in place (a job type
+gaining a dedupe key: `standard` to `exclusive`) is done by `ensureQueue` automatically; any other
+change (`allowFollowUp`, removing a key) needs a new queue name.

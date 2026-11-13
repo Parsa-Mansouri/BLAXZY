@@ -29,7 +29,8 @@ import {
   ScriptInputError,
   type ScriptJobContext,
 } from "../../src/server/script";
-import { handleFailure } from "./script-failure";
+import { handleFailure } from "./failure";
+import { classifyFailure } from "./script-failure";
 import { notesFor } from "./script-writing";
 
 function isIssueCode(code: string): code is ScriptIssueCode {
@@ -188,8 +189,14 @@ export const scriptReviseHandler = defineHandler(scriptRevise, async (payload, c
       },
     });
   } catch (error) {
-    await handleFailure(error, scriptRevise, context, async (d) => {
-      await failScriptVersion(versionId, d.message, d.runId);
-    });
+    await handleFailure(
+      error,
+      scriptRevise,
+      context,
+      async (d) => {
+        await failScriptVersion(versionId, d.message, d.runId);
+      },
+      classifyFailure,
+    );
   }
 });

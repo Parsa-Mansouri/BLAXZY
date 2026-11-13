@@ -34,7 +34,7 @@ import {
   type JobDefinition,
 } from "../../src/server/jobs";
 import { classifyAssetFailure } from "./asset-failure";
-import { handleFailure } from "./script-failure";
+import { handleFailure } from "./failure";
 
 type OriginalRole = "face" | "outfit" | "full_body" | "other";
 const ORIGINAL_ROLES: readonly string[] = ["face", "outfit", "full_body", "other"];

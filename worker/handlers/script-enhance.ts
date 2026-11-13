@@ -7,14 +7,16 @@ import {
   type EnhancerOutput,
 } from "../../src/server/damis";
 import { mergeDamiStyle } from "../../src/server/projects";
-import { defineHandler, scriptEnhance } from "../../src/server/jobs";
+import { defineHandler, isShutdownAbort, scriptEnhance } from "../../src/server/jobs";
+import { errorMessage, logLine } from "../../src/server/jobs/log";
 import {
   completeScriptVersion,
   failScriptVersion,
   loadScriptJob,
   ScriptInputError,
 } from "../../src/server/script";
-import { classifyFailure, isLastAttempt } from "./script-failure";
+import { isLastAttempt, TOOK_TOO_LONG } from "./failure";
+import { classifyFailure } from "./script-failure";
 
 function ownerChoice<T extends string>(value: string, allowed: readonly T[]): T | null {
   return (allowed as readonly string[]).includes(value) ? (value as T) : null;
@@ -64,10 +66,23 @@ export const scriptEnhanceHandler = defineHandler(scriptEnhance, async (payload,
     output = run.output;
     runId = run.runId;
   } catch (error) {
-    if (context.signal.aborted) throw error;
-    const decision = classifyFailure(error);
-    if (decision.retryable && !isLastAttempt(scriptEnhance, context)) throw error;
-    console.error(`[script.enhance] keeping the user's text for ${versionId}:`, decision.message);
+    // A shutdown is not a failure: the job runs again.
+    if (isShutdownAbort(context.signal)) throw error;
+    const last = isLastAttempt(scriptEnhance, context);
+    // An expired attempt (or an aborted dami) is retried; on the last one the user's text is
+    // kept like after any failure.
+    const decision = context.signal.aborted
+      ? { message: TOOK_TOO_LONG, retryable: true }
+      : classifyFailure(error);
+    if (decision.retryable && !last) throw error;
+    logLine("warn", "keeping the user's text", {
+      job: scriptEnhance.name,
+      id: context.jobId,
+      attempt: context.attempt,
+      versionId,
+      failure: decision.message,
+      error: errorMessage(error),
+    });
   }
 
   if (output?.status === "ok" && output.enhanced_prompt) {

@@ -21,6 +21,7 @@ import {
   type AspectRatio,
 } from "../policy";
 import type {
+  CreateOptions,
   GenerationProvider,
   GenerationRequest,
   ProviderJobStatus,
@@ -121,7 +122,15 @@ export class SampleProvider implements GenerationProvider {
     return price;
   }
 
-  async create(request: GenerationRequest): Promise<{ providerJobId: string }> {
+  /**
+   * Stateless: the job id encodes the whole job, so a repeated create is harmless and the
+   * idempotency key is not needed.
+   */
+  async create(
+    request: GenerationRequest,
+    options?: CreateOptions,
+  ): Promise<{ providerJobId: string }> {
+    if (options?.signal?.aborted) throw options.signal.reason ?? new Error("aborted");
     const created = this.clock.now();
     const job: SampleJob = {
       v: 1,
@@ -153,7 +162,11 @@ export class SampleProvider implements GenerationProvider {
     return { providerJobId: encodeSampleJobId(job) };
   }
 
-  async getStatus(providerJobId: string): Promise<ProviderJobStatus> {
+  async getStatus(
+    providerJobId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<ProviderJobStatus> {
+    if (options?.signal?.aborted) throw options.signal.reason ?? new Error("aborted");
     const job = this.decode(providerJobId);
     const now = this.clock.now();
     if (now < job.r) return { state: "running", retryAfterMs: job.r - now };

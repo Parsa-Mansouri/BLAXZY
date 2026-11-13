@@ -69,7 +69,10 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
     return rows.map((e) => `${e.type}:${e.amount}`).sort();
   }
 
-  /** Requests without enqueueing (as a caller with its own transaction would). */
+  /**
+   * Requests inside a transaction (as a caller with its own transaction would). The run job is
+   * sent on it, to the throwaway queue; the tests call the handler directly.
+   */
   async function requestOnly(input: Parameters<typeof gen.requestGeneration>[0]) {
     return getDb().transaction((tx) => gen.requestGeneration(input, tx));
   }
@@ -358,6 +361,13 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
       style: TEST_STYLE,
     });
     const create = vi.spyOn(provider, "create");
+    // The job sent with the request is the one running now (the handler is called directly).
+    await getDb().execute(
+      sql.raw(
+        `update ${jobSchema}.job set state = 'active' where name = 'generation.run' ` +
+          `and data->>'generationId' = '${generationId}'`,
+      ),
+    );
     const before = Date.now();
     await run(generationId);
     const waiting = await row(generationId);
@@ -367,7 +377,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
     const jobs = await getDb().execute<{ state: string; start_after: Date }>(
       sql.raw(
         `select state, start_after from ${jobSchema}.job where name = 'generation.run' ` +
-          `and data->>'generationId' = '${generationId}'`,
+          `and data->>'generationId' = '${generationId}' and state = 'created'`,
       ),
     );
     expect(jobs.rows).toHaveLength(1);

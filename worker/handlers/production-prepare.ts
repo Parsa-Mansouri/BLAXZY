@@ -17,7 +17,7 @@ import {
   tooManyAssetsMessage,
 } from "../../src/server/production";
 import { classifyProductionFailure } from "./production-failure";
-import { handleFailure } from "./script-failure";
+import { handleFailure } from "./failure";
 
 /**
  * Prepares a pending block version: `prepare` binds its asset mentions to reference tokens with

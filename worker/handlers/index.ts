@@ -11,6 +11,12 @@ import {
 } from "./asset-sheet-pack";
 import { generationRunHandler } from "./generation-run";
 import { generationSweepHandler, generationSweepSchedule } from "./generation-sweep";
+import {
+  damiSweepHandler,
+  damiSweepSchedule,
+  fileSweepHandler,
+  fileSweepSchedule,
+} from "./maintenance-sweeps";
 import { exportBuildHandler } from "./production-export";
 import { productionGenerationHook } from "./production-generation-hook";
 import { blockReviseHandler, productionPrepareHandler } from "./production-prepare";
@@ -33,7 +39,11 @@ export const generationHooks: GenerationFinishedHandler[] = [
 ];
 
 /** Recurring jobs (one schedule per job type for the whole fleet). */
-export const schedules: JobSchedule[] = [generationSweepSchedule];
+export const schedules: JobSchedule[] = [
+  generationSweepSchedule,
+  damiSweepSchedule,
+  fileSweepSchedule,
+];
 
 /** Every job handler this worker runs. Add new handlers here. */
 export const handlers: JobHandler[] = [
@@ -48,6 +58,8 @@ export const handlers: JobHandler[] = [
   assetDetectFixHandler,
   generationRunHandler,
   generationSweepHandler,
+  damiSweepHandler,
+  fileSweepHandler,
   assetLookGenerateHandler,
   assetLookFixHandler,
   assetSheetGenerateHandler,

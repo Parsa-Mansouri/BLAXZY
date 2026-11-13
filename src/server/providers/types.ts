@@ -51,6 +51,8 @@ export type ProviderResult = ProviderFile & {
   dispose?: () => Promise<void>;
 };
 
+export type CreateOptions = { idempotencyKey: string; signal?: AbortSignal };
+
 /**
  * A generation backend. Implementations keep no per-job state in memory: anything needed later
  * lives in the provider job id or at the provider, so any process can poll any job.
@@ -60,8 +62,14 @@ export interface GenerationProvider {
   readonly id: string;
   /** The price in credits. Creates nothing. */
   price(request: Omit<GenerationRequest, "references">): Promise<number>;
-  create(request: GenerationRequest): Promise<{ providerJobId: string }>;
-  getStatus(providerJobId: string): Promise<ProviderJobStatus>;
+  /**
+   * Starts the job. `idempotencyKey` is the generation id: a provider whose API takes an
+   * idempotency key must send it, so a create repeated after a crash (the platform never calls
+   * `create` twice at once for one generation) returns the same provider job instead of a new,
+   * paid one. `signal` aborts the request.
+   */
+  create(request: GenerationRequest, options: CreateOptions): Promise<{ providerJobId: string }>;
+  getStatus(providerJobId: string, options?: { signal?: AbortSignal }): Promise<ProviderJobStatus>;
   fetchResult(providerJobId: string, options?: { signal?: AbortSignal }): Promise<ProviderResult>;
 }
 

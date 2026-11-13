@@ -7,9 +7,10 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { refund, reserve } from "@/server/billing";
 import { projectStyleSchema } from "@/server/damis";
-import { getDb, type DbTx } from "@/server/db/client";
+import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
 import {
   GENERATION_PURPOSES,
+  file,
   generation,
   project,
   type GenerationKind,
@@ -18,7 +19,7 @@ import {
   type ProjectStyle,
 } from "@/server/db/schema";
 import { enqueue, generationRun } from "@/server/jobs";
-import { errorMessage, logLine } from "@/server/jobs/log";
+import { logLine } from "@/server/jobs/log";
 import {
   ASPECT_RATIOS,
   getProvider,
@@ -28,7 +29,7 @@ import {
   pickModel,
   type AspectRatio,
 } from "@/server/providers";
-import { getOwnedFileInfo, type FilePurpose } from "@/server/storage";
+import type { FilePurpose } from "@/server/storage";
 import { GenerationInputError } from "./errors";
 
 export type GenerationRow = typeof generation.$inferSelect;
@@ -112,11 +113,22 @@ export const DRAFT_PARAM = "draftGenerationId";
  * and a repeated completion hook must still get it).
  */
 export const POSTER_PARAM = "posterFileId";
+/**
+ * Written into `params` once the result (and a video's poster) is uploaded, before the generation
+ * is marked succeeded: a retried run reuses these files instead of uploading again.
+ */
+export const UPLOADED_RESULT_PARAM = "uploadedResultFileId";
+export const UPLOADED_POSTER_PARAM = "uploadedPosterFileId";
 /** `params` keys that are the platform's bookkeeping, never model parameters. */
-export const RESERVED_PARAMS: readonly string[] = [LABEL_PARAM, DRAFT_PARAM, POSTER_PARAM];
+export const RESERVED_PARAMS: readonly string[] = [
+  LABEL_PARAM,
+  DRAFT_PARAM,
+  POSTER_PARAM,
+  UPLOADED_RESULT_PARAM,
+  UPLOADED_POSTER_PARAM,
+];
 
 const FINISHED: readonly GenerationStatus[] = ["succeeded", "failed", "cancelled"];
-const ENQUEUE_FAILURE = "This generation could not start. Your credits were returned; try again.";
 
 const uuid = z.uuid();
 const purposeSchema = z.enum(GENERATION_PURPOSES, { error: "Unknown kind of generation." });
@@ -211,11 +223,23 @@ export async function quoteGeneration(input: {
   return { priceCredits };
 }
 
-/** Checks every reference is a ready image the user owns; returns the ids without duplicates. */
-async function checkReferences(ids: string[], userId: string): Promise<string[]> {
+/**
+ * Checks every reference is a ready image the user owns; returns the ids without duplicates. Runs
+ * on the given executor (the caller's transaction), never on a second pool connection.
+ */
+async function checkReferences(db: DbExecutor, ids: string[], userId: string): Promise<string[]> {
   const unique = [...new Set(ids)];
+  if (unique.length === 0) return unique;
+  if (!unique.every((id) => uuid.safeParse(id).success)) {
+    throw new GenerationInputError("A reference image was not found.");
+  }
+  const rows = await db
+    .select({ id: file.id, status: file.status, mimeType: file.mimeType })
+    .from(file)
+    .where(and(inArray(file.id, unique), eq(file.ownerId, userId)));
+  const byId = new Map(rows.map((r) => [r.id, r]));
   for (const id of unique) {
-    const info = uuid.safeParse(id).success ? await getOwnedFileInfo(id, userId) : null;
+    const info = byId.get(id);
     if (!info || info.status !== "ready") {
       throw new GenerationInputError("A reference image was not found.");
     }
@@ -266,9 +290,11 @@ async function checkDraft(
 }
 
 /**
- * Picks the model, prices it, inserts the generation (queued) and reserves its credits, in one
- * transaction; enqueues `generation.run` after commit. With `tx` it runs inside the caller's
- * transaction and the caller enqueues (`enqueueGeneration`) after its commit.
+ * Picks the model, prices it, then in one transaction checks the project and the references,
+ * inserts the generation (queued), reserves its credits and sends its `generation.run` job (on the
+ * same transaction: the job exists exactly when the generation does). With `tx` all of that runs
+ * inside the caller's transaction, on its connection only (never a second pool connection while
+ * the caller holds locks); the run starts once the caller commits.
  *
  * Throws `GenerationInputError` (bad input, a project or reference that is not the user's, a
  * purpose not available yet) and `InsufficientCreditsError` (nothing is created).
@@ -298,7 +324,6 @@ export async function requestGeneration(
   ) {
     throw new GenerationInputError("A video can only be 16:9 or 9:16.");
   }
-  const referenceFileIds = await checkReferences(data.referenceFileIds, data.userId);
   const choice = pickModel(
     data.purpose,
     data.style,
@@ -329,6 +354,7 @@ export async function requestGeneration(
       )
       .limit(1);
     if (!owned) throw new GenerationInputError("That project was not found.");
+    const referenceFileIds = await checkReferences(db, data.referenceFileIds, data.userId);
     const params: Record<string, unknown> = { ...choice.params };
     if (data.label) params[LABEL_PARAM] = data.label;
     if (data.draftGenerationId) {
@@ -357,14 +383,11 @@ export async function requestGeneration(
       .returning({ id: generation.id });
     if (!row) throw new Error("generation insert returned no row");
     await reserve({ userId: data.userId, generationId: row.id, amount: priceCredits }, db);
+    await enqueueGeneration(row.id, { tx: db });
     return row.id;
   };
 
-  if (tx) {
-    const generationId = await create(tx);
-    return { generationId, priceCredits };
-  }
-  const generationId = await getDb().transaction(create);
+  const generationId = tx ? await create(tx) : await getDb().transaction(create);
   logLine("info", "generation requested", {
     generationId,
     userId: data.userId,
@@ -373,19 +396,20 @@ export async function requestGeneration(
     provider: provider.id,
     model: choice.model,
     priceCredits,
+    ...(tx ? { inCallerTransaction: true } : {}),
   });
-  try {
-    await enqueueGeneration(generationId);
-  } catch (err) {
-    logLine("error", "generation enqueue failed", { generationId, error: errorMessage(err) });
-    await failGeneration(generationId, ENQUEUE_FAILURE);
-  }
   return { generationId, priceCredits };
 }
 
-/** Queues the run of a generation (idempotent: one queued job per generation). */
-export async function enqueueGeneration(generationId: string): Promise<void> {
-  await enqueue(generationRun, { generationId });
+/**
+ * Queues the run of a generation (idempotent: one queued job per generation). With `tx`, on that
+ * transaction (see `enqueue`).
+ */
+export async function enqueueGeneration(
+  generationId: string,
+  options: { tx?: DbTx } = {},
+): Promise<void> {
+  await enqueue(generationRun, { generationId }, { tx: options.tx });
 }
 
 /** The generation, or null when it is missing or not the user's. */

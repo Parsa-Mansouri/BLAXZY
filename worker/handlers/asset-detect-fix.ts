@@ -6,21 +6,33 @@ import {
   recordFixFailure,
   tempIdsFor,
 } from "../../src/server/assets";
-import { setSectioningState } from "../../src/server/blocks";
-import { assetDetectFix, defineHandler, enqueue, scriptSection } from "../../src/server/jobs";
+import { queueResection, sectioningOwedAfterDetection } from "../../src/server/assets/jobs";
+import { assetDetectFix, defineHandler } from "../../src/server/jobs";
 import { loadScriptJob, ScriptInputError } from "../../src/server/script";
 import { detectorProject, detectorScript, runDetector, viewFor } from "./asset-detection";
-import { handleFailure } from "./script-failure";
+import { handleFailure } from "./failure";
+import { classifyFailure } from "./script-failure";
 
 /**
  * One correction round of the detected list: the Asset Detector in fix mode, with the stored
  * assets rebuilt as `previous_output` (temporary ids for this run only) and the review's fix
  * requests (targets translated from names to those ids); or, for a re-scan (ADR01), an
- * incremental run over the accepted script. The result is applied like any detection.
+ * incremental run over the accepted script. The result is applied like any detection, then the
+ * blocks are cut again. A run that finds the round answered (a retry after the detection was
+ * applied) still queues the re-cut if it is owed: the first attempt may have died before it.
  */
 export const assetDetectFixHandler = defineHandler(assetDetectFix, async (payload, context) => {
   const job = await loadDetectionFix(payload.reviewId);
-  if (!job || (await detectionAnswered(payload.reviewId, job.projectId))) return;
+  if (!job) return;
+  if (await detectionAnswered(payload.reviewId, job.projectId)) {
+    if (
+      job.scriptVersionId &&
+      (await sectioningOwedAfterDetection(job.projectId, job.scriptVersionId))
+    ) {
+      await queueResection(job.projectId, job.scriptVersionId);
+    }
+    return;
+  }
   try {
     if (!job.scriptVersionId) throw new ScriptInputError("There is no accepted script to read.");
     const script = await loadScriptJob(job.scriptVersionId);
@@ -68,16 +80,16 @@ export const assetDetectFixHandler = defineHandler(assetDetectFix, async (payloa
       byTemp: view.byTemp,
     });
     // The blocks are cut again so they name the corrected list (as after the first detection).
-    await setSectioningState({
-      projectId: job.projectId,
-      state: "running",
-      scriptVersionId: job.scriptVersionId,
-      failure: null,
-    });
-    await enqueue(scriptSection, { scriptVersionId: job.scriptVersionId, resection: true });
+    await queueResection(job.projectId, job.scriptVersionId);
   } catch (error) {
-    await handleFailure(error, assetDetectFix, context, async (d) => {
-      await recordFixFailure(job.projectId, payload.reviewId, d.message);
-    });
+    await handleFailure(
+      error,
+      assetDetectFix,
+      context,
+      async (d) => {
+        await recordFixFailure(job.projectId, payload.reviewId, d.message);
+      },
+      classifyFailure,
+    );
   }
 });

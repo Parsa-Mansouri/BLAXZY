@@ -2,7 +2,9 @@
  * The only file that imports pg-boss. Everything else talks to the queue through the functions
  * below, so the backend can be swapped (for example for BullMQ) without touching callers.
  */
-import { PgBoss, type JobResult, type SendOptions } from "pg-boss";
+import { sql } from "drizzle-orm";
+import { fromDrizzle, PgBoss, type JobResult, type SendOptions } from "pg-boss";
+import type { DbTx } from "@/server/db/client";
 import { getEnv } from "@/server/env";
 import type { JobDefinition, JobOptions } from "./define";
 import { errorMessage, logLine } from "./log";
@@ -19,8 +21,11 @@ export type BackendConfig = {
 
 export type QueueBackend = {
   readonly role: QueueRole;
+  readonly schema: string;
   readonly boss: PgBoss;
   readonly queues: Map<string, Promise<void>>;
+  /** Settles once every job type of the registry has its queue (see `ensureQueues`). */
+  registry?: Promise<void>;
 };
 
 /** start() attempts (1s, 2s, 4s, ... apart), so a process booting before Postgres is up waits. */
@@ -52,7 +57,7 @@ export async function startBackend(config: BackendConfig): Promise<QueueBackend>
     logLine("warn", "queue warning", { warning: warning.message, data: warning.data }),
   );
   await boss.start({ attempts: START_ATTEMPTS });
-  return { role: config.role, boss, queues: new Map() };
+  return { role: config.role, schema: config.schema, boss, queues: new Map() };
 }
 
 let current: { role: QueueRole; backend: Promise<QueueBackend> } | undefined;
@@ -108,19 +113,50 @@ function queueOptions(options: JobOptions) {
   };
 }
 
+type Policy = "standard" | "exclusive" | "stately";
+
+function policyOf(job: JobDefinition): Policy {
+  return !job.dedupeKey ? "standard" : job.allowFollowUp ? "stately" : "exclusive";
+}
+
+/**
+ * A queue created before its job type had a dedupe key has the `standard` policy. pg-boss copies
+ * the queue's policy onto every job at insert and its dedupe indexes filter on that per-job copy,
+ * and an `exclusive` queue is fetched exactly like a `standard` one. So switching the queue row
+ * from `standard` to `exclusive` is safe while jobs are in flight: jobs already queued keep
+ * `standard` (they are not deduplicated), every job sent afterwards is. pg-boss's `updateQueue`
+ * refuses any policy change, hence the direct update (idempotent: conditional on the old policy).
+ * Every other change still needs a new queue (see `ensureQueue`).
+ */
+async function upgradeToExclusive(backend: QueueBackend, name: string): Promise<void> {
+  await backend.boss
+    .getDb()
+    .executeSql(
+      `UPDATE ${backend.schema}.queue SET policy = 'exclusive', updated_on = now() ` +
+        `WHERE name = $1 AND policy = 'standard'`,
+      [name],
+    );
+  logLine("warn", "queue policy upgraded", { queue: name, from: "standard", to: "exclusive" });
+}
+
 /**
  * Create the job type's queue once per process (idempotent across processes: the insert is
  * `ON CONFLICT DO NOTHING` under an advisory lock). A job type with a dedupe key uses the
  * `exclusive` policy: one queued-or-active job per key; with `allowFollowUp` the `stately` policy:
  * one queued and one active job per key, and a queued one is not fetched while another is active.
+ * An existing `standard` queue whose job type gained a dedupe key is upgraded in place.
  */
 export function ensureQueue(backend: QueueBackend, job: JobDefinition): Promise<void> {
   let pending = backend.queues.get(job.name);
   if (!pending) {
     pending = (async () => {
-      const policy = !job.dedupeKey ? "standard" : job.allowFollowUp ? "stately" : "exclusive";
+      const policy = policyOf(job);
       await backend.boss.createQueue(job.name, { policy, ...queueOptions(job.options) });
-      const queue = await backend.boss.getQueue(job.name);
+      let queue = await backend.boss.getQueue(job.name);
+      if (queue?.policy === "standard" && policy === "exclusive") {
+        await upgradeToExclusive(backend, job.name);
+        queue = await backend.boss.getQueue(job.name);
+      }
       if (queue?.policy !== policy) {
         throw new Error(
           `Queue "${job.name}" exists with policy "${queue?.policy}" but its definition needs ` +
@@ -134,10 +170,27 @@ export function ensureQueue(backend: QueueBackend, job: JobDefinition): Promise<
   return pending;
 }
 
+/**
+ * Makes sure every job type of the registry has its queue, once per backend, so that a send inside
+ * a caller's transaction never has to create one. A failure is not cached: the queue of the job
+ * being sent is ensured again by `ensureQueue`, which reports it.
+ */
+export async function ensureQueues(
+  backend: QueueBackend,
+  registry: readonly JobDefinition[],
+): Promise<void> {
+  backend.registry ??= Promise.allSettled(registry.map((job) => ensureQueue(backend, job))).then(
+    () => undefined,
+  );
+  await backend.registry;
+}
+
 export type SendRequest = {
   payload: object;
   dedupeKey?: string;
   startAfter?: Date;
+  /** Send on this open transaction: the job exists only if it commits. */
+  tx?: DbTx;
 };
 
 /** Returns the job id, or null when a job with the same dedupe key is already in flight. */
@@ -150,6 +203,9 @@ export async function sendJob(
   const options: SendOptions = { ...queueOptions(job.options) };
   if (request.dedupeKey !== undefined) options.singletonKey = request.dedupeKey;
   if (request.startAfter) options.startAfter = request.startAfter;
+  // pg-boss's drizzle adapter: the insert runs on the transaction's connection, so the job
+  // exists only if (and once) that transaction commits.
+  if (request.tx) options.db = fromDrizzle(request.tx, sql);
   return backend.boss.send(job.name, request.payload, options);
 }
 
@@ -173,11 +229,33 @@ export async function scheduleJob(
   });
 }
 
+/**
+ * Gives an active attempt back without using it up: the job is allowed one more attempt, so the
+ * failure that follows (the worker shutting down mid-attempt) is retried even on the last
+ * attempt. Fenced to the fetched attempt (`retry_count`); a no-op when the job has moved on.
+ */
+export async function releaseAttempt(
+  backend: QueueBackend,
+  job: JobDefinition,
+  id: string,
+  attempt: number,
+): Promise<void> {
+  await backend.boss
+    .getDb()
+    .executeSql(
+      `UPDATE ${backend.schema}.job SET retry_limit = retry_limit + 1 ` +
+        `WHERE name = $1 AND id = $2 AND retry_count = $3 AND state = 'active'`,
+      [job.name, id, attempt - 1],
+    );
+}
+
 export type ReceivedJob = {
   id: string;
   data: unknown;
   /** 1 for the first attempt, 2 for the first retry, ... */
   attempt: number;
+  /** This job's retry limit: the job type's, plus any attempt given back at a shutdown. */
+  retryLimit: number;
   /** Aborted when the attempt expires or the worker stops without finishing it. */
   signal: AbortSignal;
 };
@@ -203,6 +281,7 @@ export async function workQueue(
       localConcurrency: options.concurrency,
       pollingIntervalSeconds: options.pollingIntervalSeconds,
       perJobResults: true,
+      includeMetadata: true,
     },
     async (jobs): Promise<JobResult[]> => {
       const results: JobResult[] = [];
@@ -211,6 +290,7 @@ export async function workQueue(
           id: received.id,
           data: received.data,
           attempt: received.retryCount + 1,
+          retryLimit: received.retryLimit,
           signal: received.signal,
         });
         results.push(
@@ -222,4 +302,9 @@ export async function workQueue(
       return results;
     },
   );
+}
+
+/** Stops fetching new jobs from these queues; running handlers go on (see `stopWorker`). */
+export async function stopFetching(backend: QueueBackend, names: Iterable<string>): Promise<void> {
+  await Promise.allSettled([...names].map((name) => backend.boss.offWork(name, { wait: false })));
 }

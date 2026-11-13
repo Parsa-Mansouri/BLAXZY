@@ -32,13 +32,13 @@ output_21 prop entry
 
 ## 1. Settings
 
-| Setting | Value | Why |
-|---|---|---|
-| Output | Forced tool call `submit_asset_spec` | Parseable JSON; analysis fields come first in the schema |
-| Temperature | 0.5 first run, 0.3 fix mode | Creative gap-filling, then conservative edits |
-| max_tokens | 6000 | Spec + DNA + prompt are long |
-| Retry | One retry on tool failure, then a generic error | The user never sees raw output |
-| Assembly | `SYSTEM = CORE + OBJECT_ORIENTATION + VIEW_LIBRARY + STUDIO_STANDARD + OBJECT_TEXT_RULE` | Modules in `prop_shared_modules_v1.md` |
+| Setting     | Value                                                                                    | Why                                                      |
+| ----------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Output      | Forced tool call `submit_asset_spec`                                                     | Parseable JSON; analysis fields come first in the schema |
+| Temperature | 0.5 first run, 0.3 fix mode                                                              | Creative gap-filling, then conservative edits            |
+| max_tokens  | 6000                                                                                     | Spec + DNA + prompt are long                             |
+| Retry       | One retry on tool failure, then a generic error                                          | The user never sees raw output                           |
+| Assembly    | `SYSTEM = CORE + OBJECT_ORIENTATION + VIEW_LIBRARY + STUDIO_STANDARD + OBJECT_TEXT_RULE` | Modules in `prop_shared_modules_v1.md`                   |
 
 ---
 
@@ -62,13 +62,13 @@ output_21 prop entry
 
 Skip logic is deterministic backend code. Every question allows skip and "Let BLAXZY decide" (`ai_decides`). Questions already answered by the input are not shown. A **"Design it for me"** button sends no input and runs `auto`.
 
-| # | id | Question | Answer type | Skip when |
-|---|---|---|---|---|
-| 1 | `what_is_it` | What are we making? | name / short text / detected from image | output_21 name and script description are clear, or a reference shows it |
-| 2 | `importance` | How important is it? | Background / Standard / Hero | Never skipped in the wizard; prefilled from the script (close-ups, repetition) |
-| 3 | `usage` | How is it used? | Static / Carried / Multi-state | Prefilled from the script actions; still shown for confirmation |
-| 4 | `scale` | How big is it? | Small / Medium / Large / exact size | Prefilled when the script or the reference makes it obvious; if unknown, offer relative choices (one hand, two hands, table height, person height) |
-| 5 | `must_keep` | What must stay? | must-keep items / forbidden items / free text | Optional; preserve texts of references are added automatically |
+| #   | id           | Question             | Answer type                                   | Skip when                                                                                                                                          |
+| --- | ------------ | -------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `what_is_it` | What are we making?  | name / short text / detected from image       | output_21 name and script description are clear, or a reference shows it                                                                           |
+| 2   | `importance` | How important is it? | Background / Standard / Hero                  | Never skipped in the wizard; prefilled from the script (close-ups, repetition)                                                                     |
+| 3   | `usage`      | How is it used?      | Static / Carried / Multi-state                | Prefilled from the script actions; still shown for confirmation                                                                                    |
+| 4   | `scale`      | How big is it?       | Small / Medium / Large / exact size           | Prefilled when the script or the reference makes it obvious; if unknown, offer relative choices (one hand, two hands, table height, person height) |
+| 5   | `must_keep`  | What must stay?      | must-keep items / forbidden items / free text | Optional; preserve texts of references are added automatically                                                                                     |
 
 **Advanced** (collapsed, Pro shows it open): materials and finish, colors, period / style, wear, asymmetric details, detachable parts, mechanical movement, hand / body interaction, production limits, forbidden items. Sent as `guided_answers.advanced`.
 
@@ -85,28 +85,55 @@ The answers go to this dami directly, so no separate "guided-questions describer
   "input_schema": {
     "type": "object",
     "properties": {
-      "asset_id": {"type": "string", "description": "Echo of asset.asset_id."},
-      "asset_name": {"type": "string"},
-      "source_mode": {"type": "string", "enum": ["prompt_only", "reference_only", "prompt_reference", "auto"]},
+      "asset_id": { "type": "string", "description": "Echo of asset.asset_id." },
+      "asset_name": { "type": "string" },
+      "source_mode": {
+        "type": "string",
+        "enum": ["prompt_only", "reference_only", "prompt_reference", "auto"]
+      },
       "script_analysis": {
         "type": "object",
         "description": "Filled first. Empty strings and arrays when there is no script_context.",
         "properties": {
-          "role_in_story": {"type": "string"},
-          "actions_on_object": {"type": "array", "items": {"type": "string"}, "description": "What characters do with it, per scene."},
-          "required_features": {"type": "array", "items": {"type": "string"}, "description": "Physical facts the script makes necessary."},
-          "required_states": {"type": "array", "items": {"type": "string"}},
-          "dramatic_weight": {"type": "string", "description": "What the object must make the audience feel or notice."}
+          "role_in_story": { "type": "string" },
+          "actions_on_object": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "What characters do with it, per scene."
+          },
+          "required_features": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Physical facts the script makes necessary."
+          },
+          "required_states": { "type": "array", "items": { "type": "string" } },
+          "dramatic_weight": {
+            "type": "string",
+            "description": "What the object must make the audience feel or notice."
+          }
         },
-        "required": ["role_in_story", "actions_on_object", "required_features", "required_states", "dramatic_weight"]
+        "required": [
+          "role_in_story",
+          "actions_on_object",
+          "required_features",
+          "required_states",
+          "dramatic_weight"
+        ]
       },
       "classification": {
         "type": "object",
         "properties": {
-          "families": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["hero_prop", "hand_prop", "set_dressing", "functional_prop"]}},
-          "importance": {"type": "string", "enum": ["background", "standard", "hero"]},
-          "interaction": {"type": "string", "enum": ["static", "carried", "multi_state"]},
-          "complexity": {"type": "string", "enum": ["low", "medium", "high"]}
+          "families": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": ["hero_prop", "hand_prop", "set_dressing", "functional_prop"]
+            }
+          },
+          "importance": { "type": "string", "enum": ["background", "standard", "hero"] },
+          "interaction": { "type": "string", "enum": ["static", "carried", "multi_state"] },
+          "complexity": { "type": "string", "enum": ["low", "medium", "high"] }
         },
         "required": ["families", "importance", "interaction", "complexity"]
       },
@@ -116,11 +143,26 @@ The answers go to this dami directly, so no separate "guided-questions describer
         "items": {
           "type": "object",
           "properties": {
-            "field": {"type": "string"},
-            "value": {"type": "string"},
-            "status": {"type": "string", "enum": ["confirmed", "inferred", "unknown"]},
-            "source": {"type": "string", "enum": ["user", "guided_answer", "reference", "location", "character", "script", "project", "dami"]},
-            "critical": {"type": "boolean", "description": "True if a wrong value would break identity, scale or function."}
+            "field": { "type": "string" },
+            "value": { "type": "string" },
+            "status": { "type": "string", "enum": ["confirmed", "inferred", "unknown"] },
+            "source": {
+              "type": "string",
+              "enum": [
+                "user",
+                "guided_answer",
+                "reference",
+                "location",
+                "character",
+                "script",
+                "project",
+                "dami"
+              ]
+            },
+            "critical": {
+              "type": "boolean",
+              "description": "True if a wrong value would break identity, scale or function."
+            }
           },
           "required": ["field", "value", "status", "source", "critical"]
         }
@@ -131,12 +173,20 @@ The answers go to this dami directly, so no separate "guided-questions describer
         "items": {
           "type": "object",
           "properties": {
-            "id": {"type": "string"},
-            "field": {"type": "string"},
-            "question": {"type": "string", "description": "In project.ui_language."},
-            "options": {"type": "array", "minItems": 2, "maxItems": 4, "items": {"type": "string"}},
-            "default": {"type": "string", "description": "The value used if the user skips. Must be one of options."},
-            "blocking": {"type": "boolean"}
+            "id": { "type": "string" },
+            "field": { "type": "string" },
+            "question": { "type": "string", "description": "In project.ui_language." },
+            "options": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 4,
+              "items": { "type": "string" }
+            },
+            "default": {
+              "type": "string",
+              "description": "The value used if the user skips. Must be one of options."
+            },
+            "blocking": { "type": "boolean" }
           },
           "required": ["id", "field", "question", "options", "default", "blocking"]
         }
@@ -144,80 +194,230 @@ The answers go to this dami directly, so no separate "guided-questions describer
       "dna": {
         "type": "object",
         "properties": {
-          "object_type": {"type": "string"},
-          "front_definition": {"type": "string"},
+          "object_type": { "type": "string" },
+          "front_definition": { "type": "string" },
           "geometry": {
             "type": "object",
             "properties": {
-              "silhouette": {"type": "string"},
-              "proportions": {"type": "string", "description": "Height : width : depth as a ratio, plus a sentence."},
-              "rest_orientation": {"type": "string", "description": "How it normally rests or is held; what is up."},
-              "parts": {"type": "array", "items": {"type": "object", "properties": {
-                "part_id": {"type": "string"}, "name": {"type": "string"},
-                "attaches_to": {"type": "string"}, "face": {"type": "string", "enum": ["F", "B", "L", "R", "T", "U", "whole", "inside"]},
-                "description": {"type": "string"}}, "required": ["part_id", "name", "attaches_to", "face", "description"]}}
+              "silhouette": { "type": "string" },
+              "proportions": {
+                "type": "string",
+                "description": "Height : width : depth as a ratio, plus a sentence."
+              },
+              "rest_orientation": {
+                "type": "string",
+                "description": "How it normally rests or is held; what is up."
+              },
+              "parts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "part_id": { "type": "string" },
+                    "name": { "type": "string" },
+                    "attaches_to": { "type": "string" },
+                    "face": {
+                      "type": "string",
+                      "enum": ["F", "B", "L", "R", "T", "U", "whole", "inside"]
+                    },
+                    "description": { "type": "string" }
+                  },
+                  "required": ["part_id", "name", "attaches_to", "face", "description"]
+                }
+              }
             },
             "required": ["silhouette", "proportions", "rest_orientation", "parts"]
           },
           "scale": {
             "type": "object",
             "properties": {
-              "size_class": {"type": "string", "enum": ["tiny", "hand_held", "small", "medium", "large", "very_large"]},
-              "dimensions_cm": {"type": ["object", "null"], "properties": {"height": {"type": "number"}, "width": {"type": "number"}, "depth": {"type": "number"}}},
-              "dimensions_status": {"type": "string", "enum": ["confirmed", "inferred", "unknown"]},
-              "relative_reference": {"type": "string", "description": "Size compared with a hand, a person or a known object."},
-              "scale_reference_type": {"type": "string", "enum": ["hand", "human_figure", "standard_object"]}
+              "size_class": {
+                "type": "string",
+                "enum": ["tiny", "hand_held", "small", "medium", "large", "very_large"]
+              },
+              "dimensions_cm": {
+                "type": ["object", "null"],
+                "properties": {
+                  "height": { "type": "number" },
+                  "width": { "type": "number" },
+                  "depth": { "type": "number" }
+                }
+              },
+              "dimensions_status": {
+                "type": "string",
+                "enum": ["confirmed", "inferred", "unknown"]
+              },
+              "relative_reference": {
+                "type": "string",
+                "description": "Size compared with a hand, a person or a known object."
+              },
+              "scale_reference_type": {
+                "type": "string",
+                "enum": ["hand", "human_figure", "standard_object"]
+              }
             },
-            "required": ["size_class", "dimensions_cm", "dimensions_status", "relative_reference", "scale_reference_type"]
+            "required": [
+              "size_class",
+              "dimensions_cm",
+              "dimensions_status",
+              "relative_reference",
+              "scale_reference_type"
+            ]
           },
-          "materials": {"type": "array", "items": {"type": "object", "properties": {
-            "part_id": {"type": "string"}, "material": {"type": "string"}, "finish": {"type": "string"},
-            "color": {"type": "string"}, "wear": {"type": "string"}}, "required": ["part_id", "material", "finish", "color", "wear"]}},
-          "palette": {"type": "array", "items": {"type": "string"}},
-          "signature_details": {"type": "array", "items": {"type": "object", "properties": {
-            "detail_id": {"type": "string"}, "description": {"type": "string"},
-            "face": {"type": "string", "enum": ["F", "B", "L", "R", "T", "U", "inside"]},
-            "position": {"type": "string", "description": "As seen looking straight at that face."},
-            "asymmetric": {"type": "boolean"}, "is_text": {"type": "boolean"},
-            "text_content": {"type": ["string", "null"]},
-            "render_as": {"type": "string", "enum": ["as_designed", "legible_text", "non_legible_marks"]}},
-            "required": ["detail_id", "description", "face", "position", "asymmetric", "is_text", "text_content", "render_as"]}},
-          "states": {"type": "array", "items": {"type": "object", "properties": {
-            "state_id": {"type": "string"}, "name": {"type": "string"}, "description": {"type": "string"},
-            "is_default": {"type": "boolean"}}, "required": ["state_id", "name", "description", "is_default"]}},
-          "mechanics": {"type": "array", "items": {"type": "object", "properties": {
-            "mechanism_id": {"type": "string"}, "type": {"type": "string"}, "part_id": {"type": "string"},
-            "how": {"type": "string", "description": "Axis, hinge side, direction and range, physically plausible."}},
-            "required": ["mechanism_id", "type", "part_id", "how"]}},
-          "must_keep": {"type": "array", "items": {"type": "string"}},
-          "must_not": {"type": "array", "items": {"type": "string"}},
-          "mutable": {"type": "array", "items": {"type": "string"}, "description": "What may vary between shots (dust, contents, light state) without a new version."}
+          "materials": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "part_id": { "type": "string" },
+                "material": { "type": "string" },
+                "finish": { "type": "string" },
+                "color": { "type": "string" },
+                "wear": { "type": "string" }
+              },
+              "required": ["part_id", "material", "finish", "color", "wear"]
+            }
+          },
+          "palette": { "type": "array", "items": { "type": "string" } },
+          "signature_details": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "detail_id": { "type": "string" },
+                "description": { "type": "string" },
+                "face": { "type": "string", "enum": ["F", "B", "L", "R", "T", "U", "inside"] },
+                "position": {
+                  "type": "string",
+                  "description": "As seen looking straight at that face."
+                },
+                "asymmetric": { "type": "boolean" },
+                "is_text": { "type": "boolean" },
+                "text_content": { "type": ["string", "null"] },
+                "render_as": {
+                  "type": "string",
+                  "enum": ["as_designed", "legible_text", "non_legible_marks"]
+                }
+              },
+              "required": [
+                "detail_id",
+                "description",
+                "face",
+                "position",
+                "asymmetric",
+                "is_text",
+                "text_content",
+                "render_as"
+              ]
+            }
+          },
+          "states": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "state_id": { "type": "string" },
+                "name": { "type": "string" },
+                "description": { "type": "string" },
+                "is_default": { "type": "boolean" }
+              },
+              "required": ["state_id", "name", "description", "is_default"]
+            }
+          },
+          "mechanics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "mechanism_id": { "type": "string" },
+                "type": { "type": "string" },
+                "part_id": { "type": "string" },
+                "how": {
+                  "type": "string",
+                  "description": "Axis, hinge side, direction and range, physically plausible."
+                }
+              },
+              "required": ["mechanism_id", "type", "part_id", "how"]
+            }
+          },
+          "must_keep": { "type": "array", "items": { "type": "string" } },
+          "must_not": { "type": "array", "items": { "type": "string" } },
+          "mutable": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "What may vary between shots (dust, contents, light state) without a new version."
+          }
         },
-        "required": ["object_type", "front_definition", "geometry", "scale", "materials", "palette", "signature_details", "states", "mechanics", "must_keep", "must_not", "mutable"]
+        "required": [
+          "object_type",
+          "front_definition",
+          "geometry",
+          "scale",
+          "materials",
+          "palette",
+          "signature_details",
+          "states",
+          "mechanics",
+          "must_keep",
+          "must_not",
+          "mutable"
+        ]
       },
       "project_links": {
         "type": "object",
         "properties": {
-          "scene_refs": {"type": "array", "items": {"type": "string"}},
-          "character_links": {"type": "array", "items": {"type": "object", "properties": {
-            "character_id": {"type": "string"}, "usage": {"type": "string"}, "hand": {"type": "string", "enum": ["left", "right", "both", "unknown"]}},
-            "required": ["character_id", "usage", "hand"]}},
-          "location_links": {"type": "array", "items": {"type": "object", "properties": {
-            "location_id": {"type": "string"}, "anchor_id": {"type": ["string", "null"]},
-            "placement_hint": {"type": "string", "description": "Where in the space, in the location's compass terms (wall side, position_pct, near which anchor)."},
-            "facing": {"type": "string", "description": "Which way the asset's FRONT faces in the location (N, E, S, W or toward an anchor)."}},
-            "required": ["location_id", "anchor_id", "placement_hint", "facing"]}}
+          "scene_refs": { "type": "array", "items": { "type": "string" } },
+          "character_links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "character_id": { "type": "string" },
+                "usage": { "type": "string" },
+                "hand": { "type": "string", "enum": ["left", "right", "both", "unknown"] }
+              },
+              "required": ["character_id", "usage", "hand"]
+            }
+          },
+          "location_links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "location_id": { "type": "string" },
+                "anchor_id": { "type": ["string", "null"] },
+                "placement_hint": {
+                  "type": "string",
+                  "description": "Where in the space, in the location's compass terms (wall side, position_pct, near which anchor)."
+                },
+                "facing": {
+                  "type": "string",
+                  "description": "Which way the asset's FRONT faces in the location (N, E, S, W or toward an anchor)."
+                }
+              },
+              "required": ["location_id", "anchor_id", "placement_hint", "facing"]
+            }
+          }
         },
         "required": ["scene_refs", "character_links", "location_links"]
       },
       "sheet_plan": {
         "type": "object",
         "properties": {
-          "level": {"type": "string", "enum": ["simple", "standard", "production"]},
-          "level_reason": {"type": "string"},
-          "views": {"type": "array", "items": {"type": "object", "properties": {
-            "view_id": {"type": "string"}, "purpose": {"type": "string"}}, "required": ["view_id", "purpose"]},
-            "description": "Planned views AFTER the hero, from the VIEW_LIBRARY."}
+          "level": { "type": "string", "enum": ["simple", "standard", "production"] },
+          "level_reason": { "type": "string" },
+          "views": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "view_id": { "type": "string" },
+                "purpose": { "type": "string" }
+              },
+              "required": ["view_id", "purpose"]
+            },
+            "description": "Planned views AFTER the hero, from the VIEW_LIBRARY."
+          }
         },
         "required": ["level", "level_reason", "views"]
       },
@@ -225,27 +425,80 @@ The answers go to this dami directly, so no separate "guided-questions describer
         "type": ["object", "null"],
         "description": "Null only when a blocking clarifying question exists.",
         "properties": {
-          "view_id": {"type": "string", "enum": ["hero_34"]},
-          "hero_source": {"type": "string", "enum": ["generate", "from_reference", "from_location"]},
-          "state_id": {"type": "string"},
-          "image_prompt": {"type": "string"},
-          "aspect_ratio": {"type": "string", "enum": ["1:1", "4:3", "3:4", "16:9", "9:16"]},
-          "reference_order": {"type": "array", "maxItems": 4, "items": {"type": "object", "properties": {
-            "index": {"type": "integer"}, "source": {"type": "string", "description": "user_reference:<n> or location_hero:<location_id>"},
-            "role": {"type": "string"}}, "required": ["index", "source", "role"]}},
-          "must_show": {"type": "array", "items": {"type": "string"}},
-          "must_not_show": {"type": "array", "items": {"type": "string"}}
+          "view_id": { "type": "string", "enum": ["hero_34"] },
+          "hero_source": {
+            "type": "string",
+            "enum": ["generate", "from_reference", "from_location"]
+          },
+          "state_id": { "type": "string" },
+          "image_prompt": { "type": "string" },
+          "aspect_ratio": { "type": "string", "enum": ["1:1", "4:3", "3:4", "16:9", "9:16"] },
+          "reference_order": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": { "type": "integer" },
+                "source": {
+                  "type": "string",
+                  "description": "user_reference:<n> or location_hero:<location_id>"
+                },
+                "role": { "type": "string" }
+              },
+              "required": ["index", "source", "role"]
+            }
+          },
+          "must_show": { "type": "array", "items": { "type": "string" } },
+          "must_not_show": { "type": "array", "items": { "type": "string" } }
         },
-        "required": ["view_id", "hero_source", "state_id", "image_prompt", "aspect_ratio", "reference_order", "must_show", "must_not_show"]
+        "required": [
+          "view_id",
+          "hero_source",
+          "state_id",
+          "image_prompt",
+          "aspect_ratio",
+          "reference_order",
+          "must_show",
+          "must_not_show"
+        ]
       },
-      "changes_identity": {"type": "boolean", "description": "Fix mode only: true if this round changed silhouette, materials, colors, signature details, states or scale. Always false on first generation."},
-      "style_used": {"type": "string"},
-      "style_source": {"type": "string", "enum": ["style_override", "project_style"]},
-      "applied_fixes": {"type": "array", "items": {"type": "object", "properties": {"code": {"type": "string"}, "change": {"type": "string"}}, "required": ["code", "change"]}},
-      "assumptions": {"type": "array", "items": {"type": "string"}},
-      "warnings": {"type": "array", "items": {"type": "string"}}
+      "changes_identity": {
+        "type": "boolean",
+        "description": "Fix mode only: true if this round changed silhouette, materials, colors, signature details, states or scale. Always false on first generation."
+      },
+      "style_used": { "type": "string" },
+      "style_source": { "type": "string", "enum": ["style_override", "project_style"] },
+      "applied_fixes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": { "code": { "type": "string" }, "change": { "type": "string" } },
+          "required": ["code", "change"]
+        }
+      },
+      "assumptions": { "type": "array", "items": { "type": "string" } },
+      "warnings": { "type": "array", "items": { "type": "string" } }
     },
-    "required": ["asset_id", "asset_name", "source_mode", "script_analysis", "classification", "spec_fields", "clarifying_questions", "dna", "project_links", "sheet_plan", "hero_view", "changes_identity", "style_used", "style_source", "applied_fixes", "assumptions", "warnings"]
+    "required": [
+      "asset_id",
+      "asset_name",
+      "source_mode",
+      "script_analysis",
+      "classification",
+      "spec_fields",
+      "clarifying_questions",
+      "dna",
+      "project_links",
+      "sheet_plan",
+      "hero_view",
+      "changes_identity",
+      "style_used",
+      "style_source",
+      "applied_fixes",
+      "assumptions",
+      "warnings"
+    ]
   }
 }
 ```

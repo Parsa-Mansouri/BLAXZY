@@ -1,38 +1,34 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PROJECT_STAGES } from "@/lib/stages";
 import { getSession } from "@/server/auth";
-import { Button, stagger } from "@/ui";
-import { Wordmark } from "./_components/wordmark";
-
-/** What each stage promises, in the words of Landing.dc.html. */
-const STAGE_COPY: Record<string, string> = {
-  style: "Choose how the film should look before anything else is made.",
-  script: "Start from an idea or bring your own script, then read it scene by scene.",
-  pre_production: "Review every character, location, prop and voice before a scene is generated.",
-  production: "Each scene becomes clips. Keep the takes you like and redo the rest.",
-};
+import { Button } from "@/ui";
+import { ClipVsFilm } from "./_landing/ClipVsFilm";
+import { ClosingCta } from "./_landing/ClosingCta";
+import { Faq } from "./_landing/Faq";
+import { Footer } from "./_landing/Footer";
+import { Glows } from "./_landing/Glows";
+import { LandingNav } from "./_landing/LandingNav";
+import { Split } from "./_landing/Split";
+import { StageReel } from "./_landing/StageReel";
+import { Timecode } from "./_landing/Timecode";
+import { HeroStack } from "./_landing/vignettes";
 
 /**
- * Public landing (Landing.dc.html): the headline and the way in,
- * then the four stages.
+ * Public landing (Landing.dc.html): the headline and the way in, one clip versus the film,
+ * the four stages, who decides what, questions, and a last call to start.
  */
 export default async function Home() {
   if (await getSession()) redirect("/dashboard");
   return (
     <main className="flex min-h-dvh flex-col bg-ground">
+      <LandingNav />
       <section
         aria-label="BLAXZY"
-        className="flex flex-1 flex-col gap-16 px-(--content-x) pt-8 pb-16"
+        className="relative isolate flex min-h-dvh flex-col gap-16 overflow-hidden px-(--content-x) pt-(--toolbar-h) pb-24"
       >
-        <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-          <Wordmark />
-          <Button variant="plain" render={<Link href="/login" />}>
-            Sign In
-          </Button>
-        </header>
+        <Glows />
 
-        <div className="flex flex-1 flex-col justify-center">
+        <div className="grid flex-1 items-center gap-16 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:py-10">
           <div className="flex min-w-0 flex-col gap-10">
             <div className="flex flex-col gap-6">
               <h1 className="-ml-[0.04em] text-hero-title text-balance">
@@ -55,25 +51,34 @@ export default async function Home() {
                 and makes the technical choices for them.
               </p>
             </div>
-            <div className="flex in-3 flex-wrap items-center gap-3">
+            <div className="flex in-3 flex-col items-start gap-6">
               <Button variant="primary" size="large" render={<Link href="/signup" />}>
                 Create Account
               </Button>
+              <Timecode className="mono-value text-meta text-label-3" />
             </div>
           </div>
+          {/* Wide screens: the product itself, beside the headline. */}
+          <HeroStack className="hidden max-w-[33rem] justify-self-end lg:flex" />
         </div>
+
+        <a
+          href="#stages"
+          className="absolute bottom-6 left-(--content-x) flex in-3 items-center gap-3 rounded-nested text-label-3 focus-ring transition-colors duration-(--dur-press) hover:text-label"
+        >
+          <span aria-hidden="true" className="h-8 w-px overflow-hidden">
+            <span className="block size-full scroll-cue bg-label-3" />
+          </span>
+          <span className="caps-label">Scroll</span>
+        </a>
       </section>
 
-      <section aria-label="The four stages of a film" className="in-3 px-(--content-x) pt-8 pb-16">
-        <ol className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-x-12 gap-y-10">
-          {PROJECT_STAGES.map((stage, index) => (
-            <li key={stage.key} className="flex enter flex-col gap-2" style={stagger(index, 460)}>
-              <h2 className="caps-label text-label">{stage.label}</h2>
-              <p className="text-secondary text-pretty text-label-2">{STAGE_COPY[stage.key]}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <ClipVsFilm />
+      <StageReel />
+      <Split />
+      <Faq />
+      <ClosingCta />
+      <Footer />
     </main>
   );
 }

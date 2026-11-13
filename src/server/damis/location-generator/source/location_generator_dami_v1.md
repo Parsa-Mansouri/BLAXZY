@@ -31,13 +31,13 @@ An uploaded image enters here (`reference_only` or `prompt_reference`): the dami
 
 ## 1. Settings
 
-| Setting | Value | Why |
-|---|---|---|
-| Output | Forced tool call `submit_location_spec` | Parseable JSON, analysis fields come first |
-| Temperature | 0.5 first run, 0.3 fix mode | Creative gap-filling, then conservative edits |
-| max_tokens | 6000 | Spec + layout + prompt are long |
-| Retry | One retry on tool failure, then a generic error | User never sees raw output |
-| Assembly | `SYSTEM = CORE + ORIENTATION + <genre_lens> + <style_lens>` | See `location_shared_modules_v1.md` |
+| Setting     | Value                                                       | Why                                           |
+| ----------- | ----------------------------------------------------------- | --------------------------------------------- |
+| Output      | Forced tool call `submit_location_spec`                     | Parseable JSON, analysis fields come first    |
+| Temperature | 0.5 first run, 0.3 fix mode                                 | Creative gap-filling, then conservative edits |
+| max_tokens  | 6000                                                        | Spec + layout + prompt are long               |
+| Retry       | One retry on tool failure, then a generic error             | User never sees raw output                    |
+| Assembly    | `SYSTEM = CORE + ORIENTATION + <genre_lens> + <style_lens>` | See `location_shared_modules_v1.md`           |
 
 ---
 
@@ -59,18 +59,18 @@ An uploaded image enters here (`reference_only` or `prompt_reference`): the dami
 
 Skip logic is deterministic backend code, no extra LLM call. Every question allows "Let Blaxzy decide" (`"ai_decides"`). Wizard users also get one button, **"Design it for me"**, which sends no user input and runs `auto` mode.
 
-| # | id | Question | Rule |
-|---|---|---|---|
-| 01 | `what_is_it` | What is this space? | Skip: output_21 name and script description |
-| 02 | `interior_exterior` | Inside or outside? | Skip: INT./EXT. in the script heading |
-| 03 | `narrative_function` | What does it do in the story? | Skip when a script slice exists (derived by the dami) |
-| 04 | `era_world` | Era or world? | Skip: project era_setting |
-| 05 | `design_language` | Overall design language? | Skip: project genre and style |
-| 06 | `shape_size` | Shape and rough size | **Ask** |
-| 07 | `fixed_elements` | Doors, windows, elements that must stay fixed; anything forbidden | **Ask**, optional |
-| 08 | `materials_colors` | Dominant materials and colors | **Ask** |
-| 09 | `light_atmosphere` | Base light and atmosphere (time of day prefilled) | **Ask** |
-| 10 | `output_mode` | Quick concept or full production pack | Wizard: not asked (lock). Pro: asked |
+| #   | id                   | Question                                                          | Rule                                                  |
+| --- | -------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- |
+| 01  | `what_is_it`         | What is this space?                                               | Skip: output_21 name and script description           |
+| 02  | `interior_exterior`  | Inside or outside?                                                | Skip: INT./EXT. in the script heading                 |
+| 03  | `narrative_function` | What does it do in the story?                                     | Skip when a script slice exists (derived by the dami) |
+| 04  | `era_world`          | Era or world?                                                     | Skip: project era_setting                             |
+| 05  | `design_language`    | Overall design language?                                          | Skip: project genre and style                         |
+| 06  | `shape_size`         | Shape and rough size                                              | **Ask**                                               |
+| 07  | `fixed_elements`     | Doors, windows, elements that must stay fixed; anything forbidden | **Ask**, optional                                     |
+| 08  | `materials_colors`   | Dominant materials and colors                                     | **Ask**                                               |
+| 09  | `light_atmosphere`   | Base light and atmosphere (time of day prefilled)                 | **Ask**                                               |
+| 10  | `output_mode`        | Quick concept or full production pack                             | Wizard: not asked (lock). Pro: asked                  |
 
 The backend sends the answers as `guided_answers` keyed by id. This dami consumes them directly, so the separate "Guided-questions asset describer" is not needed for locations.
 
@@ -110,12 +110,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
       },
       "source_mode": {
         "type": "string",
-        "enum": [
-          "auto",
-          "prompt_only",
-          "prompt_reference",
-          "reference_only"
-        ]
+        "enum": ["auto", "prompt_only", "prompt_reference", "reference_only"]
       },
       "narrative_analysis": {
         "type": "object",
@@ -140,11 +135,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "scene_number",
-                "what_happens",
-                "characters_present"
-              ],
+              "required": ["scene_number", "what_happens", "characters_present"],
               "properties": {
                 "scene_number": {
                   "type": "integer"
@@ -162,10 +153,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "demand",
-                "serves"
-              ],
+              "required": ["demand", "serves"],
               "properties": {
                 "demand": {
                   "type": "string"
@@ -195,24 +183,11 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
         "description": "One entry per field. Groups: Identity, Spatial, Visual, Environment, Continuity.",
         "items": {
           "type": "object",
-          "required": [
-            "group",
-            "field",
-            "value",
-            "status",
-            "source",
-            "critical"
-          ],
+          "required": ["group", "field", "value", "status", "source", "critical"],
           "properties": {
             "group": {
               "type": "string",
-              "enum": [
-                "Identity",
-                "Spatial",
-                "Visual",
-                "Environment",
-                "Continuity"
-              ]
+              "enum": ["Identity", "Spatial", "Visual", "Environment", "Continuity"]
             },
             "field": {
               "type": "string"
@@ -222,21 +197,11 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
             },
             "status": {
               "type": "string",
-              "enum": [
-                "confirmed",
-                "inferred",
-                "unknown"
-              ]
+              "enum": ["confirmed", "inferred", "unknown"]
             },
             "source": {
               "type": "string",
-              "enum": [
-                "user",
-                "reference",
-                "script",
-                "genre_style",
-                "design"
-              ]
+              "enum": ["user", "reference", "script", "genre_style", "design"]
             },
             "critical": {
               "type": "boolean"
@@ -261,12 +226,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "id",
-                "name",
-                "where",
-                "status"
-              ],
+              "required": ["id", "name", "where", "status"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -280,10 +240,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
                 },
                 "status": {
                   "type": "string",
-                  "enum": [
-                    "confirmed",
-                    "inferred"
-                  ]
+                  "enum": ["confirmed", "inferred"]
                 }
               }
             }
@@ -356,21 +313,14 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
         "properties": {
           "space_kind": {
             "type": "string",
-            "enum": [
-              "interior",
-              "exterior"
-            ]
+            "enum": ["interior", "exterior"]
           },
           "shape": {
             "type": "string"
           },
           "approx_size": {
             "type": "object",
-            "required": [
-              "width_m",
-              "depth_m",
-              "height_m"
-            ],
+            "required": ["width_m", "depth_m", "height_m"],
             "properties": {
               "width_m": {
                 "type": "number"
@@ -387,11 +337,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "id",
-                "name",
-                "area"
-              ],
+              "required": ["id", "name", "area"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -409,40 +355,18 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "id",
-                "type",
-                "side",
-                "position_pct",
-                "size",
-                "state",
-                "status"
-              ],
+              "required": ["id", "type", "side", "position_pct", "size", "state", "status"],
               "properties": {
                 "id": {
                   "type": "string"
                 },
                 "type": {
                   "type": "string",
-                  "enum": [
-                    "door",
-                    "window",
-                    "arch",
-                    "stairs",
-                    "gate",
-                    "other"
-                  ]
+                  "enum": ["door", "window", "arch", "stairs", "gate", "other"]
                 },
                 "side": {
                   "type": "string",
-                  "enum": [
-                    "N",
-                    "E",
-                    "S",
-                    "W",
-                    "ceiling",
-                    "floor"
-                  ]
+                  "enum": ["N", "E", "S", "W", "ceiling", "floor"]
                 },
                 "position_pct": {
                   "type": "number"
@@ -455,10 +379,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
                 },
                 "status": {
                   "type": "string",
-                  "enum": [
-                    "confirmed",
-                    "inferred"
-                  ]
+                  "enum": ["confirmed", "inferred"]
                 }
               }
             }
@@ -467,15 +388,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "id",
-                "name",
-                "side_or_zone",
-                "position_pct",
-                "size",
-                "fixed",
-                "status"
-              ],
+              "required": ["id", "name", "side_or_zone", "position_pct", "size", "fixed", "status"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -487,10 +400,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
                   "type": "string"
                 },
                 "position_pct": {
-                  "type": [
-                    "number",
-                    "null"
-                  ]
+                  "type": ["number", "null"]
                 },
                 "size": {
                   "type": "string"
@@ -500,10 +410,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
                 },
                 "status": {
                   "type": "string",
-                  "enum": [
-                    "confirmed",
-                    "inferred"
-                  ]
+                  "enum": ["confirmed", "inferred"]
                 }
               }
             }
@@ -512,12 +419,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "id",
-                "view",
-                "stands_at",
-                "looks_toward"
-              ],
+              "required": ["id", "view", "stands_at", "looks_toward"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -538,11 +440,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "from",
-                "to",
-                "note"
-              ],
+              "required": ["from", "to", "note"],
               "properties": {
                 "from": {
                   "type": "string"
@@ -560,29 +458,17 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
       },
       "coverage_plan": {
         "type": "object",
-        "required": [
-          "mode",
-          "views"
-        ],
+        "required": ["mode", "views"],
         "properties": {
           "mode": {
             "type": "string",
-            "enum": [
-              "concept",
-              "lock"
-            ]
+            "enum": ["concept", "lock"]
           },
           "views": {
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "view_id",
-                "name",
-                "camera_id",
-                "purpose",
-                "required"
-              ],
+              "required": ["view_id", "name", "camera_id", "purpose", "required"],
               "properties": {
                 "view_id": {
                   "type": "string"
@@ -617,11 +503,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
         "properties": {
           "mode": {
             "type": "string",
-            "enum": [
-              "generate",
-              "use_uploaded",
-              "restyle_uploaded"
-            ]
+            "enum": ["generate", "use_uploaded", "restyle_uploaded"]
           },
           "image_prompt": {
             "type": "string",
@@ -629,31 +511,20 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
           },
           "aspect_ratio": {
             "type": "string",
-            "enum": [
-              "16:9"
-            ]
+            "enum": ["16:9"]
           },
           "reference_order": {
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "index",
-                "role"
-              ],
+              "required": ["index", "role"],
               "properties": {
                 "index": {
                   "type": "integer"
                 },
                 "role": {
                   "type": "string",
-                  "enum": [
-                    "hero",
-                    "layout",
-                    "mood",
-                    "detail",
-                    "other"
-                  ]
+                  "enum": ["hero", "layout", "mood", "detail", "other"]
                 }
               }
             }
@@ -694,10 +565,7 @@ The backend sends the answers as `guided_answers` keyed by id. This dami consume
       },
       "style_source": {
         "type": "string",
-        "enum": [
-          "style_override",
-          "project_style"
-        ]
+        "enum": ["style_override", "project_style"]
       },
       "applied_fixes": {
         "type": "array",

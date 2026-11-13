@@ -364,9 +364,7 @@
     {
       "code": "P12",
       "label_fa": "سبک تصویر کاراکتر (فقط Pro)",
-      "available_in": [
-        "pro"
-      ],
+      "available_in": ["pro"],
       "followup": {
         "type": "chips_or_text",
         "allow_custom": true,

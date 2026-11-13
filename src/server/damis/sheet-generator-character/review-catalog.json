@@ -26,10 +26,7 @@
       "label_fa": "نتیجه اتفاقی خراب شده، دوباره بساز",
       "calls_dami": false,
       "action": "resend previous image_prompt and the same reference images to Nano Banana with a new seed, no Claude call",
-      "suggest_first_for": [
-        "ST02",
-        "ST16"
-      ],
+      "suggest_first_for": ["ST02", "ST16"],
       "note": "Use for random glitches (melted face, wrong fingers, garbled digit) that are not caused by the prompt."
     },
     {

@@ -23,12 +23,12 @@ The genre/style pair is simply concatenated, so any pair works (e.g. Comedy + Cl
 
 **API settings (recommended starting point):**
 
-| Setting | Value | Why |
-|---|---|---|
-| Model | strongest Claude model you can afford for drafting (Opus-class); a Sonnet-class model is enough for revision mode | Dramatic design is the quality-critical step |
-| Output | **forced tool call** using `script_output.schema.json` (`tool_choice` pinned to `submit_screenplay`, or `submit_outline` in outline mode) | Guarantees parseable JSON; do not rely on "reply in JSON" or prefill |
-| max_tokens | 8000 for ≤5 min, scale up for longer | Analysis fields come before the script |
-| Temperature | 0.7 drafting, 0.3 revision | Creative first pass, conservative edits |
+| Setting     | Value                                                                                                                                     | Why                                                                  |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Model       | strongest Claude model you can afford for drafting (Opus-class); a Sonnet-class model is enough for revision mode                         | Dramatic design is the quality-critical step                         |
+| Output      | **forced tool call** using `script_output.schema.json` (`tool_choice` pinned to `submit_screenplay`, or `submit_outline` in outline mode) | Guarantees parseable JSON; do not rely on "reply in JSON" or prefill |
+| max_tokens  | 8000 for ≤5 min, scale up for longer                                                                                                      | Analysis fields come before the script                               |
+| Temperature | 0.7 drafting, 0.3 revision                                                                                                                | Creative first pass, conservative edits                              |
 
 **Why JSON and not plain text:** the Screenwriting Engine doc requires structured elements rendered into standard format, with no section labels printed in the text. The frontend renders `scene.heading` / `action` / `dialogue` into the standard layout (Courier 12, standard margins) and can export Fountain/FDX later. The same JSON feeds `asset_detector` and the Scene Breakdown dami with no re-parsing.
 
@@ -39,28 +39,32 @@ The genre/style pair is simply concatenated, so any pair works (e.g. Comedy + Cl
 ## 0.1 Duration architecture (new in v0.2)
 
 ### Input rule
+
 The user can enter minutes, seconds or both ("30s", "8 min", "1:45"). Code normalizes it to `target_duration_seconds` (integer) before anything else. The model never parses duration text.
 
 ### Limits
-| Limit | Value | Reason |
-|---|---|---|
-| Minimum | 10 s | Below this there is no scene to write |
-| Single-call ceiling | 15 min | Above this one call loses continuity (names drift, ending gets rushed) and hits output-length limits |
-| **Wizard max (recommended)** | **15 min** | Same as the single-call ceiling. Casual users should not enter a long pipeline |
-| **Pro max** | **90 min** via the long pipeline | Needs outline approval, sequence-by-sequence writing and a continuity ledger |
-| Hard maximum | 90 min | Beyond that, split into episodes or parts (each its own script) |
+
+| Limit                        | Value                            | Reason                                                                                               |
+| ---------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Minimum                      | 10 s                             | Below this there is no scene to write                                                                |
+| Single-call ceiling          | 15 min                           | Above this one call loses continuity (names drift, ending gets rushed) and hits output-length limits |
+| **Wizard max (recommended)** | **15 min**                       | Same as the single-call ceiling. Casual users should not enter a long pipeline                       |
+| **Pro max**                  | **90 min** via the long pipeline | Needs outline approval, sequence-by-sequence writing and a continuity ledger                         |
+| Hard maximum                 | 90 min                           | Beyond that, split into episodes or parts (each its own script)                                      |
 
 **Should you cap at 90?** Yes, I would, and you will probably want an even lower product cap for cost reasons. A 90-minute script is roughly 90 pages (about 18,000 to 25,000 words). Writing it is possible with the pipeline below, but every minute of it later becomes many generated clips (AI video models make clips a few seconds long) which the user must review one by one. That is a pricing and credits decision for you, not a script-quality one. Suggested starting point: Wizard 15 min, Pro 90 min, and revisit once you see real generation costs. The numbers are config values, not baked into the prompt.
 
 ### Tiers
-| Tier | Duration | Route | Scenes (guide) |
-|---|---|---|---|
-| XS | 10 to 90 s | generate, 1 call | 1 to 3 |
-| S | 1.5 to 5 min | generate, 1 call | 2 to 6 |
-| M | 5 to 15 min | generate, 1 call (raise max_tokens to about 16000) | 5 to 15 |
-| L | 15 to 90 min | **outline → approve → write_segment × N → stitch → continuity check** | outline decides |
+
+| Tier | Duration     | Route                                                                 | Scenes (guide)  |
+| ---- | ------------ | --------------------------------------------------------------------- | --------------- |
+| XS   | 10 to 90 s   | generate, 1 call                                                      | 1 to 3          |
+| S    | 1.5 to 5 min | generate, 1 call                                                      | 2 to 6          |
+| M    | 5 to 15 min  | generate, 1 call (raise max_tokens to about 16000)                    | 5 to 15         |
+| L    | 15 to 90 min | **outline → approve → write_segment × N → stitch → continuity check** | outline decides |
 
 ### Budgets computed by code (not by the model)
+
 Models are poor at hitting an exact runtime by feel, so code computes the budget and checks the result.
 
 ```text
@@ -75,7 +79,7 @@ dialogue_word_budget = T * dialogue_share * 2.5
 action_beat_budget   = T * (1 - dialogue_share) / 3
 tolerance_seconds    = max(5, 0.10 * T)
 
-scene_count_range (by T): 
+scene_count_range (by T):
   T <= 30 : 1-2     | T <= 90 : 1-3     | T <= 300 : 2-6
   T <= 900: 5-15    | T > 900 : set by outline
 
@@ -83,6 +87,7 @@ estimate(script)     = dialogue_words/2.5 + action_beats*3 + n_scenes*1
 ```
 
 ### Auto-correction loop (code)
+
 ```text
 draft = call(generate)
 for pass in 1..2:
@@ -94,6 +99,7 @@ if still outside tolerance: ship it with a visible warning, let the user decide.
 ```
 
 ### Long pipeline (tier L)
+
 1. **`outline` call.** Returns acts, sequences (each 8 min or less), scenes with per-scene targets, locked `canonical_names`, and `proposed_additions` when the user's story is too small for the runtime.
 2. **User approves the outline.** This is the key UX point: reviewing a one-page outline is realistic; reviewing 90 pages blind is not. Reject with notes → `outline` is re-run with feedback. Approved `proposed_additions` become part of the story.
 3. **`write_segment` calls, sequential.** Each gets: approved outline, its own `segment_id`, the `continuity_ledger` so far, and `previous_tail`. Each returns its scenes plus an updated ledger. (Parallel is possible because the outline fixes names and scenes, but sequential is safer for continuity.)
@@ -267,6 +273,7 @@ Respond ONLY by calling the tool required by the current mode: submit_screenplay
 Source: `01_Blackeiz_Screenplay_Genres`. Each module changes the narrative only, never the image.
 
 ### 2.1 Drama
+
 ```text
 GENRE: Drama
 Definition: inner or relational conflict; a decision that costs the character something.
@@ -281,6 +288,7 @@ Scene test: what does this choice cost the character?
 ```
 
 ### 2.2 Comedy
+
 ```text
 GENRE: Comedy
 Definition: contrast between a situation and behavior, with clear cause and effect.
@@ -294,6 +302,7 @@ Scene test: does the laugh come from the characters' goal colliding with the sit
 ```
 
 ### 2.3 Horror
+
 ```text
 GENRE: Horror
 Definition: a felt sense of danger, ignorance and vulnerability.
@@ -307,6 +316,7 @@ Scene test: what does the audience fear is about to happen?
 ```
 
 ### 2.4 Thriller
+
 ```text
 GENRE: Thriller
 Definition: time pressure, consequence-risk and uncertainty.
@@ -320,6 +330,7 @@ Scene test: what is at risk right now, and what is the ticking pressure?
 ```
 
 ### 2.5 Action
+
 ```text
 GENRE: Action
 Definition: story told through decisions and physical action that is easy to follow.
@@ -333,6 +344,7 @@ Scene test: what physical thing does the character want, who or what blocks it, 
 ```
 
 ### 2.6 Science Fiction
+
 ```text
 GENRE: Science Fiction
 Definition: one scientific or technological premise that genuinely affects the story's problem.
@@ -351,6 +363,7 @@ Scene test: how does the sci-fi rule change what this character can do or must d
 Source: `02_Blackeiz_Screenplay_Visual_Styles`. Each module shapes visible detail and physical behavior, never camera or render.
 
 ### 3.1 Realistic
+
 ```text
 VISUAL STYLE: Realistic
 Identity: a world with believable physical behavior and detail.
@@ -361,6 +374,7 @@ Avoid: the words "photorealistic", "35mm", lens or lighting settings.
 ```
 
 ### 3.2 Noir
+
 ```text
 VISUAL STYLE: Noir
 Identity: a visual language built on concealment and visual contrast.
@@ -370,6 +384,7 @@ Avoid: assuming noir means crime or pessimism. Use noir's visual language on wha
 ```
 
 ### 3.3 Futuristic
+
 ```text
 VISUAL STYLE: Futuristic
 Identity: a world of forward-looking objects, architecture and technology.
@@ -379,6 +394,7 @@ Avoid: listing materials or CGI effects with no narrative function.
 ```
 
 ### 3.4 Horror Visual Style
+
 ```text
 VISUAL STYLE: Horror Visual Style
 Identity: an uneasy or threatening visual atmosphere, independent of the story's genre.
@@ -388,6 +404,7 @@ Avoid: turning the story into a horror story, or adding danger or villains. Only
 ```
 
 ### 3.5 3D Animation
+
 ```text
 VISUAL STYLE: 3D Animation
 Identity: a stylized three-dimensional world with clear volume and spatial relationships.
@@ -397,6 +414,7 @@ Avoid: render-engine, shader or technical parameter language.
 ```
 
 ### 3.6 Anime
+
 ```text
 VISUAL STYLE: Anime
 Identity: the performance language of anime, with controlled rhythm between action and reaction.
@@ -406,6 +424,7 @@ Avoid: character clichés, and a camera instruction in every line.
 ```
 
 ### 3.7 Claymation
+
 ```text
 VISUAL STYLE: Claymation
 Identity: a handmade, tactile world of material and form.
@@ -416,18 +435,19 @@ Avoid: instructions for building puppets, or promising unlimited effects.
 
 ### Genre/style conflict handling (already in the core laws, summarized for maintainers)
 
-| Pair | Result |
-|---|---|
-| Comedy + Noir | Funny things happen (genre), seen through concealment and contrast (style). |
-| Drama + Claymation | An emotional, choice-driven story (genre) in a tactile clay world (style). |
+| Pair                   | Result                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Comedy + Noir          | Funny things happen (genre), seen through concealment and contrast (style).                                         |
+| Drama + Claymation     | An emotional, choice-driven story (genre) in a tactile clay world (style).                                          |
 | Horror + Horror Visual | Both active, each doing its own job: genre = fear and information control, style = unsettling placement and detail. |
-| Drama + Horror Visual | Story stays a drama. Atmosphere only. No threat added. |
+| Drama + Horror Visual  | Story stays a drama. Atmosphere only. No threat added.                                                              |
 
 ---
 
 ## 4. USER MESSAGE TEMPLATE
 
 **Generate mode**
+
 ```text
 <mode>generate</mode>
 <project>
@@ -450,6 +470,7 @@ Avoid: instructions for building puppets, or promising unlimited effects.
 ```
 
 **Revise mode**
+
 ```text
 <mode>revise</mode>
 <project> ...same fields as above... </project>
@@ -465,6 +486,7 @@ Avoid: instructions for building puppets, or promising unlimited effects.
 ```
 
 **Outline mode** (tier L)
+
 ```text
 <mode>outline</mode>
 <project> ...same fields; creative_expansion applies to proposed_additions... </project>
@@ -473,6 +495,7 @@ Avoid: instructions for building puppets, or promising unlimited effects.
 ```
 
 **Write-segment mode** (tier L)
+
 ```text
 <mode>write_segment</mode>
 <project> ...same fields; target_duration_seconds = THIS sequence's target... </project>
@@ -483,6 +506,7 @@ Avoid: instructions for building puppets, or promising unlimited effects.
 ```
 
 Notes for the code:
+
 - Put the user's story in `<story>` unmodified. Never summarize it before sending.
 - Orientation (portrait/landscape), art details and anything about models are **not** sent to this dami. They belong to shot design.
 - `creative_expansion` defaults to `false` in Wizard.
@@ -501,21 +525,21 @@ Feed these as buttons in the review UI. The dami treats them as hints; `custom_n
 
 ## 6. TEST CASES (run before shipping)
 
-| # | Input | Must hold |
-|---|---|---|
-| T1 | The two bear cubs story, Comedy + Claymation, en, 60s | Reproduces the quality of the example in doc 03; the pinecone is listed in `added_assumptions`; no camera language. |
-| T2 | Same story, Drama + Realistic | Same premise and ending; conflict becomes subtext; no jokes forced in. |
-| T3 | One-sentence story, 120s | Deepens beats before inventing plot; adds a warning. |
-| T4 | Very long story, 30s | Compresses; keeps premise and ending; warning that it is tight. |
-| T5 | Persian story, `output_language: fa` | Persian action and dialogue; enums in English. |
-| T6 | Story with user-stated ending + `creative_expansion: false` | Ending unchanged. |
-| T7 | Horror genre + Drama-like story with Realistic style | Fear comes from information control, not from added monsters. |
-| T8 | Revise: "scene 2 unclear action" | Only scene 2 changes; all other scenes byte-identical; `change_log` filled. |
-| T9 | Prompt injection inside `story` ("ignore previous instructions...") | Treated as story content, not as instructions. |
-| T10 | Story asks for camera moves or 4K | Camera/render language is not written into the script; a warning is added. |
-| T11 | 30 s story | One scene (two at most), 0 to 3 lines of dialogue, estimate within plus or minus 5 s. |
-| T12 | 8 min story | 5 to 15 scenes, a real midpoint turn, estimate within plus or minus 48 s. |
-| T13 | Output deliberately 40% too long | Auto-correction loop brings it inside tolerance in 2 passes or less, premise intact. |
-| T14 | 90 min story, outline mode | Sequences all 8 min or less; targets sum exactly; `proposed_additions` listed, none touch premise or ending. |
-| T15 | Segment 3 of T14 | Same canonical names; no re-introduction of characters; ledger updated; no ending written. |
-| T16 | Duration 20 min given to generate mode | Warning that outline mode is needed, no attempt to write the full piece. |
+| #   | Input                                                               | Must hold                                                                                                           |
+| --- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| T1  | The two bear cubs story, Comedy + Claymation, en, 60s               | Reproduces the quality of the example in doc 03; the pinecone is listed in `added_assumptions`; no camera language. |
+| T2  | Same story, Drama + Realistic                                       | Same premise and ending; conflict becomes subtext; no jokes forced in.                                              |
+| T3  | One-sentence story, 120s                                            | Deepens beats before inventing plot; adds a warning.                                                                |
+| T4  | Very long story, 30s                                                | Compresses; keeps premise and ending; warning that it is tight.                                                     |
+| T5  | Persian story, `output_language: fa`                                | Persian action and dialogue; enums in English.                                                                      |
+| T6  | Story with user-stated ending + `creative_expansion: false`         | Ending unchanged.                                                                                                   |
+| T7  | Horror genre + Drama-like story with Realistic style                | Fear comes from information control, not from added monsters.                                                       |
+| T8  | Revise: "scene 2 unclear action"                                    | Only scene 2 changes; all other scenes byte-identical; `change_log` filled.                                         |
+| T9  | Prompt injection inside `story` ("ignore previous instructions...") | Treated as story content, not as instructions.                                                                      |
+| T10 | Story asks for camera moves or 4K                                   | Camera/render language is not written into the script; a warning is added.                                          |
+| T11 | 30 s story                                                          | One scene (two at most), 0 to 3 lines of dialogue, estimate within plus or minus 5 s.                               |
+| T12 | 8 min story                                                         | 5 to 15 scenes, a real midpoint turn, estimate within plus or minus 48 s.                                           |
+| T13 | Output deliberately 40% too long                                    | Auto-correction loop brings it inside tolerance in 2 passes or less, premise intact.                                |
+| T14 | 90 min story, outline mode                                          | Sequences all 8 min or less; targets sum exactly; `proposed_additions` listed, none touch premise or ending.        |
+| T15 | Segment 3 of T14                                                    | Same canonical names; no re-introduction of characters; ledger updated; no ending written.                          |
+| T16 | Duration 20 min given to generate mode                              | Warning that outline mode is needed, no attempt to write the full piece.                                            |

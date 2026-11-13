@@ -39,19 +39,19 @@ Script edited later: mode incremental with known_assets = current output_21.
 
 ## 2. Input contract
 
-| Field | Required | Notes |
-|---|---|---|
-| `mode` | yes | `full`, `incremental`, `fix` |
-| `project.format` | yes | `movie` or `series` |
-| `project.episode_number` | series | |
-| `project.genre`, `project.style`, `project.era_setting` | yes | relevance only, never change detection |
-| `project.ui_language` | yes | language of `ui_summary` (e.g. `fa`, `en`) |
-| `project.sector` | yes | `wizard` or `pro` |
-| `script.title`, `script.logline`, `script.source` | yes | `source`: `generated` or `uploaded` |
-| `script.scenes[]` | preferred | `scene_number`, `heading`, `text`, optional `purpose`, `change` (Script Writer hidden fields) |
-| `script.raw_text` | fallback | when scenes are not split; the dami splits and returns `anchor` per scene |
-| `known_assets` | incremental, fix | earlier entries with `status`: `detected`, `in_progress`, `approved` |
-| `previous_output`, `fix_requests` | fix | `fix_requests[]`: `type`, `code`, `instruction`, `target_ids`, `custom_text` |
+| Field                                                   | Required         | Notes                                                                                         |
+| ------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------- |
+| `mode`                                                  | yes              | `full`, `incremental`, `fix`                                                                  |
+| `project.format`                                        | yes              | `movie` or `series`                                                                           |
+| `project.episode_number`                                | series           |                                                                                               |
+| `project.genre`, `project.style`, `project.era_setting` | yes              | relevance only, never change detection                                                        |
+| `project.ui_language`                                   | yes              | language of `ui_summary` (e.g. `fa`, `en`)                                                    |
+| `project.sector`                                        | yes              | `wizard` or `pro`                                                                             |
+| `script.title`, `script.logline`, `script.source`       | yes              | `source`: `generated` or `uploaded`                                                           |
+| `script.scenes[]`                                       | preferred        | `scene_number`, `heading`, `text`, optional `purpose`, `change` (Script Writer hidden fields) |
+| `script.raw_text`                                       | fallback         | when scenes are not split; the dami splits and returns `anchor` per scene                     |
+| `known_assets`                                          | incremental, fix | earlier entries with `status`: `detected`, `in_progress`, `approved`                          |
+| `previous_output`, `fix_requests`                       | fix              | `fix_requests[]`: `type`, `code`, `instruction`, `target_ids`, `custom_text`                  |
 
 ---
 
@@ -59,14 +59,14 @@ Script edited later: mode incremental with known_assets = current output_21.
 
 Authoritative shape: the tool schema in section 4. Fields the downstream contracts require:
 
-| Consumer | Needs | Provided by |
-|---|---|---|
-| Location Generator | `name`, `interior_exterior`, `time_of_day`, `script_description`, `scene_refs` | `locations[]` (plus `states`, `fixed_elements_from_script`, `location_group`) |
-| Prop Generator | `name`, `script_description`, `scene_refs`, `category_hint`, `users`, `location_ids` | `props[]` (plus `states`, `text_on_object`, `subtype`) |
-| Character Generator | character details | `characters[]`: `facts`, `looks`, `script_description`, `is_minor`, `relationships` |
-| Location Generator `script_context` | scenes with `characters_present` | `scene_index[]` |
-| Location Generator `exclude_assets` | names of chars and props | `characters[].name_latin` + `props[].name_latin` |
-| Text Blocks | asset per scene | `scene_index[]` |
+| Consumer                            | Needs                                                                                | Provided by                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Location Generator                  | `name`, `interior_exterior`, `time_of_day`, `script_description`, `scene_refs`       | `locations[]` (plus `states`, `fixed_elements_from_script`, `location_group`)       |
+| Prop Generator                      | `name`, `script_description`, `scene_refs`, `category_hint`, `users`, `location_ids` | `props[]` (plus `states`, `text_on_object`, `subtype`)                              |
+| Character Generator                 | character details                                                                    | `characters[]`: `facts`, `looks`, `script_description`, `is_minor`, `relationships` |
+| Location Generator `script_context` | scenes with `characters_present`                                                     | `scene_index[]`                                                                     |
+| Location Generator `exclude_assets` | names of chars and props                                                             | `characters[].name_latin` + `props[].name_latin`                                    |
+| Text Blocks                         | asset per scene                                                                      | `scene_index[]`                                                                     |
 
 Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`, `evidence`.
 
@@ -100,11 +100,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
         "const": "output_21"
       },
       "mode": {
-        "enum": [
-          "full",
-          "incremental",
-          "fix"
-        ]
+        "enum": ["full", "incremental", "fix"]
       },
       "scene_index": {
         "type": "array",
@@ -131,22 +127,13 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "string"
             },
             "anchor": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "location_id": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "location_state_id": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "time_of_day": {
               "enum": [
@@ -170,10 +157,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "char_id",
-                  "look_id"
-                ],
+                "required": ["char_id", "look_id"],
                 "additionalProperties": false,
                 "properties": {
                   "char_id": {
@@ -245,44 +229,22 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               }
             },
             "kind": {
-              "enum": [
-                "human",
-                "animal",
-                "creature",
-                "robot",
-                "voice_only",
-                "background_group"
-              ]
+              "enum": ["human", "animal", "creature", "robot", "voice_only", "background_group"]
             },
             "role": {
-              "enum": [
-                "lead",
-                "supporting",
-                "minor",
-                "background"
-              ]
+              "enum": ["lead", "supporting", "minor", "background"]
             },
             "asset_priority": {
-              "enum": [
-                "required",
-                "optional"
-              ]
+              "enum": ["required", "optional"]
             },
             "needs_visual": {
               "type": "boolean"
             },
             "is_minor": {
-              "enum": [
-                "yes",
-                "no",
-                "unknown"
-              ]
+              "enum": ["yes", "no", "unknown"]
             },
             "same_person_as": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "script_description": {
               "type": "string"
@@ -291,13 +253,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "field",
-                  "value",
-                  "status",
-                  "scene",
-                  "evidence"
-                ],
+                "required": ["field", "value", "status", "scene", "evidence"],
                 "additionalProperties": false,
                 "properties": {
                   "field": {
@@ -307,10 +263,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
                     "type": "string"
                   },
                   "status": {
-                    "enum": [
-                      "stated",
-                      "implied"
-                    ]
+                    "enum": ["stated", "implied"]
                   },
                   "scene": {
                     "type": "string"
@@ -326,12 +279,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "look_id",
-                  "description",
-                  "scene_refs",
-                  "evidence"
-                ],
+                "required": ["look_id", "description", "scene_refs", "evidence"],
                 "additionalProperties": false,
                 "properties": {
                   "look_id": {
@@ -369,10 +317,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "char_id",
-                  "relation"
-                ],
+                "required": ["char_id", "relation"],
                 "additionalProperties": false,
                 "properties": {
                   "char_id": {
@@ -441,17 +386,10 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               }
             },
             "location_group": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "interior_exterior": {
-              "enum": [
-                "interior",
-                "exterior",
-                "int_ext"
-              ]
+              "enum": ["interior", "exterior", "int_ext"]
             },
             "time_of_day": {
               "enum": [
@@ -484,12 +422,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "state_id",
-                  "description",
-                  "scene_refs",
-                  "evidence"
-                ],
+                "required": ["state_id", "description", "scene_refs", "evidence"],
                 "additionalProperties": false,
                 "properties": {
                   "state_id": {
@@ -517,13 +450,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "field",
-                  "value",
-                  "status",
-                  "scene",
-                  "evidence"
-                ],
+                "required": ["field", "value", "status", "scene", "evidence"],
                 "additionalProperties": false,
                 "properties": {
                   "field": {
@@ -533,10 +460,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
                     "type": "string"
                   },
                   "status": {
-                    "enum": [
-                      "stated",
-                      "implied"
-                    ]
+                    "enum": ["stated", "implied"]
                   },
                   "scene": {
                     "type": "string"
@@ -552,11 +476,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "element",
-                  "scene",
-                  "evidence"
-                ],
+                "required": ["element", "scene", "evidence"],
                 "additionalProperties": false,
                 "properties": {
                   "element": {
@@ -578,10 +498,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               }
             },
             "asset_priority": {
-              "enum": [
-                "required",
-                "optional"
-              ]
+              "enum": ["required", "optional"]
             },
             "scene_refs": {
               "type": "array",
@@ -640,19 +557,10 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               }
             },
             "category_hint": {
-              "enum": [
-                "hero_prop",
-                "hand_prop",
-                "functional_prop",
-                "set_dressing",
-                "prop_group"
-              ]
+              "enum": ["hero_prop", "hand_prop", "functional_prop", "set_dressing", "prop_group"]
             },
             "subtype": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "script_description": {
               "type": "string"
@@ -661,13 +569,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "field",
-                  "value",
-                  "status",
-                  "scene",
-                  "evidence"
-                ],
+                "required": ["field", "value", "status", "scene", "evidence"],
                 "additionalProperties": false,
                 "properties": {
                   "field": {
@@ -677,10 +579,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
                     "type": "string"
                   },
                   "status": {
-                    "enum": [
-                      "stated",
-                      "implied"
-                    ]
+                    "enum": ["stated", "implied"]
                   },
                   "scene": {
                     "type": "string"
@@ -696,12 +595,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "state_id",
-                  "description",
-                  "scene_refs",
-                  "evidence"
-                ],
+                "required": ["state_id", "description", "scene_refs", "evidence"],
                 "additionalProperties": false,
                 "properties": {
                   "state_id": {
@@ -726,10 +620,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "text",
-                  "evidence"
-                ],
+                "required": ["text", "evidence"],
                 "additionalProperties": false,
                 "properties": {
                   "text": {
@@ -760,10 +651,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               }
             },
             "asset_priority": {
-              "enum": [
-                "required",
-                "optional"
-              ]
+              "enum": ["required", "optional"]
             },
             "scene_refs": {
               "type": "array",
@@ -824,13 +712,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "field",
-                  "value",
-                  "status",
-                  "scene",
-                  "evidence"
-                ],
+                "required": ["field", "value", "status", "scene", "evidence"],
                 "additionalProperties": false,
                 "properties": {
                   "field": {
@@ -840,10 +722,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
                     "type": "string"
                   },
                   "status": {
-                    "enum": [
-                      "stated",
-                      "implied"
-                    ]
+                    "enum": ["stated", "implied"]
                   },
                   "scene": {
                     "type": "string"
@@ -873,11 +752,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
       },
       "diff": {
         "type": "object",
-        "required": [
-          "added",
-          "updated",
-          "removed"
-        ],
+        "required": ["added", "updated", "removed"],
         "additionalProperties": false,
         "properties": {
           "added": {
@@ -937,11 +812,7 @@ Each `facts[]` item: `field`, `value`, `status` (`stated` | `implied`), `scene`,
         "type": "array",
         "items": {
           "type": "object",
-          "required": [
-            "code",
-            "target_ids",
-            "change"
-          ],
+          "required": ["code", "target_ids", "change"],
           "additionalProperties": false,
           "properties": {
             "code": {
@@ -1147,6 +1018,7 @@ List every judgment the script did not settle that changed the output: a continu
 ## 8. Backend notes and validators
 
 **Validate before storing (re-run once with the errors appended as `fix_requests` of type technical, code `ADT05`/`ADT06`, if any fail):**
+
 1. Schema valid; `summary` counts equal array lengths.
 2. Every scene of the input has one `scene_index` entry in order; no extra scenes.
 3. Every id used anywhere exists; every asset has `scene_refs`; `first_scene` is the earliest.
@@ -1156,6 +1028,7 @@ List every judgment the script did not settle that changed the output: a continu
 7. No duplicate `name` or alias inside one type unless linked by `same_person_as` or a `MERGE_CHECK:` warning.
 
 **Other**
+
 - Show `MERGE_CHECK:`, `NO_LOCATION:`, `AMBIGUOUS:` and `REAL_PERSON:` warnings on the category screens as small banners with one-tap fixes (merge, pick location).
 - `MINOR_PRESENT:` is not shown to the user; it is passed to the Character Generator and later dami.
 - Store `asset_priority: "skipped"` for ADP01. The dami never outputs it.

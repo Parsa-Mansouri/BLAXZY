@@ -29,11 +29,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": [
-                    "name",
-                    "role",
-                    "want"
-                  ],
+                  "required": ["name", "role", "want"],
                   "properties": {
                     "name": {
                       "type": "string"
@@ -75,13 +71,7 @@
             "description": "Playable beats in order. Not shown to the user.",
             "items": {
               "type": "object",
-              "required": [
-                "id",
-                "type",
-                "summary",
-                "genre_effect",
-                "style_effect"
-              ],
+              "required": ["id", "type", "summary", "genre_effect", "style_effect"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -111,13 +101,7 @@
           },
           "screenplay": {
             "type": "object",
-            "required": [
-              "title",
-              "logline",
-              "language",
-              "scenes",
-              "estimated_duration_seconds"
-            ],
+            "required": ["title", "logline", "language", "scenes", "estimated_duration_seconds"],
             "properties": {
               "title": {
                 "type": "string"
@@ -152,19 +136,11 @@
                     },
                     "heading": {
                       "type": "object",
-                      "required": [
-                        "int_ext",
-                        "location",
-                        "time_of_day"
-                      ],
+                      "required": ["int_ext", "location", "time_of_day"],
                       "properties": {
                         "int_ext": {
                           "type": "string",
-                          "enum": [
-                            "INT",
-                            "EXT",
-                            "INT/EXT"
-                          ]
+                          "enum": ["INT", "EXT", "INT/EXT"]
                         },
                         "location": {
                           "type": "string",
@@ -172,14 +148,7 @@
                         },
                         "time_of_day": {
                           "type": "string",
-                          "enum": [
-                            "DAY",
-                            "NIGHT",
-                            "DAWN",
-                            "DUSK",
-                            "CONTINUOUS",
-                            "LATER"
-                          ]
+                          "enum": ["DAY", "NIGHT", "DAWN", "DUSK", "CONTINUOUS", "LATER"]
                         }
                       }
                     },
@@ -196,17 +165,11 @@
                       "minItems": 1,
                       "items": {
                         "type": "object",
-                        "required": [
-                          "type"
-                        ],
+                        "required": ["type"],
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "action",
-                              "dialogue",
-                              "transition"
-                            ]
+                            "enum": ["action", "dialogue", "transition"]
                           },
                           "text": {
                             "type": "string",
@@ -218,11 +181,7 @@
                           },
                           "extension": {
                             "type": "string",
-                            "enum": [
-                              "",
-                              "V.O.",
-                              "O.S."
-                            ],
+                            "enum": ["", "V.O.", "O.S."],
                             "description": "dialogue only."
                           },
                           "parenthetical": {
@@ -247,11 +206,7 @@
             "description": "Every detail that was NOT in the user's story and was added to make a scene playable. Shown to the user for approval.",
             "items": {
               "type": "object",
-              "required": [
-                "text",
-                "reason",
-                "scene_number"
-              ],
+              "required": ["text", "reason", "scene_number"],
               "properties": {
                 "text": {
                   "type": "string"
@@ -332,11 +287,7 @@
             "description": "Revision mode only. One entry per change made. Omit or leave empty in generation mode.",
             "items": {
               "type": "object",
-              "required": [
-                "scene_number",
-                "change",
-                "addresses"
-              ],
+              "required": ["scene_number", "change", "addresses"],
               "properties": {
                 "scene_number": {
                   "type": "integer"
@@ -368,11 +319,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": [
-                    "name",
-                    "location",
-                    "visible_state"
-                  ],
+                  "required": ["name", "location", "visible_state"],
                   "properties": {
                     "name": {
                       "type": "string"
@@ -391,11 +338,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": [
-                    "name",
-                    "location_or_holder",
-                    "state"
-                  ],
+                  "required": ["name", "location_or_holder", "state"],
                   "properties": {
                     "name": {
                       "type": "string"
@@ -425,13 +368,7 @@
       "description": "Submit the approved-for-review structure of a long piece. No scenes are written in this mode.",
       "input_schema": {
         "type": "object",
-        "required": [
-          "logline",
-          "canonical_names",
-          "acts",
-          "proposed_additions",
-          "warnings"
-        ],
+        "required": ["logline", "canonical_names", "acts", "proposed_additions", "warnings"],
         "properties": {
           "logline": {
             "type": "string"
@@ -441,11 +378,7 @@
           },
           "canonical_names": {
             "type": "object",
-            "required": [
-              "characters",
-              "locations",
-              "props"
-            ],
+            "required": ["characters", "locations", "props"],
             "properties": {
               "characters": {
                 "type": "array",
@@ -472,12 +405,7 @@
             "minItems": 1,
             "items": {
               "type": "object",
-              "required": [
-                "act",
-                "purpose",
-                "target_seconds",
-                "sequences"
-              ],
+              "required": ["act", "purpose", "target_seconds", "sequences"],
               "properties": {
                 "act": {
                   "type": "integer"
@@ -493,12 +421,7 @@
                   "minItems": 1,
                   "items": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "summary",
-                      "target_seconds",
-                      "scenes"
-                    ],
+                    "required": ["id", "summary", "target_seconds", "scenes"],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -532,25 +455,14 @@
                             },
                             "int_ext": {
                               "type": "string",
-                              "enum": [
-                                "INT",
-                                "EXT",
-                                "INT/EXT"
-                              ]
+                              "enum": ["INT", "EXT", "INT/EXT"]
                             },
                             "location": {
                               "type": "string"
                             },
                             "time_of_day": {
                               "type": "string",
-                              "enum": [
-                                "DAY",
-                                "NIGHT",
-                                "DAWN",
-                                "DUSK",
-                                "CONTINUOUS",
-                                "LATER"
-                              ]
+                              "enum": ["DAY", "NIGHT", "DAWN", "DUSK", "CONTINUOUS", "LATER"]
                             },
                             "characters": {
                               "type": "array",
@@ -588,11 +500,7 @@
             "description": "New material (secondary characters, subplots, locations) needed to fill the runtime. NOT approved until the user accepts.",
             "items": {
               "type": "object",
-              "required": [
-                "text",
-                "reason",
-                "scene_numbers"
-              ],
+              "required": ["text", "reason", "scene_numbers"],
               "properties": {
                 "text": {
                   "type": "string"

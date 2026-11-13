@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, StatusLine, cn, stagger } from "@/ui";
-import type { VersionView } from "./shared";
+import type { VersionView } from "./version-types";
 
 type Assumption = VersionView["assumptions"][number];
 

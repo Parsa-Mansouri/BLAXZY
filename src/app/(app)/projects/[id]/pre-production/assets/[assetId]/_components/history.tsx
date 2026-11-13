@@ -14,7 +14,7 @@ import {
 import type { DesignerInfo } from "../_lib/designer-view";
 import { fieldName } from "../_lib/look-review";
 import { StageHeading } from "./asset-context";
-import { StageLayout } from "./stage-panels";
+import { StageLayout } from "./stages/stage-layout";
 import { ReferenceThumbs } from "./reference-conflict";
 import { Artwork, MissingImage, type GuidedQuestion, type Orientation } from "./shared";
 

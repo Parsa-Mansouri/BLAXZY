@@ -17,7 +17,7 @@ import {
   useToast,
 } from "@/ui";
 import { approveOutlineAction, submitReviewAction } from "../actions";
-import { SAMPLE_LINE, type VersionView } from "./shared";
+import { SAMPLE_LINE, type VersionView } from "./version-types";
 
 const MAX_NOTE_CHARS = 8000;
 

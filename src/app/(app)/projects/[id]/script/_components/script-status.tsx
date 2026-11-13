@@ -8,7 +8,7 @@ import { splitScenes } from "../_lib/scenes";
 import { pollScript } from "@/app/(app)/_lib/poll-client";
 import { retryVersionAction } from "../actions";
 import { ReadingSheet } from "./screenplay-sheet";
-import type { VersionView } from "./shared";
+import type { VersionView } from "./version-types";
 
 type Source = VersionView["source"];
 

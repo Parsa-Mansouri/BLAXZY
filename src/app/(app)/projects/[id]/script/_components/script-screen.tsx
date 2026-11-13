@@ -7,7 +7,7 @@ import { ScriptAccepted } from "./script-accepted";
 import { ScriptReview } from "./script-review";
 import { ScriptStart } from "./script-start";
 import { ScriptFailed, ScriptWorking } from "./script-status";
-import type { VersionSummary, VersionView } from "./shared";
+import type { VersionSummary, VersionView } from "./version-types";
 
 export interface ScriptScreenProps {
   projectId: string;

@@ -29,7 +29,7 @@ import {
   CHARACTER_SHEET_WORDS,
   DesignChangeNotice,
   DetailFrames,
-} from "../../assets/[assetId]/_components/stage-panels";
+} from "../../assets/[assetId]/_components/stages/sheet-review-stage";
 import type { PackKind, SheetCatalogInfo } from "../../assets/[assetId]/_lib/sheet-review";
 import { ContinueToProduction } from "../../_components/continue-to-production";
 import { DrawnTick } from "../../_components/drawn-tick";

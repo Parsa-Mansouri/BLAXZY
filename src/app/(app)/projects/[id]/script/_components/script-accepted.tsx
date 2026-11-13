@@ -10,18 +10,12 @@ import { splitScenes } from "../_lib/scenes";
 import { editAcceptedAction } from "../actions";
 import { BackgroundFailure, EditChangedNotice, useBackgroundStatus } from "./background-status";
 import { ReadingSheet, SHEET_X, TitlePage } from "./screenplay-sheet";
-import {
-  SAMPLE_LINE,
-  SceneList,
-  ScenesLayout,
-  VersionNotes,
-  VersionTabs,
-  sceneName,
-  statusLabel,
-  useVersionViewer,
-  type VersionSummary,
-  type VersionView,
-} from "./shared";
+import { SceneList, sceneName } from "./scene-list";
+import { ScenesLayout } from "./scenes-layout";
+import { useVersionViewer } from "./use-version-viewer";
+import { VersionNotes } from "./version-notes";
+import { SAMPLE_LINE, statusLabel, type VersionSummary, type VersionView } from "./version-types";
+import { VersionTabs } from "./version-viewer";
 
 /** The accepted script (or an older version) read one scene at a time, on paper. */
 function AcceptedBody({

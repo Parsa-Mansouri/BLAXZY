@@ -30,13 +30,11 @@ import { AssetHeader } from "./asset-header";
 import { HistoryStrip, HistoryViewer } from "./history";
 import { NeedsAnswerStage } from "./needs-answer";
 import { PackReadyStage, PackReviewStage, type PackInfo } from "./pack-stage";
-import {
-  FailedStage,
-  LookReviewStage,
-  ReadyStage,
-  SheetReviewStage,
-  WaitingStage,
-} from "./stage-panels";
+import { FailedStage } from "./stages/failed-stage";
+import { LookReviewStage } from "./stages/look-review-stage";
+import { ReadyStage } from "./stages/ready-stage";
+import { SheetReviewStage } from "./stages/sheet-review-stage";
+import { WaitingStage } from "./stages/waiting-stage";
 import type { AssetInfo, GuidedQuestion, Limits, Orientation } from "./shared";
 
 /** What the asset's designer said about its current design. */

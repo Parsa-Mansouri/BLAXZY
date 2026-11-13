@@ -30,14 +30,9 @@ import { DnaCardView } from "./dna-card";
 import { PackGallery } from "./pack-gallery";
 import { Artwork, PriceLine, type Orientation } from "./shared";
 import { SheetChangesPanel, type SheetChangesWords } from "./sheet-changes-panel";
-import {
-  DesignChangeNotice,
-  ReadyStage,
-  SAMPLE_OUTPUT,
-  SheetNotes,
-  StageLayout,
-  VersionLine,
-} from "./stage-panels";
+import { ReadyStage } from "./stages/ready-stage";
+import { DesignChangeNotice, SheetNotes } from "./stages/sheet-review-stage";
+import { SAMPLE_OUTPUT, StageLayout, VersionLine } from "./stages/stage-layout";
 import { ErrorLine } from "@/app/(app)/_components/values";
 import { canAfford } from "@/app/(app)/_lib/format";
 

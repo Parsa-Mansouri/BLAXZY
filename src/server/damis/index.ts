@@ -4,6 +4,7 @@
  */
 import { assetDetector } from "./asset-detector/dami";
 import { characterGenerator } from "./character-generator/dami";
+import { creativeDna } from "./creative-dna/dami";
 import { blockReviser } from "./block-reviser/dami";
 import { locationGenerator } from "./location-generator/dami";
 import { propGenerator } from "./prop-generator/dami";
@@ -396,6 +397,7 @@ export {
 
 /** Every dami by key (for the CLI and, later, Pro's dami picker). */
 export const DAMIS: Readonly<Record<string, AnyDami>> = {
+  [creativeDna.key]: creativeDna,
   [scriptWriter.key]: scriptWriter,
   [scriptOutliner.key]: scriptOutliner,
   [enhancer.key]: enhancer,
@@ -413,6 +415,35 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [blockReviser.key]: blockReviser,
   [takeFixer.key]: takeFixer,
 };
+
+// Creative DNA (DAMI-00): the per-project Creative Bible and what later damis read from it
+export { creativeDna, checkCreativeBible, CREATIVE_DNA_VERSION } from "./creative-dna/dami";
+export {
+  creativeBibleSchema,
+  creativeDnaInputSchema,
+  REVIEW_POINTS,
+  type CreativeBible,
+  type CreativeDnaInput,
+  type CreativeReviewOption,
+  type CreativeRule,
+  type ReviewPoint,
+} from "./creative-dna/schema";
+export { creativeBibleKey, creativeDnaInputFromStyle } from "./creative-dna/input";
+export {
+  CREATIVE_REGISTRY,
+  getCreativeModule,
+  registryIdsForStyle,
+  type CreativeModule,
+  type CreativeModuleIds,
+} from "./creative-dna/registry";
+export {
+  CREATIVE_CONSUMERS,
+  getReviewOptions,
+  QC_STAGE,
+  renderCreativeDna,
+  type CreativeConsumer,
+} from "./shared/creative-context";
+export { PLATFORM_CONFIG } from "./shared/platform";
 
 // Review catalogs (the owner's complaint menus)
 export {

@@ -1,0 +1,214 @@
+{
+  "schema_version": "1.1",
+  "dami": "asset_detector",
+  "output": "output_21",
+  "meta": {
+    "where": "No separate approval screen. Every category screen in Pre-production (char, loc, prop) has a 'Something wrong with this list?' button and a per-asset menu. Both open this catalog.",
+    "flow": "UI asks technical or preference, shows the reasons below, collects targets (tap the asset cards) and optional text, then sends fix_requests with mode 'fix' and previous_output. Several requests can be sent in one round.",
+    "max_rounds_before_suggestion": 4,
+    "suggestion_after_max_rounds": "Offer manual add, rename or delete (backend operations) instead of another dami round.",
+    "voice_note": "Voices are not reviewed here. They are handled in Production per text block (upload, generate, or let the video model create them)."
+  },
+  "rules": {
+    "approved_assets": "Requests that would rename, redescribe, merge away or delete an asset whose status is 'approved' make the UI ask for confirmation first, because generated images depend on it. Pre-production work already done on a merged-away asset is kept as a version but detached.",
+    "ids": "Ids never change except for ADT04 (new type, new id) and the removed side of ADT02 or ADT03. The backend rewrites every reference listed in diff.",
+    "not_in_script": "If the dami returns NOT_IN_SCRIPT, the UI offers BO03 (manual asset) prefilled with the user's text.",
+    "rescan": "ADR01 re-runs the dami in incremental mode with all current assets as known_assets, so approved assets keep their ids."
+  },
+  "technical": [
+    {
+      "code": "ADT01",
+      "type": "technical",
+      "label": "Something from the script is missing",
+      "label_fa": "چیزی از فیلم‌نامه جا افتاده",
+      "handler": "dami",
+      "target_count": 0,
+      "needs_custom_text": true,
+      "instruction": "Search the script for the asset named in custom_text and add it with evidence, scene_refs and scene_index updates. If it is not in the script, do not add it and return NOT_IN_SCRIPT.",
+      "wizard_visible": true,
+      "pro_visible": true,
+      "ui_note": "Text box: 'What is missing?'"
+    },
+    {
+      "code": "ADT02",
+      "type": "technical",
+      "label": "These are the same one",
+      "label_fa": "این‌ها یکی هستند",
+      "handler": "dami",
+      "target_count": 2,
+      "needs_custom_text": false,
+      "instruction": "Merge the target assets into one entry, keep the approved or lowest id, merge aliases, facts, looks, states and scene_refs, and update every reference.",
+      "wizard_visible": true,
+      "pro_visible": true,
+      "ui_note": "Select two or more cards of the same category."
+    },
+    {
+      "code": "ADT03",
+      "type": "technical",
+      "label": "This is actually two different ones",
+      "label_fa": "این در واقع دو تا است",
+      "handler": "dami",
+      "target_count": 1,
+      "needs_custom_text": true,
+      "instruction": "Split the target into two entries using custom_text and the script, assign scenes and evidence to each, and update every reference.",
+      "wizard_visible": true,
+      "pro_visible": true,
+      "ui_note": "Text box optional: 'How are they different?'"
+    },
+    {
+      "code": "ADT04",
+      "type": "technical",
+      "label": "Wrong category",
+      "label_fa": "دسته‌بندی اشتباه است",
+      "handler": "dami",
+      "target_count": 1,
+      "needs_custom_text": true,
+      "instruction": "Move the target to the category named in custom_text with a new id of that type, rebuild its fields from the script and update every reference.",
+      "wizard_visible": true,
+      "pro_visible": true,
+      "ui_note": "Chips instead of text: character, location, prop. The chip value is sent as custom_text."
+    },
+    {
+      "code": "ADT05",
+      "type": "technical",
+      "label": "The description is wrong",
+      "label_fa": "توضیحاتش اشتباه است",
+      "handler": "dami",
+      "target_count": 1,
+      "needs_custom_text": true,
+      "instruction": "Re-check every fact of the target against the script, remove facts without valid evidence and correct the rest. Use custom_text as a hint.",
+      "wizard_visible": true,
+      "pro_visible": true
+    },
+    {
+      "code": "ADT06",
+      "type": "technical",
+      "label": "Wrong scenes",
+      "label_fa": "صحنه‌هایش اشتباه است",
+      "handler": "dami",
+      "target_count": 1,
+      "needs_custom_text": true,
+      "instruction": "Re-scan the script for the target and rebuild its scene_refs and the scene_index entries.",
+      "wizard_visible": true,
+      "pro_visible": true
+    },
+    {
+      "code": "ADT07",
+      "type": "technical",
+      "label": "Wrong name or role",
+      "label_fa": "اسم یا نقشش اشتباه است",
+      "handler": "dami",
+      "target_count": 1,
+      "needs_custom_text": true,
+      "instruction": "Apply the name or role in custom_text when the script supports it, otherwise re-derive them from the script.",
+      "wizard_visible": false,
+      "pro_visible": true
+    }
+  ],
+  "preference": [
+    {
+      "code": "ADP01",
+      "type": "preference",
+      "label": "I don't need this as a separate asset",
+      "label_fa": "این را جدا لازم ندارم",
+      "handler": "backend",
+      "target_count": 1,
+      "needs_custom_text": false,
+      "instruction": "Set asset_priority to 'skipped'. No Claude call. Skipped assets are not designed; the Text Blocks dami describes them inline from script_description.",
+      "wizard_visible": true,
+      "pro_visible": true
+    },
+    {
+      "code": "ADP02",
+      "type": "preference",
+      "label": "Make this its own asset",
+      "label_fa": "این را جدا بساز",
+      "handler": "dami",
+      "target_count": 0,
+      "needs_custom_text": true,
+      "instruction": "Promote the thing named in custom_text (a fixed element, a background figure, an object) to its own entry with evidence and remove it from where it was recorded before.",
+      "wizard_visible": true,
+      "pro_visible": true,
+      "ui_note": "Text box: 'What should be its own asset?' The user can also start it from a fixed element or background figure on a card."
+    },
+    {
+      "code": "ADP03",
+      "type": "preference",
+      "label": "Give this look its own asset",
+      "label_fa": "این ظاهر یا حالت را جدا بساز",
+      "handler": "dami",
+      "target_count": 1,
+      "needs_custom_text": true,
+      "instruction": "Turn the target look or state into a separate entry linked with same_person_as or related_asset_ids, and move its scenes.",
+      "wizard_visible": false,
+      "pro_visible": true,
+      "ui_note": "Shown on cards that have looks or states; the user picks one."
+    },
+    {
+      "code": "ADP04",
+      "type": "preference",
+      "label": "Group these into one",
+      "label_fa": "این‌ها را یکی کن (یک مجموعه)",
+      "handler": "dami",
+      "target_count": 2,
+      "needs_custom_text": false,
+      "instruction": "Merge the target props into one prop_group entry.",
+      "wizard_visible": false,
+      "pro_visible": true
+    },
+    {
+      "code": "ADP99",
+      "type": "preference",
+      "label": "Other",
+      "label_fa": "دلیل دیگر",
+      "handler": "dami",
+      "target_count": 0,
+      "needs_custom_text": true,
+      "instruction": "Follow custom_text as far as the script allows. Never invent content that is not in the script.",
+      "wizard_visible": true,
+      "pro_visible": true
+    }
+  ],
+  "actions": [
+    {
+      "code": "ADR01",
+      "label": "Re-scan the whole script",
+      "label_fa": "دوباره کل فیلم‌نامه را بررسی کن",
+      "handler": "dami",
+      "mode": "incremental",
+      "wizard_visible": true,
+      "pro_visible": true,
+      "instruction": "Re-run detection on the full script with all current assets as known_assets."
+    }
+  ],
+  "backend_operations": [
+    {
+      "code": "BO01",
+      "label": "Rename (display only)",
+      "label_fa": "تغییر نام",
+      "pro_only": false,
+      "effect": "Changes name and ui_summary; keeps the old name in aliases. No Claude call."
+    },
+    {
+      "code": "BO02",
+      "label": "Delete",
+      "label_fa": "حذف",
+      "pro_only": false,
+      "effect": "Removes the asset and its references from scene_index. Approved assets need confirmation."
+    },
+    {
+      "code": "BO03",
+      "label": "Add manually",
+      "label_fa": "افزودن دستی",
+      "pro_only": false,
+      "effect": "Creates an asset with source 'user', the next free id, the user's description as script_description, empty facts and the scenes the user ticks."
+    },
+    {
+      "code": "BO04",
+      "label": "Edit facts",
+      "label_fa": "ویرایش جزئیات",
+      "pro_only": true,
+      "effect": "Pro edits facts directly; edited facts get status 'user' in the stored copy."
+    }
+  ]
+}

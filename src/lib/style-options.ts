@@ -26,7 +26,7 @@ export const VISUAL_STYLES: readonly StyleOption[] = [
   {
     value: "noir",
     label: "Noir",
-    description: "Hard shadows, rain-slick streets and smoky light.",
+    description: "Hard light, deep shadow and a visible source for every pool of light.",
   },
   {
     value: "futuristic",

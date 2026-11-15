@@ -22,6 +22,7 @@ export {
   fileSweep,
   generationRun,
   productionPrepare,
+  projectCreativeDna,
   takeFix,
   takeGenerate,
   generationSweep,

@@ -16,6 +16,17 @@ export const systemPing = defineJob({
 const scriptPayload = z.object({ scriptVersionId: z.string().uuid() });
 const damiJob = { retryLimit: 2, retryDelaySeconds: 15, expireInSeconds: 40 * 60 } as const;
 
+/**
+ * Compile a project's Creative Bible (the Creative DNA dami) after its Style is saved. Keyed by the
+ * bible row; the handler skips a row that is no longer pending.
+ */
+export const projectCreativeDna = defineJob({
+  name: "project.creative-dna",
+  payload: z.object({ bibleId: z.string().uuid() }),
+  options: damiJob,
+  dedupeKey: (p) => p.bibleId,
+});
+
 /** Write a script from the user's brief. */
 export const scriptWrite = defineJob({
   name: "script.write",
@@ -301,6 +312,7 @@ export const productionDispatch = defineJob({
  */
 export const ALL_JOBS = [
   systemPing,
+  projectCreativeDna,
   scriptWrite,
   scriptWriteSegment,
   scriptEnhance,

@@ -9,6 +9,7 @@ import {
 } from "@/server/db/schema";
 import { z } from "zod";
 import { projectStyleSchema } from "@/server/damis";
+import { refreshCreativeBible } from "./creative-bible";
 import { episodeCount, episodeCountOf } from "./episodes";
 import { logProjectEvent } from "./events";
 import { findOwnedProject } from "./ownership";
@@ -180,6 +181,7 @@ function carryStoredFields(answers: ProjectStyle, stored: ProjectStyle | null): 
 /**
  * Stores the Style answers (fields the form does not collect, such as the damis' look line and
  * style descriptor, are kept from the stored style unless the input sets them), reconciles episode rows (adds missing, updates targets, never deletes),
+ * requests a new Creative Bible when its inputs changed (`refreshCreativeBible`),
  * moves `style → script` when still at `style`, and logs `style.saved` / `style.changed`.
  * Returns null when the project is not the user's.
  */
@@ -229,6 +231,13 @@ export async function saveStyle(input: SaveStyleInput): Promise<Project | null> 
       type: first ? "style.saved" : "style.changed",
       // The whole style, so the event log keeps every version of the answers.
       payload: { format: style.format, episodes: count, style },
+    });
+    // The Creative Bible follows the style: a new version when what it depends on changed.
+    await refreshCreativeBible(tx, {
+      projectId: existing.id,
+      userId: input.userId,
+      previous: existing.style,
+      style,
     });
     if (existing.stage === "style") {
       await advanceStage({ projectId: existing.id, from: "style", to: "script" }, tx);

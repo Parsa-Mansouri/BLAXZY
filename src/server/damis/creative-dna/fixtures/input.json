@@ -1,0 +1,13 @@
+{
+  "genre_id": "genre.drama",
+  "style_id": "style.realistic",
+  "format": "film",
+  "episode_duration_sec": 60,
+  "total_duration_sec": 60,
+  "orientation": "portrait",
+  "audience": "PG-13",
+  "script_language": "en",
+  "ui_language": "en",
+  "dialogue_policy": "normal",
+  "locks": ["Ending: mother and children reconcile"]
+}

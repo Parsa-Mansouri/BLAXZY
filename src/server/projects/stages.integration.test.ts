@@ -3,14 +3,19 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { asc, eq, inArray } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
+import { dropSchema, pointQueueAtThrowawaySchema } from "@/server/test-support/script-fixtures";
 import { databaseReachable } from "@/server/test-support/integration";
 
+// Saving a registry style queues its Creative Bible job: keep it out of the shared queue.
+const jobSchema = pointQueueAtThrowawaySchema();
 const reachable = await databaseReachable();
 
 describe.skipIf(!reachable)("stage state machine (integration)", async () => {
   const projects = await import("@/server/projects");
   const { getDb, closeDb } = await import("@/server/db/client");
-  const { project, projectEvent, episode, user, file } = await import("@/server/db/schema");
+  const { project, projectEvent, episode, user, file, creativeBible } =
+    await import("@/server/db/schema");
+  const { closeJobQueue } = await import("@/server/jobs");
   const { putFileBytes } = await import("@/server/storage");
 
   const userIds: string[] = [];
@@ -69,12 +74,15 @@ describe.skipIf(!reachable)("stage state machine (integration)", async () => {
       const ids = owned.map((p) => p.id);
       await db.delete(file).where(inArray(file.ownerId, userIds));
       if (ids.length > 0) {
+        await db.delete(creativeBible).where(inArray(creativeBible.projectId, ids));
         await db.delete(episode).where(inArray(episode.projectId, ids));
         await db.delete(projectEvent).where(inArray(projectEvent.projectId, ids));
         await db.delete(project).where(inArray(project.id, ids));
       }
       await db.delete(user).where(inArray(user.id, userIds));
     }
+    await closeJobQueue();
+    await dropSchema(jobSchema);
     await closeDb();
   });
 

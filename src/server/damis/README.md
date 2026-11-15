@@ -57,6 +57,34 @@ code that calls the Claude API and the only writer of `dami_run`.
   a requested code that is either applied or explained in `warnings`.
 - The draft `sheet-generator` and `sheet-fixer` (and `SHEET_ISSUES`) were retired.
 
+## Creative DNA (DAMI-00)
+
+- `creative-dna/` compiles a project's genre and visual-style modules, format, orientation and
+  duration into its Creative Bible (the owner's output_10): per-consumer rules, anti-cliche guards,
+  QC items and the review options of the reject flow. The system prompt is the owner's file from
+  `<role>` on (`prompt-text.ts`, checked against `source/`); `source/` also holds the registry
+  (`registry.ts`: the shared core and the 13 modules, server-side only), the output schema and the
+  regression cases. Wiring the bible into the other damis is a later phase.
+- It runs once per Style: `saveStyle` calls `refreshCreativeBible` (`src/server/projects/
+creative-bible.ts`) in its transaction, which adds a `creative_bible` row and queues
+  `project.creative-dna` when the style is saved for the first time, when the genre, visual style,
+  format, orientation, durations or language changed, or when the last bible failed. A typed
+  "Other" genre or style has no module: the old bible is superseded and none is requested.
+- Stored in `creative_bible` (append-only versions; older rows become `superseded`;
+  `pending | ready | failed | superseded`). `getReadyBible(projectId)` returns the newest `ready`
+  bible, parsed, or null while one is compiling. The worker handler is
+  `worker/handlers/project-creative-dna.ts`; a `rejected` answer is stored as a failure, not a bible.
+- Later damis call `renderCreativeDna(consumer, bible)` (`shared/creative-context.ts`) and put the
+  returned `PromptText` (already `cache: true`) in their system prompt after their own
+  instructions. Consumers: `script_writer`, `script_checker`, `asset_detector`,
+  `asset_generation`, `sheet_generator`, `director`, `text_blocks_video`. `getReviewOptions`
+  gives the review screens their options. `shared/platform.ts` holds the platform numbers
+  (block lengths, speech rates).
+- The structured output has no free-form objects and nullable fields are required keys holding
+  null. The owner's counts (3+ rules per slice, 12+ QC items, 4+ guards, 4 to 7 / 4 to 6 review
+  options) are checked by Zod after the answer; a `rejected` skeleton keeps the full shape with
+  empty lists and skips them.
+
 ## Runs, concurrency and the light entry
 
 - `dami_run.status` is `queued`, `running`, `succeeded`, `failed` or `aborted`. `aborted` means

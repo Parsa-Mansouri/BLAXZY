@@ -670,6 +670,49 @@ export const scriptVersion = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
+/* Creative Bible (DAMI-00 Creative DNA)                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * pending: the Creative DNA dami is compiling it · ready: the bible is stored · failed: the run
+ * failed · superseded: a newer row replaced it (the Style changed) or the Style no longer gets one.
+ */
+export const CREATIVE_BIBLE_STATUSES = ["pending", "ready", "failed", "superseded"] as const;
+export type CreativeBibleStatus = (typeof CREATIVE_BIBLE_STATUSES)[number];
+
+/**
+ * One immutable version of a project's Creative Bible (output_10), compiled from the Style
+ * stage's answers. A Style change adds a new row and marks the older ones `superseded`.
+ */
+export const creativeBible = pgTable(
+  "creative_bible",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    versionNumber: integer("version_number").notNull(),
+    /** The registry modules it was compiled for (`genre.drama`, `style.noir`, ...). */
+    genreId: text("genre_id").notNull(),
+    styleId: text("style_id").notNull(),
+    /** The Style answers it was compiled from. */
+    styleSnapshot: jsonb("style_snapshot").$type<ProjectStyle>().notNull(),
+    /** The Creative Bible (output_10, see `damis/creative-dna/schema.ts`). Null until ready. */
+    bible: jsonb("bible").$type<unknown>(),
+    status: text("status").$type<CreativeBibleStatus>().notNull().default("pending"),
+    failure: text("failure"),
+    damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    createdAt: createdAt(),
+    finishedAt: ts("finished_at"),
+  },
+  (t) => [
+    unique("creative_bible_project_version_unique").on(t.projectId, t.versionNumber),
+    index("creative_bible_project_created_idx").on(t.projectId, t.createdAt.desc()),
+    index("creative_bible_project_status_idx").on(t.projectId, t.status),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
 /* Assets (Output_021). Looks and sheets are added in the pre-production work. */
 /* -------------------------------------------------------------------------- */
 

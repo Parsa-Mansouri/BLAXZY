@@ -19,6 +19,16 @@ export {
   encodeTimestampCursor,
   isTimestampText,
 } from "./cursor";
+export {
+  completeCreativeBible,
+  failCreativeBible,
+  getLatestBible,
+  getReadyBible,
+  loadCreativeBibleJob,
+  type CreativeBibleJob,
+  type CreativeBibleRow,
+  type ReadyCreativeBible,
+} from "./creative-bible";
 export { episodeCount, episodeCountOf } from "./episodes";
 export { logProjectEvent } from "./events";
 export { findOwnedProject, type ProjectLock } from "./ownership";

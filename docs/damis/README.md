@@ -1,5 +1,8 @@
 # Owner dami files
 
+The status of every dami (live, upgrade available, delivered but not wired, agent draft) is in
+[TRACKER.md](TRACKER.md). New owner drops are unpacked into `inbox/<date>/` until they are wired in.
+
 Hamed's dami instructions (delivered 2026-11-12) live next to the code that implements them. Each
 dami folder under `src/server/damis/` keeps the original files in `source/` and its review catalog
 (the "complaint menu" users pick rejection reasons from) as `review-catalog.json`.

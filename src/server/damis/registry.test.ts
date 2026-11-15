@@ -11,6 +11,7 @@ describe("dami registry", () => {
         "asset-detector",
         "block-reviser",
         "character-generator",
+        "creative-dna",
         "enhancer",
         "location-generator",
         "prompt-sectioner",

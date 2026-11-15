@@ -12,6 +12,7 @@ import type {
 import { SAMPLE_MODEL } from "../framework/mode";
 import { sampleAssetDetector } from "./asset-detector";
 import { sampleCharacterGenerator } from "./character-generator";
+import { sampleCreativeDna } from "./creative-dna";
 import { sampleLocationGenerator } from "./location-generator";
 import { samplePropGenerator } from "./prop-generator";
 import { sampleSheetGeneratorCharacter } from "./sheet-generator-character";
@@ -26,6 +27,7 @@ import { sampleScriptOutline, sampleScriptWriter } from "./script-writer";
 
 /** Sample output by dami key. Each generator validates the input with the dami's schema. */
 export const SAMPLE_GENERATORS: Readonly<Record<string, (input: unknown) => unknown>> = {
+  "creative-dna": sampleCreativeDna,
   "script-writer": sampleScriptWriter,
   "script-writer-outline": sampleScriptOutline,
   enhancer: sampleEnhancer,

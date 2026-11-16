@@ -104,7 +104,6 @@ describe.skipIf(!reachable)("script services (integration)", async () => {
       userId,
       versionId: v1,
       decision: "rejected",
-      issueCodes: ["ending_weak"],
       note: "Warmer.",
       comments: [{ quote, start, end: start + quote.length, note: "Softer." }],
     });
@@ -113,7 +112,8 @@ describe.skipIf(!reachable)("script services (integration)", async () => {
     const [stored] = await getDb().select().from(review).where(eq(review.subjectId, v1));
     expect(stored).toMatchObject({
       decision: "rejected",
-      issueCodes: ["ending_weak"],
+      issueCodes: [],
+      fixRequests: [],
       note: "Warmer.",
       damiRunId: runId,
     });
@@ -261,9 +261,18 @@ describe.skipIf(!reachable)("script services (integration)", async () => {
         userId,
         versionId: v1,
         decision: "rejected",
-        issueCodes: ["not_a_code"],
+        note: "  ",
       }),
-    ).rejects.toThrow(/not known/);
+    ).rejects.toBeInstanceOf(script.ScriptInputError);
+    await expect(
+      script.submitScriptReview({
+        projectId,
+        userId,
+        versionId: v1,
+        decision: "rejected",
+        note: "x".repeat(2001),
+      }),
+    ).rejects.toThrow(/2,000/);
     await expect(
       script.submitScriptReview({
         projectId,

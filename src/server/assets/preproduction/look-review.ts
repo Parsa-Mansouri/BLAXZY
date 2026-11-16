@@ -1,6 +1,6 @@
 /** Reviewing a look, and sending an asset back to its designer from the sheet step. */
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
-import { designerFor, fixRequestCodes, type FixSelection } from "@/server/damis";
+import { designerFor } from "@/server/damis";
 import { type DbTx, getDb } from "@/server/db/client";
 import {
   asset,
@@ -31,8 +31,8 @@ import { insertLook, insertSheet } from "./versions";
  * any earlier accepted look and sheet are superseded and a sheet is started. A location that is
  * accepted wakes the props waiting for it.
  *
- * Rejected: the catalog picks become `fix_requests` (and `issue_codes`); spec-card edits, answers
- * to the designer's questions and changed photos go with them. A re-roll picked alone makes a new
+ * Rejected: the note becomes one free-text `fix_request` (`issue_codes` stays empty); spec-card edits, answers
+ * to the designer's questions and changed photos go with them. A re-roll (`regenerate`) alone makes a new
  * version with the same prompt and a new seed (no dami call); anything else is a fix round
  * (`asset.look.fix`). An uploaded look (older projects) sends the asset back to needs_image.
  */
@@ -40,8 +40,9 @@ export async function submitLookReview(input: {
   lookId: string;
   userId: string;
   decision: "accepted" | "rejected";
-  selections?: FixSelection[];
   note?: string;
+  /** Rejected, no words: draw the same design again (a new seed, no dami call). */
+  regenerate?: boolean;
   references?: ReferenceInput[];
   specEdits?: { field: string; value: string }[];
   clarifyAnswers?: Record<string, string>;
@@ -50,7 +51,6 @@ export async function submitLookReview(input: {
   const parsed = parse(lookReviewInput, input);
   const { lookId, userId, decision } = parsed;
   const note = parsed.note ? parsed.note : null;
-  const selections = parsed.selections ?? [];
   const specEdits = parsed.specEdits ?? [];
   const clarify = parsed.clarifyAnswers ?? {};
   if (!isUuid(lookId)) return null;
@@ -74,9 +74,7 @@ export async function submitLookReview(input: {
     const { asset: row } = locked;
     assertActive(row);
     const plan =
-      decision === "rejected"
-        ? planLookReview(row.kind, selections, specEdits)
-        : { fixRequests: [], regenerate: null };
+      decision === "rejected" ? planLookReview(row.kind, note, specEdits) : { fixRequests: [] };
     const { look: latest } = await loadAssetState(tx, row);
     if (!latest || latest.id !== lookId || latest.status !== "in_review") {
       throw new AssetInputError(NOT_IN_REVIEW);
@@ -87,7 +85,7 @@ export async function submitLookReview(input: {
     if (
       decision === "rejected" &&
       plan.fixRequests.length === 0 &&
-      !plan.regenerate &&
+      !parsed.regenerate &&
       !note &&
       !clarifyGiven &&
       !referencesChanged
@@ -100,17 +98,14 @@ export async function submitLookReview(input: {
       if (missing.length > 0) throw new AssetInputError(CHECK_FIELDS);
     }
     const now = new Date();
-    const issueCodes = [
-      ...fixRequestCodes(plan.fixRequests),
-      ...(plan.regenerate ? [plan.regenerate] : []),
-    ];
     await tx.insert(review).values({
       projectId: row.projectId,
       userId,
       subjectType: "asset_look",
       subjectId: lookId,
       decision,
-      issueCodes: decision === "rejected" ? issueCodes : [],
+      // The user's words are the request: the note, and the free-text fix request built from it.
+      issueCodes: [],
       fixRequests: decision === "rejected" ? plan.fixRequests : [],
       note,
       damiRunId: latest.damiRunId,
@@ -128,14 +123,13 @@ export async function submitLookReview(input: {
         payload: {
           assetId: row.id,
           lookId,
-          issueCodes,
           ...(referencesChanged ? { referencesChanged: true } : {}),
           ...(specEdits.length > 0 ? { specEdits: specEdits.map((e) => e.field) } : {}),
         },
       });
       if (latest.source === "uploaded") return "needs_image" as const;
       const reroll =
-        plan.regenerate !== null &&
+        parsed.regenerate === true &&
         plan.fixRequests.length === 0 &&
         !note &&
         !clarifyGiven &&

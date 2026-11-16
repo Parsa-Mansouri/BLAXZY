@@ -11,8 +11,7 @@ import {
 import { requireUser } from "@/server/auth";
 import { ASSET_KIND_LABELS } from "../../_lib/asset-kinds";
 import { loadProjectForStage } from "../../_lib/load-stage";
-import { characterSheetCatalog, packSheetCatalog } from "../_lib/sheet-catalogs";
-import { designRouteOption } from "../assets/[assetId]/_lib/sheet-review";
+import { characterSheetCatalog } from "../_lib/sheet-catalogs";
 import { toReviewSheet, type ReviewSheet } from "./_lib/review-sheet";
 import { SheetsReview, type ReviewItem, type ReviewStatus } from "./_components/sheets-review";
 
@@ -81,10 +80,6 @@ export default async function ReviewSheetsPage({ params }: { params: Promise<{ i
       initialSheet={firstSheet}
       notReady={notReady}
       characterCatalog={characterSheetCatalog()}
-      packRoutes={{
-        location: designRouteOption(packSheetCatalog("location").options),
-        prop: designRouteOption(packSheetCatalog("prop").options),
-      }}
       maxNote={MAX_REVIEW_NOTE_LENGTH}
       moved={project.stage !== "pre_production"}
     />

@@ -7,6 +7,7 @@ import {
   tempIdsFor,
 } from "../../src/server/assets";
 import { queueResection, sectioningOwedAfterDetection } from "../../src/server/assets/jobs";
+import { noteOutsideRequests } from "../../src/server/damis";
 import { assetDetectFix, defineHandler } from "../../src/server/jobs";
 import { loadScriptJob, ScriptInputError } from "../../src/server/script";
 import {
@@ -48,7 +49,8 @@ export const assetDetectFixHandler = defineHandler(assetDetectFix, async (payloa
     const requests = job.review.fixRequests;
     const mode = job.rescan || requests.length === 0 ? "incremental" : "fix";
     const view = viewFor(state.rows, sceneIndex, mode);
-    const note = job.review.note ? [job.review.note] : [];
+    // A free-text request carries the note itself; older reviews send it with the first request.
+    const note = noteOutsideRequests(job.review.note, requests);
     const run = await runDetector(
       {
         mode,
@@ -64,9 +66,9 @@ export const assetDetectFixHandler = defineHandler(assetDetectFix, async (payloa
                 code: r.code,
                 instruction: r.instruction,
                 target_ids: tempIdsFor(r.targetNames ?? [], view.tempByName),
-                ...(r.customText || (i === 0 && note[0])
+                ...(r.customText || (i === 0 && note)
                   ? {
-                      custom_text: [r.customText, i === 0 ? note[0] : undefined]
+                      custom_text: [r.customText, i === 0 ? note : undefined]
                         .filter(Boolean)
                         .join("\n"),
                     }

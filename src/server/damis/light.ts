@@ -28,39 +28,12 @@ export {
   type ReviewOptionKind,
   type ReviewSector,
 } from "./shared/review-catalog";
-export {
-  BLOCK_ISSUES,
-  BLOCK_ISSUE_CODES,
-  BLOCK_ISSUE_LIST,
-  type BlockIssueCode,
-  type BlockIssueDefinition,
-} from "./block-reviser/issues";
-export {
-  TAKE_ISSUES,
-  TAKE_ISSUE_CODES,
-  TAKE_ISSUE_LIST,
-  type TakeIssueCode,
-  type TakeIssueDefinition,
-} from "./take-fixer/issues";
-export {
-  isWriterReasonCode,
-  issueTypeFor,
-  writerReason,
-  WRITER_PREFERENCE_REASONS,
-  WRITER_REASON_CODES,
-  WRITER_REASONS,
-  WRITER_TECHNICAL_REASONS,
-  type WriterReason,
-  type WriterReasonCode,
-} from "./script-writer/reasons";
 export { AI_DECIDES, MAX_DESIGN_REFERENCES } from "./shared/designer";
 export {
   DESIGNER_CATALOGS,
   DESIGNER_DAMI_KEYS,
   designerFor,
   designerQuestions,
-  LOOK_FRAMES,
-  REFERENCE_CONFLICTS,
   REFERENCE_ROLES,
   type DesignerKey,
   type GuidedQuestion,

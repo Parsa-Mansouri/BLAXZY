@@ -6,7 +6,9 @@
 export { applyDetection, type ApplyDetectionResult, type DetectionRow } from "./apply";
 export {
   getDetectionPanel,
+  skipDetectedAssets,
   submitDetectionReview,
+  MAX_DETECTION_NOTE,
   type DetectionPanel,
   type DetectionWarning,
 } from "./review";

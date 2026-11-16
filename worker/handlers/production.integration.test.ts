@@ -233,7 +233,7 @@ describe.skipIf(!hasFfmpeg)(
         .where(eq(s.damiRun.projectId, projectId));
       expect(prepareRuns.filter((r) => r.key === "text-blocks")).toHaveLength(3);
 
-      // Block review: reject the first with a code → a revised version.
+      // Block review: reject the first with a note → a revised version.
       await expect(
         production.submitBlockReview({ lineageId: l1, userId, decision: "rejected" }),
       ).rejects.toThrow(production.ProductionInputError);
@@ -242,7 +242,6 @@ describe.skipIf(!hasFfmpeg)(
           lineageId: l1,
           userId,
           decision: "rejected",
-          issueCodes: ["wrong_camera"],
           note: "Closer on his hands.",
         }),
       ).toBe("preparing");
@@ -253,7 +252,8 @@ describe.skipIf(!hasFfmpeg)(
       expect(blockReview).toMatchObject({
         subjectType: "prompt_block",
         decision: "rejected",
-        issueCodes: ["wrong_camera"],
+        issueCodes: [],
+        note: "Closer on his hands.",
       });
       const [prepared1] = await getDb()
         .select({ run: s.promptBlock.productionDamiRunId })
@@ -334,13 +334,12 @@ describe.skipIf(!hasFfmpeg)(
         posterFileId: draft1.posterFileId,
       });
 
-      // Reject the first draft with codes → a fixed draft (take-fixer).
+      // Reject the first draft with a note → a fixed draft (take-fixer).
       expect(
         await production.submitTakeReview({
           takeId: draft1.id,
           userId,
           decision: "rejected",
-          issueCodes: ["face_distorted", "too_static"],
           note: "Keep his face sharp.",
         }),
       ).toBe("draft_generating");
@@ -351,7 +350,8 @@ describe.skipIf(!hasFfmpeg)(
       expect(takeReview).toMatchObject({
         subjectType: "generation",
         decision: "rejected",
-        issueCodes: ["face_distorted", "too_static"],
+        issueCodes: [],
+        note: "Keep his face sharp.",
         damiRunId: draft1.damiRunId,
       });
       await drain(projectId);
@@ -404,7 +404,7 @@ describe.skipIf(!hasFfmpeg)(
           takeId: final2,
           userId,
           decision: "rejected",
-          issueCodes: ["flicker"],
+          note: "The video flickers.",
         }),
       ).toBe("draft_generating");
       await drain(projectId);
@@ -805,7 +805,7 @@ describe.skipIf(!hasFfmpeg)(
         lineageId: l1,
         userId,
         decision: "rejected",
-        issueCodes: ["wrong_camera"],
+        note: "Wrong camera angle.",
       });
       expect(await queuedForBlocks("block.revise", projectId)).toBe(1);
       expect(await production.dispatchProductionJobs(projectId, "prepare")).toBe(1);
@@ -1097,7 +1097,7 @@ describe.skipIf(!hasFfmpeg)(
         takeId: await latestTakeId(l2, userId),
         userId,
         decision: "rejected",
-        issueCodes: ["wrong_action"],
+        note: "The action is wrong.",
       });
       await acceptEverything(projectId, userId);
       expect(await production.completeProduction({ projectId, userId })).toBe(true);

@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation";
-import { BLOCK_ISSUE_LIST } from "@/server/damis/light";
 import { getBlockDetail, MAX_BLOCK_ASSETS, MAX_REVIEW_NOTE_LENGTH } from "@/server/production";
 import { loadProduction } from "../../../../_lib/load-production";
 import { blockHref, shotMovedHref } from "../../../../_lib/production-routes";
@@ -39,7 +38,6 @@ export default async function BlockPage({
       block={block}
       position={neighbours.position}
       nextToReviewHref={nextReview}
-      issues={BLOCK_ISSUE_LIST.map(({ code, label, hint }) => ({ code, label, hint }))}
       maxNote={MAX_REVIEW_NOTE_LENGTH}
       maxAssets={MAX_BLOCK_ASSETS}
     />

@@ -20,12 +20,6 @@ export interface AssetInfo {
   removed: boolean;
 }
 
-export interface IssueChoice {
-  code: string;
-  label: string;
-  hint: string;
-}
-
 export interface Limits {
   prompt: number;
   answer: number;

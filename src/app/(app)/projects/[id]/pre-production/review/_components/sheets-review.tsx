@@ -4,8 +4,6 @@ import { useEffect, useRef, useState, useTransition, type ReactNode } from "reac
 import Link from "next/link";
 import { fileSrc } from "@/lib/file-src";
 import { stageHref } from "@/lib/stages";
-import type { FixSelection } from "@/server/damis";
-import type { ClientReviewOption } from "@/lib/review-option";
 import {
   Button,
   cn,
@@ -30,7 +28,7 @@ import {
   DesignChangeNotice,
   DetailFrames,
 } from "../../assets/[assetId]/_components/stages/sheet-review-stage";
-import type { PackKind, SheetCatalogInfo } from "../../assets/[assetId]/_lib/sheet-review";
+import type { SheetCatalogInfo } from "../../assets/[assetId]/_lib/sheet-review";
 import { ContinueToProduction } from "../../_components/continue-to-production";
 import { DrawnTick } from "../../_components/drawn-tick";
 import { MarkLayer, useMarking } from "../../_components/mark-layer";
@@ -115,7 +113,6 @@ export function SheetsReview({
   initialSheet,
   notReady,
   characterCatalog,
-  packRoutes,
   maxNote,
   moved,
 }: {
@@ -126,8 +123,6 @@ export function SheetsReview({
   notReady: number;
   /** The character sheet maker's catalog (characters' sheets are sent back with it). */
   characterCatalog: SheetCatalogInfo;
-  /** The design route of each pack kind (a locked pack goes back to its design step). */
-  packRoutes: Record<PackKind, ClientReviewOption | null>;
   maxNote: number;
   /** The project has moved on to Production already. */
   moved: boolean;
@@ -244,7 +239,7 @@ export function SheetsReview({
     });
   }
 
-  function sendBack(input: { selections: FixSelection[]; note: string }) {
+  function sendBack(input: { note: string; regenerate?: boolean; designChange?: boolean }) {
     if (!current || !sheet) return;
     setPanelError(null);
     startSending(async () => {
@@ -394,7 +389,6 @@ export function SheetsReview({
               {asking && sheet?.kind === "character" ? (
                 <SheetChangesPanel
                   catalog={characterCatalog}
-                  cells={sheet.cells}
                   words={CHARACTER_SHEET_WORDS}
                   initialDesignText={designText}
                   rejectedInARow={sheet.rejectedInARow}
@@ -408,13 +402,12 @@ export function SheetsReview({
                   markSubject="sheet"
                   headingAs={PanelHeading}
                   onSubmit={sendBack}
-                  onReroll={(code) => sendBack({ selections: [{ code }], note: "" })}
+                  onReroll={() => sendBack({ note: "", regenerate: true })}
                   onCancel={cancel}
                 />
               ) : asking && sheet?.kind === "pack" ? (
                 <DesignRoutePanel
                   kind={sheet.pack}
-                  route={packRoutes[sheet.pack]}
                   maxText={maxNote}
                   sending={sending}
                   serverError={panelError}

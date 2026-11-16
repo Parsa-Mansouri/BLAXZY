@@ -18,6 +18,7 @@ import {
   CHARACTER_SHEET_EDIT_CODES,
   designerProject,
   MAX_DESIGN_REFERENCES,
+  noteOutsideRequests,
   runDami,
   sheetGeneratorCharacter,
   type CharacterSheetInput,
@@ -84,7 +85,7 @@ export function characterSheetInput(ctx: SheetJobContext): CharacterSheetInput {
       });
     }
   }
-  const notes = fixing && review.note ? review.note : undefined;
+  const notes = fixing ? noteOutsideRequests(review.note, requests) : undefined;
   return {
     project: designerProject(style),
     character: {

@@ -139,7 +139,7 @@ export interface ReviewOutcome {
 export async function reviewBlockAction(
   projectId: string,
   lineageId: string,
-  review: { decision: "accepted" | "rejected"; issueCodes?: string[]; note?: string },
+  review: { decision: "accepted" | "rejected"; note?: string },
 ): Promise<ActionResult<ReviewOutcome>> {
   return userAction("expensive", "blocks.review", async (user) => {
     if (!isUuid(projectId) || !isUuid(lineageId)) return MISSING_RESULT;

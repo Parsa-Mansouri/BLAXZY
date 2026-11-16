@@ -28,6 +28,7 @@ import {
 import {
   designerProject,
   findReviewOption,
+  noteOutsideRequests,
   getReviewCatalog,
   runDami,
   sheetGeneratorLocation,
@@ -305,7 +306,7 @@ async function fixRoundOf(view: PackViewRow, kind: PackKind): Promise<FixRound |
   const catalog = getReviewCatalog(CATALOG[kind]);
   return {
     view,
-    note: rejection.note ?? undefined,
+    note: noteOutsideRequests(rejection.note, rejection.fixRequests),
     requests: rejection.fixRequests.map((r) => ({
       code: r.code,
       instruction: r.instruction,

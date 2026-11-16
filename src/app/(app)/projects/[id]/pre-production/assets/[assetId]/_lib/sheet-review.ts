@@ -1,13 +1,8 @@
 /**
- * Pure helpers of a sheet's review: the sheet makers' catalogs as the request-changes panel shows
- * them (the character sheet's numbered detail frames, a pack view's QA checks), turning the
- * panel's draft into the selections `submitSheetReview` and `submitSheetViewReview` take, and the
- * words of a location pack or prop sheet (what a view waits for, what the lock still needs).
+ * Pure helpers of a sheet's review: the sheet maker's refused design changes, and the words of a
+ * location pack or prop sheet (what a view waits for, what the lock still needs).
  */
 import type { PackView, SheetSpecView, SheetView } from "@/server/assets";
-import type { FixSelection } from "@/server/damis";
-import type { ClientFollowupStep, ClientReviewOption } from "@/lib/review-option";
-import { followupChips, optionLabel, takesText } from "./look-review";
 
 export type DetailCell = SheetSpecView["detailCells"][number];
 export type PackKind = "location" | "prop";
@@ -18,199 +13,13 @@ export type PackKind = "location" | "prop";
  */
 export const DESIGN_CHANGE_WARNING = "DESIGN_CHANGE_REQUESTED:";
 
-/** What a sheet maker's catalog looks like on screen; built by the page from `@/server/damis`, projected to the client-safe option type. */
+/** What the review screens need of a sheet maker's catalog; built by the page from `@/server/damis`. */
 export interface SheetCatalogInfo {
-  /** The catalog's options visible in the Wizard, in catalog order. */
-  options: ClientReviewOption[];
-  /** The catalog's groups (character sheet: Face, Full-body views ...; props: shape, scale ...). */
-  groups: { id: string; label: string }[];
   /** Rejected rounds in a row after which the catalog's message shows. */
   maxAttempts: number;
   attemptMessage: string | null;
   /** What the catalog says when a change belongs to the design step; null when it says nothing. */
   designChangeMessage: string | null;
-}
-
-/** "1 — main fabric", as the owner's catalog displays a detail frame. */
-export function cellLabel(cell: Pick<DetailCell, "slot" | "subject">): string {
-  return `${cell.slot} — ${cell.subject}`;
-}
-
-/** The frame-picking step of a follow-up (the character sheet's SP01 and SP02). */
-function frameStep(option: ClientReviewOption): ClientFollowupStep | null {
-  return (
-    option.followup?.steps?.find(
-      (s) => s.type === "select_detail_cell" || /detail_cells/.test(s.dynamicOptionsSource ?? ""),
-    ) ?? null
-  );
-}
-
-/** True when the option first asks which numbered detail frame it is about. */
-export function picksFrame(option: ClientReviewOption): boolean {
-  return frameStep(option) !== null;
-}
-
-/** The step after the frame is picked (its chips and its label), or null. */
-function answerStep(option: ClientReviewOption): ClientFollowupStep | null {
-  const steps = option.followup?.steps;
-  if (!steps) return null;
-  const frame = frameStep(option);
-  return steps.find((s) => s !== frame) ?? null;
-}
-
-/** The labels of a two-step follow-up: "Which frame?" and "What should it show?". */
-export function stepLabels(option: ClientReviewOption): { frame: string; answer: string } {
-  return {
-    frame: frameStep(option)?.label ?? "Which frame?",
-    answer: answerStep(option)?.label ?? "How should it change?",
-  };
-}
-
-/** The ready answers of an option (a stepped follow-up's answer step included). */
-export function sheetChips(option: ClientReviewOption): { label: string; value: string }[] {
-  const step = answerStep(option);
-  if (step) return step.options.map(({ label, value }) => ({ label, value }));
-  return followupChips(option);
-}
-
-/** True when anything opens under a picked option: chips, a text box or the frame picker. */
-export function hasSheetStrip(option: ClientReviewOption): boolean {
-  return picksFrame(option) || sheetChips(option).length > 0 || takesText(option);
-}
-
-/** True when the option cannot be sent without a chip or the user's words. */
-export function needsSheetAnswer(option: ClientReviewOption): boolean {
-  return option.needsText || option.takesValue;
-}
-
-/** The re-roll ("make it again": SR01, LSR01, ASR01), sent alone; null when there is none. */
-export function rerollOption(options: readonly ClientReviewOption[]): ClientReviewOption | null {
-  return options.find((o) => o.kind === "regenerate") ?? null;
-}
-
-/** The design route (SX01, LSX01, ASX01): back to the designer with the user's words. */
-export function designRouteOption(
-  options: readonly ClientReviewOption[],
-): ClientReviewOption | null {
-  return options.find((o) => o.kind === "route") ?? null;
-}
-
-/** The options of one side of the panel, in catalog order (re-rolls and routes stand apart). */
-export function sheetOptionsFor(
-  options: readonly ClientReviewOption[],
-  side: "technical" | "preference",
-): ClientReviewOption[] {
-  return options.filter((o) => o.kind === side);
-}
-
-/**
- * The option to offer before sending the picked ones: a re-roll the catalog suggests first for a
- * picked reason (random glitches such as a melted face), when that re-roll is on screen.
- */
-export function suggestedFirst(
-  picked: readonly string[],
-  options: readonly ClientReviewOption[],
-): { option: ClientReviewOption; for: string[] } | null {
-  let found: ClientReviewOption | null = null;
-  const reasons: string[] = [];
-  for (const code of picked) {
-    const option = options.find((o) => o.code === code);
-    if (!option?.suggestFirst) continue;
-    const first = options.find((o) => o.code === option.suggestFirst);
-    if (!first || (found && found.code !== first.code)) continue;
-    found = first;
-    reasons.push(optionLabel(option));
-  }
-  return found ? { option: found, for: reasons } : null;
-}
-
-/** Everything the sheet's request-changes panel collects. */
-export interface SheetChangesDraft {
-  picked: string[];
-  /** The chosen chip per option code. */
-  values: Record<string, string>;
-  /** The user's words per option code. */
-  texts: Record<string, string>;
-  /** The detail frame (its number) per option code. */
-  frames: Record<string, number>;
-  note: string;
-  /** What should change in the design (the route's words). */
-  designText: string;
-}
-
-export const EMPTY_SHEET_DRAFT: SheetChangesDraft = {
-  picked: [],
-  values: {},
-  texts: {},
-  frames: {},
-  note: "",
-  designText: "",
-};
-
-export type BuiltSheetSelections =
-  { ok: true; selections: FixSelection[] } | { ok: false; error: string; code?: string };
-
-/**
- * The selections for a sheet or view review, or the first problem in plain words. A chip goes as
- * `value`, the user's words as `customText`, the chosen detail frame as `slot`. Re-rolls and the
- * design route are sent on their own and are skipped here.
- */
-export function buildSheetSelections(
-  draft: SheetChangesDraft,
-  options: readonly ClientReviewOption[],
-  cells: readonly DetailCell[],
-  maxText: number,
-): BuiltSheetSelections {
-  const selections: FixSelection[] = [];
-  for (const code of draft.picked) {
-    const option = options.find((o) => o.code === code);
-    if (!option || option.kind === "regenerate" || option.kind === "route") continue;
-    const label = optionLabel(option);
-    let slot: FixSelection["slot"];
-    if (picksFrame(option)) {
-      const number = draft.frames[code];
-      const cell = cells.find((c) => c.slot === number);
-      if (!cell) return { ok: false, code, error: `Pick the frame for “${label}”.` };
-      slot = { slot: cell.slot, subject: cell.subject };
-    }
-    const value = draft.values[code]?.trim() || undefined;
-    const text = takesText(option) ? draft.texts[code]?.trim() || undefined : undefined;
-    if (needsSheetAnswer(option)) {
-      const chips = sheetChips(option).length > 0;
-      if (option.needsText && !text && !(chips && value)) {
-        return { ok: false, code, error: `Say what you want for “${label}”.` };
-      }
-      if (!value && !text) {
-        return { ok: false, code, error: `Pick an answer or say what you want for “${label}”.` };
-      }
-    }
-    if (text && text.length > maxText) {
-      return { ok: false, code, error: `Keep the words for “${label}” shorter.` };
-    }
-    selections.push({
-      code,
-      ...(value ? { value } : {}),
-      ...(text ? { customText: text } : {}),
-      ...(slot ? { slot } : {}),
-    });
-  }
-  return { ok: true, selections };
-}
-
-/** The design route as a selection, with the user's words (required by the server). */
-export function buildDesignChange(
-  route: ClientReviewOption | null,
-  text: string,
-  maxText: number,
-): BuiltSheetSelections {
-  if (!route) return { ok: false, error: "The design cannot be changed from here." };
-  const words = text.trim();
-  if (!words)
-    return { ok: false, code: route.code, error: "Say what should change in the design." };
-  if (words.length > maxText) {
-    return { ok: false, code: route.code, error: "Keep the words about the design shorter." };
-  }
-  return { ok: true, selections: [{ code: route.code, customText: words }] };
 }
 
 /** A sheet maker's warnings: the design changes it refused, and the rest. */

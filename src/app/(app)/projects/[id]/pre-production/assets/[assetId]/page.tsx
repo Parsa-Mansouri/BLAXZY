@@ -19,13 +19,9 @@ import {
   DESIGNER_CATALOGS,
   designerFor,
   getReviewCatalog,
-  LOOK_FRAMES,
   MAX_DESIGN_REFERENCES,
-  REFERENCE_CONFLICTS,
   REFERENCE_ROLES,
-  visibleOptions,
 } from "@/server/damis/light";
-import { toClientOptions } from "@/lib/review-option";
 import { quoteGeneration } from "@/server/generation";
 import { ASSET_KIND_LABELS } from "../../../_lib/asset-kinds";
 import { loadProject } from "../../../_lib/load-project";
@@ -46,19 +42,11 @@ function designerInfo(kind: Asset["kind"]): DesignerInfo | null {
   const key = designerFor(kind);
   if (!key) return null;
   const catalog = getReviewCatalog(DESIGNER_CATALOGS[key]);
-  const visible = visibleOptions(catalog, { sector: "wizard" });
-  const codes = new Set(visible.map((o) => o.code));
   return {
     key,
-    options: toClientOptions(visible),
-    groups: catalog.groups.map(({ id, label }) => ({ id, label })),
     maxAttempts: catalog.maxAttemptsBeforeSuggestion ?? DEFAULT_MAX_ATTEMPTS,
     attemptMessage: catalog.attemptMessage?.en ?? null,
     roles: REFERENCE_ROLES[key],
-    conflicts: Object.fromEntries(
-      Object.entries(REFERENCE_CONFLICTS).filter(([code]) => codes.has(code)),
-    ),
-    frames: LOOK_FRAMES[key],
     maxReferences: MAX_DESIGN_REFERENCES,
     aiDecides: AI_DECIDES,
   };

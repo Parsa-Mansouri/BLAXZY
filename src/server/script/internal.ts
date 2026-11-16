@@ -4,19 +4,8 @@
  * for the job handlers.
  */
 import { and, desc, eq, isNull } from "drizzle-orm";
-import {
-  isWriterReasonCode,
-  SCRIPT_ISSUES,
-  type ScriptIssueCode,
-  writerReason,
-} from "@/server/damis";
 import { type DbTx, getDb } from "@/server/db/client";
-import {
-  damiRun,
-  type ReviewFixRequest,
-  type ScriptSource,
-  scriptVersion,
-} from "@/server/db/schema";
+import { damiRun, type ScriptSource, scriptVersion } from "@/server/db/schema";
 import {
   enqueue,
   type JobDefinition,
@@ -50,18 +39,6 @@ const JOB_FOR_SOURCE: Record<
   edited: null,
   enhanced: scriptEnhance,
 };
-
-/** The fix requests a review stores for its codes (writer reasons or reviser issues). */
-export function fixRequestsFor(codes: readonly string[]): ReviewFixRequest[] {
-  return codes.map((code) => {
-    if (isWriterReasonCode(code)) {
-      const reason = writerReason(code);
-      return { type: reason.type, code, instruction: reason.instruction };
-    }
-    const issue = SCRIPT_ISSUES[code as ScriptIssueCode];
-    return { type: "technical", code, instruction: issue?.label ?? code };
-  });
-}
 
 export const projectScope = (projectId: string) =>
   and(eq(scriptVersion.projectId, projectId), isNull(scriptVersion.episodeId));

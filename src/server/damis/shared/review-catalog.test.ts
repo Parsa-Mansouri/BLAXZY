@@ -3,7 +3,10 @@ import {
   AUTO_VALUE,
   buildFixRequests,
   findReviewOption,
+  freeTextCode,
+  freeTextFixRequest,
   getReviewCatalog,
+  noteOutsideRequests,
   REVIEW_CATALOG_KEYS,
   REVIEW_OPTION_KINDS,
   ReviewCatalogError,
@@ -197,5 +200,32 @@ describe("review catalogs", () => {
     expect(() => buildFixRequests(sheet, [{ code: "SP01", value: "x" }])).toThrow(/\{slot\}/);
     const location = getReviewCatalog("location-generator");
     expect(() => buildFixRequests(location, [{ code: "LP03" }])).toThrow(/text/);
+  });
+});
+
+describe("free-text change requests", () => {
+  it.each(REVIEW_CATALOG_KEYS)("%s has a free-text option that carries the note", (key) => {
+    const option = findReviewOption(getReviewCatalog(key), freeTextCode(key));
+    expect(option?.kind).toBe("preference");
+    expect(option?.callsClaude).toBe(true);
+    const request = freeTextFixRequest(key, "  Make the door red.  ");
+    expect(request).toMatchObject({
+      type: "preference",
+      code: freeTextCode(key),
+      customText: "Make the door red.",
+    });
+    // The note is in the instruction too (the templates fill {value}) or in the custom text.
+    expect(request.instruction.length).toBeGreaterThan(0);
+  });
+
+  it("refuses an empty note", () => {
+    expect(() => freeTextFixRequest("asset-detector", "   ")).toThrow(ReviewCatalogError);
+  });
+
+  it("keeps the note out of user notes when a request already carries it", () => {
+    expect(noteOutsideRequests("Older.", [{ customText: "Older." }])).toBeUndefined();
+    expect(noteOutsideRequests("Older.", [])).toBe("Older.");
+    expect(noteOutsideRequests("  ", [])).toBeUndefined();
+    expect(noteOutsideRequests(null, [{ customText: "x" }])).toBeUndefined();
   });
 });

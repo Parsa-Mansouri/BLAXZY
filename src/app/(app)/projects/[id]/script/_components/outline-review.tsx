@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import type { OutlineView } from "@/server/script";
 import {
   Button,
-  Field,
+  ChangeRequestBox,
   OptionRow,
   PageHeader,
   Sheet,
   StatusLine,
-  Textarea,
   cn,
   formatDuration,
   stagger,
@@ -18,8 +17,6 @@ import {
 } from "@/ui";
 import { approveOutlineAction, submitReviewAction } from "../actions";
 import { SAMPLE_LINE, type VersionView } from "./version-types";
-
-const MAX_NOTE_CHARS = 8000;
 
 /** Act bands on the runtime ribbon, light to dark. */
 const ACT_TONES = ["bg-label/80", "bg-label/55", "bg-label/30"] as const;
@@ -103,7 +100,6 @@ export function OutlineReview({
   const [approving, startApproving] = useTransition();
   const [sending, startSending] = useTransition();
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sheetError, setSheetError] = useState<string | null>(null);
 
@@ -120,21 +116,12 @@ export function OutlineReview({
     });
   }
 
-  function requestChanges() {
-    const trimmed = note.trim();
-    if (!trimmed) {
-      setSheetError("Say what the outline should do differently.");
-      return;
-    }
-    if (trimmed.length > MAX_NOTE_CHARS) {
-      setSheetError("Keep the note under 8,000 characters.");
-      return;
-    }
+  function requestChanges(note: string) {
     setSheetError(null);
     startSending(async () => {
       const result = await submitReviewAction(projectId, version.id, {
         decision: "rejected",
-        note: trimmed,
+        note,
       });
       if (!result.ok) {
         setSheetError(result.error);
@@ -285,39 +272,17 @@ export function OutlineReview({
         size="lg"
         title="Request Changes"
         description="The outline is planned again from your note. Nothing has been written yet."
-        footer={
-          <div className="flex w-full items-center justify-end gap-3">
-            <Button variant="plain" onClick={() => setSheetOpen(false)} disabled={sending}>
-              Cancel
-            </Button>
-            <Button variant="primary" loading={sending} onClick={requestChanges}>
-              Request Changes
-            </Button>
-          </div>
-        }
       >
-        <div className="flex flex-col gap-4">
-          <Field
-            label={<span className="font-mono text-meta tracking-caps uppercase">Your note</span>}
-          >
-            <Textarea
-              autoFocus
-              value={note}
-              onChange={(e) => {
-                setNote(e.target.value);
-                setSheetError(null);
-              }}
-              placeholder="What should the outline do differently?"
-              minRows={4}
-              maxRows={10}
-            />
-          </Field>
-          {sheetError ? (
-            <p role="alert" className="swap-in text-secondary text-red">
-              {sheetError}
-            </p>
-          ) : null}
-        </div>
+        <ChangeRequestBox
+          maxLength={2000}
+          placeholder="Make the second act shorter, and give the sister a bigger part in the third."
+          submitLabel="Request Changes"
+          emptyMessage="Say what the outline should do differently."
+          sending={sending}
+          serverError={sheetError}
+          onSubmit={requestChanges}
+          onCancel={() => setSheetOpen(false)}
+        />
       </Sheet>
     </>
   );

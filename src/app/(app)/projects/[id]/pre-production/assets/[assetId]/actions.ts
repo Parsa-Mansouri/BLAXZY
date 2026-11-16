@@ -21,7 +21,6 @@ import {
   answerLookQuestion,
   type AssetStage,
 } from "@/server/assets";
-import type { FixSelection } from "@/server/damis";
 import { confirmUpload } from "@/server/storage";
 import { isUuid, logActionError, userAction, type ActionResult } from "../../../../../_lib/action";
 import {
@@ -216,14 +215,17 @@ export async function finishAssetUploadAction(
 }
 
 /**
- * A sheet's review (see `submitSheetReview`): a character sheet's catalog picks, or a pack's
- * design route (LSX01, ASX01) with the user's words.
+ * A sheet's review (see `submitSheetReview`): rejecting is the user's words (`note`), a new
+ * variation (`regenerate`) or a change of the design with the user's words (`designChange`).
  */
 export interface ReviewInput {
   decision: "accepted" | "rejected";
-  /** Rejected: the sheet maker's catalog options picked, with their chip, words and frame. */
-  selections?: FixSelection[];
+  /** Rejected: what to change, in the user's own words. */
   note?: string;
+  /** Rejected, no words: draw the sheet again (a new variation). */
+  regenerate?: boolean;
+  /** Rejected: the words are a change of the design, made at the design step. */
+  designChange?: boolean;
 }
 
 /** A pack view's review (see `submitSheetViewReview`). */
@@ -235,9 +237,10 @@ export interface ViewReviewInput extends ReviewInput {
 /** A look's review (see `submitLookReview`). */
 export interface LookReviewInput {
   decision: "accepted" | "rejected";
-  /** Rejected: the designer's catalog options picked, with their chip, words and frame. */
-  selections?: FixSelection[];
+  /** Rejected: what to change, in the user's own words. */
   note?: string;
+  /** Rejected, no words: draw the image again (a new variation). */
+  regenerate?: boolean;
   /** Rejected: the next version's photos (one replaced or dropped). */
   references?: ReferencePhoto[];
   /** Rejected: values written on the spec card. */

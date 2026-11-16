@@ -58,6 +58,8 @@ export { Field, useFieldControl } from "./Field";
 export type { FieldProps } from "./Field";
 export { Input } from "./Input";
 export type { InputProps } from "./Input";
+export { ChangeRequestBox } from "./ChangeRequestBox";
+export type { ChangeRequestBoxProps } from "./ChangeRequestBox";
 export { Textarea } from "./Textarea";
 export type { TextareaProps } from "./Textarea";
 export { Select } from "./Select";

@@ -631,3 +631,49 @@ export function buildFixRequests(
 export function fixRequestCodes(requests: readonly FixRequest[]): string[] {
   return [...new Set(requests.map((r) => r.code))];
 }
+
+/**
+ * The owner's free-text option of each catalog ("Other": the user's own words). A change request
+ * written in free text is sent to the dami as this option with the note as its custom text.
+ */
+const FREE_TEXT_CODES: Readonly<Record<ReviewCatalogKey, string>> = {
+  "asset-detector": "ADP99",
+  "character-generator": "P99",
+  "location-generator": "LP99",
+  "prop-generator": "AP99",
+  "sheet-generator-character": "SP99",
+  "sheet-generator-location": "LSP99",
+  "sheet-generator-prop": "ASP99",
+};
+
+/** The code of a catalog's free-text option. */
+export function freeTextCode(key: ReviewCatalogKey): string {
+  return FREE_TEXT_CODES[key];
+}
+
+/**
+ * The one fix request of a free-text change request: the catalog's free-text option carrying the
+ * user's note (`customText`). Throws a `ReviewCatalogError` for an empty note.
+ */
+export function freeTextFixRequest(key: ReviewCatalogKey, note: string): FixRequest {
+  const customText = note.trim();
+  if (!customText) throw new ReviewCatalogError(`${key}: a free-text request needs the note`);
+  const [request] = buildFixRequests(getReviewCatalog(key), [
+    { code: FREE_TEXT_CODES[key], customText },
+  ]);
+  if (!request) throw new ReviewCatalogError(`${key} has no free-text option`);
+  return request;
+}
+
+/**
+ * The review's note when its words are not already in a fix request (a free-text request carries
+ * the note as its custom text, so sending it again as `user_notes` would only repeat it).
+ */
+export function noteOutsideRequests(
+  note: string | null | undefined,
+  requests: readonly { customText?: string }[],
+): string | undefined {
+  const text = note?.trim();
+  if (!text) return undefined;
+  return requests.some((r) => r.customText === text) ? undefined : text;
+}

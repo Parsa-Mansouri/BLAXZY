@@ -1,6 +1,6 @@
 /** Input schemas and limits of Production's services (pure: no database). */
 import { z } from "zod";
-import { BLOCK_ISSUE_CODES, MAX_REFERENCE_IMAGES, TAKE_ISSUE_CODES } from "@/server/damis";
+import { MAX_REFERENCE_IMAGES } from "@/server/damis";
 import { MAX_REFERENCES } from "@/server/generation";
 import { userIdSchema } from "./access";
 import { BLOCK_PRODUCTION_STAGES } from "./stage";
@@ -28,19 +28,11 @@ const noteSchema = z
 
 export const blockReviewInput = lineageInput.extend({
   decision: z.enum(["accepted", "rejected"], { error: "Approve the shot or ask for changes." }),
-  issueCodes: z
-    .array(z.enum(BLOCK_ISSUE_CODES, { error: "Pick issues from the list." }))
-    .max(BLOCK_ISSUE_CODES.length)
-    .optional(),
   note: noteSchema,
 });
 
 export const takeReviewInput = takeInput.extend({
   decision: z.enum(["accepted", "rejected"], { error: "Accept the clip or ask for changes." }),
-  issueCodes: z
-    .array(z.enum(TAKE_ISSUE_CODES, { error: "Pick issues from the list." }))
-    .max(TAKE_ISSUE_CODES.length)
-    .optional(),
   note: noteSchema,
 });
 

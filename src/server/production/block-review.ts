@@ -100,7 +100,7 @@ export async function setBlockAssets(input: {
 }
 
 /**
- * Approves a prepared block, or asks for changes (an issue or a note is needed): the block's next
+ * Approves a prepared block, or asks for changes (a note is needed): the block's next
  * version is revised from the review (`block.revise`). An approved block can still be sent back
  * before its draft is made. Reviews go to `review` with the dami run that prepared the prompt.
  */
@@ -108,13 +108,12 @@ export async function submitBlockReview(input: {
   lineageId: string;
   userId: string;
   decision: "accepted" | "rejected";
-  issueCodes?: string[];
   note?: string;
 }): Promise<BlockProductionStage | null> {
   const parsed = parse(blockReviewInput, input);
   const { lineageId, userId, decision } = parsed;
   if (!isUuid(lineageId)) return null;
-  const reason = reviewReason(decision, parsed.issueCodes, parsed.note);
+  const reason = reviewReason(decision, parsed.note);
   const outcome = await getDb().transaction(async (tx) => {
     const locked = await lockLineage(tx, lineageId, userId);
     if (!locked) return null;

@@ -1,5 +1,5 @@
 /** User-facing messages shared by Production's services (a leaf: no imports). */
-export const NEEDS_REASON = "Tell us what is wrong: pick an issue or write a note.";
+export const NEEDS_REASON = "Tell us what to change: write a note.";
 
 export const NOT_IN_REVIEW = "This is no longer waiting for review. Reload the page.";
 

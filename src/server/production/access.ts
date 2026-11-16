@@ -99,15 +99,15 @@ export async function lineageStage(
   return { stage: deriveBlockStage(block, take), take };
 }
 
+/**
+ * The note a review stores. Asking for changes is free text: the note is required (and is the
+ * whole request); `issue_codes` stays empty. An approval keeps the note if one was given.
+ */
 export function reviewReason(
   decision: "accepted" | "rejected",
-  issueCodes: readonly string[] | undefined,
   note: string | undefined,
 ): { issueCodes: string[]; note: string | null } {
-  const codes = [...new Set(issueCodes ?? [])];
   const text = note ? note : null;
-  if (decision === "rejected" && codes.length === 0 && !text) {
-    throw new ProductionInputError(NEEDS_REASON);
-  }
-  return { issueCodes: decision === "rejected" ? codes : [], note: text };
+  if (decision === "rejected" && !text) throw new ProductionInputError(NEEDS_REASON);
+  return { issueCodes: [], note: text };
 }

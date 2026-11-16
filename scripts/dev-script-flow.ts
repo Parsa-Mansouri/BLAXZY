@@ -83,7 +83,6 @@ async function main(): Promise<void> {
     userId,
     versionId: v1.id,
     decision: "rejected",
-    issueCodes: ["ending_weak"],
     note: "Give the ending more hope.",
   });
   if (!v2) throw new Error("submitScriptReview returned null");

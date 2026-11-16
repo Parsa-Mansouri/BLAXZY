@@ -169,15 +169,13 @@ describe.skipIf(!reachable)("jobs are sent with their rows (integration)", async
         warnings: [],
       });
     await expect(
-      whileQueueDown(() =>
-        assets.submitDetectionReview({ projectId, userId, selections: [{ code: "ADR01" }] }),
-      ),
+      whileQueueDown(() => assets.submitDetectionReview({ projectId, userId, rescan: true })),
     ).rejects.toThrow(/could not start/);
     const reviews = await getDb().select().from(s.review).where(eq(s.review.projectId, projectId));
     expect(reviews).toEqual([]);
     expect((await assets.getDetectionPanel(projectId, userId))?.busy).toBe(false);
-    expect(
-      await assets.submitDetectionReview({ projectId, userId, selections: [{ code: "ADR01" }] }),
-    ).toEqual({ skipped: 0, started: true });
+    expect(await assets.submitDetectionReview({ projectId, userId, rescan: true })).toEqual({
+      started: true,
+    });
   });
 });

@@ -54,19 +54,13 @@ const LOCK_LABEL: Record<PackKind, string> = {
 const VIEW_WORDS: Record<PackKind, SheetChangesWords> = {
   location: {
     subject: "view",
-    designTile: {
-      title: "Change the design",
-      line: "Layout, openings, materials or a proposed unseen part: made at the location’s design step.",
-    },
+    placeholder: "Show more of the floor, and make the window on the left bigger.",
     designHint:
       "The location goes back to its design step with your words. Once you accept the new Hero, its views are planned again.",
   },
   prop: {
     subject: "view",
-    designTile: {
-      title: "Change the design",
-      line: "Shape, material, a detail or a proposed hidden part: made at the prop’s design step.",
-    },
+    placeholder: "Show the clasp more clearly, and keep the same lighting.",
     designHint:
       "The prop goes back to its design step with your words. Once you accept the new design, its views are planned again.",
   },
@@ -571,7 +565,6 @@ export function PackReviewStage({
       {asking && view ? (
         <SheetChangesPanel
           catalog={catalog}
-          cells={[]}
           words={VIEW_WORDS[kind]}
           initialDesignText={designText}
           rejectedInARow={0}
@@ -589,22 +582,16 @@ export function PackReviewStage({
               view,
               {
                 decision: "rejected",
-                selections: input.selections,
                 ...(input.note ? { note: input.note } : {}),
+                ...(input.designChange ? { designChange: true } : {}),
               },
-              input.selections.some(
-                (s) => catalog.options.find((o) => o.code === s.code)?.kind === "route",
-              )
+              input.designChange
                 ? `${assetName} goes back to its design`
                 : `Making ${view.label} again`,
             )
           }
-          onReroll={(code) =>
-            review(
-              view,
-              { decision: "rejected", selections: [{ code }] },
-              `Making ${view.label} again`,
-            )
+          onReroll={() =>
+            review(view, { decision: "rejected", regenerate: true }, `Making ${view.label} again`)
           }
           onCancel={closePanel}
         />

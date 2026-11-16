@@ -206,39 +206,40 @@ describe.skipIf(!reachable)(
         .where(eq(s.project.id, projectId));
       expect(styled?.style?.styleDescriptor).toBe(produced1.spec?.styleUsed);
 
-      // Reject with catalog picks: a fix round of the Character Generator.
-      await expect(
-        assets.submitLookReview({
-          lookId: produced1.id,
-          userId,
-          decision: "rejected",
-          selections: [{ code: "P05" }],
-        }),
-      ).rejects.toThrow(/Say what you want/);
+      // An empty or blank note is refused: asking for changes needs the user's words.
+      for (const blank of [undefined, "   "]) {
+        await expect(
+          assets.submitLookReview({
+            lookId: produced1.id,
+            userId,
+            decision: "rejected",
+            note: blank,
+          }),
+        ).rejects.toThrow(/Tell us what to change/);
+      }
+      expect(await reviewsOf(produced1.id)).toHaveLength(0);
+      // Reject in free text: a fix round of the Character Generator, one custom-text request.
       expect(
         await assets.submitLookReview({
           lookId: produced1.id,
           userId,
           decision: "rejected",
-          selections: [
-            { code: "T14" },
-            { code: "P01", value: "noticeably older" },
-            { code: "T01", viewId: "closeup" },
-          ],
-          note: "Older, please.",
+          note: "Make him noticeably older, with a close-up of the face.",
         }),
       ).toBe("generating");
       const [review1] = await reviewsOf(produced1.id);
       expect(review1).toMatchObject({
         subjectType: "asset_look",
         decision: "rejected",
-        issueCodes: ["T14", "P01", "T01"],
-        note: "Older, please.",
+        issueCodes: [],
+        note: "Make him noticeably older, with a close-up of the face.",
         damiRunId: produced1.damiRunId,
       });
-      expect(review1?.fixRequests[1]).toMatchObject({
+      expect(review1?.fixRequests).toHaveLength(1);
+      expect(review1?.fixRequests[0]).toMatchObject({
         type: "preference",
-        code: "P01",
+        code: "P99",
+        customText: "Make him noticeably older, with a close-up of the face.",
         instruction: expect.stringContaining("noticeably older"),
       });
       const d1 = await detail(tomas.id, userId);
@@ -248,24 +249,28 @@ describe.skipIf(!reachable)(
       expect(produced2).toMatchObject({ status: "in_review", parentId: produced1.id });
       expect(produced2.prompt).toContain("noticeably older");
       expect(produced2.prompt).toContain("close-up");
-      expect(produced2.spec?.appliedFixes.map((f) => f.code)).toEqual(["T14", "P01", "T01"]);
       const [fixRun] = await getDb()
         .select({ damiKey: s.damiRun.damiKey, input: s.damiRun.input })
         .from(s.damiRun)
         .where(eq(s.damiRun.id, produced2.damiRunId ?? ""));
       expect(fixRun?.damiKey).toBe("character-generator");
-      expect(fixRun?.input).toMatchObject({ previousPrompt: produced1.prompt });
+      expect(fixRun?.input).toMatchObject({
+        previousPrompt: produced1.prompt,
+        fixRequests: [
+          { code: "P99", customText: "Make him noticeably older, with a close-up of the face." },
+        ],
+      });
       expect((await generationRow(produced2.generationId ?? "")).params).toMatchObject({
         variant: produced2.id,
       });
 
-      // A re-roll (R01) alone keeps the prompt and the dami run: only the seed changes.
+      // A re-roll (regenerate) alone keeps the prompt and the dami run: only the seed changes.
       expect(
         await assets.submitLookReview({
           lookId: produced2.id,
           userId,
           decision: "rejected",
-          selections: [{ code: "R01" }],
+          regenerate: true,
         }),
       ).toBe("generating");
       const reroll = await produceLook((await detail(tomas.id, userId)).looks[0]?.id ?? "");
@@ -302,22 +307,29 @@ describe.skipIf(!reachable)(
       // Reject the sheet: a fixed one.
       await expect(
         assets.submitSheetReview({ sheetId: producedSheet1.id, userId, decision: "rejected" }),
-      ).rejects.toThrow(/Say what is wrong/);
+      ).rejects.toThrow(/Tell us what to change/);
       expect(
         await assets.submitSheetReview({
           sheetId: producedSheet1.id,
           userId,
           decision: "rejected",
-          selections: [{ code: "ST20" }],
+          note: "The detail frames are too small; make them bigger.",
         }),
       ).toBe("building_sheet");
       const [sheetReview] = await reviewsOf(producedSheet1.id);
       expect(sheetReview).toMatchObject({
         subjectType: "asset_sheet",
-        issueCodes: ["ST20"],
+        issueCodes: [],
+        note: "The detail frames are too small; make them bigger.",
         damiRunId: producedSheet1.damiRunId,
       });
-      expect(sheetReview?.fixRequests[0]).toMatchObject({ type: "technical", code: "ST20" });
+      expect(sheetReview?.fixRequests).toEqual([
+        expect.objectContaining({
+          type: "preference",
+          code: "SP99",
+          customText: "The detail frames are too small; make them bigger.",
+        }),
+      ]);
       expect(producedSheet1.spec).toMatchObject({
         maker: "sheet-generator-character",
         editMode: "full",
@@ -326,10 +338,11 @@ describe.skipIf(!reachable)(
       const sheet2 = (await detail(tomas.id, userId)).sheets[0];
       const producedSheet2 = await produceSheet(sheet2?.id ?? "");
       expect(producedSheet2).toMatchObject({ status: "in_review", parentId: producedSheet1.id });
-      // ST20 only touches the detail frames: the previous sheet is attached and edited.
-      expect(producedSheet2.spec?.editMode).toBe("edit_previous_sheet");
+      // A free-text request is not known to touch only the detail frames: the sheet is drawn
+      // again in full (the previous sheet is not attached), the safe default.
+      expect(producedSheet2.spec?.editMode).toBe("full");
       const fixGen = await generationRow(producedSheet2.generationId ?? "");
-      expect(fixGen.referenceFileIds).toEqual([reroll.fileId, producedSheet1.fileId]);
+      expect(fixGen.referenceFileIds).toEqual([reroll.fileId]);
 
       expect(
         await assets.submitSheetReview({
@@ -369,13 +382,8 @@ describe.skipIf(!reachable)(
       expect(produced.spec).toMatchObject({ generator: "location-generator", aspectRatio: "16:9" });
       expect(produced.spec?.fields.length).toBeGreaterThan(0);
       await expect(
-        assets.submitLookReview({
-          lookId: produced.id,
-          userId,
-          decision: "rejected",
-          selections: [{ code: "T01" }],
-        }),
-      ).rejects.toThrow(/does not apply/);
+        assets.submitLookReview({ lookId: produced.id, userId, decision: "rejected" }),
+      ).rejects.toThrow(/Tell us what to change/);
       expect(await reviewsOf(produced.id)).toHaveLength(0);
       await expect(
         assets.submitLookReview({ lookId: produced.id, userId, decision: "accepted" }),
@@ -401,9 +409,9 @@ describe.skipIf(!reachable)(
           viewRowId: reverse?.id ?? "",
           userId,
           decision: "rejected",
-          selections: [{ code: "ST01" }],
+          regenerate: true,
         }),
-      ).rejects.toThrow(/does not apply|no longer waiting/);
+      ).rejects.toThrow(/no longer waiting/);
     });
 
     it("a spec-card edit is a fix round; the location's own photo can be the Hero", async () => {
@@ -524,13 +532,14 @@ describe.skipIf(!reachable)(
           lookId: produced.id,
           userId,
           decision: "rejected",
-          selections: [{ code: "AP02", customText: "dark green" }],
+          note: "Make it dark green.",
           references: [],
         }),
       ).toBe("generating");
       const fixed = await produceLook((await detail(prop.id, userId)).looks[0]?.id ?? "");
       expect(fixed.references).toEqual([]);
-      expect(fixed.spec?.changesIdentity).toBe(true);
+      // The words reached the designer (a real one decides whether they change what the prop is).
+      expect(fixed.prompt).toContain("dark green");
       expect((await generationRow(fixed.generationId ?? "")).referenceFileIds).toEqual([]);
       expect(await billing.getBalance(userId)).toBe(50 - 8);
     });
@@ -1169,15 +1178,24 @@ describe.skipIf(!reachable)(
       const cornerGen = await generationRow(cornerRow.generationId ?? "");
       expect(cornerGen.referenceFileIds).toEqual([look.fileId, reverseRow.fileId]);
 
-      // LST05 is edit-eligible: the fix round re-writes only this view and edits its image.
+      // A free-text fix re-writes only this view (the fix round of its sheet maker).
       expect(
         await assets.submitSheetViewReview({
           viewRowId: corner?.id ?? "",
           userId,
           decision: "rejected",
-          selections: [{ code: "LST05" }],
+          note: "The corner is too dark; open the curtains.",
         }),
       ).toBe("sheet_review");
+      const [viewReview] = await reviewsOf(corner?.id ?? "");
+      expect(viewReview).toMatchObject({ issueCodes: [], decision: "rejected" });
+      expect(viewReview?.fixRequests).toEqual([
+        expect.objectContaining({
+          code: "LSP99",
+          customText: "The corner is too dark; open the curtains.",
+          viewId: "corner_a",
+        }),
+      ]);
       d = await detail(cabin.id, userId);
       const fixVersion = d.packViews.find((v) => v.viewId === "corner_a");
       expect(fixVersion).toMatchObject({ status: "planned", versionNumber: 2 });
@@ -1185,17 +1203,16 @@ describe.skipIf(!reachable)(
       await advancePack(sheetId);
       d = await detail(cabin.id, userId);
       const fixed = d.packViews.find((v) => v.viewId === "corner_a");
-      expect(fixed).toMatchObject({ status: "in_review", editMode: "edit_previous_view" });
+      // Free text is not known to be edit-eligible: the view is drawn again in full.
+      expect(fixed).toMatchObject({ status: "in_review", editMode: "full" });
       const fixedRow = await viewRow(fixed?.id ?? "");
-      const fixedGen = await generationRow(fixedRow.generationId ?? "");
-      expect(fixedGen.referenceFileIds).toContain(cornerRow.fileId);
 
-      // LSR01 re-rolls: same prompt, a new seed, no dami call.
+      // Regenerate re-rolls: same prompt, a new seed, no dami call.
       await assets.submitSheetViewReview({
         viewRowId: fixed?.id ?? "",
         userId,
         decision: "rejected",
-        selections: [{ code: "LSR01" }],
+        regenerate: true,
       });
       await advancePack(sheetId);
       d = await detail(cabin.id, userId);
@@ -1245,15 +1262,16 @@ describe.skipIf(!reachable)(
           viewRowId: reverse?.id ?? "",
           userId,
           decision: "rejected",
-          selections: [{ code: "LSX01" }],
+          designChange: true,
         }),
-      ).rejects.toThrow(/design/);
+      ).rejects.toThrow(/Tell us what to change/);
       expect(
         await assets.submitSheetViewReview({
           viewRowId: reverse?.id ?? "",
           userId,
           decision: "rejected",
-          selections: [{ code: "LSX01", customText: "Put a second window on the east wall" }],
+          designChange: true,
+          note: "Put a second window on the east wall",
         }),
       ).toBe("generating");
       let d = await detail(cabin.id, userId);
@@ -1279,7 +1297,8 @@ describe.skipIf(!reachable)(
       expect(d.stage).toBe("building_sheet");
       expect(d.sheets[0]?.lookId).toBe(next.id);
 
-      // A character: SR01 re-rolls the sheet; SX01 goes back to the Character Generator.
+      // A character: regenerate re-rolls the sheet; a free-text design request is refused by the
+      // sheet maker (DESIGN_CHANGE_REQUESTED) and goes back to the Character Generator.
       const tomas = await add(projectId, userId);
       const started = await assets.startLookFromPrompt({
         assetId: tomas.id,
@@ -1293,19 +1312,33 @@ describe.skipIf(!reachable)(
         sheetId: s1.id,
         userId,
         decision: "rejected",
-        selections: [{ code: "SR01" }],
+        regenerate: true,
       });
       const s2 = await produceSheet((await detail(tomas.id, userId)).sheets[0]?.id ?? "");
       expect(s2).toMatchObject({ prompt: s1.prompt, damiRunId: s1.damiRunId, status: "in_review" });
       expect((await generationRow(s2.generationId ?? "")).params).toMatchObject({
         variant: s2.id,
       });
+      // The user writes a design change in the plain box: the sheet maker leaves the design alone
+      // and returns the DESIGN_CHANGE_REQUESTED warning the screen offers the design route with.
       expect(
         await assets.submitSheetReview({
           sheetId: s2.id,
           userId,
           decision: "rejected",
-          selections: [{ code: "SX01", customText: "Give him a red scarf" }],
+          note: "Make his hair white and give him a red scarf.",
+        }),
+      ).toBe("building_sheet");
+      const s3 = await produceSheet((await detail(tomas.id, userId)).sheets[0]?.id ?? "");
+      const refused = (await detail(tomas.id, userId)).sheets[0]?.spec?.designChanges ?? [];
+      expect(refused).toEqual([expect.stringContaining("hair white")]);
+      expect(
+        await assets.submitSheetReview({
+          sheetId: s3.id,
+          userId,
+          decision: "rejected",
+          designChange: true,
+          note: refused[0] ?? "",
         }),
       ).toBe("generating");
       const t = await detail(tomas.id, userId);
@@ -1418,12 +1451,12 @@ describe.skipIf(!reachable)(
       // Skipped from the detected list (ADP01).
       const cabin = await waitingPair("Ferry Cabin", "Locket");
       expect(
-        await assets.submitDetectionReview({
+        await assets.skipDetectedAssets({
           projectId,
           userId,
-          selections: [{ code: "ADP01", targetNames: ["location:ferry cabin"] }],
+          refs: ["location:ferry cabin"],
         }),
-      ).toEqual({ skipped: 1, started: false });
+      ).toEqual({ skipped: 1 });
       expect(await queued("asset.look.generate", "lookId", cabin.lookId)).toBe(1);
 
       // Merged away into a location that is not being designed.
@@ -1536,7 +1569,8 @@ describe.skipIf(!reachable)(
           viewRowId: reverse?.id ?? "",
           userId,
           decision: "rejected",
-          selections: [{ code: "LSX01", customText: "A second window on the east wall" }],
+          designChange: true,
+          note: "A second window on the east wall",
         }),
       ).toBe("generating");
       const views = await getDb()

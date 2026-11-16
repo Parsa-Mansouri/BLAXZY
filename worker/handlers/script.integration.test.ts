@@ -25,7 +25,7 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
   const { closeJobQueue } = await import("../../src/server/jobs");
   const { closeDb, getDb } = await import("../../src/server/db/client");
   const { damiRun, project } = await import("../../src/server/db/schema");
-  const { and, eq } = await import("drizzle-orm");
+  const { and, desc, eq } = await import("drizzle-orm");
   const { scriptWriteHandler } = await import("./script-write");
   const { scriptCheckHandler } = await import("./script-check");
   const { scriptReviseHandler } = await import("./script-revise");
@@ -74,7 +74,7 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     expect(written?.runtime?.verdict).toBe("ok");
     expect(await runCount(projectId, "script-writer")).toBe(1);
 
-    // Reject with a reason code, a note and a comment; the writer revises (revise mode).
+    // Reject with a note and a comment; the writer revises (revise mode) from the note alone.
     const content = written?.content ?? "";
     const quote = content.split("\n").find((l) => l.startsWith("Tomas ")) ?? "";
     const start = content.indexOf(quote);
@@ -84,7 +84,6 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
       userId,
       versionId: v1?.id ?? "",
       decision: "rejected",
-      issueCodes: ["different_ending_tone"],
       note: "More hope at the end.",
       comments: [{ quote, start, end: start + quote.length, note: "Angrier." }],
     });
@@ -100,6 +99,21 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     expect(revised?.notes.length).toBeGreaterThan(0);
     expect(await runCount(projectId, "script-writer")).toBe(2);
     expect(await runCount(projectId, "script-reviser")).toBe(0);
+    // The note reached the writer's revise mode as its free-text note, with no reason codes.
+    const [reviseRun] = await getDb()
+      .select({ input: damiRun.input })
+      .from(damiRun)
+      .where(and(eq(damiRun.projectId, projectId), eq(damiRun.damiKey, "script-writer")))
+      .orderBy(desc(damiRun.createdAt))
+      .limit(1);
+    expect(reviseRun?.input).toMatchObject({
+      mode: "revise",
+      feedback: {
+        issueType: "preference",
+        selectedReasons: [],
+        customNote: expect.stringContaining("More hope at the end."),
+      },
+    });
 
     // Accept; detect assets; section.
     await script.submitScriptReview({
@@ -297,7 +311,6 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
 
     const { getDb: db } = await import("../../src/server/db/client");
     const { review } = await import("../../src/server/db/schema");
-    const { desc } = await import("drizzle-orm");
     const latestReview = async () =>
       (
         await db()
@@ -308,51 +321,45 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
           .limit(1)
       )[0]?.id ?? "";
 
-    // ADT02: two characters are the same one.
-    const started = await assets.submitDetectionReview({
-      projectId,
-      userId,
-      selections: [
-        {
-          code: "ADT02",
-          targetNames: names.slice(0, 2).map((n) => `character:${n}`),
-        },
-      ],
-    });
-    expect(started).toEqual({ skipped: 0, started: true });
+    // A change request in free text: one custom-text fix request of the owner's "Other" (ADP99).
+    const note = `${names[0]} and ${names[1]} are the same character. Keep one of them.`;
+    const started = await assets.submitDetectionReview({ projectId, userId, note });
+    expect(started).toEqual({ started: true });
     expect((await assets.getDetectionPanel(projectId, userId))?.busy).toBe(true);
     const reviewId = await latestReview();
     await assetDetectFixHandler.run({ reviewId }, jobContext());
     await assetDetectFixHandler.run({ reviewId }, jobContext());
-    const after = await assets.listAssets(projectId, userId, { kind: "character" });
-    expect(after?.items.length).toBe(names.length - 1);
-    // The merge moved block refs to the surviving name (logged), and sectioning runs again.
-    const { project: projectTable, projectEvent } = await import("../../src/server/db/schema");
-    const merges = await db()
-      .select({ payload: projectEvent.payload })
-      .from(projectEvent)
-      .where(and(eq(projectEvent.projectId, projectId), eq(projectEvent.type, "asset.merged")));
-    expect(merges[0]?.payload).toMatchObject({ by: "detector" });
+    // The note reached the detector in fix mode as the custom text of its one request.
+    const [fixRun] = await db()
+      .select({ input: damiRun.input })
+      .from(damiRun)
+      .where(and(eq(damiRun.projectId, projectId), eq(damiRun.damiKey, "asset-detector")))
+      .orderBy(desc(damiRun.createdAt))
+      .limit(1);
+    expect(fixRun?.input).toMatchObject({
+      mode: "fix",
+      fix_requests: [{ type: "preference", code: "ADP99", custom_text: note }],
+    });
+    // The corrected list is applied and sectioning runs again.
+    const { project: projectTable } = await import("../../src/server/db/schema");
     const [sectioning] = await db()
       .select({ stageState: projectTable.stageState })
       .from(projectTable)
       .where(eq(projectTable.id, projectId));
     expect(sectioning?.stageState.sectioning).toMatchObject({ state: "running" });
+    const after = await assets.listAssets(projectId, userId, { kind: "character" });
     const panel = await assets.getDetectionPanel(projectId, userId);
     expect(panel).toMatchObject({ busy: false, rounds: 1, failure: null });
 
-    // ADT01 for something the script does not contain: a NOT_IN_SCRIPT warning, no new asset.
-    await assets.submitDetectionReview({
-      projectId,
-      userId,
-      selections: [{ code: "ADT01", customText: "a purple giraffe" }],
-    });
+    // A thing the script does not contain: the dami keeps the list and says so; no new asset.
+    await assets.submitDetectionReview({ projectId, userId, note: "a purple giraffe" });
     await assetDetectFixHandler.run({ reviewId: await latestReview() }, jobContext());
-    const warned = await assets.getDetectionPanel(projectId, userId);
-    expect(warned?.warnings.some((w) => w.tag === "NOT_IN_SCRIPT")).toBe(true);
+    expect((await assets.listAssets(projectId, userId, { kind: "character" }))?.items.length).toBe(
+      after?.items.length,
+    );
 
     // ADR01: a re-scan runs incrementally and keeps the stored names.
-    await assets.submitDetectionReview({ projectId, userId, selections: [{ code: "ADR01" }] });
+    await assets.submitDetectionReview({ projectId, userId, rescan: true });
     await assetDetectFixHandler.run({ reviewId: await latestReview() }, jobContext());
     const rescanned = await assets.listAssets(projectId, userId, { kind: "character" });
     expect(rescanned?.items.map((c) => c.name)).toEqual(

@@ -19,20 +19,19 @@ async function enqueueTakeJob(tx: DbTx, take: Pick<TakeRow, "id" | "prompt">): P
 /**
  * Accepts or rejects the lineage's latest take in review, recording the review with the dami run
  * that wrote its prompt. Draft accepted: a final take is made from exactly that draft
- * (`take.generate`). Final accepted: the block is done. Rejected (an issue or a note is needed):
+ * (`take.generate`). Final accepted: the block is done. Rejected (a note is needed):
  * a new draft with a fixed prompt (`take.fix`).
  */
 export async function submitTakeReview(input: {
   takeId: string;
   userId: string;
   decision: "accepted" | "rejected";
-  issueCodes?: string[];
   note?: string;
 }): Promise<BlockProductionStage | null> {
   const parsed = parse(takeReviewInput, input);
   const { takeId, userId, decision } = parsed;
   if (!isUuid(takeId)) return null;
-  const reason = reviewReason(decision, parsed.issueCodes, parsed.note);
+  const reason = reviewReason(decision, parsed.note);
   const outcome = await getDb().transaction(async (tx) => {
     const target = await getTake(tx, takeId);
     if (!target) return null;

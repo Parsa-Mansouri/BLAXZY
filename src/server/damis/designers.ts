@@ -81,27 +81,6 @@ const rolesMatch: [
 ] = [true, true, true];
 void rolesMatch;
 
-/**
- * The reference roles a preference change would contradict (the owner: "a preference that
- * conflicts with a reference image makes the UI ask first"). The character catalog marks its own
- * (`conflicts_with_reference`); for locations and props the catalogs say it in words, so the
- * pairs are listed here.
- */
-export const REFERENCE_CONFLICTS: Readonly<Record<string, readonly string[]>> = {
-  // Locations
-  LP03: ["hero", "mood"],
-  LP04: ["hero", "detail"],
-  LP05: ["hero", "layout"],
-  LP07: ["hero", "layout"],
-  LP08: ["hero", "mood"],
-  // Props
-  AP01: ["identity"],
-  AP02: ["identity", "material"],
-  AP03: ["identity", "material"],
-  AP09: ["identity"],
-  AP10: ["identity", "detail"],
-};
-
 /** Where on a look a change applies (the character board's three views). */
 export const LOOK_FRAMES: Readonly<Record<DesignerKey, readonly { id: string; label: string }[]>> =
   {

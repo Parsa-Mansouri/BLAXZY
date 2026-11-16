@@ -192,7 +192,6 @@ async function main(): Promise<void> {
       takeId,
       userId,
       decision: "rejected",
-      issueCodes: ["too_static"],
       note: "Give the shot a slow push-in.",
     });
     console.log(`   ${first.title}: ${stage}`);

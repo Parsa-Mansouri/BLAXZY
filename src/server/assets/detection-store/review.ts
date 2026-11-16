@@ -4,18 +4,9 @@
  */
 import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { z } from "zod";
-import {
-  buildFixRequests,
-  fixRequestCodes,
-  type FixSelection,
-  getReviewCatalog,
-  parseAssetRef,
-  ReviewCatalogError,
-  type ReviewOption,
-  visibleOptions,
-} from "@/server/damis";
+import { freeTextFixRequest, getReviewCatalog, parseAssetRef } from "@/server/damis";
 import { getDb } from "@/server/db/client";
-import { asset, projectEvent, review, type ReviewFixRequest } from "@/server/db/schema";
+import { asset, projectEvent, review } from "@/server/db/schema";
 import { assetDetectFix, enqueue } from "@/server/jobs";
 import { findOwnedProject, logProjectEvent } from "@/server/projects";
 import { visibleWarnings } from "../detection";
@@ -26,10 +17,11 @@ import { latestDetection } from "./apply";
 
 const CATALOG_KEY = "asset-detector" as const;
 
-/** Codes that need no dami: skip (ADP01). Rename, delete, add and merge use their own actions. */
-const SKIP_CODE = "ADP01";
-
+/** The re-scan action (ADR01): the whole script again; stored in `issue_codes` to tell the worker. */
 export const RESCAN_CODE = "ADR01";
+
+/** The longest change request, in characters. */
+export const MAX_DETECTION_NOTE = 2000;
 
 export type DetectionWarning = {
   /** MERGE_CHECK, NO_LOCATION, AMBIGUOUS, REAL_PERSON, APPROVED_CONFLICT, NOT_IN_SCRIPT ... */
@@ -38,8 +30,6 @@ export type DetectionWarning = {
 };
 
 export type DetectionPanel = {
-  /** The options the Wizard shows, from the owner's catalog. */
-  options: ReviewOption[];
   warnings: DetectionWarning[];
   /** Correction rounds asked for so far (for the "edit by hand" suggestion). */
   rounds: number;
@@ -102,7 +92,6 @@ export async function getDetectionPanel(
   const maxRounds = catalog.maxAttemptsBeforeSuggestion ?? 4;
   const n = rounds?.n ?? 0;
   return {
-    options: visibleOptions(catalog, { sector: owned.mode === "pro" ? "pro" : "wizard" }),
     warnings: visibleWarnings(latest?.warnings ?? []).map(splitWarning),
     rounds: n,
     maxRounds,
@@ -115,74 +104,36 @@ export async function getDetectionPanel(
   };
 }
 
-const selectionSchema = z.object({
-  code: z.string().trim().min(1).max(20),
-  value: z.string().trim().max(200).optional(),
-  customText: z.string().trim().max(4000).optional(),
-  targetNames: z.array(z.string().min(1).max(300)).max(50).optional(),
-});
-
 const NOT_AN_ASSET = "One of the chosen assets is not on the list. Reload the page.";
 
-const submitSchema = z.object({
+const reviewSchema = z.object({
   projectId: z.string().max(100),
   userId: z.string().min(1).max(128),
-  selections: z.array(selectionSchema).min(1, "Pick what is wrong first.").max(20),
-  note: z.string().trim().max(8000).optional(),
+  note: z.string().trim().max(MAX_DETECTION_NOTE, "Keep it under 2,000 characters.").optional(),
+  rescan: z.boolean().optional(),
 });
 
 /**
- * One "Something wrong with this list?" round. Skip (ADP01) sets the targets' priority to
- * skipped (no dami). Re-scan (ADR01) and the dami fixes (ADT…, ADP02…) are recorded as a review
- * of the latest detection, with the fix requests built from the owner's catalog (targets as
- * `kind:Name` refs), and run by `asset.detect.fix`. Returns what was started.
+ * One "Something wrong with this list?" round, in the user's own words. The note is recorded as a
+ * review of the latest detection and sent to the Asset Detector in fix mode as one free-text fix
+ * request (the owner's "Other", ADP99, with the note as its custom text), run by `asset.detect.fix`.
+ * `rescan` (the action, no words needed) runs the detector again over the whole script instead
+ * (incremental, known assets kept). Returns whether a round started.
  */
 export async function submitDetectionReview(input: {
   projectId: string;
   userId: string;
-  selections: FixSelection[];
   note?: string;
-}): Promise<{ skipped: number; started: boolean } | null> {
-  const parsed = parse(submitSchema, input);
+  rescan?: boolean;
+}): Promise<{ started: boolean } | null> {
+  const parsed = parse(reviewSchema, input);
+  const note = parsed.note ? parsed.note : null;
+  const rescan = parsed.rescan === true;
+  if (!rescan && !note) throw new AssetInputError("Tell us what to change: write a note.");
   const owned = await ownedProject(parsed.projectId, parsed.userId);
   if (!owned) return null;
   assertPreProductionOpen(owned);
-  const catalog = getReviewCatalog(CATALOG_KEY);
-  const allowed = new Set(
-    visibleOptions(catalog, { sector: owned.mode === "pro" ? "pro" : "wizard" }).map((o) => o.code),
-  );
-  for (const s of parsed.selections) {
-    if (!allowed.has(s.code))
-      throw new AssetInputError("One of the chosen fixes is not available.");
-  }
-  const skip = parsed.selections.filter((s) => s.code === SKIP_CODE);
-  // Each target is a `kind:Name` ref; anything else is refused before it reaches the database.
-  const skipRefs = skip.flatMap((s) =>
-    (s.targetNames ?? []).map((ref) => {
-      const target = parseAssetRef(ref);
-      if (!target) throw new AssetInputError(NOT_AN_ASSET);
-      return target;
-    }),
-  );
-  const rescan = parsed.selections.some((s) => s.code === RESCAN_CODE);
-  let requests: ReviewFixRequest[];
-  try {
-    requests = buildFixRequests(
-      catalog,
-      parsed.selections.filter((s) => s.code !== SKIP_CODE && s.code !== RESCAN_CODE),
-    );
-  } catch (error) {
-    if (error instanceof ReviewCatalogError) {
-      throw new AssetInputError("Say a little more about what is wrong, then try again.");
-    }
-    throw error;
-  }
-  for (const r of requests) {
-    const option = catalog.options.find((o) => o.code === r.code);
-    if ((option?.targetCount ?? 0) >= 1 && !(r.targetNames?.length ?? 0)) {
-      throw new AssetInputError("Pick the assets this is about.");
-    }
-  }
+  const requests = rescan || !note ? [] : [freeTextFixRequest(CATALOG_KEY, note)];
 
   const outcome = await getDb().transaction(async (tx) => {
     // The project row first (the lock order of every asset writer), with ownership and stage.
@@ -191,9 +142,72 @@ export async function submitDetectionReview(input: {
     });
     if (!locked) return null;
     assertPreProductionOpen(locked);
+    const latest = await latestDetection(tx, parsed.projectId);
+    if (!latest) {
+      throw new AssetInputError("The assets have not been detected yet. Wait for the list first.");
+    }
+    const [row] = await tx
+      .insert(review)
+      .values({
+        projectId: parsed.projectId,
+        userId: parsed.userId,
+        subjectType: "asset_detection",
+        subjectId: latest.id,
+        decision: "rejected",
+        issueCodes: rescan ? [RESCAN_CODE] : [],
+        fixRequests: requests,
+        note,
+        damiRunId: latest.damiRunId,
+      })
+      .returning({ id: review.id });
+    if (!row) throw new Error("review insert returned no row");
+    // The fix job is sent with the review: the panel never shows a round as running without it.
+    try {
+      await enqueue(assetDetectFix, { reviewId: row.id }, { tx });
+    } catch (error) {
+      console.error("[assets] could not enqueue asset.detect.fix:", error);
+      throw new AssetInputError(ENQUEUE_FAILURE);
+    }
+    return { reviewId: row.id };
+  });
+  if (!outcome) return null;
+  return { started: true };
+}
+
+const skipSchema = z.object({
+  projectId: z.string().max(100),
+  userId: z.string().min(1).max(128),
+  refs: z.array(z.string().min(1).max(300)).min(1).max(50),
+});
+
+/**
+ * "Not needed as its own asset" (the owner's ADP01): the assets' priority is set to skipped, no
+ * dami. Each target is a \`kind:Name\` ref; anything else is refused before it reaches the database.
+ * Returns how many assets were skipped.
+ */
+export async function skipDetectedAssets(input: {
+  projectId: string;
+  userId: string;
+  refs: string[];
+}): Promise<{ skipped: number } | null> {
+  const parsed = parse(skipSchema, input);
+  const targets = parsed.refs.map((ref) => {
+    const target = parseAssetRef(ref);
+    if (!target) throw new AssetInputError(NOT_AN_ASSET);
+    return target;
+  });
+  const owned = await ownedProject(parsed.projectId, parsed.userId);
+  if (!owned) return null;
+  assertPreProductionOpen(owned);
+  return getDb().transaction(async (tx) => {
+    const locked = await findOwnedProject(tx, parsed.projectId, parsed.userId, {
+      lock: "no-key-update",
+    });
+    if (!locked) return null;
+    assertPreProductionOpen(locked);
     let skipped = 0;
     let skippedLocation = false;
-    for (const target of skipRefs) {
+    for (const target of targets) {
       const updated = await tx
         .update(asset)
         .set({ priority: "skipped" })
@@ -213,42 +227,11 @@ export async function submitDetectionReview(input: {
         projectId: parsed.projectId,
         userId: parsed.userId,
         type: "assets.skipped",
-        payload: { refs: skip.flatMap((s) => s.targetNames ?? []) },
+        payload: { refs: parsed.refs },
       });
     }
     // A skipped location is not designed: props waiting for it go ahead without it.
     if (skippedLocation) await wakeOnTx(tx, parsed.projectId);
-    if (requests.length === 0 && !rescan) return { skipped, reviewId: null };
-    const latest = await latestDetection(tx, parsed.projectId);
-    if (!latest) {
-      throw new AssetInputError("The assets have not been detected yet. Wait for the list first.");
-    }
-    const [row] = await tx
-      .insert(review)
-      .values({
-        projectId: parsed.projectId,
-        userId: parsed.userId,
-        subjectType: "asset_detection",
-        subjectId: latest.id,
-        decision: "rejected",
-        issueCodes: rescan
-          ? [RESCAN_CODE, ...fixRequestCodes(requests)]
-          : fixRequestCodes(requests),
-        fixRequests: requests,
-        note: parsed.note || null,
-        damiRunId: latest.damiRunId,
-      })
-      .returning({ id: review.id });
-    if (!row) throw new Error("review insert returned no row");
-    // The fix job is sent with the review: the panel never shows a round as running without it.
-    try {
-      await enqueue(assetDetectFix, { reviewId: row.id }, { tx });
-    } catch (error) {
-      console.error("[assets] could not enqueue asset.detect.fix:", error);
-      throw new AssetInputError(ENQUEUE_FAILURE);
-    }
-    return { skipped, reviewId: row.id };
+    return { skipped };
   });
-  if (!outcome) return null;
-  return { skipped: outcome.skipped, started: outcome.reviewId !== null };
 }

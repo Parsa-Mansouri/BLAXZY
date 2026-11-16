@@ -7,11 +7,11 @@ import {
   includeSkippedAsset,
   mergeAssets,
   removeAsset,
+  skipDetectedAssets,
   submitDetectionReview,
   submitSheetReview,
   updateAsset,
 } from "@/server/assets";
-import type { FixSelection } from "@/server/damis";
 import { isUuid, userAction, type ActionResult } from "../../../../_lib/action";
 import {
   asKind,
@@ -103,17 +103,30 @@ export async function mergeAssetsAction(
 }
 
 /**
- * One review round of the detected list: skips apply at once, corrections and re-scans start in
- * the background.
+ * One review round of the detected list, in the user's own words: the correction starts in the
+ * background. `rescan` runs the whole script again instead (no words needed).
  */
 export async function submitDetectionReviewAction(
   projectId: string,
-  selections: FixSelection[],
-  note?: string,
-): Promise<ActionResult<{ skipped: number; started: boolean }>> {
+  input: { note?: string; rescan?: boolean },
+): Promise<ActionResult<{ started: boolean }>> {
   return userAction("expensive", "category.submitDetectionReview", async (user) => {
     if (!isUuid(projectId)) return MISSING_RESULT;
-    const result = await submitDetectionReview({ projectId, userId: user.id, selections, note });
+    const result = await submitDetectionReview({ projectId, userId: user.id, ...input });
+    if (!result) return MISSING_RESULT;
+    revalidatePath(`/projects/${projectId}/pre-production`, "layout");
+    return { ok: true, data: result };
+  });
+}
+
+/** "Not needed as its own asset": the assets are skipped at once (no dami). */
+export async function skipAssetsAction(
+  projectId: string,
+  refs: string[],
+): Promise<ActionResult<{ skipped: number }>> {
+  return userAction("mutate", "category.skipAssets", async (user) => {
+    if (!isUuid(projectId)) return MISSING_RESULT;
+    const result = await skipDetectedAssets({ projectId, userId: user.id, refs });
     if (!result) return MISSING_RESULT;
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");
     return { ok: true, data: result };

@@ -79,54 +79,35 @@ export function foldMarks(
   return trimmed ? `${trimmed}\n\n${block}` : block;
 }
 
-/* ------------------------------------------------------------------------------------------ */
-/* Issue groups                                                                                */
-/* ------------------------------------------------------------------------------------------ */
-
-export type IssueGroupKey = "subject" | "look" | "frame";
-
-const GROUP_LABELS: Record<IssueGroupKey, string> = {
-  subject: "Subject",
-  look: "Look",
-  frame: "Frame",
-};
+export type MarkedNote =
+  | { ok: true; note: string }
+  | {
+      ok: false;
+      error: string;
+      /** The 1-based mark that still needs its comment. */ blank?: number;
+    };
 
 /**
- * Which group each issue code sits under in the panel (codes from the look and sheet
- * catalogues). A code not listed here falls under Look.
+ * The note ready to send: the marks folded in, after checking that every mark says something and
+ * that the note and the marks fit `maxChars` together.
  */
-const GROUP_OF: Readonly<Record<string, IssueGroupKey>> = {
-  face_incomplete: "subject",
-  anatomy_wrong: "subject",
-  wrong_age: "subject",
-  wrong_clothing: "subject",
-  wrong_details: "subject",
-  differs_from_look: "subject",
-  inconsistent_views: "subject",
-  proportions_off: "subject",
-  wrong_era: "look",
-  wrong_colours: "look",
-  style_mismatch: "look",
-  lighting_poor: "look",
-  text_or_watermark: "look",
-  text_or_labels: "look",
-  wrong_framing: "frame",
-  extra_subjects: "frame",
-  background_not_clean: "frame",
-  missing_view: "frame",
-  layout_cluttered: "frame",
-};
-
-/** Issues in their groups (Subject, Look, Frame), catalogue order kept, empty groups dropped. */
-export function groupIssues<T extends { code: string }>(
-  issues: readonly T[],
-): { key: IssueGroupKey; label: string; issues: T[] }[] {
-  const order: IssueGroupKey[] = ["subject", "look", "frame"];
-  return order
-    .map((key) => ({
-      key,
-      label: GROUP_LABELS[key],
-      issues: issues.filter((issue) => (GROUP_OF[issue.code] ?? "look") === key),
-    }))
-    .filter((group) => group.issues.length > 0);
+export function markedNote(
+  note: string,
+  marks: readonly Mark[],
+  subject: "image" | "sheet",
+  maxChars: number,
+): MarkedNote {
+  const blank = firstBlankMark(marks);
+  if (blank !== null) return { ok: false, error: `Say what is wrong at mark ${blank}.`, blank };
+  const folded = foldMarks(note, marks, subject);
+  if (folded.length > maxChars) {
+    return {
+      ok: false,
+      error:
+        marks.length > 0
+          ? `Keep the note and the marks under ${maxChars.toLocaleString("en-US")} characters together.`
+          : `Keep it under ${maxChars.toLocaleString("en-US")} characters.`,
+    };
+  }
+  return { ok: true, note: folded };
 }

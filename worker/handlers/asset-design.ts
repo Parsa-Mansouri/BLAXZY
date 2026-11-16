@@ -18,6 +18,7 @@ import {
   locationGenerator,
   LOOK_FRAMES,
   notAProp,
+  noteOutsideRequests,
   PROP_FIX_EFFORT,
   propGenerator,
   runDami,
@@ -88,7 +89,8 @@ export function fixRoundOf(ctx: LookJobContext, designer: DesignerKey): FixRound
   const { look, parent, review } = ctx;
   if (!parent || parent.status !== "rejected" || !review || !parent.spec) return null;
   const notes: string[] = [];
-  if (review.note) notes.push(review.note);
+  const extra = noteOutsideRequests(review.note, review.fixRequests);
+  if (extra) notes.push(extra);
   // Older reviews have issue codes only: pass them on as words.
   if (review.fixRequests.length === 0 && review.issueCodes.length > 0 && !review.note) {
     notes.push(`Fix: ${review.issueCodes.join(", ").replaceAll("_", " ")}.`);

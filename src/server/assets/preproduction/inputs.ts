@@ -81,17 +81,6 @@ const noteSchema = z
   .max(MAX_REVIEW_NOTE_LENGTH, `Keep the note under ${MAX_REVIEW_NOTE_LENGTH} characters.`)
   .optional();
 
-const fixSelectionSchema = z.object({
-  code: z.string().trim().min(1).max(40),
-  value: z.string().trim().max(1000).optional(),
-  customText: z.string().trim().max(MAX_REVIEW_NOTE_LENGTH).optional(),
-  viewId: z.string().trim().max(60).optional(),
-  /** A character sheet's detail frame (SP01, SP02). */
-  slot: z
-    .object({ slot: z.number().int().min(1).max(6), subject: z.string().trim().min(1).max(300) })
-    .optional(),
-});
-
 const specEditSchema = z.object({
   field: z.string().trim().min(1).max(200),
   value: z
@@ -105,9 +94,9 @@ export const lookReviewInput = z.object({
   lookId: idSchema,
   userId: userIdSchema,
   decision: z.enum(["accepted", "rejected"], { error: "Accept or reject the image." }),
-  /** Rejected: the catalog options picked (with chips, text and the view they are about). */
-  selections: z.array(fixSelectionSchema).max(40).optional(),
   note: noteSchema,
+  /** Rejected, no words: draw it again as a new variation (same prompt, new seed; no dami call). */
+  regenerate: z.boolean().optional(),
   /** Rejected: the next version's photos (a photo replaced or dropped); default: the same. */
   references: referencesSchema.optional(),
   /** Rejected: values the user wrote on the spec card. */
@@ -122,17 +111,21 @@ export const sheetReviewInput = z.object({
   sheetId: idSchema,
   userId: userIdSchema,
   decision: z.enum(["accepted", "rejected"], { error: "Accept or reject the sheet." }),
-  /** Rejected: the catalog options picked (with chips, text and the frame they are about). */
-  selections: z.array(fixSelectionSchema).max(40).optional(),
+  /** Rejected: the user's words (the whole request). */
   note: noteSchema,
+  /** Rejected, no words: draw it again as a new variation (same prompt, new seed; no dami call). */
+  regenerate: z.boolean().optional(),
+  /** Rejected: the words are a change of the design, made by the designer (words required). */
+  designChange: z.boolean().optional(),
 });
 
 export const viewReviewInput = z.object({
   viewRowId: idSchema,
   userId: userIdSchema,
   decision: z.enum(["accepted", "rejected"], { error: "Approve the view or ask for changes." }),
-  selections: z.array(fixSelectionSchema).max(40).optional(),
   note: noteSchema,
+  regenerate: z.boolean().optional(),
+  designChange: z.boolean().optional(),
   /** Accepted: the reviewer approved the parts the view proposes (`new_hypotheses`). */
   hypothesesApproved: z.boolean().optional(),
 });

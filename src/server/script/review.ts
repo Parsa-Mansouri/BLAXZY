@@ -1,7 +1,6 @@
 /** Reviewing a version, editing the accepted script, and retrying a failed version. */
 import { and, desc, eq, ne } from "drizzle-orm";
 import { setSectioningState } from "@/server/blocks";
-import { isWriterReasonCode, writerReason } from "@/server/damis";
 import { getDb, type DbTx } from "@/server/db/client";
 import { review, scriptVersion, type ReviewComment } from "@/server/db/schema";
 import { advanceStage, logProjectEvent } from "@/server/projects";
@@ -10,7 +9,6 @@ import {
   BUSY_MESSAGE,
   enqueueDetection,
   enqueueForVersion,
-  fixRequestsFor,
   insertVersion,
   latestVersion,
   loadView,
@@ -49,23 +47,16 @@ type Decided = {
  */
 async function rejectVersion(
   decided: Decided,
-  feedback: { issueCodes: string[]; note: string | null; comments: number; isOutline: boolean },
+  feedback: { note: string | null; comments: number; isOutline: boolean },
 ): Promise<ScriptVersionRow> {
   const { tx, projectId, userId, version, latest, now } = decided;
-  const { issueCodes, note, isOutline } = feedback;
+  const { note, isOutline } = feedback;
   await tx
     .update(scriptVersion)
     .set({ status: "rejected", decidedAt: now })
     .where(eq(scriptVersion.id, version.id));
   // An outline is re-planned from the note (generated again); a script is revised.
-  const outlineFeedback = isOutline
-    ? [
-        ...issueCodes.map((c) => (isWriterReasonCode(c) ? writerReason(c).instruction : c)),
-        note ?? "",
-      ]
-        .filter(Boolean)
-        .join("\n")
-    : null;
+  const outlineFeedback = isOutline ? (note ?? "") : null;
   const next = await insertVersion(
     tx,
     {
@@ -86,7 +77,6 @@ async function rejectVersion(
     payload: {
       versionId: version.id,
       nextVersionId: next.id,
-      issueCodes,
       comments: feedback.comments,
     },
   });
@@ -141,22 +131,18 @@ export async function submitScriptReview(input: {
   userId: string;
   versionId: string;
   decision: "accepted" | "rejected";
-  issueCodes?: string[];
   note?: string;
   comments?: ReviewComment[];
 }): Promise<ScriptVersionView | null> {
   const parsed = parseInput(submitReviewSchema, input);
   const { projectId, userId, versionId, decision } = parsed;
-  const issueCodes = [...new Set(parsed.issueCodes ?? [])];
   const note = parsed.note ? parsed.note : null;
   const comments = parsed.comments ?? [];
   if (!uuidSchema.safeParse(projectId).success || !uuidSchema.safeParse(versionId).success) {
     return null;
   }
-  if (decision === "rejected" && issueCodes.length === 0 && !note && comments.length === 0) {
-    throw new ScriptInputError(
-      "Say what to change: pick an issue, write a note or comment on the text.",
-    );
+  if (decision === "rejected" && !note && comments.length === 0) {
+    throw new ScriptInputError("Tell us what to change: write a note or comment on the text.");
   }
 
   const decided = await getDb().transaction(async (tx) => {
@@ -199,15 +185,16 @@ export async function submitScriptReview(input: {
       subjectType: "script_version",
       subjectId: version.id,
       decision,
-      issueCodes: decision === "rejected" ? issueCodes : [],
-      fixRequests: decision === "rejected" ? fixRequestsFor(issueCodes) : [],
+      // A change request is free text: the note (and any anchored comments) is the whole request.
+      issueCodes: [],
+      fixRequests: [],
       note,
       comments,
       damiRunId: version.damiRunId,
     });
     const context: Decided = { tx, projectId, userId, version, latest, now };
     return decision === "rejected"
-      ? rejectVersion(context, { issueCodes, note, comments: comments.length, isOutline })
+      ? rejectVersion(context, { note, comments: comments.length, isOutline })
       : acceptVersion(context);
   });
   if (!decided) return null;

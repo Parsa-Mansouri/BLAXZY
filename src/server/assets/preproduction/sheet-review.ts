@@ -1,7 +1,6 @@
 /** Reviewing sheets and the views of location packs and prop sheets, and locking a pack. */
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
-import { fixRequestCodes, type FixSelection } from "@/server/damis";
 import { type DbTx, getDb } from "@/server/db/client";
 import { assetSheet, assetSheetView, review } from "@/server/db/schema";
 import { assetSheetAssemble, assetSheetPlan, assetSheetViewsAdvance } from "@/server/jobs";
@@ -22,26 +21,27 @@ import { insertSheet, insertViewVersion } from "./versions";
  * Accepts or rejects a character sheet in review (the asset's latest, built from its accepted
  * look); a ready asset's accepted sheet can also be sent back (the Review All pass).
  *
- * Accepted: the asset is ready. Rejected: the catalog picks become `fix_requests` (and
- * `issue_codes`). SR01 alone re-rolls the image (same prompt, new seed, no dami call). SX01 sends
- * the asset back to the Character Generator with the user's words (the sheet is rebuilt once the
- * new board is accepted). Anything else is a fix round of the sheet maker (`asset.sheet.fix`).
- * Location packs and prop sheets are reviewed view by view (`submitSheetViewReview`, `lockSheet`);
- * only the design route applies to them here.
+ * Accepted: the asset is ready. Rejected: the note becomes one free-text `fix_request` of the
+ * sheet maker (`asset.sheet.fix`; `issue_codes` stays empty). `regenerate` alone re-rolls the image
+ * (same prompt, new seed, no dami call). `designChange` sends the asset back to the Character
+ * Generator with the note (the sheet is rebuilt once the new board is accepted). Location packs and
+ * prop sheets are reviewed view by view (`submitSheetViewReview`, `lockSheet`); only the design
+ * change applies to them here.
  */
 export async function submitSheetReview(input: {
   sheetId: string;
   userId: string;
   decision: "accepted" | "rejected";
-  selections?: FixSelection[];
   note?: string;
+  regenerate?: boolean;
+  designChange?: boolean;
 }): Promise<AssetStage | null> {
   const parsed = parse(sheetReviewInput, input);
   const { sheetId, userId, decision } = parsed;
-  const selections = parsed.selections ?? [];
   const note = parsed.note ? parsed.note : null;
+  const regenerate = parsed.regenerate === true && !parsed.designChange;
   if (!isUuid(sheetId)) return null;
-  if (decision === "rejected" && selections.length === 0 && !note) {
+  if (decision === "rejected" && !note && !regenerate) {
     throw new AssetInputError(NEEDS_REASON);
   }
   const outcome = await getDb().transaction(async (tx) => {
@@ -57,8 +57,8 @@ export async function submitSheetReview(input: {
     assertActive(row);
     const plan =
       decision === "rejected"
-        ? planSheetReview(row.kind, selections)
-        : { fixRequests: [], regenerate: null, route: null };
+        ? planSheetReview(row.kind, { note, designChange: parsed.designChange === true })
+        : { fixRequests: [], route: null };
     const { look, sheet: latest } = await loadAssetState(tx, row);
     if (
       !latest ||
@@ -94,34 +94,23 @@ export async function submitSheetReview(input: {
       return "generating" as const;
     }
     const now = new Date();
-    const issueCodes = [
-      ...fixRequestCodes(plan.fixRequests),
-      ...(plan.regenerate ? [plan.regenerate] : []),
-    ];
     await tx.insert(review).values({
       projectId: row.projectId,
       userId,
       subjectType: "asset_sheet",
       subjectId: sheetId,
       decision,
-      issueCodes: decision === "rejected" ? issueCodes : [],
+      issueCodes: [],
       fixRequests: decision === "rejected" ? plan.fixRequests : [],
       note,
       damiRunId: latest.damiRunId,
     });
     if (decision === "rejected") {
-      if (plan.fixRequests.length === 0 && !plan.regenerate && !note) {
-        throw new AssetInputError(NEEDS_REASON);
-      }
       await tx
         .update(assetSheet)
         .set({ status: "rejected", decidedAt: now })
         .where(eq(assetSheet.id, sheetId));
-      const reroll =
-        plan.regenerate !== null &&
-        plan.fixRequests.length === 0 &&
-        !note &&
-        latest.prompt !== null;
+      const reroll = regenerate && plan.fixRequests.length === 0 && !note && latest.prompt !== null;
       const next = await insertSheet(tx, {
         assetId: row.id,
         projectId: row.projectId,
@@ -141,7 +130,6 @@ export async function submitSheetReview(input: {
           assetId: row.id,
           sheetId,
           nextSheetId: next.id,
-          issueCodes,
         },
       });
       await enqueueSheetJob(tx, next, row.kind);
@@ -206,24 +194,25 @@ async function lockView(
  * Approves a view of a location pack or prop sheet, or asks for changes.
  *
  * Accepted: the view's proposed parts (`new_hypotheses`) must be approved with it; the views that
- * waited for it are requested. Rejected: the catalog picks become `fix_requests`. A re-roll alone
- * (LSR01, ASR01) makes a new version with the same prompt and a new seed; a design change (LSX01,
- * ASX01) sends the asset back to its designer; anything else is a fix round that re-writes only
- * this view (`asset.sheet.plan` with the new version).
+ * waited for it are requested. Rejected: the note becomes one free-text `fix_request`. A re-roll
+ * alone (`regenerate`) makes a new version with the same prompt and a new seed; a design change
+ * sends the asset back to its designer; anything else is a fix round that re-writes only this view
+ * (`asset.sheet.plan` with the new version).
  */
 export async function submitSheetViewReview(input: {
   viewRowId: string;
   userId: string;
   decision: "accepted" | "rejected";
-  selections?: FixSelection[];
   note?: string;
+  regenerate?: boolean;
+  designChange?: boolean;
   hypothesesApproved?: boolean;
 }): Promise<AssetStage | null> {
   const parsed = parse(viewReviewInput, input);
   const { viewRowId, userId, decision } = parsed;
   const note = parsed.note ? parsed.note : null;
-  const selections = parsed.selections ?? [];
-  if (decision === "rejected" && selections.length === 0 && !note) {
+  const regenerate = parsed.regenerate === true && !parsed.designChange;
+  if (decision === "rejected" && !note && !regenerate) {
     throw new AssetInputError(NEEDS_REASON);
   }
   const outcome = await getDb().transaction(async (tx) => {
@@ -266,10 +255,9 @@ export async function submitSheetViewReview(input: {
       await enqueueOnTx(tx, assetSheetViewsAdvance, { sheetId: sheet.id });
       return "sheet_review" as const;
     }
-    const plan = planSheetReview(
-      row.kind,
-      selections.map((s) => ({ ...s, viewId: view.viewId })),
-    );
+    const plan = planSheetReview(row.kind, { note, designChange: parsed.designChange === true });
+    // The request is about this view of the pack.
+    const fixRequests = plan.fixRequests.map((r) => ({ ...r, viewId: view.viewId }));
     if (plan.route) {
       await sendBackToDesigner(tx, {
         row,
@@ -283,18 +271,14 @@ export async function submitSheetViewReview(input: {
       });
       return "generating" as const;
     }
-    const issueCodes = [
-      ...fixRequestCodes(plan.fixRequests),
-      ...(plan.regenerate ? [plan.regenerate] : []),
-    ];
     await tx.insert(review).values({
       projectId: row.projectId,
       userId,
       subjectType: "asset_sheet_view",
       subjectId: view.id,
       decision,
-      issueCodes,
-      fixRequests: plan.fixRequests,
+      issueCodes: [],
+      fixRequests,
       note,
       damiRunId: view.damiRunId,
     });
@@ -302,7 +286,7 @@ export async function submitSheetViewReview(input: {
       .update(assetSheetView)
       .set({ status: "rejected", decidedAt: now })
       .where(eq(assetSheetView.id, view.id));
-    const reroll = plan.regenerate !== null && plan.fixRequests.length === 0 && !note;
+    const reroll = regenerate && fixRequests.length === 0 && !note;
     const next = await insertViewVersion(
       tx,
       view,
@@ -319,7 +303,6 @@ export async function submitSheetViewReview(input: {
         sheetId: sheet.id,
         viewRowId: view.id,
         nextViewRowId: next.id,
-        issueCodes,
       },
     });
     // A re-roll is requested by the advance; a fix round re-writes this view first.

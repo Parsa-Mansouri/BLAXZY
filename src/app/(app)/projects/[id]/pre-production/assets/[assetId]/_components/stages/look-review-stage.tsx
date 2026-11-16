@@ -171,8 +171,6 @@ export function LookReviewStage({
           marking={marking}
           panel={
             <LookChangesPanel
-              assetId={assetId}
-              look={look}
               designer={designer}
               rejectedInARow={rejectedInARow}
               maxNote={maxNote}
@@ -187,18 +185,16 @@ export function LookReviewStage({
                   target,
                   {
                     decision: "rejected",
-                    selections: input.selections,
                     ...(input.note ? { note: input.note } : {}),
-                    ...(input.references ? { references: input.references } : {}),
                     ...specInput(),
                   },
                   "panel",
                 )
               }
-              onReroll={(code) =>
+              onReroll={() =>
                 review.run(
                   target,
-                  { decision: "rejected", selections: [{ code }] },
+                  { decision: "rejected", regenerate: true },
                   "panel",
                   `Making a new variation of ${assetName}`,
                 )

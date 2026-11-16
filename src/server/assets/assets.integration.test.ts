@@ -12,7 +12,7 @@ const reachable = await databaseReachable();
 describe.skipIf(!reachable)("assets service (integration)", async () => {
   const assets = await import("@/server/assets");
   const { closeDb, getDb } = await import("@/server/db/client");
-  const { asset, assetDetection, assetLook, damiRun, project, scriptVersion } =
+  const { asset, assetDetection, assetLook, damiRun, project, review, scriptVersion } =
     await import("@/server/db/schema");
   const { and, eq } = await import("drizzle-orm");
   const fixtures = createFixtures();
@@ -250,8 +250,7 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
 
     const panel = await assets.getDetectionPanel(projectId, userId);
     expect(panel?.warnings.map((w) => w.tag)).toEqual(["APPROVED_CONFLICT"]);
-    expect(panel?.options.map((o) => o.code)).toContain("ADT01");
-    expect(panel?.options.map((o) => o.code)).not.toContain("ADT07");
+    expect(panel).not.toHaveProperty("options");
 
     // A removed asset found again is revived under its name.
     const third = await versionAndRun(projectId, 3);
@@ -309,54 +308,52 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     const v = await versionAndRun(projectId, 1);
     // Still at the script stage: the list cannot be corrected yet.
     await expect(
-      assets.submitDetectionReview({
-        projectId,
-        userId,
-        selections: [{ code: "ADP01", targetNames: ["prop:Lamp"] }],
-      }),
+      assets.submitDetectionReview({ projectId, userId, note: "Mara and Marla are one woman." }),
     ).rejects.toThrow(/Accept a script/);
     await getDb().update(project).set({ stage: "pre_production" }).where(eq(project.id, projectId));
     await apply(projectId, v, "full", [
       { kind: "character", name: "Ines" },
       { kind: "prop", name: "Lamp" },
     ]);
-    const skipped = await assets.submitDetectionReview({
-      projectId,
-      userId,
-      selections: [{ code: "ADP01", targetNames: ["prop:Lamp"] }],
-    });
-    expect(skipped).toEqual({ skipped: 1, started: false });
+    const skipped = await assets.skipDetectedAssets({ projectId, userId, refs: ["prop:Lamp"] });
+    expect(skipped).toEqual({ skipped: 1 });
     const lamp = (await assets.listAssets(projectId, userId, { kind: "prop" }))?.items[0];
     expect(lamp?.priority).toBe("skipped");
     // Crafted targets are refused as input, never sent to Postgres as an invalid kind.
     for (const ref of ["Lamp", "bogus:Lamp", "prop:", "prop:Lamp\u0000"]) {
       await expect(
-        assets.submitDetectionReview({
-          projectId,
-          userId,
-          selections: [{ code: "ADP01", targetNames: [ref] }],
-        }),
+        assets.skipDetectedAssets({ projectId, userId, refs: [ref] }),
       ).rejects.toBeInstanceOf(assets.AssetInputError);
     }
     // Another user's project is "missing".
     const stranger = await fixtures.newUser();
     expect(
-      await assets.submitDetectionReview({
-        projectId,
-        userId: stranger,
-        selections: [{ code: "ADP01", targetNames: ["prop:Lamp"] }],
-      }),
+      await assets.skipDetectedAssets({ projectId, userId: stranger, refs: ["prop:Lamp"] }),
     ).toBeNull();
+    expect(
+      await assets.submitDetectionReview({ projectId, userId: stranger, note: "Add the dog." }),
+    ).toBeNull();
+    // A correction round needs the user's words: an empty or blank note is refused.
+    await expect(assets.submitDetectionReview({ projectId, userId })).rejects.toBeInstanceOf(
+      assets.AssetInputError,
+    );
+    await expect(assets.submitDetectionReview({ projectId, userId, note: "   " })).rejects.toThrow(
+      /write a note/,
+    );
     await expect(
-      assets.submitDetectionReview({ projectId, userId, selections: [{ code: "ADT07" }] }),
-    ).rejects.toThrow(/not available/);
-    await expect(
-      assets.submitDetectionReview({
-        projectId,
-        userId,
-        selections: [{ code: "ADT05", customText: "wrong" }],
-      }),
-    ).rejects.toThrow(/Pick the assets/);
+      assets.submitDetectionReview({ projectId, userId, note: "x".repeat(2001) }),
+    ).rejects.toThrow(/2,000/);
+    // The words are stored as the review's note, with one free-text fix request and no codes.
+    expect(
+      await assets.submitDetectionReview({ projectId, userId, note: "  The dog is missing. " }),
+    ).toEqual({ started: true });
+    const [row] = await getDb().select().from(review).where(eq(review.projectId, projectId));
+    expect(row).toMatchObject({
+      decision: "rejected",
+      note: "The dog is missing.",
+      issueCodes: [],
+      fixRequests: [{ code: "ADP99", type: "preference", customText: "The dog is missing." }],
+    });
   });
 
   it("paginates and hides other users' assets", async () => {

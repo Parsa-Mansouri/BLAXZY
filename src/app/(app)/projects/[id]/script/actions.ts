@@ -135,7 +135,6 @@ export async function loadVersionAction(
 
 export interface ReviewInput {
   decision: "accepted" | "rejected";
-  issueCodes?: string[];
   note?: string;
   comments?: { quote: string; start: number; end: number; note: string }[];
 }
@@ -152,7 +151,6 @@ export async function submitReviewAction(
       userId: user.id,
       versionId,
       decision: review.decision,
-      issueCodes: review.issueCodes,
       note: review.note,
       comments: review.comments,
     });

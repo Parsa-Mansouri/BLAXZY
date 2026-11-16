@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import type { DetectionPanel } from "@/server/assets";
-import type { ClientReviewOption } from "@/lib/review-option";
 import {
   Button,
   MenuItem,
@@ -26,15 +25,12 @@ import { KIND_ASPECTS, type GalleryItem } from "../../_components/gallery-item";
 import { FILL_PAGE } from "../../_lib/fill";
 import { statusWords, type StageCounts } from "../../_lib/status-words";
 import {
+  aboutAsset,
   assetRef,
   categoryWarnings,
-  draftWith,
-  EMPTY_DRAFT,
-  SKIP_CODE,
-  type ReviewDraft,
   type WarningFix,
 } from "../../_lib/detection-review";
-import { includeAssetAction, loadCardsAction, submitDetectionReviewAction } from "../actions";
+import { includeAssetAction, loadCardsAction, skipAssetsAction } from "../actions";
 import { AddAssetSheet } from "./add-asset-sheet";
 import { AssetCard } from "./asset-card";
 import { RemoveAssetAlert, RenameAssetSheet } from "./asset-edits";
@@ -60,10 +56,8 @@ const ASPECT_CLASS = {
   video: "aspect-video",
 } as const;
 
-/** The detection review's state with the options reduced to the client-safe type (no prompts). */
-export type ClientDetectionPanel = Omit<DetectionPanel, "options"> & {
-  options: ClientReviewOption[];
-};
+/** The detection review's state, as the screens poll it. */
+export type ClientDetectionPanel = DetectionPanel;
 
 /** One category: picture cards with their actions, Add, Merge, Load More and live status. */
 export function CategoryPanel({
@@ -146,9 +140,9 @@ export function CategoryPanel({
 
   /* The detected list's review ("Something wrong with this list?"). */
   const [panel, setPanel] = useServerSnapshot(initialPanel, (_current, fresh) => fresh);
-  const [review, setReview] = useState<{ open: boolean; seed: ReviewDraft; key: number }>({
+  const [review, setReview] = useState<{ open: boolean; note: string; key: number }>({
     open: false,
-    seed: EMPTY_DRAFT,
+    note: "",
     key: 0,
   });
   const [edit, setEdit] = useState<{ type: "rename" | "remove"; item: GalleryItem } | null>(null);
@@ -165,16 +159,15 @@ export function CategoryPanel({
     if (!result.data.busy) router.refresh();
   }, correcting);
 
-  const available = useMemo(() => new Set(panel?.options.map((o) => o.code)), [panel]);
   const warnings = useMemo(
-    () => (panel ? categoryWarnings(panel.warnings, kind, items, panel.options) : []),
+    () => (panel ? categoryWarnings(panel.warnings, kind, items) : []),
     [panel, kind, items],
   );
   const listed = items.filter((item) => item.priority !== "skipped");
   const skippedItems = items.filter((item) => item.priority === "skipped");
 
-  function openReview(seed: ReviewDraft = EMPTY_DRAFT) {
-    setReview((r) => ({ open: true, seed, key: r.key + 1 }));
+  function openReview(note = "") {
+    setReview((r) => ({ open: true, note, key: r.key + 1 }));
   }
 
   function openAdd(prefill: { name: string; description: string } | null) {
@@ -183,21 +176,15 @@ export function CategoryPanel({
     setAddOpen(true);
   }
 
-  function sent(result: { skipped: number; started: boolean }) {
+  function sent(result: { started: boolean }) {
     setReview((r) => ({ ...r, open: false }));
-    if (result.started) {
-      setPanel((p) => (p ? { ...p, busy: true, failure: null } : p));
-    } else if (result.skipped > 0) {
-      toast.success("Skipped. It will not be designed.");
-    }
+    if (result.started) setPanel((p) => (p ? { ...p, busy: true, failure: null } : p));
     router.refresh();
   }
 
   function skip(item: GalleryItem) {
     setSkippingId(item.id);
-    void submitDetectionReviewAction(projectId, [
-      { code: SKIP_CODE, targetNames: [assetRef(item)] },
-    ]).then((result) => {
+    void skipAssetsAction(projectId, [assetRef(item)]).then((result) => {
       setSkippingId(null);
       if (!result.ok) {
         toast.danger(result.error);
@@ -223,11 +210,8 @@ export function CategoryPanel({
 
   function fixWarning(fix: WarningFix) {
     switch (fix.type) {
-      case "same":
-        openReview(draftWith("ADT02", { targets: fix.targets }));
-        break;
       case "review":
-        openReview(draftWith(fix.code));
+        openReview(fix.note);
         break;
       case "add":
         openAdd({ name: fix.name, description: fix.description });
@@ -242,20 +226,10 @@ export function CategoryPanel({
 
   /** The card's menu: fixes to the detected list first, then Rename and Remove. */
   function menuFor(item: GalleryItem) {
-    const reason = (code: string, label: string) =>
-      available.has(code) ? (
-        <MenuItem
-          key={code}
-          disabled={correcting}
-          onClick={() => openReview(draftWith(code, { targets: [item.id] }))}
-        >
-          {label}
-        </MenuItem>
-      ) : null;
     const skipped = item.priority === "skipped";
     return (
       <>
-        {!skipped && available.has(SKIP_CODE) ? (
+        {!skipped && panel ? (
           <MenuItem onClick={() => skip(item)} disabled={skippingId === item.id}>
             Not Needed as Its Own Asset
           </MenuItem>
@@ -265,11 +239,11 @@ export function CategoryPanel({
             Include It Again
           </MenuItem>
         ) : null}
-        {reason("ADT05", "The Description Is Wrong…")}
-        {reason("ADT06", "Wrong Scenes…")}
-        {reason("ADT04", "Wrong Category…")}
-        {reason("ADT03", "This Is Actually Two…")}
-        {items.length >= 2 ? reason("ADT02", "Same as Another…") : null}
+        {panel && !skipped ? (
+          <MenuItem disabled={correcting} onClick={() => openReview(aboutAsset(item))}>
+            Something Is Wrong With This One…
+          </MenuItem>
+        ) : null}
         {panel ? <MenuSeparator /> : null}
         <MenuItem onClick={() => setEdit({ type: "rename", item })}>Rename…</MenuItem>
         <MenuItem destructive onClick={() => setEdit({ type: "remove", item })}>
@@ -345,7 +319,7 @@ export function CategoryPanel({
               projectId={projectId}
               item={item}
               menu={menuFor(item)}
-              onSkip={available.has(SKIP_CODE) ? () => skip(item) : undefined}
+              onSkip={panel ? () => skip(item) : undefined}
               skipping={skippingId === item.id}
               className="enter"
               style={stagger(Math.min(i, 12))}
@@ -461,9 +435,7 @@ export function CategoryPanel({
           open={review.open}
           onOpenChange={(open) => setReview((r) => ({ ...r, open }))}
           projectId={projectId}
-          options={panel.options}
-          items={items}
-          seed={review.seed}
+          initialNote={review.note}
           onSent={sent}
         />
       ) : null}

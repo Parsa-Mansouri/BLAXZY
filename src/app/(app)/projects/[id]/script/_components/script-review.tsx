@@ -65,7 +65,7 @@ export function ScriptReview({
   }
 
   function submitRejection(
-    extra: { issueCodes?: string[]; note?: string },
+    extra: { note?: string },
     run: typeof startSending,
     fail: (message: string) => void,
     done: () => void,
@@ -97,10 +97,10 @@ export function ScriptReview({
     });
   }
 
-  function requestChanges(input: { issueCodes: string[]; note: string }) {
+  function requestChanges(input: { note: string }) {
     setSheetError(null);
     submitRejection(
-      { issueCodes: input.issueCodes, note: input.note || undefined },
+      { note: input.note || undefined },
       startSending,
       setSheetError,
       () => setSheetOpen(false),

@@ -5,7 +5,6 @@ import type { LookView, SheetView } from "@/server/assets";
 import { Button } from "@/ui";
 import { lookShape } from "../../_lib/asset-view";
 import {
-  designRouteOption,
   splitSheetWarnings,
   type DetailCell,
   type SheetCatalogInfo,
@@ -120,10 +119,7 @@ export function SheetNotes({
 /** The panel's words for a character sheet. */
 export const CHARACTER_SHEET_WORDS: SheetChangesWords = {
   subject: "sheet",
-  designTile: {
-    title: "Change the character’s design",
-    line: "Face, hair, body, outfit or colours: made at the character step.",
-  },
+  placeholder: "Move the backdrop to a lighter grey, and show the boots in frame 2.",
   designHint:
     "The character goes back to its design step with your words. Once you accept the new board, the sheet is rebuilt by itself.",
 };
@@ -167,7 +163,6 @@ export function SheetReviewStage({
   const cells = spec?.detailCells ?? [];
   const notes = splitSheetWarnings(spec?.warnings ?? []);
   const designChanges = spec?.designChanges.length ? spec.designChanges : notes.designChanges;
-  const routeCode = designRouteOption(catalog.options)?.code;
   return (
     <StageLayout
       frame={
@@ -238,7 +233,6 @@ export function SheetReviewStage({
           panel={
             <SheetChangesPanel
               catalog={catalog}
-              cells={cells}
               words={CHARACTER_SHEET_WORDS}
               initialDesignText={designText}
               rejectedInARow={rejectedInARow}
@@ -256,19 +250,17 @@ export function SheetReviewStage({
                   target,
                   {
                     decision: "rejected",
-                    selections: input.selections,
                     ...(input.note ? { note: input.note } : {}),
+                    ...(input.designChange ? { designChange: true } : {}),
                   },
                   "panel",
-                  input.selections.some((s) => s.code === routeCode)
-                    ? `${assetName} goes back to its design`
-                    : undefined,
+                  input.designChange ? `${assetName} goes back to its design` : undefined,
                 )
               }
-              onReroll={(code) =>
+              onReroll={() =>
                 review.run(
                   target,
-                  { decision: "rejected", selections: [{ code }] },
+                  { decision: "rejected", regenerate: true },
                   "panel",
                   `Making ${assetName}’s sheet again`,
                 )

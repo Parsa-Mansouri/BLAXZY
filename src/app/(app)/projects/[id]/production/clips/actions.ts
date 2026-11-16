@@ -50,7 +50,6 @@ export async function finishProductionAction(projectId: string): Promise<ActionR
 
 export interface ReviewInput {
   decision: "accepted" | "rejected";
-  issueCodes?: string[];
   note?: string;
 }
 

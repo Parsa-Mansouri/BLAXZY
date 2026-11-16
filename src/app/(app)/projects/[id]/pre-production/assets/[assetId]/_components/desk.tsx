@@ -108,35 +108,3 @@ export function ChoiceTile({
     </button>
   );
 }
-
-/** A many-of choice as a square tile: square tick in the corner, its name at the bottom. */
-export function CheckTile({
-  label,
-  on,
-  disabled,
-  onToggle,
-}: {
-  label: ReactNode;
-  on: boolean;
-  disabled?: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={on}
-      disabled={disabled}
-      onClick={onToggle}
-      className={cn(
-        "relative flex aspect-square flex-col items-start justify-end rounded-item border p-3 pt-8 text-left text-secondary text-pretty hyphens-auto focus-ring transition-colors motion-reduce:transition-none",
-        on ? TILE_ON : TILE_OFF,
-      )}
-    >
-      <span className="absolute top-2.5 left-2.5">
-        <CheckMark on={on} />
-      </span>
-      {label}
-    </button>
-  );
-}

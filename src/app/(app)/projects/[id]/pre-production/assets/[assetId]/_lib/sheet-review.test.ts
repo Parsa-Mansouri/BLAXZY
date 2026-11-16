@@ -1,170 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { PackView, SheetView } from "@/server/assets";
-import { DESIGN_CHANGE_PREFIX, getReviewCatalog, visibleOptions } from "@/server/damis";
-import { toClientOptions, type ClientReviewOption } from "@/lib/review-option";
+import { DESIGN_CHANGE_PREFIX } from "@/server/damis";
 import {
-  buildDesignChange,
-  buildSheetSelections,
-  cellLabel,
   DESIGN_CHANGE_WARNING,
-  designRouteOption,
-  EMPTY_SHEET_DRAFT,
   lockMissingWords,
   packPictures,
   packWorking,
-  picksFrame,
   reviewChecks,
-  rerollOption,
-  sheetChips,
   sheetRejectedInARow,
   splitSheetWarnings,
-  stepLabels,
-  suggestedFirst,
   viewStateWords,
 } from "./sheet-review";
 
-const characterOptions = toClientOptions(
-  visibleOptions(getReviewCatalog("sheet-generator-character"), {
-    sector: "wizard",
-    context: { render_cell_numbers: true },
-  }),
-);
-const locationOptions = toClientOptions(
-  visibleOptions(getReviewCatalog("sheet-generator-location"), { sector: "wizard" }),
-);
-const propOptions = toClientOptions(
-  visibleOptions(getReviewCatalog("sheet-generator-prop"), { sector: "wizard" }),
-);
-
-const cells = [
-  { slot: 1, subject: "main fabric", reason: "default" },
-  { slot: 2, subject: "boots", reason: "default" },
-  { slot: 4, subject: "brass buckle", reason: "signature" },
-];
-
-const find = (options: ClientReviewOption[], code: string) => {
-  const option = options.find((o) => o.code === code);
-  if (!option) throw new Error(`no ${code}`);
-  return option;
-};
-
-describe("the character sheet catalog on screen", () => {
+describe("the design-change warning", () => {
   it("mirrors the server's design-change prefix", () => {
     expect(DESIGN_CHANGE_WARNING).toBe(DESIGN_CHANGE_PREFIX);
-  });
-
-  it("shows the frame numbers' reason only when digits are drawn", () => {
-    expect(characterOptions.some((o) => o.code === "ST22")).toBe(true);
-  });
-
-  it("asks for the frame first on SP01 and SP02, with the answer step's chips", () => {
-    const sp01 = find(characterOptions, "SP01");
-    expect(picksFrame(sp01)).toBe(true);
-    expect(picksFrame(find(characterOptions, "SP03"))).toBe(false);
-    expect(stepLabels(sp01).frame).toMatch(/frame/i);
-    expect(sheetChips(sp01).map((c) => c.label)).toContain("Belt and buckle");
-    expect(sheetChips(find(characterOptions, "SP03")).map((c) => c.label)).toEqual([
-      "Lighter",
-      "Darker",
-      "Medium",
-    ]);
-  });
-
-  it("writes a frame as the catalog displays it", () => {
-    expect(cellLabel({ slot: 1, subject: "main fabric" })).toBe("1 — main fabric");
-  });
-
-  it("finds the re-roll and the design route", () => {
-    expect(rerollOption(characterOptions)?.code).toBe("SR01");
-    expect(designRouteOption(characterOptions)?.code).toBe("SX01");
-    expect(rerollOption(locationOptions)?.code).toBe("LSR01");
-    expect(designRouteOption(propOptions)?.code).toBe("ASX01");
-  });
-
-  it("suggests making it again first for random glitches", () => {
-    expect(suggestedFirst(["ST01"], characterOptions)).toBeNull();
-    const hit = suggestedFirst(["ST01", "ST02", "ST16"], characterOptions);
-    expect(hit?.option.code).toBe("SR01");
-    expect(hit?.for).toHaveLength(2);
-  });
-});
-
-describe("buildSheetSelections", () => {
-  it("sends the chosen frame as the slot, chips as values and words as custom text", () => {
-    const built = buildSheetSelections(
-      {
-        ...EMPTY_SHEET_DRAFT,
-        picked: ["ST20", "SP01", "SP02", "SP99", "SR01"],
-        frames: { SP01: 4, SP02: 2 },
-        values: { SP01: "the belt and its buckle", SP02: "as a closer macro shot" },
-        texts: { SP99: "  Less empty space at the top  " },
-      },
-      characterOptions,
-      cells,
-      2000,
-    );
-    expect(built).toEqual({
-      ok: true,
-      selections: [
-        { code: "ST20" },
-        {
-          code: "SP01",
-          value: "the belt and its buckle",
-          slot: { slot: 4, subject: "brass buckle" },
-        },
-        { code: "SP02", value: "as a closer macro shot", slot: { slot: 2, subject: "boots" } },
-        { code: "SP99", customText: "Less empty space at the top" },
-      ],
-    });
-  });
-
-  it("needs the frame, then an answer", () => {
-    const noFrame = buildSheetSelections(
-      { ...EMPTY_SHEET_DRAFT, picked: ["SP01"], values: { SP01: "__auto__" } },
-      characterOptions,
-      cells,
-      2000,
-    );
-    expect(noFrame).toMatchObject({ ok: false, code: "SP01" });
-    const noAnswer = buildSheetSelections(
-      { ...EMPTY_SHEET_DRAFT, picked: ["SP01"], frames: { SP01: 1 } },
-      characterOptions,
-      cells,
-      2000,
-    );
-    expect(noAnswer).toMatchObject({ ok: false, code: "SP01" });
-  });
-
-  it("needs the words of a location view's text items", () => {
-    expect(
-      buildSheetSelections({ ...EMPTY_SHEET_DRAFT, picked: ["LSP01"] }, locationOptions, [], 2000),
-    ).toMatchObject({ ok: false, code: "LSP01" });
-    expect(
-      buildSheetSelections(
-        { ...EMPTY_SHEET_DRAFT, picked: ["LST02", "LSP01"], texts: { LSP01: "From the door" } },
-        locationOptions,
-        [],
-        2000,
-      ),
-    ).toEqual({
-      ok: true,
-      selections: [{ code: "LST02" }, { code: "LSP01", customText: "From the door" }],
-    });
-  });
-});
-
-describe("buildDesignChange", () => {
-  const route = designRouteOption(characterOptions);
-  it("sends the route with the user's words", () => {
-    expect(buildDesignChange(route, "  Make the coat red  ", 2000)).toEqual({
-      ok: true,
-      selections: [{ code: "SX01", customText: "Make the coat red" }],
-    });
-  });
-  it("refuses blank or long words", () => {
-    expect(buildDesignChange(route, " ", 2000).ok).toBe(false);
-    expect(buildDesignChange(route, "x".repeat(20), 10).ok).toBe(false);
-    expect(buildDesignChange(null, "words", 2000).ok).toBe(false);
   });
 });
 

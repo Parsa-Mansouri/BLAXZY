@@ -50,7 +50,6 @@ import {
   type ReviewRequest,
 } from "./stage-rail";
 import { TakesStrip } from "./takes-strip";
-import type { IssueChoice } from "./shared";
 import { VideoPlayer } from "./video-player";
 import { Mono } from "@/app/(app)/_components/values";
 
@@ -166,7 +165,6 @@ export interface ClipScreenProps {
   neighbours: { previous: ShotRef | null; next: ShotRef | null };
   prices: Prices;
   balance: number;
-  issues: IssueChoice[];
   maxNote: number;
 }
 
@@ -285,7 +283,6 @@ export function ClipScreen(props: ClipScreenProps) {
           label={labels.get(latest.id) ?? "Take"}
           prices={prices}
           balance={balance}
-          issues={props.issues}
           maxNote={props.maxNote}
           deciding={deciding}
           error={error}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstBlankMark, foldMarks, groupIssues, nudgeMark, regionWords, type Mark } from "./marks";
+import { firstBlankMark, foldMarks, markedNote, nudgeMark, regionWords, type Mark } from "./marks";
 
 const mark = (x: number, y: number, text: string, id = `${x}-${y}`): Mark => ({ id, x, y, text });
 
@@ -66,20 +66,24 @@ describe("firstBlankMark", () => {
   });
 });
 
-describe("groupIssues", () => {
-  it("groups by subject, look and frame in that order and drops empty groups", () => {
-    const issues = [
-      { code: "lighting_poor" },
-      { code: "wrong_framing" },
-      { code: "wrong_details" },
-      { code: "style_mismatch" },
-      { code: "something_new" },
-    ];
-    expect(groupIssues(issues).map((g) => [g.label, g.issues.map((i) => i.code)])).toEqual([
-      ["Subject", ["wrong_details"]],
-      ["Look", ["lighting_poor", "style_mismatch", "something_new"]],
-      ["Frame", ["wrong_framing"]],
-    ]);
-    expect(groupIssues([{ code: "wrong_framing" }]).map((g) => g.key)).toEqual(["frame"]);
+describe("markedNote", () => {
+  it("folds the marks into the note", () => {
+    expect(markedNote("Too bright.", [mark(0.1, 0.1, "the lamp")], "image", 2000)).toEqual({
+      ok: true,
+      note: "Too bright.\n\nMarked on the image:\n1 (upper left): the lamp.",
+    });
+  });
+
+  it("names the mark that says nothing", () => {
+    expect(markedNote("", [mark(0.5, 0.5, "ok"), mark(0, 0, " ")], "sheet", 2000)).toMatchObject({
+      ok: false,
+      blank: 2,
+    });
+  });
+
+  it("refuses a note and marks that are too long together", () => {
+    expect(markedNote("x".repeat(1990), [mark(0, 0, "the lamp")], "image", 2000)).toMatchObject({
+      ok: false,
+    });
   });
 });

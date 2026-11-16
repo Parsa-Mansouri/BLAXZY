@@ -9,7 +9,6 @@ import { isCreditsFailure } from "../../../_lib/clip-view";
 import { blocksHref } from "../../../_lib/routes";
 import { retryTakeAction } from "../../../actions";
 import { StateHeading } from "../../../_components/clips-context";
-import { type IssueChoice } from "./shared";
 import { CreditLine, Credits, ErrorLine, Mono, When } from "@/app/(app)/_components/values";
 import { canAfford, formatNumber } from "@/app/(app)/_lib/format";
 
@@ -22,7 +21,6 @@ export interface Prices {
 
 export interface ReviewRequest {
   decision: "accepted" | "rejected";
-  issueCodes?: string[];
   note?: string;
 }
 
@@ -62,7 +60,7 @@ function TakeLine({ label, take }: { label: string; take: TakeView }) {
 
 /**
  * Accept or request changes on a draft or a final waiting for review. Request Changes replaces
- * the decision in place with the issue chips, a note and the price of the new draft.
+ * the decision in place with a box for the change request and the price of the new draft.
  */
 export function ReviewPanel({
   shown,
@@ -70,7 +68,6 @@ export function ReviewPanel({
   label,
   prices,
   balance,
-  issues,
   maxNote,
   deciding,
   error,
@@ -83,7 +80,6 @@ export function ReviewPanel({
   label: string;
   prices: Prices;
   balance: number;
-  issues: IssueChoice[];
   maxNote: number;
   deciding: "accepted" | "rejected" | null;
   error: string | null;
@@ -99,11 +95,10 @@ export function ReviewPanel({
   if (asking) {
     return (
       <ChangeRequest
-        issues={issues}
         maxNote={maxNote}
         sending={deciding === "rejected"}
         serverError={askError}
-        notePlaceholder="What the next draft should do differently."
+        notePlaceholder="Keep the same framing, but the door should already be open when she walks in."
         cost={<CreditLine price={prices.draft} balance={balance} action="A new draft" />}
         blocked={!canAfford(prices.draft, balance)}
         onSubmit={(input) => onDecide({ decision: "rejected", ...input }, true)}

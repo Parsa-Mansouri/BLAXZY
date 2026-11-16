@@ -1,17 +1,17 @@
 /** Pure planning of reviews: catalog picks and spec edits become fix requests. */
 import {
-  buildFixRequests,
   DESIGNER_CATALOGS,
   designerFor,
-  findReviewOption,
-  type FixSelection,
-  getReviewCatalog,
-  ReviewCatalogError,
+  freeTextFixRequest,
+  type ReviewCatalogKey,
 } from "@/server/damis";
 import type { AssetKind, LookReference, LookSpecField, ReviewFixRequest } from "@/server/db/schema";
 import { packKindOf } from "../packs";
 import { AssetInputError } from "../service";
 import { ISSUE_NOT_FOR_KIND } from "./messages";
+
+/** The design route's code of each sheet maker (SX01, LSX01, ASX01): back to the designer. */
+const DESIGN_ROUTE_CODES = { character: "SX01", location: "LSX01", prop: "ASX01" } as const;
 
 /** The code of a spec-card edit sent to the designer as a fix request. */
 export const SPEC_EDIT_CODE = "SPEC_EDIT";
@@ -28,41 +28,23 @@ export function fieldsToConfirm(spec: { fields: readonly LookSpecField[] } | nul
 
 type LookReviewPlan = {
   fixRequests: ReviewFixRequest[];
-  /** The re-roll option picked (no dami call), when it is the only thing asked. */
-  regenerate: string | null;
 };
 
 /**
- * The fix requests for a rejection, from the designer's catalog (the Wizard hides Pro-only
- * options) and the spec card's edits. A re-roll option (`regenerate`) makes no request.
+ * The fix requests for a look's rejection: the user's note as one free-text request (the
+ * designer's "other" option, with the words as its custom text) and the spec card's edits.
+ * Asking again without changes (a re-roll) is the caller's, and makes no request.
  */
 export function planLookReview(
   kind: AssetKind,
-  selections: readonly FixSelection[],
+  note: string | null,
   specEdits: readonly { field: string; value: string }[],
 ): LookReviewPlan {
   const designer = designerFor(kind);
   if (!designer) throw new AssetInputError(ISSUE_NOT_FOR_KIND);
-  const catalog = getReviewCatalog(DESIGNER_CATALOGS[designer]);
-  let regenerate: string | null = null;
-  for (const selection of selections) {
-    const option = findReviewOption(catalog, selection.code);
-    if (!option || option.proOnly) throw new AssetInputError(ISSUE_NOT_FOR_KIND);
-    if (option.kind === "regenerate") regenerate = option.code;
-  }
-  let fixRequests: ReviewFixRequest[];
-  try {
-    fixRequests = buildFixRequests(catalog, selections);
-  } catch (error) {
-    if (error instanceof ReviewCatalogError) {
-      const code = selections.find((s) => error.message.includes(s.code))?.code;
-      const label = code ? findReviewOption(catalog, code)?.label : undefined;
-      throw new AssetInputError(
-        label ? `Say what you want for “${label}”.` : "Say what you want for each reason.",
-      );
-    }
-    throw error;
-  }
+  const fixRequests: ReviewFixRequest[] = note
+    ? [freeTextFixRequest(DESIGNER_CATALOGS[designer], note)]
+    : [];
   for (const edit of specEdits) {
     fixRequests.push({
       type: "preference",
@@ -70,7 +52,7 @@ export function planLookReview(
       instruction: `Set the spec field "${edit.field}" to: ${edit.value}. The user confirmed it (status confirmed, source user): keep the rest of the spec, the DNA and the prompt consistent with it.`,
     });
   }
-  return { fixRequests, regenerate };
+  return { fixRequests };
 }
 
 export function sameReferences(a: readonly LookReference[], b: readonly LookReference[]): boolean {
@@ -81,51 +63,38 @@ export function sameReferences(a: readonly LookReference[], b: readonly LookRefe
 }
 
 /** The sheet maker's catalog of an asset kind. */
-function sheetCatalogFor(kind: AssetKind) {
+function sheetCatalogKey(kind: AssetKind): ReviewCatalogKey {
   const pack = packKindOf(kind);
-  return getReviewCatalog(
-    pack === "location"
-      ? "sheet-generator-location"
-      : pack === "prop"
-        ? "sheet-generator-prop"
-        : "sheet-generator-character",
-  );
+  return pack === "location"
+    ? "sheet-generator-location"
+    : pack === "prop"
+      ? "sheet-generator-prop"
+      : "sheet-generator-character";
 }
 
 type SheetReviewPlan = {
   fixRequests: ReviewFixRequest[];
-  /** The re-roll option picked (no dami call). */
-  regenerate: string | null;
-  /** The design-change option picked (back to the designer), with the user's words. */
+  /** The design change asked for (back to the designer), with the user's words. */
   route: { code: string; text: string | null } | null;
 };
 
-/** The fix requests for a sheet's (or a view's) rejection, from the sheet maker's catalog. */
+/**
+ * The plan for a sheet's (or a view's) rejection. A design change goes back to the designer with
+ * the note (the design route of the sheet maker). Anything else is the note as one free-text
+ * request to the sheet maker; it never changes the design (the maker answers a design request with
+ * a `DESIGN_CHANGE_REQUESTED:` warning, and the screen offers the design route then).
+ */
 export function planSheetReview(
   kind: AssetKind,
-  selections: readonly FixSelection[],
+  input: { note: string | null; designChange: boolean },
 ): SheetReviewPlan {
-  const catalog = sheetCatalogFor(kind);
-  let regenerate: string | null = null;
-  let route: SheetReviewPlan["route"] = null;
-  for (const selection of selections) {
-    const option = findReviewOption(catalog, selection.code);
-    if (!option || option.proOnly) throw new AssetInputError(ISSUE_NOT_FOR_KIND);
-    if (option.kind === "regenerate") regenerate = option.code;
-    if (option.kind === "route") {
-      route = { code: option.code, text: selection.customText?.trim() || null };
-    }
+  if (input.designChange) {
+    const designer = designerFor(kind);
+    if (!designer) throw new AssetInputError(ISSUE_NOT_FOR_KIND);
+    return { fixRequests: [], route: { code: DESIGN_ROUTE_CODES[designer], text: input.note } };
   }
-  try {
-    return { fixRequests: buildFixRequests(catalog, selections), regenerate, route };
-  } catch (error) {
-    if (error instanceof ReviewCatalogError) {
-      const code = selections.find((s) => error.message.includes(s.code))?.code;
-      const label = code ? findReviewOption(catalog, code)?.label : undefined;
-      throw new AssetInputError(
-        label ? `Say what you want for “${label}”.` : "Say what you want for each reason.",
-      );
-    }
-    throw error;
-  }
+  return {
+    fixRequests: input.note ? [freeTextFixRequest(sheetCatalogKey(kind), input.note)] : [],
+    route: null,
+  };
 }

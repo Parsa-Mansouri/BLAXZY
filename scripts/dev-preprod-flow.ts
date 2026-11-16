@@ -226,12 +226,12 @@ async function main(): Promise<void> {
   console.log(
     `   look v${d.looks[0]?.versionNumber} file ${d.looks[0]?.fileId} (sample: ${d.looks[0]?.isSample})`,
   );
-  console.log(`2. ${character.name}: reject the look (P01 older)`);
+  console.log(`2. ${character.name}: reject the look (older)`);
   await submitLookReview({
     lookId: look1.id,
     userId,
     decision: "rejected",
-    selections: [{ code: "P01", value: "noticeably older" }],
+    note: "Make her noticeably older.",
   });
   d = await waitFor(
     "fixed look in review",
@@ -249,12 +249,12 @@ async function main(): Promise<void> {
   for (const cell of sheet1?.spec?.detailCells ?? []) {
     console.log(`   frame ${cell.slot}: ${cell.subject}`);
   }
-  console.log(`   send it back: ST20 (details too small), an edit of the previous sheet`);
+  console.log(`   send it back: the detail frames are too small`);
   await submitSheetReview({
     sheetId: sheet1?.id ?? "",
     userId,
     decision: "rejected",
-    selections: [{ code: "ST20" }],
+    note: "The detail frames are too small; make them bigger.",
   });
   d = await waitFor(
     "fixed sheet in review",

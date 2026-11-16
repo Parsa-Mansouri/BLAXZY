@@ -12,7 +12,6 @@ import {
   submitSheetReview,
   type AssetStage,
 } from "@/server/assets";
-import type { FixSelection } from "@/server/damis";
 import { isUuid, userAction, type ActionResult } from "../../../../_lib/action";
 import { ASSET_KIND_LABELS, type AssetKindKey } from "../../_lib/asset-kinds";
 import { toReviewSheet, type ReviewSheet } from "./_lib/review-sheet";
@@ -47,13 +46,13 @@ export async function loadReviewSheetAction(
 }
 
 /**
- * Sends a sheet (accepted or in review) back for changes: a character sheet with the catalog's
- * picks (a new sheet is built), or any sheet back to its design step with the design route.
+ * Sends a sheet (accepted or in review) back for changes: a character sheet with the user's words
+ * (a new sheet is built) or drawn again, or any sheet back to its design step (`designChange`).
  */
 export async function requestSheetChangesAction(
   projectId: string,
   sheetId: string,
-  input: { selections: FixSelection[]; note: string },
+  input: { note: string; regenerate?: boolean; designChange?: boolean },
 ): Promise<ActionResult> {
   return userAction("expensive", "review.requestSheetChanges", async (user) => {
     if (!isUuid(projectId)) return GONE;
@@ -61,8 +60,9 @@ export async function requestSheetChangesAction(
       sheetId,
       userId: user.id,
       decision: "rejected",
-      selections: input.selections,
       note: input.note || undefined,
+      regenerate: input.regenerate,
+      designChange: input.designChange,
     });
     if (!stage) return GONE;
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");

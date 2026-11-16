@@ -18,7 +18,7 @@ import {
   StoredImage,
 } from "@/ui";
 import { fileSrc } from "@/lib/file-src";
-import { ChangeRequest, type IssueChoice } from "../../_components/change-request";
+import { ChangeRequest } from "../../_components/change-request";
 import { useRefreshReviewList } from "../../_components/review-list-context";
 import { pollBlock } from "@/app/(app)/_lib/poll-client";
 import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
@@ -31,7 +31,6 @@ import { AssetPickerSheet } from "./asset-picker-sheet";
 import { PromptView } from "./prompt-view";
 import { Mono } from "@/app/(app)/_components/values";
 
-export type { IssueChoice };
 export type BlockView = Omit<BlockDetail, "takes">;
 
 /** When to check again after an action: its own refresh may have raced the server. */
@@ -136,14 +135,13 @@ function Section({
 /**
  * One shot in the focus area of the shot review: its title, state and decision first, then the
  * assets it shows, its script on paper and the prepared prompt. "Request Changes" replaces the
- * decision with the issue chips and a note, in place.
+ * decision with a box for the change request, in place.
  */
 export function BlockScreen({
   projectId,
   block,
   position,
   nextToReviewHref,
-  issues,
   maxNote,
   maxAssets,
 }: {
@@ -152,7 +150,6 @@ export function BlockScreen({
   position: number;
   /** The next shot that waits for review, or the list when none does. */
   nextToReviewHref: string;
-  issues: IssueChoice[];
   maxNote: number;
   maxAssets: number;
 }) {
@@ -230,7 +227,7 @@ export function BlockScreen({
     });
   }
 
-  function requestChanges(input: { issueCodes: string[]; note: string }) {
+  function requestChanges(input: { note: string }) {
     setChangesError(null);
     startPending(async () => {
       const result = await reviewBlockAction(projectId, block.lineageId, {
@@ -366,11 +363,10 @@ export function BlockScreen({
         {asking ? (
           <div className="max-w-180">
             <ChangeRequest
-              issues={issues}
               maxNote={maxNote}
               sending={pending}
               serverError={changesError}
-              notePlaceholder="What the shot should do differently."
+              notePlaceholder="The jacket should be red, and the camera should stay on her face when she turns."
               onSubmit={requestChanges}
               onCancel={() => setAsking(false)}
             />

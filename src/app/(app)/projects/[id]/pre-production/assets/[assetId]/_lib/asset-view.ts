@@ -178,11 +178,17 @@ export type HistoryItem =
   | { kind: "look"; key: string; version: LookView }
   | { kind: "sheet"; key: string; version: SheetView };
 
-/** Looks and sheets in one list, newest first. */
+/**
+ * Looks and sheets in one list, newest first. A pack's sheet has no image of its own until the
+ * pack is locked (its views are what is in review), so a sheet without a file that did not fail is
+ * the work on the stage, not an earlier version: it has nothing to open and is left out.
+ */
 export function historyItems(looks: LookView[], sheets: SheetView[]): HistoryItem[] {
   const items: HistoryItem[] = [
     ...looks.map((version) => ({ kind: "look" as const, key: `look:${version.id}`, version })),
-    ...sheets.map((version) => ({ kind: "sheet" as const, key: `sheet:${version.id}`, version })),
+    ...sheets
+      .filter((version) => version.fileId !== null || version.status === "failed")
+      .map((version) => ({ kind: "sheet" as const, key: `sheet:${version.id}`, version })),
   ];
   return items.sort(
     (a, b) => new Date(b.version.createdAt).getTime() - new Date(a.version.createdAt).getTime(),

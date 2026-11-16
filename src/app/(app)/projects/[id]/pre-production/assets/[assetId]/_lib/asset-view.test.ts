@@ -181,6 +181,17 @@ describe("versionsKey and historyItems", () => {
     expect(items.map((i) => i.key)).toEqual(["sheet:sheet-1", "look:look-2", "look:look-1"]);
   });
 
+  it("leaves out a pack sheet that has no image yet, and keeps a failed one", () => {
+    const items = historyItems(
+      [look(1)],
+      [
+        sheet(1, "look-1", { fileId: null, status: "in_review" }),
+        sheet(2, "look-1", { fileId: null, status: "failed" }),
+      ],
+    );
+    expect(items.map((i) => i.key)).toEqual(["sheet:sheet-2", "look:look-1"]);
+  });
+
   it("turns kind underscores into hyphens", () => {
     expect(kindSlug("some_kind")).toBe("some-kind");
   });

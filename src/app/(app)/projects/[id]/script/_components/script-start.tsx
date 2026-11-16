@@ -221,7 +221,7 @@ export function ScriptStart({
           </div>
 
           <label htmlFor={`${id}-brief`} className="sr-only">
-            Your story
+            Tell the story in your own words
           </label>
           {/* The wrapper takes the field's bleed; the overlay sits inside its 2px rule, 16px top
               and 12px side padding, in its type and placeholder colour. */}

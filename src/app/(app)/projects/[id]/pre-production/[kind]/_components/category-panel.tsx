@@ -139,9 +139,15 @@ export function CategoryPanel({
 
   /* The detected list's review ("Something wrong with this list?"). */
   const [panel, setPanel] = useServerSnapshot(initialPanel, (_current, fresh) => fresh);
-  const [review, setReview] = useState<{ open: boolean; note: string; key: number }>({
+  const [review, setReview] = useState<{
+    open: boolean;
+    note: string;
+    about: string | null;
+    key: number;
+  }>({
     open: false,
     note: "",
+    about: null,
     key: 0,
   });
   const [edit, setEdit] = useState<{ type: "rename" | "remove"; item: GalleryItem } | null>(null);
@@ -165,8 +171,9 @@ export function CategoryPanel({
   const listed = items.filter((item) => item.priority !== "skipped");
   const skippedItems = items.filter((item) => item.priority === "skipped");
 
-  function openReview(note = "") {
-    setReview((r) => ({ open: true, note, key: r.key + 1 }));
+  /** `about` is the one asset the review is about; without it the review is about the whole list. */
+  function openReview(note = "", about: string | null = null) {
+    setReview((r) => ({ open: true, note, about, key: r.key + 1 }));
   }
 
   function openAdd(prefill: { name: string; description: string } | null) {
@@ -250,7 +257,7 @@ export function CategoryPanel({
               id: "review",
               label: "Something Is Wrong With This One…",
               disabled: correcting,
-              onSelect: () => openReview(aboutAsset(item)),
+              onSelect: () => openReview(aboutAsset(item), item.name),
             }
           : null,
       ],
@@ -453,6 +460,7 @@ export function CategoryPanel({
           onOpenChange={(open) => setReview((r) => ({ ...r, open }))}
           projectId={projectId}
           initialNote={review.note}
+          about={review.about}
           onSent={sent}
         />
       ) : null}

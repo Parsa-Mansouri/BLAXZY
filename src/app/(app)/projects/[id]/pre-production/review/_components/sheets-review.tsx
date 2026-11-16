@@ -1,6 +1,6 @@
 "use client";
 
-import { useSpend } from "@/app/(app)/_components/spend-confirm";
+import { useSpend, useSpendTransition } from "@/app/(app)/_components/spend-confirm";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { fileSrc } from "@/lib/file-src";
@@ -144,7 +144,7 @@ export function SheetsReview({
   // A refused design change opens the panel on the design step, with the request written.
   const [designText, setDesignText] = useState<string | null>(null);
   const [accepting, startAccepting] = useTransition();
-  const [sending, startSending] = useTransition();
+  const [sending, startSending] = useSpendTransition();
   const marking = useMarking();
   const imageRef = useRef<HTMLImageElement>(null);
 

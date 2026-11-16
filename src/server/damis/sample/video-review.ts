@@ -87,8 +87,8 @@ export function sampleVideoReview(raw: unknown): VideoReviewOutput {
     .map((w, i) => ({
       id: `k${i + 1}`,
       window: w.window,
-      what: `Shot ${w.planned_shot} as rendered`,
-      label: `Shot ${w.planned_shot} looks as planned.`,
+      what: `Angle ${w.planned_shot} as rendered`,
+      label: `Angle ${w.planned_shot} looks as planned.`,
     }));
 
   const output: VideoReviewOutput = {

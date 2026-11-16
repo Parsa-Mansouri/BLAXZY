@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useTransition,
   type ReactNode,
 } from "react";
 import { ConfirmCredits } from "@/ui";
@@ -51,6 +52,8 @@ interface SpendApi {
 }
 
 const SpendContext = createContext<SpendApi | null>(null);
+/** True from the moment a step is priced until the user confirmed it (or it needs no question). */
+const WaitingContext = createContext(false);
 
 /**
  * Hosts the one credit confirmation of the signed-in window. Screens call `useSpend().run`, which
@@ -60,6 +63,8 @@ const SpendContext = createContext<SpendApi | null>(null);
 export function SpendConfirmProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<Pending | null>(null);
   const [dontAsk, setDontAsk] = useState(false);
+  const [waiting, setWaiting] = useState(false);
+  const running = useRef(false);
   const open = useRef<Pending | null>(null);
 
   useEffect(() => {
@@ -94,6 +99,7 @@ export function SpendConfirmProvider({ children }: { children: ReactNode }) {
         };
         open.current?.resolve({ confirmed: false, dontAskAgain: false });
         open.current = next;
+        setWaiting(true);
         setDontAsk(false);
         setPending(next);
       }),
@@ -101,13 +107,24 @@ export function SpendConfirmProvider({ children }: { children: ReactNode }) {
   );
 
   const run = useCallback(
-    <R extends Outcome>(request: SpendRequest<R>): Promise<R | ActionFailure | null> =>
-      runSpendFlow<SpendQuoteData, R>({
-        quote: () => quoteSpendAction(request.target),
-        ask: (quote, notice) => ask(request, quote, notice),
-        saveSkip: () => setSkipCreditConfirmAction(true),
-        submit: request.submit,
-      }),
+    async <R extends Outcome>(request: SpendRequest<R>): Promise<R | ActionFailure | null> => {
+      // One step at a time: a second press while the first is priced or asked does nothing.
+      if (running.current) return null;
+      running.current = true;
+      setWaiting(true);
+      try {
+        return await runSpendFlow<SpendQuoteData, R>({
+          quote: () => quoteSpendAction(request.target),
+          ask: (quote, notice) => ask(request, quote, notice),
+          saveSkip: () => setSkipCreditConfirmAction(true),
+          onSubmitting: () => setWaiting(false),
+          submit: request.submit,
+        });
+      } finally {
+        running.current = false;
+        setWaiting(false);
+      }
+    },
     [ask],
   );
 
@@ -115,7 +132,7 @@ export function SpendConfirmProvider({ children }: { children: ReactNode }) {
   const quote = pending?.quote;
   return (
     <SpendContext.Provider value={api}>
-      {children}
+      <WaitingContext.Provider value={waiting}>{children}</WaitingContext.Provider>
       {pending && quote ? (
         <ConfirmCredits
           open
@@ -146,4 +163,15 @@ export function useSpend(): SpendApi {
   const api = useContext(SpendContext);
   if (!api) throw new Error("useSpend needs the SpendConfirmProvider");
   return api;
+}
+
+/**
+ * `useTransition` for a step that spends: the pending flag stays false while the price is read and
+ * the confirmation is open, and turns on once the user confirmed (at once when the question is
+ * turned off), so no spinner shows behind the dialog.
+ */
+export function useSpendTransition(): [boolean, (action: () => Promise<void>) => void] {
+  const [pending, start] = useTransition();
+  const waiting = useContext(WaitingContext);
+  return [pending && !waiting, start];
 }

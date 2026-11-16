@@ -1,8 +1,8 @@
 "use client";
 
-import { useSpend } from "@/app/(app)/_components/spend-confirm";
+import { useSpend, useSpendTransition } from "@/app/(app)/_components/spend-confirm";
 import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -140,7 +140,7 @@ export function BlockScreen({
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const spend = useSpend();
-  const [pending, startPending] = useTransition();
+  const [pending, startPending] = useSpendTransition();
   // An asset change makes a new version that is prepared again: from the click until that version
   // arrives, the shot shows (and says) Preparing, as after Request Changes.
   const [rePreparing, setRePreparing] = useState<string | null>(null);
@@ -400,9 +400,9 @@ export function BlockScreen({
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-start gap-x-10 gap-y-12">
+      <div className="grid items-start gap-x-10 gap-y-12 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         {block.scriptExcerpt.trim() ? (
-          <Section title="Script" className="flex-[3_1_28rem] sm:max-w-205">
+          <Section title="Script" className="lg:col-start-1 lg:max-w-205">
             <PaperSheet as="div" className="max-w-none">
               <p className="whitespace-pre-line">{block.scriptExcerpt.trim()}</p>
             </PaperSheet>
@@ -411,7 +411,7 @@ export function BlockScreen({
 
         <Section
           title="In This Shot"
-          className="flex-[2_1_20rem]"
+          className="lg:col-start-2 lg:row-span-2 lg:row-start-1"
           headingRef={assetsRef}
           action={
             <Button
@@ -503,6 +503,14 @@ export function BlockScreen({
             <p className="text-secondary text-label-2">That is as many as this shot can use.</p>
           ) : null}
         </Section>
+
+        {block.direction ? (
+          <DirectionPanel
+            direction={block.direction}
+            durationSeconds={block.durationSeconds}
+            className="lg:col-start-1"
+          />
+        ) : null}
       </div>
 
       {block.handoffChanged ? (
@@ -511,10 +519,6 @@ export function BlockScreen({
 
       {block.revision && !preparing ? (
         <RevisionPanel revision={block.revision} updating={pending} onUpdateNext={updateNext} />
-      ) : null}
-
-      {block.direction ? (
-        <DirectionPanel direction={block.direction} durationSeconds={block.durationSeconds} />
       ) : null}
 
       {block.prompt && block.direction ? (

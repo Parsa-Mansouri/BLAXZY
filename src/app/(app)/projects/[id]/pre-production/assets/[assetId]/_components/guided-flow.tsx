@@ -1,7 +1,7 @@
 "use client";
 
-import { useSpend } from "@/app/(app)/_components/spend-confirm";
-import { useEffect, useId, useRef, useState, useTransition, type KeyboardEvent } from "react";
+import { useSpend, useSpendTransition } from "@/app/(app)/_components/spend-confirm";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { Button, SwapFade, TextLink, Textarea, isTypingTarget, stagger } from "@/ui";
 import type { GuidedDraft } from "../_lib/guided-draft";
 import { startFromGuidedAction } from "../actions";
@@ -136,7 +136,7 @@ export function GuidedFlow({
   const [error, setError] = useState<string | null>(null);
   // The field whose answer was just picked, so the sheet types it in.
   const [typedId, setTypedId] = useState<string | null>(null);
-  const [sending, startSending] = useTransition();
+  const [sending, startSending] = useSpendTransition();
   const moved = useRef(false);
   const wantFreeFocus = useRef(false);
 

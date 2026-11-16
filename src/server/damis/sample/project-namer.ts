@@ -16,6 +16,13 @@ const FILLER = new Set(
   ),
 );
 
+/** Words that only introduce a name or a clause: a title never ends on them, so they are left out. */
+const CONNECTORS = new Set(
+  "named called known nicknamed titled who whose where there here have has had not no than then so if".split(
+    " ",
+  ),
+);
+
 function capitalize(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
@@ -27,7 +34,9 @@ export function sampleProjectNamer(input: unknown): ProjectNamerOutput {
     .split(" ")
     .map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
     .filter(Boolean);
-  const meaningful = words.filter((w) => w.length > 2 && !FILLER.has(w.toLowerCase()));
+  const meaningful = words.filter(
+    (w) => w.length > 2 && !FILLER.has(w.toLowerCase()) && !CONNECTORS.has(w.toLowerCase()),
+  );
   const picked = (meaningful.length >= 2 ? meaningful : words).slice(0, 4);
   let title = picked.map(capitalize).join(" ");
   if (title.length > NAME_MAX_CHARS) {

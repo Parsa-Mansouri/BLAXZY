@@ -1,15 +1,7 @@
 "use client";
 
-import { useSpend } from "@/app/(app)/_components/spend-confirm";
-import {
-  useEffect,
-  useEffectEvent,
-  useId,
-  useRef,
-  useState,
-  useTransition,
-  type ReactNode,
-} from "react";
+import { useSpend, useSpendTransition } from "@/app/(app)/_components/spend-confirm";
+import { useEffect, useEffectEvent, useId, useRef, useState, type ReactNode } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { fileSrc } from "@/lib/file-src";
 import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
@@ -225,7 +217,7 @@ export function ReferencePhotos({
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const [description, setDescription] = useState("");
   const [error, setError] = useState<{ text: string; key?: string } | null>(null);
-  const [sending, startSending] = useTransition();
+  const [sending, startSending] = useSpendTransition();
   const uploading = photos.some((p) => p.progress !== null);
   const slots = designer.maxReferences - photos.length;
   const affordable = canAfford(price, balance);

@@ -1,7 +1,7 @@
 "use client";
 
-import { useSpend } from "@/app/(app)/_components/spend-confirm";
-import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { useSpend, useSpendTransition } from "@/app/(app)/_components/spend-confirm";
+import { useEffect, useId, useRef, useState } from "react";
 import type { LookView } from "@/server/assets";
 import { Button, TextLink, Textarea, stagger } from "@/ui";
 import { answerQuestionAction } from "../actions";
@@ -139,7 +139,7 @@ export function NeedsAnswerStage({
   const questions = blocking.length > 0 ? blocking : all;
   const [replies, setReplies] = useState<Record<string, Reply>>({});
   const [error, setError] = useState<string | null>(null);
-  const [sending, startSending] = useTransition();
+  const [sending, startSending] = useSpendTransition();
   const lines = [spec?.summary, ...(spec?.assumptions ?? [])].filter(
     (line): line is string => typeof line === "string" && line.trim().length > 0,
   );

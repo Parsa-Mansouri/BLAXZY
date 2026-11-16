@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
-import { BlockSwapScene, ChangeRequestBox, DemoHint } from "@/ui";
+import { ChangeRequestBox } from "@/ui";
 
 /**
  * "What should change?": one box to explain it in the user's own words. It replaces the decision
@@ -47,22 +47,14 @@ export function ChangeRequest({
 
   return (
     <div className="flex swap-in flex-col gap-6">
-      {/* The heading row is the demo's hover target: a block's card swapped for its next version. */}
-      <div className="demo-host flex items-center justify-between gap-6">
-        <h3
-          ref={headingRef}
-          tabIndex={-1}
-          id={`${id}-title`}
-          className="text-heading-sm text-balance outline-none"
-        >
-          What should change?
-        </h3>
-        <span className="demo-blockswap-slot">
-          <DemoHint mask="none">
-            <BlockSwapScene />
-          </DemoHint>
-        </span>
-      </div>
+      <h3
+        ref={headingRef}
+        tabIndex={-1}
+        id={`${id}-title`}
+        className="text-heading-sm text-balance outline-none"
+      >
+        What should change?
+      </h3>
       {before}
       <ChangeRequestBox
         autoFocus={false}

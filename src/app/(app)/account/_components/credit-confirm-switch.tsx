@@ -50,7 +50,7 @@ export function CreditConfirmSwitch({ initialSkip }: { initialSkip: boolean }) {
           type="button"
           role="switch"
           aria-checked={ask}
-          aria-labelledby={`${id}-label`}
+          aria-label="Ask before spending credits"
           aria-describedby={`${id}-hint`}
           disabled={pending}
           onClick={toggle}

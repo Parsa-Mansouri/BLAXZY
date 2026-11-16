@@ -1,7 +1,7 @@
 "use client";
 
-import { useSpend } from "@/app/(app)/_components/spend-confirm";
-import { useState, useTransition } from "react";
+import { useSpend, useSpendTransition } from "@/app/(app)/_components/spend-confirm";
+import { useState } from "react";
 import { Button } from "@/ui";
 import { isCreditsFailure, type ArtworkShape, type HeldImage } from "../../_lib/asset-view";
 import { retryAction } from "../../actions";
@@ -34,7 +34,7 @@ export function FailedStage({
 }) {
   const { moveOn } = useAssetScreen();
   const spend = useSpend();
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSpendTransition();
   const [error, setError] = useState<string | null>(null);
   const credits = isCreditsFailure(failed.failure);
   const title =

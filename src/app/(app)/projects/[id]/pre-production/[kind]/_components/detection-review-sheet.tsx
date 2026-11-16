@@ -14,6 +14,7 @@ export function DetectionReviewSheet({
   onOpenChange,
   projectId,
   initialNote,
+  about = null,
   onSent,
 }: {
   open: boolean;
@@ -21,6 +22,8 @@ export function DetectionReviewSheet({
   projectId: string;
   /** Words to start from (a card's menu or a warning). */
   initialNote: string;
+  /** The one asset the review is about (a card's menu); null for the whole list. */
+  about?: string | null;
   onSent: (result: { started: boolean }) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +62,7 @@ export function DetectionReviewSheet({
         if (!busy) onOpenChange(next);
       }}
       size="lg"
-      title="Something Wrong With This List?"
+      title={about ? `Something wrong with ${about}?` : "Something Wrong With This List?"}
       description="Say what is off. The list is corrected in the background and comes back here."
     >
       <div className="flex flex-col gap-6">
@@ -72,20 +75,22 @@ export function DetectionReviewSheet({
           onSubmit={send}
           onCancel={() => onOpenChange(false)}
         />
-        <div className="flex flex-col items-start gap-1 border-t border-outline-quiet pt-4">
-          <Button
-            variant="plain"
-            className="pl-0"
-            onClick={rescan}
-            loading={rescanning}
-            disabled={sending}
-          >
-            Re-scan the Whole Script
-          </Button>
-          <p className="text-secondary text-pretty text-label-2">
-            The script is read again from the start. Assets you already approved keep their place.
-          </p>
-        </div>
+        {about ? null : (
+          <div className="flex flex-col items-start gap-1 border-t border-outline-quiet pt-4">
+            <Button
+              variant="plain"
+              className="pl-0"
+              onClick={rescan}
+              loading={rescanning}
+              disabled={sending}
+            >
+              Re-scan the Whole Script
+            </Button>
+            <p className="text-secondary text-pretty text-label-2">
+              The script is read again from the start. Assets you already approved keep their place.
+            </p>
+          </div>
+        )}
       </div>
     </Sheet>
   );

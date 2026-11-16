@@ -5,6 +5,7 @@ import { Mono } from "@/app/(app)/_components/values";
 import {
   continuityLabel,
   framing,
+  functionLabel,
   plain,
   stagingLine,
   windowLabel,
@@ -51,10 +52,10 @@ function Shots({ shots, names }: { shots: readonly ShotView[]; names: Names }) {
         >
           <div className="flex flex-col gap-0.5">
             <Mono>{windowLabel(shot.window)}</Mono>
-            <span className="caps-label text-label-3">Shot {i + 1}</span>
+            <span className="caps-label text-label-3">Angle {i + 1}</span>
           </div>
           <div className="flex min-w-0 flex-col gap-1.5">
-            <p className="text-body text-label">{framing(shot) || "Shot"}</p>
+            <p className="text-body text-label">{framing(shot) || "Angle"}</p>
             {shot.action.trim() ? (
               <p className="max-w-(--measure) text-body text-pretty text-label-2">
                 {plain(shot.action, names)}
@@ -129,21 +130,23 @@ function Reason({ title, children }: { title: string; children: string }) {
 export function DirectionPanel({
   direction,
   durationSeconds,
+  className,
 }: {
   direction: BlockDirectionView;
   durationSeconds: number | null;
+  className?: string;
 }) {
   const names = direction.asset_names;
   const how = continuityLabel(direction.continuity.type);
   const total = durationSeconds ?? direction.duration_s;
   return (
-    <Section title="Direction">
+    <Section title="Direction" className={className}>
       <div className="flex flex-col gap-10">
         {direction.dramatic_function.trim() || how ? (
           <div className="flex max-w-(--measure) flex-col gap-1">
             {direction.dramatic_function.trim() ? (
               <p className="text-body text-pretty text-label">
-                {plain(direction.dramatic_function, names)}
+                {functionLabel(direction.dramatic_function, names)}
               </p>
             ) : null}
             {how ? (

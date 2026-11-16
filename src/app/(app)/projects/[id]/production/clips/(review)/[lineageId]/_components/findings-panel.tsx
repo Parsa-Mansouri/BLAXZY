@@ -2,6 +2,7 @@
 
 import { useState, type MutableRefObject } from "react";
 import { Button, Input, ProgressBar, Spinner } from "@/ui";
+import { angleWording } from "@/app/(app)/_lib/format";
 import { formatClock } from "../../../_lib/clip-view";
 import {
   MAX_TIMED_NOTES,
@@ -93,7 +94,7 @@ export function FindingsEditor({
                         : "text-body text-pretty"
                     }
                   >
-                    {f.label}{" "}
+                    {angleWording(f.label)}{" "}
                     <span className="text-label-2 tabular-nums">
                       ({rangeLabel(f.fromS, f.toS)})
                     </span>
@@ -127,7 +128,7 @@ export function FindingsEditor({
               const kept = !dropped.has(k.id);
               return (
                 <li key={k.id} className="flex items-start justify-between gap-4 py-2.5">
-                  <p className="text-body text-pretty">{k.label}</p>
+                  <p className="text-body text-pretty">{angleWording(k.label)}</p>
                   <Button
                     variant="plain"
                     disabled={disabled}

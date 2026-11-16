@@ -335,6 +335,49 @@ function packBlocks(
   return drafts;
 }
 
+/**
+ * Sizes the blocks toward the project's runtime: a block holds at most `maxEvents` beats, so a
+ * script with many short beats would run far past the target. While the plan is more than 10%
+ * longer than the target, the two neighbouring action paragraphs with the least text become one
+ * beat (the same moment, told in one go). Dialogue is never merged, and what cannot be merged is
+ * left long: the runtime warning then says so, no plot is cut or invented.
+ */
+function fitToTarget(scenes: Scene[], frame: Frame, target: number | null): Scene[] {
+  if (!target || target <= 0) return scenes;
+  let current = scenes;
+  const total = (list: Scene[]) =>
+    packBlocks(list, frame.duration, frame.maxEvents, frame.spokenMax).length * frame.duration;
+  while (total(current) > target * 1.1) {
+    let best: { scene: number; at: number; size: number } | null = null;
+    current.forEach((scene, si) => {
+      for (let at = 0; at + 1 < scene.units.length; at++) {
+        const x = scene.units[at] as Unit;
+        const y = scene.units[at + 1] as Unit;
+        if (x.kind !== "action" || y.kind !== "action") continue;
+        const size = x.text.length + y.text.length;
+        if (!best || size < best.size) best = { scene: si, at, size };
+      }
+    });
+    if (!best) break;
+    const pick: { scene: number; at: number; size: number } = best;
+    current = current.map((scene, si) => {
+      if (si !== pick.scene) return scene;
+      const x = scene.units[pick.at] as Unit;
+      const y = scene.units[pick.at + 1] as Unit;
+      const merged: Unit = {
+        ...x,
+        lastQuote: y.lastQuote,
+        text: collapseWhitespace(`${x.text} ${y.text}`),
+      };
+      return {
+        ...scene,
+        units: [...scene.units.slice(0, pick.at), merged, ...scene.units.slice(pick.at + 2)],
+      };
+    });
+  }
+  return current;
+}
+
 const POSTURES = ["standing", "sitting forward", "standing, arms folded", "sitting back"];
 const END_POSTURES = [
   "standing, arms loose",
@@ -969,9 +1012,14 @@ export function sampleDirector(raw: unknown): DirectorOutput | DirectorPlanOutpu
     mode === "plan" ? directorPlanInputSchema.parse(raw) : directorInputSchema.parse(raw);
   if (input.creative_bible.validation_status === "rejected") return blocked(input);
 
-  const scenes = parseScript(input.script);
-  const world = newWorld(input.asset_registry, scenes);
   const frame = frameOf(input);
+  const projectFrame = input.creative_bible.project_frame;
+  const scenes = fitToTarget(
+    parseScript(input.script),
+    frame,
+    projectFrame.episode_duration_sec ?? projectFrame.total_duration_sec,
+  );
+  const world = newWorld(input.asset_registry, scenes);
   const planned = planBlocks(input, scenes, world, frame);
   const header = headerOf(input, scenes, world, planned, frame);
 

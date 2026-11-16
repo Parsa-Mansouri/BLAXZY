@@ -1,8 +1,8 @@
 "use client";
 
-import { useSpend } from "@/app/(app)/_components/spend-confirm";
+import { useSpend, useSpendTransition } from "@/app/(app)/_components/spend-confirm";
 import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -233,7 +233,7 @@ export function ClipScreen(props: ClipScreenProps) {
   // Decisions: accept or request changes, then move on to the next shot waiting for review.
   const spend = useSpend();
   const [deciding, setDeciding] = useState<"accepted" | "rejected" | null>(null);
-  const [, startDeciding] = useTransition();
+  const [, startDeciding] = useSpendTransition();
   const [error, setError] = useState<string | null>(null);
   const [askError, setAskError] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);

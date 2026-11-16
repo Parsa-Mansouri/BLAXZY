@@ -1,13 +1,7 @@
 "use client";
 
-import { useSpend } from "@/app/(app)/_components/spend-confirm";
-import {
-  useState,
-  useTransition,
-  type MutableRefObject,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useSpend, useSpendTransition } from "@/app/(app)/_components/spend-confirm";
+import { useState, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import Link from "next/link";
 import type { BlockProductionStage, TakeView } from "@/server/production";
 import { Button, ProgressBar } from "@/ui";
@@ -25,7 +19,7 @@ import { blocksHref } from "../../../_lib/routes";
 import { retryTakeAction } from "../../../actions";
 import { StateHeading } from "../../../_components/clips-context";
 import { CreditLine, Credits, ErrorLine, Mono, When } from "@/app/(app)/_components/values";
-import { canAfford, formatNumber } from "@/app/(app)/_lib/format";
+import { angleWording, canAfford, formatNumber } from "@/app/(app)/_lib/format";
 
 const SAMPLE_CLIP = "Sample clip. A placeholder from the test generator, not a real result.";
 
@@ -216,7 +210,7 @@ function ReviewSummary({ review }: { review: TakeView["review"] }) {
       <ul className="flex flex-col gap-1.5">
         {review.findings.map((f) => (
           <li key={f.id} className="text-body text-pretty">
-            {f.label}{" "}
+            {angleWording(f.label)}{" "}
             <span className="text-label-2 tabular-nums">({rangeLabel(f.fromS, f.toS)})</span>
           </li>
         ))}
@@ -260,7 +254,7 @@ export function FailedPanel({
   onDone: () => void;
 }) {
   const spend = useSpend();
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSpendTransition();
   const [error, setError] = useState<string | null>(null);
   const final = take.stage === "final";
   const price = final ? prices.final : prices.draft;

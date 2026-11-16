@@ -1,6 +1,6 @@
 "use client";
 
-import { useSpend } from "@/app/(app)/_components/spend-confirm";
+import { useSpend, useSpendTransition } from "@/app/(app)/_components/spend-confirm";
 import { useState, useTransition, type ReactNode } from "react";
 import type { DnaCard, LookView, PackLockGate, PackView, SheetView } from "@/server/assets";
 import { Button, ProgressBar, StatusDot, SwapFade, cn, type StatusTone } from "@/ui";
@@ -227,10 +227,10 @@ export function PackReviewStage({
   const [approvedParts, setApprovedParts] = useState<Record<string, boolean>>({});
   const [ticks, setTicks] = useState<Record<string, string[]>>({});
   const [errors, setErrors] = useState<{ decision?: string; panel?: string; lock?: string }>({});
-  const [accepting, startAccepting] = useTransition();
-  const [sending, startSending] = useTransition();
+  const [accepting, startAccepting] = useSpendTransition();
+  const [sending, startSending] = useSpendTransition();
   const [locking, startLocking] = useTransition();
-  const [retrying, startRetrying] = useTransition();
+  const [retrying, startRetrying] = useSpendTransition();
   const busy = accepting || sending || locking || retrying;
 
   const gate = pack.lockGate;

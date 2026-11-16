@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   continuityLabel,
   framing,
+  functionLabel,
   parseWindow,
   plain,
   stagingLine,
+  stripRuleIds,
   windowLabel,
   windowLengths,
 } from "./direction-text";
@@ -29,6 +31,20 @@ describe("direction text", () => {
     expect(plain("@char_1 turns to char_2 near @loc_1 and @char_9", names)).toBe(
       "Nora turns to Lina near Kitchen and @char_9",
     );
+  });
+
+  it("keeps rule ids out of what a person reads", () => {
+    expect(plain("Keeps the eyeline (dr_01) and the cut (tbv_02, dr_03).", names)).toBe(
+      "Keeps the eyeline and the cut.",
+    );
+    expect(stripRuleIds("A slow push tbv_02 builds")).toBe("A slow push builds");
+    expect(plain("@char_12 stays", names)).toBe("@char_12 stays");
+  });
+
+  it("says the dramatic function in plain words", () => {
+    expect(functionLabel("setup", names)).toBe("Sets up the scene");
+    expect(functionLabel("Climax", names)).toBe("The peak");
+    expect(functionLabel("Nora decides", names)).toBe("Nora decides");
   });
 
   it("reads windows and lengths", () => {

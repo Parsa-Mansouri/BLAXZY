@@ -1,7 +1,7 @@
 "use client";
 
-import { useSpend } from "@/app/(app)/_components/spend-confirm";
-import { useId, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { useSpend, useSpendTransition } from "@/app/(app)/_components/spend-confirm";
+import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import {
   Button,
@@ -314,7 +314,7 @@ function PromptWriter({
   const area = useRef<HTMLTextAreaElement>(null);
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [sending, startSending] = useTransition();
+  const [sending, startSending] = useSpendTransition();
   const over = prompt.length > maxLength;
   // The count appears once it matters: near the limit.
   const showCount = prompt.length > maxLength * 0.8;
@@ -464,7 +464,7 @@ function DesignForMe({
   const spend = useSpend();
   const id = useId();
   const [error, setError] = useState<string | null>(null);
-  const [sending, startSending] = useTransition();
+  const [sending, startSending] = useSpendTransition();
 
   function generate() {
     setError(null);

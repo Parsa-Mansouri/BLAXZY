@@ -27,6 +27,8 @@ export interface FlowDeps<Q extends FlowQuote, R extends FlowOutcome> {
   ask: (quote: Q, notice: string | null) => Promise<{ confirmed: boolean; dontAskAgain: boolean }>;
   /** Saves "don't ask again". */
   saveSkip: () => Promise<unknown>;
+  /** Called right before each send: the user confirmed, or the question is turned off. */
+  onSubmitting?: () => void;
   /** Sends the step with the confirmed price. */
   submit: (expectedCredits: number) => Promise<R>;
 }
@@ -49,13 +51,17 @@ export async function runSpendFlow<Q extends FlowQuote, R extends FlowOutcome>(
     if (!quoted.ok) return quoted;
     const quote = quoted.data;
     // Nothing to pay (an approval): the server ignores the price.
-    if (!quote.spends) return deps.submit(0);
+    if (!quote.spends) {
+      deps.onSubmitting?.();
+      return deps.submit(0);
+    }
     const short = quote.balance < quote.credits;
     if (!quote.skip || mustAsk || short) {
       const decision = await deps.ask(quote, notice);
       if (!decision.confirmed) return null;
       if (decision.dontAskAgain) await deps.saveSkip();
     }
+    deps.onSubmitting?.();
     const result = await deps.submit(quote.credits);
     if (!result.ok && result.priceChanged) {
       mustAsk = true;

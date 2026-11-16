@@ -16,3 +16,9 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", {
 
 /** "12 Nov, 14:05". */
 export const formatWhen = (date: Date) => dateFormat.format(date);
+
+/**
+ * A block is "Shot N" in the UI, so the camera shots a review names inside it read "Angle N":
+ * "Shot 2 looks as planned." becomes "Angle 2 looks as planned."
+ */
+export const angleWording = (text: string) => text.replace(/\bShot (\d+)\b/g, "Angle $1");

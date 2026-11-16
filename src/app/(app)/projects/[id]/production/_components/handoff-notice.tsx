@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useSpend } from "@/app/(app)/_components/spend-confirm";
+import { useState } from "react";
+import { useSpend, useSpendTransition } from "@/app/(app)/_components/spend-confirm";
 import { ErrorLine } from "@/app/(app)/_components/values";
 import { Button } from "@/ui";
 import { updateShotAction } from "../blocks/actions";
@@ -21,7 +21,7 @@ export function HandoffNotice({
   onDone: () => void;
 }) {
   const spend = useSpend();
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSpendTransition();
   const [error, setError] = useState<string | null>(null);
 
   function update() {

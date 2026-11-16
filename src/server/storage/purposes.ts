@@ -70,6 +70,11 @@ export const FILE_PURPOSES = {
       "image/png": ["png"],
     },
   },
+  /** A keyframe of a generated clip, extracted for the video review (JPEG, about 768 px). */
+  review_frame: {
+    maxBytes: 5 * MB,
+    types: { "image/jpeg": ["jpg", "jpeg"] },
+  },
   /**
    * A ZIP of a project's finished clips, written by streaming. `putFileBytes` switches to a
    * multipart upload for large streams, so this may exceed S3's 5 GB single-PUT cap.

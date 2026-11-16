@@ -154,6 +154,26 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
 - Sample mode (`sample/director.ts`, `sample/block-revision.ts`) is deterministic, passes the
   dami's own `check()`, and covers all three Director modes.
 
+## Video Review (not wired yet)
+
+- `video-review/` is the owner's VIDEO_REVIEW v1.0 (Sonnet, medium effort): it compares a generated
+  clip's keyframes, the server's detected cuts and the asset sheets with the block that asked for it
+  and reports windows, cuts, identity, boundary, audio, issues (cause, kind, severity, suggested
+  route), keep candidates and what is not checkable. The system prompt is the owner's file from
+  `<role>` through `</output_format>` (`prompt-text.ts`, checked against `source/`); the file's
+  `<frame_extraction_spec>` and `<router>` are the server's code and stay out of the prompt.
+- The input holds file ids only: sheets, frames and PREV_END are image parts, each preceded by its
+  label line (`SHEET char_1 (MOHAMMAD)`, `FRAME f07 t=8.0s window 4-9s planned shot 2`,
+  `PREV_END`). The frame labels are written by `planFrames`; `MAX_PROMPT_IMAGES` (40) is checked by
+  the input schema. The block, creative bible and continuity bible are the subsets the review reads
+  (the Director's own shapes are reconciled when it lands).
+- `check()` enforces: evidence frame ids exist, one entry per planned window, `pass` only without a
+  blocker or major issue, the route follows the cause (artifact to reroll, binding to rebind,
+  instruction_miss to revise), the cut counts match the server's detection.
+- Server side, not part of the dami: `production/frame-plan.ts` and `frames.ts` (cut detection,
+  frame plan, extraction, storing frames as `review_frame` files) and `production/router.ts` (the
+  pure router and the stale-next-block rule). No job, handler or UI calls any of it yet.
+
 ## Runs, concurrency and the light entry
 
 - `dami_run.status` is `queued`, `running`, `succeeded`, `failed` or `aborted`. `aborted` means

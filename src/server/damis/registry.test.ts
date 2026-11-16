@@ -29,6 +29,7 @@ describe("dami registry", () => {
         "sheet-generator-prop",
         "take-fixer",
         "text-blocks",
+        "video-review",
       ].sort(),
     );
   });

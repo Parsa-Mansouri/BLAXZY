@@ -1,0 +1,261 @@
+{
+  "ui_language": "en",
+  "creative_bible": {
+    "anti_cliche_guards": [
+      {
+        "guard": "No rain on the window as a mood cue",
+        "source": "genre"
+      },
+      {
+        "guard": "No slow-motion tear",
+        "source": "combo"
+      }
+    ],
+    "continuity_locks": [
+      "Mohammad wears the grey wool coat in every block",
+      "Daylight from screen-left"
+    ],
+    "review_options": {
+      "video": {
+        "technical": [
+          {
+            "id": "vid_face_morph",
+            "label": "A face changes or melts"
+          },
+          {
+            "id": "vid_hands",
+            "label": "Hands look wrong"
+          }
+        ],
+        "preference": [
+          {
+            "id": "vid_framing",
+            "label": "The framing is not what I pictured"
+          }
+        ]
+      }
+    }
+  },
+  "continuity_bible": {
+    "descriptors": [
+      "Mohammad: 50s, grey stubble, grey wool coat",
+      "Reza: 30s, clean-shaven, navy jacket"
+    ],
+    "landmarks": ["kitchen window screen-left", "front door screen-right"]
+  },
+  "block": {
+    "block_id": 3,
+    "version": 2,
+    "prompt_text": "@loc_1 kitchen. @char_1 Mohammad stands at the window ... @char_2 Reza enters ...",
+    "shots": [
+      {
+        "window": "0-4s",
+        "shot_number": 1,
+        "owner": "char_1",
+        "shot": "Medium close-up, Mohammad at the kitchen window, still",
+        "angle": "eye level",
+        "camera": "static"
+      },
+      {
+        "window": "4-9s",
+        "shot_number": 2,
+        "owner": "char_1",
+        "shot": "Medium two-shot, Mohammad turns to Reza and lowers the letter",
+        "angle": "slightly low",
+        "camera": "slow push-in"
+      },
+      {
+        "window": "9-12s",
+        "shot_number": 3,
+        "owner": "char_2",
+        "shot": "Close-up, Reza reads the letter, jaw tight",
+        "angle": "eye level",
+        "camera": "static"
+      },
+      {
+        "window": "12-15s",
+        "shot_number": 4,
+        "owner": "char_1",
+        "shot": "Wide, Mohammad walks to the door and stops with his hand on it",
+        "angle": "high",
+        "camera": "slow pull-back"
+      }
+    ],
+    "start_staging": "Mohammad at the window, facing it; Reza out of frame",
+    "end_staging": "Mohammad at the door, hand on the handle, back to camera",
+    "opening_frame": "Mohammad at the window, letter in his left hand",
+    "in_progress_at_end": "Mohammad is about to open the door",
+    "assets": [
+      {
+        "token": "@char_1",
+        "asset_id": "char_1",
+        "sheet_id": "sheet_char_1_a"
+      },
+      {
+        "token": "@char_2",
+        "asset_id": "char_2",
+        "sheet_id": ""
+      },
+      {
+        "token": "@loc_1",
+        "asset_id": "loc_1",
+        "sheet_id": ""
+      }
+    ],
+    "budgets": {
+      "shot_budget": 4
+    }
+  },
+  "reference_binding": [
+    {
+      "token": "@char_1",
+      "asset_id": "char_1",
+      "sheet_id": "sheet_char_1_a"
+    },
+    {
+      "token": "@char_2",
+      "asset_id": "char_2",
+      "sheet_id": ""
+    },
+    {
+      "token": "@loc_1",
+      "asset_id": "loc_1",
+      "sheet_id": ""
+    }
+  ],
+  "sheets": [
+    {
+      "asset_id": "char_1",
+      "name": "MOHAMMAD",
+      "fileId": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "asset_id": "char_2",
+      "name": "REZA",
+      "fileId": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "asset_id": "char_3",
+      "name": "HAMID",
+      "fileId": "00000000-0000-4000-8000-000000000003"
+    },
+    {
+      "asset_id": "loc_1",
+      "name": "KITCHEN",
+      "fileId": "00000000-0000-4000-8000-000000000004"
+    }
+  ],
+  "frames": [
+    {
+      "id": "f01",
+      "t": 0.1,
+      "label": "FRAME f01 t=0.1s window 0-4s planned shot 1",
+      "fileId": "00000000-0000-4000-8000-000000000100"
+    },
+    {
+      "id": "f02",
+      "t": 2,
+      "label": "FRAME f02 t=2.0s window 0-4s planned shot 1",
+      "fileId": "00000000-0000-4000-8000-000000000101"
+    },
+    {
+      "id": "f03",
+      "t": 3.9,
+      "label": "FRAME f03 t=3.9s window 0-4s planned shot 1",
+      "fileId": "00000000-0000-4000-8000-000000000102"
+    },
+    {
+      "id": "f04",
+      "t": 4.1,
+      "label": "FRAME f04 t=4.1s window 4-9s planned shot 2",
+      "fileId": "00000000-0000-4000-8000-000000000103"
+    },
+    {
+      "id": "f05",
+      "t": 4.4,
+      "label": "FRAME f05 t=4.4s window 4-9s planned shot 2",
+      "fileId": "00000000-0000-4000-8000-000000000104"
+    },
+    {
+      "id": "f06",
+      "t": 6.5,
+      "label": "FRAME f06 t=6.5s window 4-9s planned shot 2",
+      "fileId": "00000000-0000-4000-8000-000000000105"
+    },
+    {
+      "id": "f07",
+      "t": 8.9,
+      "label": "FRAME f07 t=8.9s window 4-9s planned shot 2",
+      "fileId": "00000000-0000-4000-8000-000000000106"
+    },
+    {
+      "id": "f08",
+      "t": 9.1,
+      "label": "FRAME f08 t=9.1s window 9-12s planned shot 3",
+      "fileId": "00000000-0000-4000-8000-000000000107"
+    },
+    {
+      "id": "f09",
+      "t": 9.3,
+      "label": "FRAME f09 t=9.3s window 9-12s planned shot 3",
+      "fileId": "00000000-0000-4000-8000-000000000108"
+    },
+    {
+      "id": "f10",
+      "t": 10.5,
+      "label": "FRAME f10 t=10.5s window 9-12s planned shot 3",
+      "fileId": "00000000-0000-4000-8000-000000000109"
+    },
+    {
+      "id": "f11",
+      "t": 11.9,
+      "label": "FRAME f11 t=11.9s window 9-12s planned shot 3",
+      "fileId": "00000000-0000-4000-8000-000000000110"
+    },
+    {
+      "id": "f12",
+      "t": 12.1,
+      "label": "FRAME f12 t=12.1s window 12-15s planned shot 4",
+      "fileId": "00000000-0000-4000-8000-000000000111"
+    },
+    {
+      "id": "f13",
+      "t": 12.4,
+      "label": "FRAME f13 t=12.4s window 12-15s planned shot 4",
+      "fileId": "00000000-0000-4000-8000-000000000112"
+    },
+    {
+      "id": "f14",
+      "t": 13.5,
+      "label": "FRAME f14 t=13.5s window 12-15s planned shot 4",
+      "fileId": "00000000-0000-4000-8000-000000000113"
+    },
+    {
+      "id": "f15",
+      "t": 14.95,
+      "label": "FRAME f15 t=14.9s window 12-15s planned shot 4",
+      "fileId": "00000000-0000-4000-8000-000000000114"
+    }
+  ],
+  "previous_end_frame": {
+    "fileId": "00000000-0000-4000-8000-000000000050"
+  },
+  "detected_cuts": [
+    {
+      "t": 4.1
+    },
+    {
+      "t": 9
+    },
+    {
+      "t": 12.1
+    }
+  ],
+  "generation_meta": {
+    "model": "seedance-2.5",
+    "seed": "481516",
+    "attempt": 1,
+    "video_version": 1,
+    "duration_s": 15
+  }
+}

@@ -22,6 +22,7 @@ import { takeFixer } from "./take-fixer/dami";
 import { textBlocks } from "./text-blocks/dami";
 import { director, directorPlan } from "./director/dami";
 import { blockRevision } from "./block-revision/dami";
+import { videoReview } from "./video-review/dami";
 
 // Framework
 export { defineDami, isPromptImage, partText } from "./framework/define";
@@ -419,6 +420,7 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [director.key]: director,
   [directorPlan.key]: directorPlan,
   [blockRevision.key]: blockRevision,
+  [videoReview.key]: videoReview,
 };
 
 // Creative DNA (DAMI-00): the per-project Creative Bible and what later damis read from it
@@ -543,7 +545,33 @@ export {
   blockRevisionOutputSchema,
   type BlockRevisionInput,
   type BlockRevisionOutput,
-  type ReviewIssue,
+  type ReviewIssue as BlockRevisionIssue,
   type TimedNote,
 } from "./block-revision/schema";
 export { checkBlockRevision } from "./block-revision/validate";
+// Video Review (the owner's VIDEO_REVIEW v1.0): not wired yet; the router is `production/router.ts`
+export {
+  checkVideoReview,
+  ROUTE_FOR_CAUSE,
+  videoReview,
+  VIDEO_REVIEW_VERSION,
+} from "./video-review/dami";
+export { PREV_END_LABEL, sheetLabel } from "./video-review/prompt";
+export {
+  ISSUE_CAUSES,
+  ISSUE_KINDS,
+  ISSUE_ROUTES,
+  ISSUE_SEVERITIES,
+  videoReviewInputSchema,
+  videoReviewOutputSchema,
+  type IssueCause,
+  type IssueKind,
+  type IssueRoute,
+  type KeepCandidate,
+  type ReferenceBindingEntry,
+  type ReviewBlock,
+  type ReviewFrame,
+  type ReviewIssue,
+  type VideoReviewInput,
+  type VideoReviewOutput,
+} from "./video-review/schema";

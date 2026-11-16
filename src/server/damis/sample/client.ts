@@ -26,6 +26,7 @@ import { samplePromptSectioner } from "./prompt-sectioner";
 import { sampleScriptChecker } from "./script-checker";
 import { sampleScriptReviser } from "./script-reviser";
 import { sampleEnhancer } from "./enhancer";
+import { sampleVideoReview } from "./video-review";
 import { sampleScriptOutline, sampleScriptWriter } from "./script-writer";
 
 /** Sample output by dami key. Each generator validates the input with the dami's schema. */
@@ -51,6 +52,7 @@ export const SAMPLE_GENERATORS: Readonly<Record<string, (input: unknown) => unkn
   director: sampleDirector,
   "director-plan": sampleDirector,
   "block-revision": sampleBlockRevision,
+  "video-review": sampleVideoReview,
 };
 
 function wait(ms: number, signal: AbortSignal | undefined): Promise<void> {

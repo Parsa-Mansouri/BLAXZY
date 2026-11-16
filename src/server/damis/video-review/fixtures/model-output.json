@@ -1,0 +1,140 @@
+{
+  "dami": "video_review",
+  "dami_version": "1.0",
+  "block_id": 3,
+  "block_version": 2,
+  "video_version": 1,
+  "verdict": "needs_fix",
+  "windows": [
+    {
+      "window": "0-4s",
+      "planned_shot": 1,
+      "status": "partial",
+      "observed": "Mohammad is at the window but already turns away from it by 2 s.",
+      "differences": ["The planned still hold is a turn away from the window."],
+      "frames": ["f01", "f02", "f03"]
+    },
+    {
+      "window": "4-9s",
+      "planned_shot": 2,
+      "status": "miss",
+      "observed": "The man on screen is clean-shaven and wears a navy jacket.",
+      "differences": ["The person is not Mohammad."],
+      "frames": ["f04", "f05", "f06", "f07"]
+    },
+    {
+      "window": "9-12s",
+      "planned_shot": 3,
+      "status": "partial",
+      "observed": "Reza reads the letter; his right hand has six fingers at 10.5 s.",
+      "differences": ["Hand artifact on the letter."],
+      "frames": ["f08", "f09", "f10", "f11"]
+    },
+    {
+      "window": "12-15s",
+      "planned_shot": 4,
+      "status": "match",
+      "observed": "Wide shot, a man walks to the door and stops with a hand on it.",
+      "differences": [],
+      "frames": ["f12", "f13", "f14", "f15"]
+    }
+  ],
+  "cuts": {
+    "planned": 3,
+    "detected": 3,
+    "planned_times_s": [4, 9, 12],
+    "detected_times_s": [4.1, 9, 12.1],
+    "status": "match"
+  },
+  "identity": [
+    {
+      "character_id": "char_1",
+      "window": "0-4s",
+      "result": "matches_planned",
+      "other_asset_id": "",
+      "confidence": "high",
+      "frames": ["f01", "f02"]
+    },
+    {
+      "character_id": "char_1",
+      "window": "4-9s",
+      "result": "matches_other_asset",
+      "other_asset_id": "char_2",
+      "confidence": "high",
+      "frames": ["f05", "f06"]
+    },
+    {
+      "character_id": "char_2",
+      "window": "9-12s",
+      "result": "matches_planned",
+      "other_asset_id": "",
+      "confidence": "medium",
+      "frames": ["f09"]
+    }
+  ],
+  "boundary": {
+    "opening": "partial",
+    "opening_notes": "The letter is in the right hand instead of the left.",
+    "restarted_action": true,
+    "vs_prev_end": "match",
+    "ending": "match",
+    "ending_notes": "Hand on the door handle, as planned."
+  },
+  "audio": { "status": "not_checkable", "missing_lines": [], "unplanned_speech": [] },
+  "issues": [
+    {
+      "issue_id": "i1",
+      "cause": "binding_suspect",
+      "kind": "identity",
+      "severity": "blocker",
+      "from_s": 4.1,
+      "to_s": 9,
+      "window": "4-9s",
+      "planned": "Mohammad turns to Reza",
+      "observed": "The man matches the sheet of REZA, not MOHAMMAD",
+      "evidence": ["f05", "f06"],
+      "review_option_id": "",
+      "label": "Second 6: the man is not Mohammad.",
+      "suggested_route": "rebind"
+    },
+    {
+      "issue_id": "i2",
+      "cause": "ai_artifact",
+      "kind": "artifact_hands",
+      "severity": "major",
+      "from_s": 10,
+      "to_s": 11,
+      "window": "9-12s",
+      "planned": "Reza holds the letter",
+      "observed": "Six fingers on the right hand",
+      "evidence": ["f10"],
+      "review_option_id": "vid_hands",
+      "label": "Second 10: Reza's hand has too many fingers.",
+      "suggested_route": "reroll"
+    },
+    {
+      "issue_id": "i3",
+      "cause": "instruction_miss",
+      "kind": "restarted_action",
+      "severity": "major",
+      "from_s": 0,
+      "to_s": 3.9,
+      "window": "0-4s",
+      "planned": "Mohammad holds still at the window",
+      "observed": "He turns away from the window at 2 s",
+      "evidence": ["f01", "f02", "f03"],
+      "review_option_id": "",
+      "label": "Seconds 2 to 4: Mohammad turns away instead of staying at the window.",
+      "suggested_route": "revise"
+    }
+  ],
+  "keep_candidates": [
+    {
+      "id": "k1",
+      "window": "12-15s",
+      "what": "The slow pull-back ending on the hand on the door",
+      "label": "The last shot works: keep the pull-back to the door."
+    }
+  ],
+  "not_checkable": ["Lip sync", "Motion smoothness between frames"]
+}

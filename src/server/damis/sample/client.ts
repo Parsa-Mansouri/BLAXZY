@@ -13,6 +13,8 @@ import { SAMPLE_MODEL } from "../framework/mode";
 import { sampleAssetDetector } from "./asset-detector";
 import { sampleCharacterGenerator } from "./character-generator";
 import { sampleCreativeDna } from "./creative-dna";
+import { sampleBlockRevision } from "./block-revision";
+import { sampleDirector } from "./director";
 import { sampleLocationGenerator } from "./location-generator";
 import { samplePropGenerator } from "./prop-generator";
 import { sampleSheetGeneratorCharacter } from "./sheet-generator-character";
@@ -46,6 +48,9 @@ export const SAMPLE_GENERATORS: Readonly<Record<string, (input: unknown) => unkn
   "text-blocks": sampleTextBlocks,
   "block-reviser": sampleBlockReviser,
   "take-fixer": sampleTakeFixer,
+  director: sampleDirector,
+  "director-plan": sampleDirector,
+  "block-revision": sampleBlockRevision,
 };
 
 function wait(ms: number, signal: AbortSignal | undefined): Promise<void> {

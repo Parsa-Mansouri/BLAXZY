@@ -1,0 +1,1005 @@
+{
+  "dami": "director",
+  "dami_version": "1.0.0",
+  "creative_bible_ref": {
+    "genre_id": "genre.drama",
+    "style_id": "style.realistic",
+    "dami_version": "1.0"
+  },
+  "status": "ok",
+  "project": {
+    "title": "Kitchen",
+    "format": "film",
+    "episode_number": null,
+    "aspect_ratio": "9:16",
+    "block_mode": "fixed_15"
+  },
+  "dramatic_analysis": {
+    "logline": "NORA stirs a pot at the stove, her back to the room. LINA sits at the table in her coat, staring at the floor. SAM watches from the doorway.",
+    "dramatic_question": "Will Nora and the others find their way to each other by the end?",
+    "protagonist_want": "Nora wants the moment to be heard.",
+    "turning_points": ["The turn into EXT. FRONT STEP - NIGHT."],
+    "scenes": [
+      {
+        "scene_id": "sc_1",
+        "heading": "INT. KITCHEN - EVENING",
+        "dramatic_function": "setup",
+        "pov_character": "char_1",
+        "emotional_temperature": 2,
+        "relationship_start": "Distant and guarded.",
+        "relationship_end": "Tense but listening."
+      },
+      {
+        "scene_id": "sc_2",
+        "heading": "EXT. FRONT STEP - NIGHT",
+        "dramatic_function": "release",
+        "pov_character": "char_1",
+        "emotional_temperature": 3,
+        "relationship_start": "Distant and guarded.",
+        "relationship_end": "Closer and open."
+      }
+    ]
+  },
+  "directors_notes": {
+    "look": "Interpret realism as a coherent photographic and physical presentation of the approved world, not as a ban on speculative content.",
+    "camera_personality": "Observational: offset angles, few motivated moves, a static frame when the moment needs stillness.",
+    "staging_personality": "Space carries the relationship: distance closes only when trust does.",
+    "rhythm_map": "Few, long shots in calm moments; shorter where tension rises.",
+    "sound_world": "Quiet room ambience, no music unless the script asks for it.",
+    "framing_rules": "Vertical staging, depth stacking, faces in the upper third.",
+    "rules_used": ["dr_01", "dr_02", "dr_03"],
+    "aesthetic_overrides": []
+  },
+  "continuity_bible": {
+    "characters": [
+      {
+        "asset_id": "char_1",
+        "name": "Nora",
+        "descriptor": "A woman in her forties with short dark hair, wearing a grey wool cardigan",
+        "voice": "natural speaking voice",
+        "costume_versions": []
+      },
+      {
+        "asset_id": "char_2",
+        "name": "Lina",
+        "descriptor": "A girl of fifteen with a long dark braid, wearing a green parka",
+        "voice": "natural speaking voice",
+        "costume_versions": []
+      },
+      {
+        "asset_id": "char_3",
+        "name": "Sam",
+        "descriptor": "A boy of nine with curly brown hair, wearing a yellow sweater",
+        "voice": "natural speaking voice",
+        "costume_versions": []
+      }
+    ],
+    "locations": [
+      {
+        "asset_id": "loc_1",
+        "descriptor": "A small kitchen with yellow walls, a wooden table and a gas stove, lit by an amber hanging lamp",
+        "landmarks": ["the stove", "the table", "the doorway"]
+      },
+      {
+        "asset_id": "loc_2",
+        "descriptor": "A concrete front step under a yellow porch light, with a cold blue street beyond",
+        "landmarks": ["the front door behind the step", "the garden wall"]
+      }
+    ],
+    "props": [
+      {
+        "asset_id": "prop_1",
+        "descriptor": "A blue enamel kettle with a black handle"
+      },
+      {
+        "asset_id": "prop_2",
+        "descriptor": "A long red wool scarf with fringed ends"
+      }
+    ],
+    "voices": [],
+    "style_line": "Interpret realism as a coherent photographic and physical presentation of the approved world, not as a ban on speculative content."
+  },
+  "totals": {
+    "block_count": 4,
+    "count_15": 4,
+    "count_30": 0,
+    "total_runtime_s": 60,
+    "target_runtime_s": 60,
+    "deviation_pct": 0
+  },
+  "warnings": [],
+  "blocks": [
+    {
+      "block_id": 1,
+      "version": 1,
+      "duration_s": 15,
+      "scene_ids": ["sc_1"],
+      "scene_heading": "INT. KITCHEN - EVENING",
+      "dramatic_function": "setup",
+      "script_coverage": {
+        "start_quote": "INT. KITCHEN - EVENING",
+        "end_quote": "Dinner is almost ready."
+      },
+      "start_state": "NORA and LINA and SAM at the start of the moment, positions as staged.",
+      "end_state": "NORA and LINA and SAM at the end of the moment, positions as staged.",
+      "start_staging": [
+        {
+          "character_id": "char_1",
+          "on_screen": true,
+          "position": "by the stove",
+          "posture": "standing",
+          "facing": "three-quarter toward Lina",
+          "gaze": "at the other person",
+          "screen_side": "frame-left",
+          "distances": [
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.7
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 2.4
+            }
+          ]
+        },
+        {
+          "character_id": "char_2",
+          "on_screen": true,
+          "position": "by the table",
+          "posture": "sitting forward",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at the floor",
+          "screen_side": "frame-right",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 1.7
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 1.7
+            }
+          ]
+        },
+        {
+          "character_id": "char_3",
+          "on_screen": true,
+          "position": "by the doorway",
+          "posture": "standing, arms folded",
+          "facing": "three-quarter toward Nora",
+          "gaze": "out of frame",
+          "screen_side": "centre",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 2.4
+            },
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.7
+            }
+          ]
+        }
+      ],
+      "end_staging": [
+        {
+          "character_id": "char_1",
+          "on_screen": true,
+          "position": "by the stove",
+          "posture": "standing, arms loose",
+          "facing": "three-quarter toward Lina",
+          "gaze": "at Lina",
+          "screen_side": "frame-left",
+          "distances": [
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 2.1
+            }
+          ]
+        },
+        {
+          "character_id": "char_2",
+          "on_screen": true,
+          "position": "by the table",
+          "posture": "sitting upright",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "frame-right",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        },
+        {
+          "character_id": "char_3",
+          "on_screen": true,
+          "position": "by the doorway",
+          "posture": "standing, one step closer",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "centre",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 2.1
+            },
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        }
+      ],
+      "staging_meaning": "The social distance keeps them apart.",
+      "opening_frame": "NORA and LINA and SAM hold the positions of the scene opening, faces calm, breathing even",
+      "in_progress_at_end": "NORA is standing, arms loose by the stove, gaze at Lina, breathing slowly",
+      "continuity": {
+        "type": "first",
+        "note": "A new scene opens with NORA and LINA and SAM in fresh positions.",
+        "use_last_frame_as_start": false
+      },
+      "assets": {
+        "characters": ["char_1", "char_2", "char_3"],
+        "locations": ["loc_1"],
+        "props": [],
+        "voices": []
+      },
+      "budgets": {
+        "spoken_words": 4,
+        "spoken_words_max": 26,
+        "events": 2,
+        "shot_budget": "standard"
+      },
+      "camera_rationale": "The camera stays with the owner of the moment at chest height and offsets from the obvious axis (dr_01).",
+      "editing_rationale": "Few, long shots: the moment is calm, and each cut falls at the end of a line or a look.",
+      "applied_rules": ["dr_01", "tb_01"],
+      "shots": [
+        {
+          "window": "0-5s",
+          "shot_number": 1,
+          "owner": "char_1",
+          "shot": "Wide shot",
+          "angle": "three-quarter, 30 degrees off the axis",
+          "camera_height": "chest height",
+          "camera": "The camera pushes in slowly.",
+          "action": "NORA stirs a pot at the stove, her back to the room. LINA sits at the table in her coat, staring at the floor.",
+          "staging_change": "",
+          "default_avoided": "a centred, symmetrical wide shot from the room's entrance",
+          "default_kept_reason": "",
+          "cut_reason": "the cut falls at the end of the opening beat",
+          "dialogue": []
+        },
+        {
+          "window": "5-10s",
+          "shot_number": 2,
+          "owner": "char_1",
+          "shot": "Medium close-up",
+          "angle": "three-quarter from frame-right",
+          "camera_height": "below eye level",
+          "camera": "The camera holds locked off.",
+          "action": "NORA, natural, quiet: \"Dinner is almost ready.\"",
+          "staging_change": "",
+          "default_avoided": "two faces in strict profile, squared to each other at eye level",
+          "default_kept_reason": "",
+          "cut_reason": "the cut falls on a look",
+          "dialogue": [
+            {
+              "speaker_id": "char_1",
+              "line": "Dinner is almost ready.",
+              "delivery": "natural, quiet",
+              "language": "en"
+            }
+          ]
+        },
+        {
+          "window": "10-15s",
+          "shot_number": 3,
+          "owner": "char_1",
+          "shot": "Close-up",
+          "angle": "over the shoulder, 20 degrees off axis",
+          "camera_height": "eye level",
+          "camera": "The camera drifts toward the face.",
+          "action": "SAM glances away, then back, jaw loosening.",
+          "staging_change": "the characters settle into their end positions",
+          "default_avoided": "a dead-centre close-up straight to the lens",
+          "default_kept_reason": "",
+          "cut_reason": "the last beat ends the moment",
+          "dialogue": []
+        }
+      ],
+      "prompt_text": "BEGIN PROMPT\nA 15-second sequence from a realistic drama film, 9:16.\nCharacters: @char_1 NORA — A woman in her forties with short dark hair, wearing a grey wool cardigan.\n@char_2 LINA — A girl of fifteen with a long dark braid, wearing a green parka.\n@char_3 SAM — A boy of nine with curly brown hair, wearing a yellow sweater.\nLocations: @loc_1 — A small kitchen with yellow walls, a wooden table and a gas stove, lit by an amber hanging lamp.\nStaging: NORA is standing by the stove, frame-left, facing three-quarter toward Lina, gaze at the other person, 1.7 m from LINA. LINA is sitting forward by the table, frame-right, facing three-quarter toward Nora, gaze at the floor, 1.7 m from NORA. SAM is standing, arms folded by the doorway, centre, facing three-quarter toward Nora, gaze out of frame, 2.4 m from NORA. The social distance keeps them apart.\nOpening frame: NORA and LINA and SAM hold the positions of the scene opening, faces calm, breathing even.\nShots:\n[0-5s] Shot 1 — Wide shot, three-quarter, 30 degrees off the axis, chest height. The camera pushes in slowly. NORA stirs a pot at the stove, her back to the room. LINA sits at the table in her coat, staring at the floor.\n[5-10s] Cut to Shot 2 — Medium close-up, three-quarter from frame-right, below eye level. The camera holds locked off. NORA, natural, quiet: \"Dinner is almost ready.\"\n[10-15s] Cut to Shot 3 — Close-up, over the shoulder, 20 degrees off axis, eye level. The camera drifts toward the face. SAM glances away, then back, jaw loosening.\nLook: Motivated light from the practical sources in the room, natural colour grade.\nAudio: dialogue delivered quietly and clearly, soft room ambience, no music.\nNo subtitles. No text on screen. No extra characters. No flat side-profile two-shot.\nEND PROMPT",
+      "word_count": 306
+    },
+    {
+      "block_id": 2,
+      "version": 1,
+      "duration_s": 15,
+      "scene_ids": ["sc_1"],
+      "scene_heading": "INT. KITCHEN - EVENING",
+      "dramatic_function": "escalation",
+      "script_coverage": {
+        "start_quote": "LINA I am not hungry.",
+        "end_quote": "NORA sets the blue kettle on the stove and turns to face her daughter."
+      },
+      "start_state": "NORA and LINA and SAM at the start of the moment, positions as staged.",
+      "end_state": "NORA and LINA and SAM at the end of the moment, positions as staged.",
+      "start_staging": [
+        {
+          "character_id": "char_1",
+          "on_screen": true,
+          "position": "by the stove",
+          "posture": "standing, arms loose",
+          "facing": "three-quarter toward Lina",
+          "gaze": "at Lina",
+          "screen_side": "frame-left",
+          "distances": [
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 2.1
+            }
+          ]
+        },
+        {
+          "character_id": "char_2",
+          "on_screen": true,
+          "position": "by the table",
+          "posture": "sitting upright",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "frame-right",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        },
+        {
+          "character_id": "char_3",
+          "on_screen": true,
+          "position": "by the doorway",
+          "posture": "standing, one step closer",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "centre",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 2.1
+            },
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        }
+      ],
+      "end_staging": [
+        {
+          "character_id": "char_1",
+          "on_screen": true,
+          "position": "by the stove",
+          "posture": "sitting upright",
+          "facing": "three-quarter toward Lina",
+          "gaze": "at Lina",
+          "screen_side": "frame-left",
+          "distances": [
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 2.1
+            }
+          ]
+        },
+        {
+          "character_id": "char_2",
+          "on_screen": true,
+          "position": "by the table",
+          "posture": "standing, one step closer",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "frame-right",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        },
+        {
+          "character_id": "char_3",
+          "on_screen": true,
+          "position": "by the doorway",
+          "posture": "leaning forward",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "centre",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 2.1
+            },
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        }
+      ],
+      "staging_meaning": "The social distance keeps them apart.",
+      "opening_frame": "NORA is standing, arms loose by the stove, gaze at Lina, breathing slowly",
+      "in_progress_at_end": "NORA is sitting upright by the stove, gaze at Lina, breathing slowly",
+      "continuity": {
+        "type": "continuous",
+        "note": "Same moment, no time gap; NORA and LINA and SAM keep their end positions.",
+        "use_last_frame_as_start": true
+      },
+      "assets": {
+        "characters": ["char_1", "char_2", "char_3"],
+        "locations": ["loc_1"],
+        "props": ["prop_1"],
+        "voices": []
+      },
+      "budgets": {
+        "spoken_words": 4,
+        "spoken_words_max": 26,
+        "events": 2,
+        "shot_budget": "standard"
+      },
+      "camera_rationale": "The camera stays with the owner of the moment at chest height and offsets from the obvious axis (dr_01).",
+      "editing_rationale": "Few, long shots: the moment is building, and each cut falls at the end of a line or a look.",
+      "applied_rules": ["dr_01", "tb_01"],
+      "shots": [
+        {
+          "window": "0-5s",
+          "shot_number": 1,
+          "owner": "char_2",
+          "shot": "Wide shot",
+          "angle": "three-quarter, 30 degrees off the axis",
+          "camera_height": "chest height",
+          "camera": "The camera pushes in slowly.",
+          "action": "LINA, natural, quiet: \"I am not hungry.\"",
+          "staging_change": "",
+          "default_avoided": "a centred, symmetrical wide shot from the room's entrance",
+          "default_kept_reason": "",
+          "cut_reason": "the cut falls at the end of the opening beat",
+          "dialogue": [
+            {
+              "speaker_id": "char_2",
+              "line": "I am not hungry.",
+              "delivery": "natural, quiet",
+              "language": "en"
+            }
+          ]
+        },
+        {
+          "window": "5-10s",
+          "shot_number": 2,
+          "owner": "char_1",
+          "shot": "Medium close-up",
+          "angle": "three-quarter from frame-right",
+          "camera_height": "below eye level",
+          "camera": "The camera holds locked off.",
+          "action": "NORA sets the blue kettle on the stove and turns to face her daughter.",
+          "staging_change": "",
+          "default_avoided": "two faces in strict profile, squared to each other at eye level",
+          "default_kept_reason": "",
+          "cut_reason": "the cut falls on a look",
+          "dialogue": []
+        },
+        {
+          "window": "10-15s",
+          "shot_number": 3,
+          "owner": "char_1",
+          "shot": "Close-up",
+          "angle": "over the shoulder, 20 degrees off axis",
+          "camera_height": "eye level",
+          "camera": "The camera drifts toward the face.",
+          "action": "SAM glances away, then back, jaw loosening.",
+          "staging_change": "the characters settle into their end positions",
+          "default_avoided": "a dead-centre close-up straight to the lens",
+          "default_kept_reason": "",
+          "cut_reason": "the last beat ends the moment",
+          "dialogue": []
+        }
+      ],
+      "prompt_text": "BEGIN PROMPT\nA 15-second sequence from a realistic drama film, 9:16.\nCharacters: @char_1 NORA — A woman in her forties with short dark hair, wearing a grey wool cardigan.\n@char_2 LINA — A girl of fifteen with a long dark braid, wearing a green parka.\n@char_3 SAM — A boy of nine with curly brown hair, wearing a yellow sweater.\nLocations: @loc_1 — A small kitchen with yellow walls, a wooden table and a gas stove, lit by an amber hanging lamp.\nProps: @prop_1 — A blue enamel kettle with a black handle.\nStaging: NORA is standing, arms loose by the stove, frame-left, facing three-quarter toward Lina, gaze at Lina, 1.4 m from LINA. LINA is sitting upright by the table, frame-right, facing three-quarter toward Nora, gaze at Nora, 1.4 m from NORA. SAM is standing, one step closer by the doorway, centre, facing three-quarter toward Nora, gaze at Nora, 2.1 m from NORA. The social distance keeps them apart.\nOpening frame: NORA is standing, arms loose by the stove, gaze at Lina, breathing slowly.\nShots:\n[0-5s] Shot 1 — Wide shot, three-quarter, 30 degrees off the axis, chest height. The camera pushes in slowly. LINA, natural, quiet: \"I am not hungry.\"\n[5-10s] Cut to Shot 2 — Medium close-up, three-quarter from frame-right, below eye level. The camera holds locked off. NORA sets the blue kettle on the stove and turns to face her daughter.\n[10-15s] Cut to Shot 3 — Close-up, over the shoulder, 20 degrees off axis, eye level. The camera drifts toward the face. SAM glances away, then back, jaw loosening.\nLook: Motivated light from the practical sources in the room, natural colour grade.\nAudio: dialogue delivered quietly and clearly, soft room ambience, no music.\nNo subtitles. No text on screen. No extra characters. No flat side-profile two-shot.\nEND PROMPT",
+      "word_count": 303
+    },
+    {
+      "block_id": 3,
+      "version": 1,
+      "duration_s": 15,
+      "scene_ids": ["sc_2"],
+      "scene_heading": "EXT. FRONT STEP - NIGHT",
+      "dramatic_function": "transition",
+      "script_coverage": {
+        "start_quote": "EXT. FRONT STEP - NIGHT",
+        "end_quote": "I was wrong to shout."
+      },
+      "start_state": "NORA and LINA and SAM at the start of the moment, positions as staged.",
+      "end_state": "NORA and LINA and SAM at the end of the moment, positions as staged.",
+      "start_staging": [
+        {
+          "character_id": "char_1",
+          "on_screen": true,
+          "position": "by the front door behind the step",
+          "posture": "standing, arms folded",
+          "facing": "three-quarter toward Lina",
+          "gaze": "out of frame",
+          "screen_side": "frame-left",
+          "distances": [
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.7
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 2.4
+            }
+          ]
+        },
+        {
+          "character_id": "char_2",
+          "on_screen": true,
+          "position": "by the garden wall",
+          "posture": "sitting back",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at an object in hand",
+          "screen_side": "frame-right",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 1.7
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 1.7
+            }
+          ]
+        },
+        {
+          "character_id": "char_3",
+          "on_screen": true,
+          "position": "by the front door behind the step",
+          "posture": "standing",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at the other person",
+          "screen_side": "centre",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 2.4
+            },
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.7
+            }
+          ]
+        }
+      ],
+      "end_staging": [
+        {
+          "character_id": "char_1",
+          "on_screen": true,
+          "position": "by the front door behind the step",
+          "posture": "standing, one step closer",
+          "facing": "three-quarter toward Lina",
+          "gaze": "at Lina",
+          "screen_side": "frame-left",
+          "distances": [
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 2.1
+            }
+          ]
+        },
+        {
+          "character_id": "char_2",
+          "on_screen": true,
+          "position": "by the garden wall",
+          "posture": "leaning forward",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "frame-right",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        },
+        {
+          "character_id": "char_3",
+          "on_screen": true,
+          "position": "by the front door behind the step",
+          "posture": "standing, arms loose",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "centre",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 2.1
+            },
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        }
+      ],
+      "staging_meaning": "The social distance keeps them apart.",
+      "opening_frame": "NORA and LINA and SAM hold the positions of the scene opening, faces calm, breathing even",
+      "in_progress_at_end": "NORA is standing, one step closer by the front door behind the step, gaze at Lina, breathing slowly",
+      "continuity": {
+        "type": "new_scene",
+        "note": "A new scene opens with NORA and LINA and SAM in fresh positions.",
+        "use_last_frame_as_start": false
+      },
+      "assets": {
+        "characters": ["char_1", "char_2", "char_3"],
+        "locations": ["loc_2"],
+        "props": [],
+        "voices": []
+      },
+      "budgets": {
+        "spoken_words": 5,
+        "spoken_words_max": 26,
+        "events": 2,
+        "shot_budget": "standard"
+      },
+      "camera_rationale": "The camera stays with the owner of the moment at chest height and offsets from the obvious axis (dr_01).",
+      "editing_rationale": "Few, long shots: the moment is calm, and each cut falls at the end of a line or a look.",
+      "applied_rules": ["dr_01", "tb_01"],
+      "shots": [
+        {
+          "window": "0-5s",
+          "shot_number": 1,
+          "owner": "char_1",
+          "shot": "Wide shot",
+          "angle": "three-quarter, 30 degrees off the axis",
+          "camera_height": "chest height",
+          "camera": "The camera pushes in slowly.",
+          "action": "LINA sits alone on the cold step, hugging her knees. NORA comes out and lowers herself beside her.",
+          "staging_change": "",
+          "default_avoided": "a centred, symmetrical wide shot from the room's entrance",
+          "default_kept_reason": "",
+          "cut_reason": "the cut falls at the end of the opening beat",
+          "dialogue": []
+        },
+        {
+          "window": "5-10s",
+          "shot_number": 2,
+          "owner": "char_1",
+          "shot": "Medium close-up",
+          "angle": "three-quarter from frame-right",
+          "camera_height": "below eye level",
+          "camera": "The camera holds locked off.",
+          "action": "NORA, natural, quiet: \"I was wrong to shout.\"",
+          "staging_change": "",
+          "default_avoided": "two faces in strict profile, squared to each other at eye level",
+          "default_kept_reason": "",
+          "cut_reason": "the cut falls on a look",
+          "dialogue": [
+            {
+              "speaker_id": "char_1",
+              "line": "I was wrong to shout.",
+              "delivery": "natural, quiet",
+              "language": "en"
+            }
+          ]
+        },
+        {
+          "window": "10-15s",
+          "shot_number": 3,
+          "owner": "char_1",
+          "shot": "Close-up",
+          "angle": "over the shoulder, 20 degrees off axis",
+          "camera_height": "eye level",
+          "camera": "The camera drifts toward the face.",
+          "action": "SAM glances away, then back, jaw loosening.",
+          "staging_change": "the characters settle into their end positions",
+          "default_avoided": "a dead-centre close-up straight to the lens",
+          "default_kept_reason": "",
+          "cut_reason": "the last beat ends the moment",
+          "dialogue": []
+        }
+      ],
+      "prompt_text": "BEGIN PROMPT\nA 15-second sequence from a realistic drama film, 9:16.\nCharacters: @char_1 NORA — A woman in her forties with short dark hair, wearing a grey wool cardigan.\n@char_2 LINA — A girl of fifteen with a long dark braid, wearing a green parka.\n@char_3 SAM — A boy of nine with curly brown hair, wearing a yellow sweater.\nLocations: @loc_2 — A concrete front step under a yellow porch light, with a cold blue street beyond.\nStaging: NORA is standing, arms folded by the front door behind the step, frame-left, facing three-quarter toward Lina, gaze out of frame, 1.7 m from LINA. LINA is sitting back by the garden wall, frame-right, facing three-quarter toward Nora, gaze at an object in hand, 1.7 m from NORA. SAM is standing by the front door behind the step, centre, facing three-quarter toward Nora, gaze at the other person, 2.4 m from NORA. The social distance keeps them apart.\nOpening frame: NORA and LINA and SAM hold the positions of the scene opening, faces calm, breathing even.\nShots:\n[0-5s] Shot 1 — Wide shot, three-quarter, 30 degrees off the axis, chest height. The camera pushes in slowly. LINA sits alone on the cold step, hugging her knees. NORA comes out and lowers herself beside her.\n[5-10s] Cut to Shot 2 — Medium close-up, three-quarter from frame-right, below eye level. The camera holds locked off. NORA, natural, quiet: \"I was wrong to shout.\"\n[10-15s] Cut to Shot 3 — Close-up, over the shoulder, 20 degrees off axis, eye level. The camera drifts toward the face. SAM glances away, then back, jaw loosening.\nLook: Motivated light from the practical sources in the room, natural colour grade.\nAudio: dialogue delivered quietly and clearly, soft room ambience, no music.\nNo subtitles. No text on screen. No extra characters. No flat side-profile two-shot.\nEND PROMPT",
+      "word_count": 308
+    },
+    {
+      "block_id": 4,
+      "version": 1,
+      "duration_s": 15,
+      "scene_ids": ["sc_2"],
+      "scene_heading": "EXT. FRONT STEP - NIGHT",
+      "dramatic_function": "release",
+      "script_coverage": {
+        "start_quote": "LINA I was wrong to leave.",
+        "end_quote": "NORA wraps her scarf around Lina's shoulders. SAM sits down on her other side, and the three of them look at the street together."
+      },
+      "start_state": "NORA and LINA and SAM at the start of the moment, positions as staged.",
+      "end_state": "NORA and LINA and SAM at the end of the moment, positions as staged.",
+      "start_staging": [
+        {
+          "character_id": "char_1",
+          "on_screen": true,
+          "position": "by the front door behind the step",
+          "posture": "standing, one step closer",
+          "facing": "three-quarter toward Lina",
+          "gaze": "at Lina",
+          "screen_side": "frame-left",
+          "distances": [
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 2.1
+            }
+          ]
+        },
+        {
+          "character_id": "char_2",
+          "on_screen": true,
+          "position": "by the garden wall",
+          "posture": "leaning forward",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "frame-right",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        },
+        {
+          "character_id": "char_3",
+          "on_screen": true,
+          "position": "by the front door behind the step",
+          "posture": "standing, arms loose",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "centre",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 2.1
+            },
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        }
+      ],
+      "end_staging": [
+        {
+          "character_id": "char_1",
+          "on_screen": true,
+          "position": "by the front door behind the step",
+          "posture": "leaning forward",
+          "facing": "three-quarter toward Lina",
+          "gaze": "at Lina",
+          "screen_side": "frame-left",
+          "distances": [
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 2.1
+            }
+          ]
+        },
+        {
+          "character_id": "char_2",
+          "on_screen": true,
+          "position": "by the garden wall",
+          "posture": "standing, arms loose",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "frame-right",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 1.4
+            },
+            {
+              "to": "char_3",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        },
+        {
+          "character_id": "char_3",
+          "on_screen": true,
+          "position": "by the front door behind the step",
+          "posture": "sitting upright",
+          "facing": "three-quarter toward Nora",
+          "gaze": "at Nora",
+          "screen_side": "centre",
+          "distances": [
+            {
+              "to": "char_1",
+              "zone": "social",
+              "approx_m": 2.1
+            },
+            {
+              "to": "char_2",
+              "zone": "social",
+              "approx_m": 1.4
+            }
+          ]
+        }
+      ],
+      "staging_meaning": "The social distance keeps them apart.",
+      "opening_frame": "NORA is standing, one step closer by the front door behind the step, gaze at Lina, breathing slowly",
+      "in_progress_at_end": "NORA is leaning forward by the front door behind the step, gaze at Lina, breathing slowly",
+      "continuity": {
+        "type": "continuous",
+        "note": "Same moment, no time gap; NORA and LINA and SAM keep their end positions.",
+        "use_last_frame_as_start": true
+      },
+      "assets": {
+        "characters": ["char_1", "char_2", "char_3"],
+        "locations": ["loc_2"],
+        "props": ["prop_2"],
+        "voices": []
+      },
+      "budgets": {
+        "spoken_words": 5,
+        "spoken_words_max": 26,
+        "events": 2,
+        "shot_budget": "standard"
+      },
+      "camera_rationale": "The camera stays with the owner of the moment at chest height and offsets from the obvious axis (dr_01).",
+      "editing_rationale": "Few, long shots: the moment is calm, and each cut falls at the end of a line or a look.",
+      "applied_rules": ["dr_01", "tb_01"],
+      "shots": [
+        {
+          "window": "0-5s",
+          "shot_number": 1,
+          "owner": "char_2",
+          "shot": "Wide shot",
+          "angle": "three-quarter, 30 degrees off the axis",
+          "camera_height": "chest height",
+          "camera": "The camera pushes in slowly.",
+          "action": "LINA, natural, quiet: \"I was wrong to leave.\"",
+          "staging_change": "",
+          "default_avoided": "a centred, symmetrical wide shot from the room's entrance",
+          "default_kept_reason": "",
+          "cut_reason": "the cut falls at the end of the opening beat",
+          "dialogue": [
+            {
+              "speaker_id": "char_2",
+              "line": "I was wrong to leave.",
+              "delivery": "natural, quiet",
+              "language": "en"
+            }
+          ]
+        },
+        {
+          "window": "5-10s",
+          "shot_number": 2,
+          "owner": "char_1",
+          "shot": "Medium close-up",
+          "angle": "three-quarter from frame-right",
+          "camera_height": "below eye level",
+          "camera": "The camera holds locked off.",
+          "action": "NORA wraps her scarf around Lina's shoulders.",
+          "staging_change": "",
+          "default_avoided": "two faces in strict profile, squared to each other at eye level",
+          "default_kept_reason": "",
+          "cut_reason": "the cut falls on a look",
+          "dialogue": []
+        },
+        {
+          "window": "10-15s",
+          "shot_number": 3,
+          "owner": "char_1",
+          "shot": "Close-up",
+          "angle": "over the shoulder, 20 degrees off axis",
+          "camera_height": "eye level",
+          "camera": "The camera drifts toward the face.",
+          "action": "SAM glances away, then back, jaw loosening.",
+          "staging_change": "the characters settle into their end positions",
+          "default_avoided": "a dead-centre close-up straight to the lens",
+          "default_kept_reason": "",
+          "cut_reason": "the last beat ends the moment",
+          "dialogue": []
+        }
+      ],
+      "prompt_text": "BEGIN PROMPT\nA 15-second sequence from a realistic drama film, 9:16.\nCharacters: @char_1 NORA — A woman in her forties with short dark hair, wearing a grey wool cardigan.\n@char_2 LINA — A girl of fifteen with a long dark braid, wearing a green parka.\n@char_3 SAM — A boy of nine with curly brown hair, wearing a yellow sweater.\nLocations: @loc_2 — A concrete front step under a yellow porch light, with a cold blue street beyond.\nProps: @prop_2 — A long red wool scarf with fringed ends.\nStaging: NORA is standing, one step closer by the front door behind the step, frame-left, facing three-quarter toward Lina, gaze at Lina, 1.4 m from LINA. LINA is leaning forward by the garden wall, frame-right, facing three-quarter toward Nora, gaze at Nora, 1.4 m from NORA. SAM is standing, arms loose by the front door behind the step, centre, facing three-quarter toward Nora, gaze at Nora, 2.1 m from NORA. The social distance keeps them apart.\nOpening frame: NORA is standing, one step closer by the front door behind the step, gaze at Lina, breathing slowly.\nShots:\n[0-5s] Shot 1 — Wide shot, three-quarter, 30 degrees off the axis, chest height. The camera pushes in slowly. LINA, natural, quiet: \"I was wrong to leave.\"\n[5-10s] Cut to Shot 2 — Medium close-up, three-quarter from frame-right, below eye level. The camera holds locked off. NORA wraps her scarf around Lina's shoulders.\n[10-15s] Cut to Shot 3 — Close-up, over the shoulder, 20 degrees off axis, eye level. The camera drifts toward the face. SAM glances away, then back, jaw loosening.\nLook: Motivated light from the practical sources in the room, natural colour grade.\nAudio: dialogue delivered quietly and clearly, soft room ambience, no music.\nNo subtitles. No text on screen. No extra characters. No flat side-profile two-shot.\nEND PROMPT",
+      "word_count": 307
+    }
+  ]
+}

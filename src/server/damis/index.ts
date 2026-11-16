@@ -20,6 +20,8 @@ import { sheetGeneratorLocation } from "./sheet-generator-location/dami";
 import { sheetGeneratorProp } from "./sheet-generator-prop/dami";
 import { takeFixer } from "./take-fixer/dami";
 import { textBlocks } from "./text-blocks/dami";
+import { director, directorPlan } from "./director/dami";
+import { blockRevision } from "./block-revision/dami";
 
 // Framework
 export { defineDami, isPromptImage, partText } from "./framework/define";
@@ -414,6 +416,9 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [textBlocks.key]: textBlocks,
   [blockReviser.key]: blockReviser,
   [takeFixer.key]: takeFixer,
+  [director.key]: director,
+  [directorPlan.key]: directorPlan,
+  [blockRevision.key]: blockRevision,
 };
 
 // Creative DNA (DAMI-00): the per-project Creative Bible and what later damis read from it
@@ -484,3 +489,61 @@ export {
   type ProjectNamerInput,
   type ProjectNamerOutput,
 } from "./project-namer/schema";
+
+// Director (owner v1.3) and Block Revision (owner v1.4): not wired into the pipeline yet
+export { director, directorPlan, DIRECTOR_VERSION, DIRECTOR_OWNER_VERSION } from "./director/dami";
+export {
+  assetRegistrySchema,
+  blockSchema,
+  continuityBibleSchema,
+  directorInputSchema,
+  directorOutputSchema,
+  directorPlanInputSchema,
+  directorPlanOutputSchema,
+  isBlocked,
+  parseBlockRange,
+  planBlockSchema,
+  registryAssetIds,
+  shotSchema,
+  stagingSchema,
+  BLOCK_MODES,
+  DIRECTOR_MODES,
+  type AssetRegistry,
+  type Block as DirectorBlock,
+  type BlockMode,
+  type ContinuityBible,
+  type DirectorInput,
+  type DirectorMode,
+  type DirectorOutput,
+  type DirectorPlanInput,
+  type DirectorPlanOutput,
+  type PlanBlock,
+  type Shot,
+  type Staging,
+} from "./director/schema";
+export { checkDirector, checkDirectorPlan } from "./director/validate";
+export {
+  bindAssetTokens,
+  bindingMap,
+  buildAssetIds,
+  idPrefixForKind,
+  type AssetBinding,
+  type AssetIdEntry,
+  type BoundPrompt,
+} from "./director/binding";
+export {
+  blockRevision,
+  blockRevisionModel,
+  blockRevisionRunContext,
+  BLOCK_REVISION_VERSION,
+  BLOCK_REVISION_OWNER_VERSION,
+} from "./block-revision/dami";
+export {
+  blockRevisionInputSchema,
+  blockRevisionOutputSchema,
+  type BlockRevisionInput,
+  type BlockRevisionOutput,
+  type ReviewIssue,
+  type TimedNote,
+} from "./block-revision/schema";
+export { checkBlockRevision } from "./block-revision/validate";

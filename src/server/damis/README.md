@@ -122,6 +122,38 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   `placeholder`, so a rename by the user (`user`) always wins and a name is only ever made once.
   A failed name is only logged; the project keeps "Untitled project".
 
+## Director and Block Revision (not wired yet)
+
+- `director/` is the owner's DIRECTOR v1.3 (output_22): the approved script becomes 15 or 30 second
+  Seedance blocks with staging, a shot plan, rationales and a self-contained `prompt_text`. Two
+  damis share one prompt, one `check()` and one input schema: `director` (modes `full` and
+  `write_blocks`) and `director-plan` (mode `plan`: blocks without shots, `prompt_text` and
+  `word_count`). Structured output needs one closed schema per answer shape, hence two. Opus,
+  medium effort, 32k output tokens. The owner runs `plan` and then `write_blocks` in batches of
+  ~8 blocks when the runtime would pass ~180 s; for up to ~8 blocks `full` is enough.
+- The user turn follows the owner's `<inputs>`: `<platform_config>`, `<block_mode>`,
+  `<creative_bible>`, `<asset_registry>`, `<script>` (cached), then `<plan>` (cached),
+  `<mode>`, `<block_range>`. `<creative_bible>` is the owner's field list (selection,
+  project_frame, contracts, the `for_director` and `for_text_blocks_video` slices, locks, guards,
+  QC items of stages text_block/video/all, open questions, validation status), not
+  `renderCreativeDna`, which renders one consumer per call and drops the two preflight fields.
+- `<asset_registry>` is the subset of the Asset Detector's output_21 v2 the Director reads; its
+  zod lives in `director/schema.ts` (no import from the detector). Voices are not assets: the
+  continuity bible and blocks keep the owner's `voices` arrays, expected empty.
+- `director/validate.ts` is the owner's `<code_side_validator>` as pure functions. Two
+  deliberate differences: dialogue lines are removed before the forbidden-word regex (a script
+  line may say "still"), and `script_coverage` is checked by quotes found in order within a small
+  gap tolerance (two quotes cannot prove "no gaps").
+- `director/binding.ts` (pure): `@char_1` tokens to `Name <<<image_N>>>` with the ordered
+  `kind:Name` refs, and stable output_21-style ids for BLAXZY assets by first appearance.
+- `block-revision/` is BLOCK_REVISION v1.4 (`block-revision`): the next version of one block from
+  free-text requests only (asset correction, regenerate, director notes, confirmed review issues,
+  timed notes, keep list, attempt history). The owner's review options and sliders are not part
+  of the input by decision; the output keeps `slider_state` (always zeros). Sonnet by default;
+  `blockRevisionRunContext(input)` gives the context that selects Opus when `regenerate` is set.
+- Sample mode (`sample/director.ts`, `sample/block-revision.ts`) is deterministic, passes the
+  dami's own `check()`, and covers all three Director modes.
+
 ## Runs, concurrency and the light entry
 
 - `dami_run.status` is `queued`, `running`, `succeeded`, `failed` or `aborted`. `aborted` means

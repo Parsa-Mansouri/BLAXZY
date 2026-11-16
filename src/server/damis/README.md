@@ -192,7 +192,7 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
 - Sample mode (`sample/director.ts`, `sample/block-revision.ts`) is deterministic, passes the
   dami's own `check()`, and covers all three Director modes.
 
-## Video Review (not wired yet)
+## Video Review (wired) and the router
 
 - `video-review/` is the owner's VIDEO_REVIEW v1.0 (Sonnet, medium effort): it compares a generated
   clip's keyframes, the server's detected cuts and the asset sheets with the block that asked for it
@@ -203,14 +203,46 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
 - The input holds file ids only: sheets, frames and PREV_END are image parts, each preceded by its
   label line (`SHEET char_1 (MOHAMMAD)`, `FRAME f07 t=8.0s window 4-9s planned shot 2`,
   `PREV_END`). The frame labels are written by `planFrames`; `MAX_PROMPT_IMAGES` (40) is checked by
-  the input schema. The block, creative bible and continuity bible are the subsets the review reads
-  (the Director's own shapes are reconciled when it lands).
+  the input schema.
 - `check()` enforces: evidence frame ids exist, one entry per planned window, `pass` only without a
   blocker or major issue, the route follows the cause (artifact to reroll, binding to rebind,
   instruction_miss to revise), the cut counts match the server's detection.
-- Server side, not part of the dami: `production/frame-plan.ts` and `frames.ts` (cut detection,
-  frame plan, extraction, storing frames as `review_frame` files) and `production/router.ts` (the
-  pure router and the stale-next-block rule). No job, handler or UI calls any of it yet.
+- **Flow.** The generation completion hook (`applyTakeGenerationResult`) moves a succeeded take to
+  `in_review` and, when its block has a usable Director direction, sets `auto_review = pending` and
+  queues `take.review` (drafts and finals alike: a final is a re-render that can differ, and a
+  rejected final costs a paid draft). The user can decide at once; the screen shows "Checking the
+  clip…" until the report is there. `production/take-check.ts` (`runTakeCheck`) downloads the clip,
+  `detectCuts`, `planFrames` from the direction's shot windows, `extractFrames` +
+  `storeReviewFrames`, builds the input (block subset from `direction`, the Continuity Bible from the
+  direction run, the Creative Bible's guards and locks when ready, the expected and actual reference
+  binding, the bound assets' sheets and up to 6 other characters' sheets, PREV_END from the
+  previous block's accepted take), runs the dami and stores the report on the take
+  (`auto_review = ready`). It also stores the clip's last frame (`last_frame_file_id`). A failure
+  on the last attempt sets `auto_review = failed`; blocks without direction are `skipped`. Nothing
+  here ever blocks the user.
+- **Review screen.** The report's issues become plain sentences with their time range (the
+  `label`s) the user can dismiss one by one; the keep candidates are shown as "Looks good" points
+  kept unless unticked; the user can mark a stretch of the clip with the playhead and write a note
+  on it; the free-text box stays. Only ids and the user's words go to the server.
+- **The router** (`production/router.ts`, pure) decides from the confirmed issues, the notes and
+  the binding; `production/take-routing.ts` is its database side. Reject runs, in the router's
+  order: **rebind** (a confirmed wrong-reference finding whose binding really is wrong: the
+  references are fixed in code and a new draft is made with the same prompt, route `rebind`),
+  **revise** (missed instructions, any note or timed note, an identity confusion despite a right
+  binding, an artifact that came back in 2 rerolls in a row: a `review` row with
+  `revision_request` is written and `requestBlockRevision` is called; when the revised block
+  version is prepared, `production/revision-draft.ts` approves it and creates its draft take
+  with the price the user confirmed), **reroll** (confirmed rendering artifacts only: the same
+  prompt and references as a new variant, route `reroll`). Revise wins over rebind over reroll, and
+  every route ends in one new draft, so the confirmation is always one draft's price
+  (`quoteTakeSpend` also names the route). There is no cap on generations.
+- **Accepting** a clip makes sure its last frame is stored (PREV_END) and applies the owner's rule
+  6 (`shouldMarkNextStale`) as a notice, not a block: when the accepted shot's end differs from the
+  Director's original plan for it and the next shot already has a clip, the next shot's current
+  version gets `handoff_notice` ("The shot before now ends differently.", event
+  `production.handoff_changed`). "Update This Shot" (`production/handoff.ts`) revises it with a
+  system hand-off note in any state; with clips it supersedes them and the revised version gets a
+  draft at the price the user confirmed (stored on the review row). A new version has no notice.
 
 ## Runs, concurrency and the light entry
 

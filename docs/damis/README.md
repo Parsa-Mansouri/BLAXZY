@@ -39,7 +39,7 @@ copied block still matches the source. To take a new version from Hamed:
 ## Pending
 
 `pending/blaxzy_director_dami.md` is not wired in. The owner marked this version as wrong, so
-Production keeps the current prompt-sectioner, text-blocks and take-fixer flow until a
+Production keeps the current prompt-sectioner, and text-blocks flow until a
 corrected Director arrives.
 
 ## Settings that differ from the files

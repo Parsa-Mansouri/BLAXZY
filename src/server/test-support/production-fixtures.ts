@@ -13,6 +13,8 @@ export type BlockSpec = {
   assetRefs: string[];
   title?: string;
   durationSeconds?: number;
+  /** The Director's data for the block (see `direction-fixtures`); old blocks have none. */
+  direction?: unknown;
 };
 
 export function createProductionFixtures() {
@@ -143,6 +145,7 @@ export function createProductionFixtures() {
         durationSeconds: spec.durationSeconds ?? 1,
         assetRefs: spec.assetRefs,
         orderIndex: i,
+        ...(spec.direction !== undefined ? { direction: spec.direction } : {}),
       })),
     });
   }

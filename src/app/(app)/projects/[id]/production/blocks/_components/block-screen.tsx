@@ -1,5 +1,6 @@
 "use client";
 
+import { useSpend } from "@/app/(app)/_components/spend-confirm";
 import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
@@ -36,6 +37,7 @@ import { BLOCK_STATE_TONES, blockStateLabel, scriptChangeNotice } from "../_lib/
 import { AssetPickerSheet } from "./asset-picker-sheet";
 import { DirectionPanel } from "./direction-panel";
 import { PromptView } from "./prompt-view";
+import { HandoffNotice } from "../../_components/handoff-notice";
 import { RevisionPanel } from "./revision-panel";
 import { ClosedSection, Section } from "./section";
 import { Mono } from "@/app/(app)/_components/values";
@@ -137,6 +139,7 @@ export function BlockScreen({
   const [changesError, setChangesError] = useState<string | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const spend = useSpend();
   const [pending, startPending] = useTransition();
   // An asset change makes a new version that is prepared again: from the click until that version
   // arrives, the shot shows (and says) Preparing, as after Request Changes.
@@ -248,7 +251,15 @@ export function BlockScreen({
   function updateNext() {
     setActionError(null);
     startPending(async () => {
-      const result = await updateNextShotAction(projectId, block.lineageId);
+      const result = await spend.run({
+        target: { kind: "shot_update", lineageId: block.lineageId, of: "next" },
+        title: "Update the next shot?",
+        description: "The next shot is rewritten to open from this shot's new ending.",
+        confirmLabel: "Update the Next Shot",
+        submit: (expectedCredits) =>
+          updateNextShotAction(projectId, block.lineageId, expectedCredits),
+      });
+      if (result === null) return;
       if (!result.ok) {
         setActionError(result.error);
         return;
@@ -493,6 +504,10 @@ export function BlockScreen({
           ) : null}
         </Section>
       </div>
+
+      {block.handoffChanged ? (
+        <HandoffNotice projectId={projectId} lineageId={block.lineageId} onDone={refresh} />
+      ) : null}
 
       {block.revision && !preparing ? (
         <RevisionPanel revision={block.revision} updating={pending} onUpdateNext={updateNext} />

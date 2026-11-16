@@ -16,7 +16,6 @@ import { scriptOutliner, scriptWriter } from "./script-writer/dami";
 import { sheetGeneratorCharacter } from "./sheet-generator-character/dami";
 import { sheetGeneratorLocation } from "./sheet-generator-location/dami";
 import { sheetGeneratorProp } from "./sheet-generator-prop/dami";
-import { takeFixer } from "./take-fixer/dami";
 import { director, directorPlan } from "./director/dami";
 import { blockRevision } from "./block-revision/dami";
 import { videoReview } from "./video-review/dami";
@@ -322,24 +321,6 @@ export {
   type ReferenceAsset,
 } from "./shared/reference";
 
-// Production (take review)
-export { takeFixer };
-export {
-  takeFixerInputSchema,
-  takeFixerOutputSchema,
-  takeIssueCodeSchema,
-  takeReviewSchema,
-  TAKE_STAGES,
-  type TakeFixerInput,
-  type TakeFixerOutput,
-} from "./take-fixer/schema";
-export {
-  TAKE_ISSUES,
-  TAKE_ISSUE_CODES,
-  TAKE_ISSUE_LIST,
-  type TakeIssueCode,
-  type TakeIssueDefinition,
-} from "./take-fixer/issues";
 export {
   blockAssetSchema,
   checkBlockPrompt,
@@ -365,7 +346,6 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [sheetGeneratorCharacter.key]: sheetGeneratorCharacter,
   [sheetGeneratorLocation.key]: sheetGeneratorLocation,
   [sheetGeneratorProp.key]: sheetGeneratorProp,
-  [takeFixer.key]: takeFixer,
   [director.key]: director,
   [directorPlan.key]: directorPlan,
   [blockRevision.key]: blockRevision,
@@ -507,7 +487,7 @@ export {
   type TimedNote,
 } from "./block-revision/schema";
 export { checkBlockRevision } from "./block-revision/validate";
-// Video Review (the owner's VIDEO_REVIEW v1.0): not wired yet; the router is `production/router.ts`
+// Video Review (the owner's VIDEO_REVIEW v1.0), run by the take.review job; the router is `production/router.ts`
 export {
   checkVideoReview,
   ROUTE_FOR_CAUSE,

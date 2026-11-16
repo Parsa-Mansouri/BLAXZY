@@ -151,10 +151,12 @@ export function detailKey(detail: {
   id: string;
   stage: BlockProductionStage;
   busy: boolean;
-  takes: readonly Pick<TakeView, "id" | "status" | "fileId" | "posterFileId">[];
+  takes: readonly (Pick<TakeView, "id" | "status" | "fileId" | "posterFileId"> & {
+    review: Pick<TakeView["review"], "state">;
+  })[];
 }): string {
   const takes = detail.takes.map(
-    (t) => `${t.id}:${t.status}:${t.fileId ?? ""}:${t.posterFileId ?? ""}`,
+    (t) => `${t.id}:${t.status}:${t.fileId ?? ""}:${t.posterFileId ?? ""}:${t.review.state}`,
   );
   return [detail.id, detail.stage, detail.busy ? "busy" : "idle", ...takes].join("|");
 }

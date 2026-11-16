@@ -318,9 +318,13 @@ export const takeGenerate = defineJob({
   dedupeKey: (p) => p.takeId,
 });
 
-/** Fix a rejected take's prompt from its review (take-fixer), then request the new draft. */
-export const takeFix = defineJob({
-  name: "take.fix",
+/**
+ * Check a generated clip (the Video Review): cut detection, keyframes, the dami's report, and the
+ * clip's last frame. Keyed by the take. Never blocks the user: a failure only marks the review
+ * `failed`.
+ */
+export const takeReview = defineJob({
+  name: "take.review",
   payload: takePayload,
   options: damiJob,
   dedupeKey: (p) => p.takeId,
@@ -380,7 +384,7 @@ export const ALL_JOBS = [
   productionPrepare,
   blockRevise,
   takeGenerate,
-  takeFix,
+  takeReview,
   exportBuild,
   productionDispatch,
 ] as const;

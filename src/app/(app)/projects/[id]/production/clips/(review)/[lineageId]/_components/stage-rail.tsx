@@ -1,12 +1,26 @@
 "use client";
 
 import { useSpend } from "@/app/(app)/_components/spend-confirm";
-import { useState, useTransition, type ReactNode, type RefObject } from "react";
+import {
+  useState,
+  useTransition,
+  type MutableRefObject,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import Link from "next/link";
 import type { BlockProductionStage, TakeView } from "@/server/production";
 import { Button, ProgressBar } from "@/ui";
 import { ChangeRequest } from "../../../../_components/change-request";
 import { isCreditsFailure } from "../../../_lib/clip-view";
+import {
+  changeRequest,
+  hasRequest,
+  rangeLabel,
+  standing,
+  type TimedNote,
+} from "../../../_lib/take-feedback";
+import { CheckingLine, FindingsEditor } from "./findings-panel";
 import { blocksHref } from "../../../_lib/routes";
 import { retryTakeAction } from "../../../actions";
 import { StateHeading } from "../../../_components/clips-context";
@@ -23,6 +37,10 @@ export interface Prices {
 export interface ReviewRequest {
   decision: "accepted" | "rejected";
   note?: string;
+  /** Rejections: the findings left standing, the points to keep and the notes on the clip. */
+  confirmedIssueIds?: string[];
+  keepIds?: string[];
+  timedNotes?: TimedNote[];
 }
 
 /** Shared by the panels: the heading takes focus when a panel replaces another. */
@@ -76,7 +94,9 @@ export function ReviewPanel({
   asking,
   onAsk,
   onDecide,
+  timeRef,
 }: PanelBase & {
+  timeRef: MutableRefObject<(() => number) | null>;
   take: TakeView;
   label: string;
   prices: Prices;
@@ -92,6 +112,10 @@ export function ReviewPanel({
   const draft = take.stage === "draft";
   const acceptPrice = draft ? prices.final : null;
   const busy = deciding !== null;
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [dropped, setDropped] = useState<Set<string>>(new Set());
+  const [timedNotes, setTimedNotes] = useState<TimedNote[]>([]);
+  const left = standing(take.review, dismissed, dropped);
 
   if (asking) {
     return (
@@ -100,9 +124,27 @@ export function ReviewPanel({
         sending={deciding === "rejected"}
         serverError={askError}
         notePlaceholder="Keep the same framing, but the door should already be open when she walks in."
+        before={
+          <FindingsEditor
+            findings={take.review.findings}
+            keeps={take.review.keeps}
+            dismissed={dismissed}
+            dropped={dropped}
+            timedNotes={timedNotes}
+            clipLength={0}
+            timeRef={timeRef}
+            disabled={deciding === "rejected"}
+            onDismissed={setDismissed}
+            onDropped={setDropped}
+            onTimedNotes={setTimedNotes}
+          />
+        }
+        allowEmpty={hasRequest({ note: "", timedNotes, findings: left.findings })}
         cost={<CreditLine price={prices.draft} balance={balance} action="A new draft" />}
         blocked={!canAfford(prices.draft, balance)}
-        onSubmit={(input) => onDecide({ decision: "rejected", ...input }, true)}
+        onSubmit={({ note }) =>
+          onDecide({ decision: "rejected", ...changeRequest({ note, timedNotes, ...left }) }, true)
+        }
         onCancel={() => onAsk(false)}
       />
     );
@@ -118,6 +160,7 @@ export function ReviewPanel({
         </p>
         <TakeLine label={label} take={take} />
       </Intro>
+      <ReviewSummary review={take.review} />
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-3">
           <Button
@@ -156,6 +199,32 @@ export function ReviewPanel({
         <ErrorLine className="text-failed">{error}</ErrorLine>
       </div>
     </div>
+  );
+}
+
+/** What the automatic check says about the clip, in plain sentences (read only here). */
+function ReviewSummary({ review }: { review: TakeView["review"] }) {
+  if (review.state === "pending") return <CheckingLine />;
+  if (review.state !== "ready") return null;
+  if (review.findings.length === 0) {
+    return (
+      <p className="text-body text-pretty text-label-2">We found nothing to flag in this clip.</p>
+    );
+  }
+  return (
+    <section aria-label="What we noticed" className="flex flex-col gap-2">
+      <ul className="flex flex-col gap-1.5">
+        {review.findings.map((f) => (
+          <li key={f.id} className="text-body text-pretty">
+            {f.label}{" "}
+            <span className="text-label-2 tabular-nums">({rangeLabel(f.fromS, f.toS)})</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-secondary text-pretty text-label-2">
+        You can dismiss any of these when you ask for changes.
+      </p>
+    </section>
   );
 }
 
@@ -273,7 +342,7 @@ export function BeforeClipsPanel({
 }) {
   const words =
     stage === "preparing"
-      ? "This shot is being prepared. Its draft is made once every shot is approved."
+      ? (failure ?? "This shot is being prepared. Its draft is made once every shot is approved.")
       : stage === "prepare_failed"
         ? (failure ?? "This shot could not be prepared.")
         : stage === "approved"

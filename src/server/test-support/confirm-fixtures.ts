@@ -66,4 +66,9 @@ export const ASSET_SPEND_FUNCTIONS = [
   "submitSheetViewReview",
 ] as const;
 
-export const PRODUCTION_SPEND_FUNCTIONS = ["submitTakeReview", "retryTake"] as const;
+export const PRODUCTION_SPEND_FUNCTIONS = [
+  "submitTakeReview",
+  "retryTake",
+  "updateShotForHandoff",
+  "requestNextShotUpdate",
+] as const;

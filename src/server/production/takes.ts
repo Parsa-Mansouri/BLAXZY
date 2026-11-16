@@ -11,8 +11,10 @@ import {
   damiRun,
   generation,
   type LookStatus,
+  type TakeRoute,
   type TakeStage,
 } from "@/server/db/schema";
+import { readReport, reviewFindings, type ReviewFindings } from "./findings";
 
 export type TakeRow = typeof blockTake.$inferSelect;
 
@@ -31,9 +33,15 @@ export type TakeView = {
   isSample: boolean;
   /** Credits reserved for its generation; null before it was requested. */
   priceCredits: number | null;
+  /** What produced it (the first render, or what a rejection chose). */
+  route: TakeRoute;
+  /** The automatic review of the clip: its state and findings. */
+  review: TakeReviewView;
   createdAt: Date;
   decidedAt: Date | null;
 };
+
+export type TakeReviewView = ReviewFindings;
 
 /** Takes listed in a block's detail, newest first. */
 export const MAX_LISTED_TAKES = 20;
@@ -55,6 +63,8 @@ export function toTakeView(
     failure: row.failure,
     isSample: isSampleOutput(joined.provider, joined.model),
     priceCredits: joined.priceCredits,
+    route: row.route,
+    review: reviewFindings(row.autoReview, readReport(row)),
     createdAt: row.createdAt,
     decidedAt: row.decidedAt,
   };

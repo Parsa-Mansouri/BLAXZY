@@ -26,6 +26,7 @@ import {
   uuid,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import type { VideoReviewOutput } from "@/server/damis/video-review/schema";
 import type { RevisionRequest } from "@/server/production/revision-request";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -887,6 +888,17 @@ export const promptBlock = pgTable(
      * Null for blocks cut before the Director existed.
      */
     direction: jsonb("direction").$type<unknown>(),
+    /**
+     * Set on a shot's current version when the shot before it was accepted ending differently from
+     * the plan this shot was written from. A notice, not a block: the shot stays usable, and the
+     * user may update it (a revision). A new version of the shot starts without one.
+     */
+    handoffNotice: jsonb("handoff_notice").$type<{
+      /** The accepted take of the previous shot, and the block version it was made from. */
+      takeId: string;
+      blockId: string;
+      at: string;
+    }>(),
     /** True when the script changed under this block and it must be regenerated. */
     stale: boolean("stale").notNull().default(false),
     staleReason: text("stale_reason"),
@@ -1048,6 +1060,11 @@ export const review = pgTable(
     note: text("note"),
     /** What a block revision was asked to do (see `production/revision-request.ts`). */
     revisionRequest: jsonb("revision_request").$type<RevisionRequest>(),
+    /**
+     * Take reviews routed to a block revision: the price the user confirmed for the new draft the
+     * revised block gets (it is never charged more).
+     */
+    confirmedCredits: integer("confirmed_credits"),
     /** Comments anchored to passages (script review). */
     comments: jsonb("comments")
       .$type<ReviewComment[]>()
@@ -1414,6 +1431,18 @@ export const TAKE_STAGES = ["draft", "final"] as const;
 export type TakeStage = (typeof TAKE_STAGES)[number];
 
 /**
+ * The automatic Video Review of a take: `pending` while the clip is checked, `ready` with
+ * `reviewReport`, `failed` (the user reviews it unaided) or `skipped` (old blocks without the
+ * Director's direction, and every take made before the review existed).
+ */
+export const TAKE_AUTO_REVIEWS = ["pending", "ready", "failed", "skipped"] as const;
+export type TakeAutoReview = (typeof TAKE_AUTO_REVIEWS)[number];
+
+/** How a take came about: the first generation, or what the router chose after a rejection. */
+export const TAKE_ROUTES = ["initial", "reroll", "revise", "rebind"] as const;
+export type TakeRoute = (typeof TAKE_ROUTES)[number];
+
+/**
  * One generated clip of a block. A draft is the cheap low-resolution render; a final finishes an
  * accepted draft at full quality (`draftTakeId`). Statuses are those of looks and sheets.
  */
@@ -1453,6 +1482,14 @@ export const blockTake = pgTable(
      * spent without a new confirmation.
      */
     confirmedCredits: integer("confirmed_credits"),
+    /** The Video Review of the clip (see `TAKE_AUTO_REVIEWS`). Old rows are `skipped`. */
+    autoReview: text("auto_review").$type<TakeAutoReview>().notNull().default("skipped"),
+    /** The Video Review dami's output for the clip (set with `autoReview` = `ready`). */
+    reviewReport: jsonb("review_report").$type<VideoReviewOutput>(),
+    /** What produced this take; a reroll or rebind is a new generation variant of the same prompt. */
+    route: text("route").$type<TakeRoute>().notNull().default("initial"),
+    /** The clip's last frame (PREV_END for the next block's review), stored once per clip. */
+    lastFrameFileId: uuid("last_frame_file_id").references(() => file.id),
     failure: text("failure"),
     createdAt: createdAt(),
     decidedAt: ts("decided_at"),

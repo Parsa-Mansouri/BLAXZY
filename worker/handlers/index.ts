@@ -22,7 +22,8 @@ import { productionDispatchHandler } from "./production-dispatch";
 import { exportBuildHandler } from "./production-export";
 import { productionGenerationHook } from "./production-generation-hook";
 import { blockReviseHandler, productionPrepareHandler } from "./production-prepare";
-import { takeFixHandler, takeGenerateHandler } from "./production-take";
+import { takeGenerateHandler } from "./production-take";
+import { takeReviewHandler } from "./take-review";
 import { projectCreativeDnaHandler } from "./project-creative-dna";
 import { projectNameHandler } from "./project-name";
 import { ratelimitPruneHandler, ratelimitPruneSchedule } from "./ratelimit-prune";
@@ -80,7 +81,7 @@ export const handlers: JobHandler[] = [
   productionPrepareHandler,
   blockReviseHandler,
   takeGenerateHandler,
-  takeFixHandler,
+  takeReviewHandler,
   exportBuildHandler,
   productionDispatchHandler,
 ];

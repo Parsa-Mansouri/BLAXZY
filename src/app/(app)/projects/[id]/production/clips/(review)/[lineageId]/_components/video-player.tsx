@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MutableRefObject,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -78,6 +79,7 @@ export function VideoPlayer({
   label,
   pageKeys = false,
   caption,
+  timeRef,
 }: {
   fileId: string;
   posterFileId: string | null;
@@ -86,6 +88,8 @@ export function VideoPlayer({
   label: string;
   pageKeys?: boolean;
   caption?: ReactNode;
+  /** Filled with a reader of the playhead (seconds), for a screen that marks a part of the clip. */
+  timeRef?: MutableRefObject<(() => number) | null>;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -117,6 +121,14 @@ export function VideoPlayer({
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [playing]);
+
+  useEffect(() => {
+    if (!timeRef) return;
+    timeRef.current = () => videoRef.current?.currentTime ?? 0;
+    return () => {
+      timeRef.current = null;
+    };
+  }, [timeRef]);
 
   // The element may load its metadata before React attaches its handlers (a server-rendered
   // page loads the video while it hydrates), so read the length from the element itself too.

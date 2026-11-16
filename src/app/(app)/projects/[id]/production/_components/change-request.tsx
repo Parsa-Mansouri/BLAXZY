@@ -18,6 +18,8 @@ export function ChangeRequest({
   notePlaceholder,
   cost,
   blocked = false,
+  before,
+  allowEmpty = false,
 }: {
   maxNote: number;
   sending: boolean;
@@ -31,6 +33,10 @@ export function ChangeRequest({
   cost?: ReactNode;
   /** Sending is not possible (for example, not enough credits). */
   blocked?: boolean;
+  /** Content between the heading and the box (the findings of a clip review). */
+  before?: ReactNode;
+  /** An empty note may be sent: something else (findings, notes on the clip) carries the request. */
+  allowEmpty?: boolean;
 }) {
   const id = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -57,8 +63,10 @@ export function ChangeRequest({
           </DemoHint>
         </span>
       </div>
+      {before}
       <ChangeRequestBox
         autoFocus={false}
+        allowEmpty={allowEmpty}
         maxLength={maxNote}
         placeholder={notePlaceholder}
         sending={sending}

@@ -8,6 +8,7 @@ import {
   PriceChangedError,
   quoteProduction,
   requestNextShotUpdate,
+  updateShotForHandoff,
   retryPreparation,
   setBlockAssets,
   startDrafts,
@@ -161,14 +162,36 @@ export async function reviewBlockAction(
 export async function updateNextShotAction(
   projectId: string,
   lineageId: string,
+  /** The price of one draft the user confirmed: needed when the next shot has clips. */
+  expectedCredits?: number,
 ): Promise<ActionResult<{ nextHref: string }>> {
   return userAction("expensive", "blocks.updateNextShot", async (user) => {
     if (!isUuid(projectId) || !isUuid(lineageId)) return MISSING_RESULT;
-    const nextLineageId = await requestNextShotUpdate({ lineageId, userId: user.id });
+    const nextLineageId = await requestNextShotUpdate({
+      lineageId,
+      userId: user.id,
+      expectedCredits,
+    });
     if (!nextLineageId) return MISSING_RESULT;
     revalidatePath(blockHref(projectId, lineageId));
     revalidatePath(blockHref(projectId, nextLineageId));
     return { ok: true, data: { nextHref: blockHref(projectId, nextLineageId) } };
+  });
+}
+
+/** Updates a shot that carries the hand-off notice ("The shot before now ends differently."). */
+export async function updateShotAction(
+  projectId: string,
+  lineageId: string,
+  expectedCredits?: number,
+): Promise<ActionResult> {
+  return userAction("expensive", "blocks.updateShot", async (user) => {
+    if (!isUuid(projectId) || !isUuid(lineageId)) return MISSING_RESULT;
+    const updated = await updateShotForHandoff({ lineageId, userId: user.id, expectedCredits });
+    if (!updated) return MISSING_RESULT;
+    revalidatePath(blockHref(projectId, lineageId));
+    revalidatePath(`/projects/${projectId}/production`, "layout");
+    return { ok: true, data: null };
   });
 }
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { MAX_REFERENCE_IMAGES } from "@/server/damis";
 import { MAX_REFERENCES } from "@/server/generation";
 import { userIdSchema } from "./access";
+import { timedNoteSchema } from "./revision-request";
 import { BLOCK_PRODUCTION_STAGES } from "./stage";
 
 /** The most references one take may attach (the engine's limit and the video model's). */
@@ -43,9 +44,26 @@ export const blockReviewInput = lineageInput.extend({
   regenerate: z.boolean().optional(),
 });
 
+const issueIds = z.array(z.string().min(1).max(40)).max(50);
+
+/**
+ * The user's own words about a rejected clip: a free-text note, notes on a time range, the
+ * findings of the clip's review they left standing and the "looks good" points to keep (every one
+ * when not given). Nothing from a client but text and ids.
+ */
 export const takeReviewInput = takeInput.extend({
   decision: z.enum(["accepted", "rejected"], { error: "Accept the clip or ask for changes." }),
   note: noteSchema,
+  confirmedIssueIds: issueIds.optional(),
+  keepIds: issueIds.optional(),
+  timedNotes: z
+    .array(
+      timedNoteSchema.refine((n) => n.toS >= n.fromS, {
+        message: "A note on a time range must end after it starts.",
+      }),
+    )
+    .max(20, "Keep to 20 notes on the clip.")
+    .optional(),
   expectedCredits,
 });
 

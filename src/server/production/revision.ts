@@ -11,7 +11,6 @@ import {
   createNextBlockVersion,
   getBlockVersion,
   getCurrentBlock,
-  getNextCurrentBlock,
   parseBlockDirection,
   type PromptBlock,
 } from "@/server/blocks";
@@ -24,10 +23,8 @@ import {
   type DirectionBinding,
 } from "@/server/direction";
 import { logProjectEvent } from "@/server/projects";
-import { assertWritable, isUuid, lineageStage, lockLineage, STALE_MESSAGE, parse } from "./access";
+import { isUuid } from "./access";
 import { ProductionInputError } from "./errors";
-import { lineageInput } from "./inputs";
-import { BUSY_MESSAGE } from "./messages";
 import { enqueuePreparation } from "./preparation";
 import { type RevisionRequest, revisionRequestSchema } from "./revision-request";
 
@@ -206,7 +203,7 @@ export async function requestBlockRevision(input: {
 }
 
 /** The text the next shot is asked to follow: the previous shot's new ending. */
-function handOffNote(previous: DirectorBlock, title: string): string {
+export function handOffNote(previous: DirectorBlock, title: string): string {
   return [
     `The shot before this one ("${title}") was revised and now ends differently.`,
     `It now ends with: ${previous.end_state}`,
@@ -214,67 +211,4 @@ function handOffNote(previous: DirectorBlock, title: string): string {
   ]
     .join(" ")
     .slice(0, 2000);
-}
-
-/**
- * After a revision reported `next_block_needs_update`: asks Block Revision to update the shot
- * that follows `lineageId` so it opens from the new ending. A user action (the shot's owner
- * decides, as the next shot may be approved or have its own work): it revises the next shot with
- * a block-review request whose note describes the new hand-off. Returns the next shot's lineage
- * id, or null when the shot is not theirs.
- */
-export async function requestNextShotUpdate(input: {
-  lineageId: string;
-  userId: string;
-}): Promise<string | null> {
-  const { lineageId, userId } = parse(lineageInput, input);
-  if (!isUuid(lineageId)) return null;
-  return getDb().transaction(async (tx) => {
-    const locked = await lockLineage(tx, lineageId, userId);
-    if (!locked) return null;
-    const { block, project } = locked;
-    assertWritable(project);
-    if (block.stale) throw new ProductionInputError(STALE_MESSAGE);
-    const view = parseBlockDirection(block.direction);
-    const previous = directedBlockOf(block);
-    if (!view?.revision?.flags.next_block_needs_update || !previous) {
-      throw new ProductionInputError("The next shot does not need an update.");
-    }
-    const next = await getNextCurrentBlock(block, tx);
-    if (!next) throw new ProductionInputError("There is no shot after this one.");
-    if (next.createdAt > block.createdAt) {
-      throw new ProductionInputError("The next shot was already updated.");
-    }
-    if (next.stale) throw new ProductionInputError(STALE_MESSAGE);
-    if (!directedBlockOf(next)) throw new ProductionInputError(NOT_DIRECTED_MESSAGE);
-    const nextLocked = await getCurrentBlock(next.lineageId, tx, true);
-    if (!nextLocked) return null;
-    const { stage } = await lineageStage(tx, nextLocked);
-    if (stage === "preparing") throw new ProductionInputError(BUSY_MESSAGE);
-    if (stage !== "block_review" && stage !== "approved") {
-      throw new ProductionInputError(
-        "The next shot already has a clip. Change it from its clip page.",
-      );
-    }
-    const request: RevisionRequest = {
-      ...ASSETS_ONLY_REQUEST,
-      note: handOffNote(previous, block.title ?? `Shot ${block.orderIndex + 1}`),
-    };
-    const [row] = await tx
-      .insert(review)
-      .values({
-        projectId: project.id,
-        userId,
-        subjectType: "prompt_block",
-        subjectId: nextLocked.id,
-        decision: "rejected",
-        note: request.note,
-        revisionRequest: request,
-        damiRunId: nextLocked.productionDamiRunId,
-      })
-      .returning({ id: review.id });
-    if (!row) throw new Error("review insert returned no row");
-    await requestBlockRevision({ tx, blockId: nextLocked.id, userId, reviewId: row.id });
-    return nextLocked.lineageId;
-  });
 }

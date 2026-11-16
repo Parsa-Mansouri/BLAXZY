@@ -8,9 +8,11 @@
 import { z } from "zod";
 import { getBalance } from "@/server/billing";
 import { type DbExecutor, getDb } from "@/server/db/client";
-import type { TakeStage } from "@/server/db/schema";
+import type { TakeRoute, TakeStage } from "@/server/db/schema";
 import { confirmSpend, PriceChangedError, quoteSpend, type SpendQuote } from "@/server/generation";
 import { isUuid, openLineage, parse, requireStyle, userIdSchema, type ProjectRow } from "./access";
+import { timedNoteSchema } from "./revision-request";
+import { planTakeRoute } from "./take-routing";
 import { getTake, latestLiveTake } from "./takes";
 
 const purposeOf = (stage: TakeStage) => (stage === "final" ? "block_final" : "block_draft");
@@ -40,19 +42,41 @@ const quoteInput = z.object({
   takeId: z.string(),
   userId: userIdSchema,
   action: z.enum(["accept", "reject", "retry"], { error: "Unknown action." }),
+  /** For a rejection: what the user decided, so the quote names the route that will run. */
+  review: z
+    .object({
+      note: z.string().trim().max(2000).optional(),
+      confirmedIssueIds: z.array(z.string().max(40)).max(50).optional(),
+      keepIds: z.array(z.string().max(40)).max(50).optional(),
+      timedNotes: z.array(timedNoteSchema).max(20).optional(),
+    })
+    .optional(),
 });
+
+/** A quote, with the route a rejection will take when the user's decision was given. */
+export type TakeSpendQuote = SpendQuote & {
+  route?: Extract<TakeRoute, "reroll" | "revise" | "rebind">;
+};
 
 /**
  * What a decision on a take costs, for the confirmation: accepting a draft starts its final,
  * rejecting a take starts a new draft, a failed take run again costs its own stage; accepting a
- * final costs nothing. Null when the take is missing or not the user's.
+ * final costs nothing. Every route of a rejection (reroll, rebind, revise) ends in one new draft,
+ * so the price is the draft's whichever runs; with `review` the quote also says which route that
+ * is (it is also what the confirmation shows). Null when the take is missing or not the user's.
  */
 export async function quoteTakeSpend(input: {
   takeId: string;
   userId: string;
   action: "accept" | "reject" | "retry";
-}): Promise<SpendQuote | null> {
-  const { takeId, userId, action } = parse(quoteInput, input);
+  review?: {
+    note?: string;
+    confirmedIssueIds?: string[];
+    keepIds?: string[];
+    timedNotes?: { fromS: number; toS: number; text: string }[];
+  };
+}): Promise<TakeSpendQuote | null> {
+  const { takeId, userId, action, review } = parse(quoteInput, input);
   if (!isUuid(takeId)) return null;
   const db = getDb();
   const take = await getTake(db, takeId);
@@ -76,5 +100,21 @@ export async function quoteTakeSpend(input: {
   } else if (action === "reject") {
     stage = "draft";
   }
-  return quoteSpend({ userId, purpose: purposeOf(stage), style: requireStyle(opened.project) });
+  const quote = await quoteSpend({
+    userId,
+    purpose: purposeOf(stage),
+    style: requireStyle(opened.project),
+  });
+  if (action !== "reject" || !review) return quote;
+  const planned = await planTakeRoute(db, {
+    take: latest,
+    block: opened.block,
+    choice: {
+      confirmedIssueIds: review.confirmedIssueIds ?? [],
+      keepIds: review.keepIds,
+      timedNotes: review.timedNotes ?? [],
+      note: review.note ? review.note : null,
+    },
+  }).catch(() => null);
+  return planned ? { ...quote, route: planned.route } : quote;
 }

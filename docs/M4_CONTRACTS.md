@@ -72,7 +72,6 @@ type BlockProductionStage =
 | Dami | Input | Output |
 |---|---|---|
 | `block-revision` | see `src/server/damis/block-revision/schema.ts`; assembled from the DB by `production/revision-job.ts` | revised block, `change_log`, `fix_map`, `flags` |
-| `take-fixer` | `{ style, block, previousPrompt, assetRefs, stage: "draft" | "final", review }` | `{ prompt, changeSummary[] }` |
 
 `prompt` uses `<<<image_N>>>` tokens, N being the 1-based position in the returned `assetRefs`;
 every listed ref is called at least once and every token has a ref (checked in code). Only assets
@@ -133,8 +132,10 @@ startDrafts(input: { projectId; userId; expectedCredits: number }): Promise<{ st
   // credits are short. Creates the draft takes and sends ONE production.dispatch
   // { projectId, kind: "takes" } on the same transaction
 submitTakeReview(input: { takeId; userId; decision; issueCodes?; note? }): Promise<BlockProductionStage | null>
-  // draft accepted → final take (pending), take.generate; draft rejected → new draft, take.fix
-  // final accepted → done; final rejected → new draft, take.fix
+  // draft accepted → final take (pending), take.generate; final accepted → done (PREV_END, stale-next rule)
+  // rejected (any take) → the router (production/take-routing.ts) from the clip's Video Review report:
+  //   reroll / rebind → a new draft of the same prompt (take.generate); revise → requestBlockRevision, and the
+  //   revised version's draft follows once it is prepared (production/revision-draft.ts)
 retryTake(input: { takeId; userId }): Promise<BlockProductionStage | null>
 retryPreparation(input: { lineageId; userId }): Promise<BlockProductionStage | null>
 completeProduction(input: { projectId; userId }): Promise<boolean>   // all blocks done → stage done
@@ -165,11 +166,11 @@ Jobs (handlers in `worker/handlers/`):
 
 | Job | Payload, dedupe | Does |
 |---|---|---|
-| `production.dispatch` | `{ projectId, kind: "prepare" \| "takes" }`, `<projectId>:<kind>` (with a follow-up: one may wait beside a running one) | fan-out: `prepare` queues `block.revise` (block answers its predecessor's rejected review) or `production.prepare` for every pending, non-stale block; `takes` queues `take.generate` (prompt stored) or `take.fix` for every pending take without a generation. Idempotent (each per-row job is keyed by its row); sent on the transaction that created the rows |
+| `production.dispatch` | `{ projectId, kind: "prepare" \| "takes" }`, `<projectId>:<kind>` (with a follow-up: one may wait beside a running one) | fan-out: `prepare` queues `block.revise` (block answers its predecessor's rejected review) or `production.prepare` for every pending, non-stale block; `takes` queues `take.generate` (prompt stored) for every pending take without a generation. Idempotent (each per-row job is keyed by its row); sent on the transaction that created the rows |
 | `production.prepare` | `{ blockId }`, block id | binds the block's `[kind:Name]` tags to `<<<image_N>>>` tokens for the project's ready assets (code, `production/binding.ts`) → production fields, state ready |
 | `block.revise` | `{ blockId }`, block id | runDami(block-revision) on the parent version + the review's `revisionRequest` → revised block and production fields |
 | `take.generate` | `{ takeId }`, take id | requestGeneration (draft or final; references = each `productionAssetRefs` asset's file, in order: a character's accepted sheet, a location's or prop's approved Hero; `ReferenceAsset.views` lists a locked pack's approved views for later use) |
-| `take.fix` | `{ takeId }`, take id | runDami(take-fixer) on the parent take's prompt + review → prompt → requestGeneration |
+| `take.review` | `{ takeId }`, take id | the Video Review of a generated clip of a directed block: cut detection, keyframes, runDami(video-review), report on the take; also stores the clip's last frame (PREV_END). Queued by the generation completion hook; a failure only marks the review `failed` |
 | `export.build` | `{ exportId }`, export id | build and store the ZIP (stream the clips from and the ZIP to object storage; refuse above 20 GB) |
 
 Every job above is sent on the transaction that writes its row (see `docs/M1_CONTRACTS.md`): the

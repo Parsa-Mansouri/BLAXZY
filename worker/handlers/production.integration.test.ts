@@ -6,7 +6,7 @@
  * service or ffmpeg is unavailable.
  */
 import "dotenv/config";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ffmpegReady } from "../../src/server/test-support/integration";
 import { servicesReachable } from "../../src/server/test-support/generation-fixtures";
 import {
@@ -14,6 +14,33 @@ import {
   jobContext,
   pointQueueAtThrowawaySchema,
 } from "../../src/server/test-support/script-fixtures";
+
+/**
+ * This flow is about generation, review and export; a rejected clip is routed to a block revision,
+ * which has its own tests (`take-review.integration.test.ts`, with the real Block Revision). Here
+ * the revision is reduced to its effect on production: the next version of the block, waiting to
+ * be prepared again.
+ */
+vi.mock("../../src/server/production/revision", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../src/server/production/revision")>();
+  const { getBlockVersion, createNextBlockVersion } = await import("../../src/server/blocks");
+  return {
+    ...original,
+    requestBlockRevision: async (input: Parameters<typeof original.requestBlockRevision>[0]) => {
+      // Block reviews (and the directed tests) use the real service; only a clip review is reduced.
+      const { eq } = await import("drizzle-orm");
+      const { review } = await import("../../src/server/db/schema");
+      const [row] = input.tx
+        ? await input.tx.select().from(review).where(eq(review.id, input.reviewId))
+        : [];
+      if (row?.subjectType !== "generation") return original.requestBlockRevision(input);
+      if (!input.tx) throw new Error("the mock needs the review's transaction");
+      const block = await getBlockVersion(input.blockId, input.tx);
+      if (!block) throw new Error("block missing");
+      return createNextBlockVersion(block, { productionState: "pending" }, input.tx);
+    },
+  };
+});
 
 const jobSchema = pointQueueAtThrowawaySchema();
 const reachable = await servicesReachable();
@@ -40,12 +67,14 @@ describe.skipIf(!hasFfmpeg)(
     const { and, asc, eq, inArray, isNull, sql } = await import("drizzle-orm");
     const { generationRunHandler } = await import("./generation-run");
     const { blockReviseHandler, productionPrepareHandler } = await import("./production-prepare");
-    const { takeFixHandler, takeGenerateHandler } = await import("./production-take");
+    const { takeGenerateHandler } = await import("./production-take");
+    const { takeReviewHandler } = await import("./take-review");
     const { exportBuildHandler } = await import("./production-export");
     const { productionDispatchHandler } = await import("./production-dispatch");
     const { productionGenerationHook } = await import("./production-generation-hook");
     const { createProductionFixtures } =
       await import("../../src/server/test-support/production-fixtures");
+    const { testDirection } = await import("../../src/server/test-support/direction-fixtures");
     const fixtures = createProductionFixtures();
     let unregister: () => void = () => undefined;
 
@@ -93,7 +122,12 @@ describe.skipIf(!hasFfmpeg)(
       const tomas = await fixtures.readyAsset(projectId, userId, "character", "Tomas");
       const lighthouse = await fixtures.readyAsset(projectId, userId, "location", "Lighthouse");
       const lamp = await fixtures.readyAsset(projectId, userId, "prop", "Lamp");
-      await fixtures.setBlocks(projectId, scriptVersionId, shots);
+      // Directed blocks (the Director's data), so a rejected clip can be revised.
+      await fixtures.setBlocks(
+        projectId,
+        scriptVersionId,
+        shots.map((shot, i) => ({ direction: testDirection({ blockId: i + 1 }), ...shot })),
+      );
       return { userId, projectId, scriptVersionId, tomas, lighthouse, lamp };
     }
 
@@ -132,8 +166,7 @@ describe.skipIf(!hasFfmpeg)(
           .where(and(eq(s.blockTake.projectId, projectId), eq(s.blockTake.status, "pending")));
         for (const take of pendingTakes) {
           if (!take.generationId) {
-            const handler = take.prompt === null ? takeFixHandler : takeGenerateHandler;
-            await handler.run({ takeId: take.id }, jobContext());
+            await takeGenerateHandler.run({ takeId: take.id }, jobContext());
             worked = true;
           }
         }
@@ -148,6 +181,14 @@ describe.skipIf(!hasFfmpeg)(
           );
         for (const { id } of queued) {
           await generationRunHandler.run({ generationId: id }, jobContext());
+          worked = true;
+        }
+        const checking = await db
+          .select({ id: s.blockTake.id })
+          .from(s.blockTake)
+          .where(and(eq(s.blockTake.projectId, projectId), eq(s.blockTake.autoReview, "pending")));
+        for (const { id } of checking) {
+          await takeReviewHandler.run({ takeId: id }, jobContext());
           worked = true;
         }
         if (!worked) return;
@@ -252,6 +293,10 @@ describe.skipIf(!hasFfmpeg)(
 
       // A shot cut before the Director existed has no direction to revise: asking for changes
       // fails clearly and leaves the shot as it is (revisions are covered by the directed tests).
+      await getDb()
+        .update(s.promptBlock)
+        .set({ direction: null })
+        .where(eq(s.promptBlock.projectId, projectId));
       await expect(
         production.submitBlockReview({
           lineageId: l1,
@@ -262,6 +307,13 @@ describe.skipIf(!hasFfmpeg)(
       ).rejects.toThrow(/before the Director existed/);
       expect((await detail(l1, userId)).id).toBe(d1.id);
       expect((await detail(l1, userId)).stage).toBe("block_review");
+      // The Director's data is back for the rest of the flow (a clip review can be revised).
+      for (const [i, lineageId] of [l1, l2, l3].entries()) {
+        await getDb()
+          .update(s.promptBlock)
+          .set({ direction: testDirection({ blockId: i + 1 }) })
+          .where(and(eq(s.promptBlock.lineageId, lineageId), isNull(s.promptBlock.supersededAt)));
+      }
 
       // Change the third block's assets: the lighthouse and the lamp (not named there before).
       await expect(
@@ -330,7 +382,8 @@ describe.skipIf(!hasFfmpeg)(
         posterFileId: draft1.posterFileId,
       });
 
-      // Reject the first draft with a note → a fixed draft (take-fixer).
+      // Reject the first draft with a note: the router sends a note to a block revision, whose
+      // new version is prepared again and then gets its draft.
       expect(
         await production.submitTakeReview({
           takeId: draft1.id,
@@ -338,7 +391,7 @@ describe.skipIf(!hasFfmpeg)(
           decision: "rejected",
           note: "Keep his face sharp.",
         }),
-      ).toBe("draft_generating");
+      ).toBe("preparing");
       const [takeReview] = await getDb()
         .select()
         .from(s.review)
@@ -349,6 +402,8 @@ describe.skipIf(!hasFfmpeg)(
         issueCodes: [],
         note: "Keep his face sharp.",
         damiRunId: draft1.damiRunId,
+        revisionRequest: { source: "take_review", note: "Keep his face sharp.", takeId: draft1.id },
+        confirmedCredits: 20,
       });
       await drain(projectId);
       const fixed1 = await takeRow(await latestTakeId(l1, userId));
@@ -357,9 +412,10 @@ describe.skipIf(!hasFfmpeg)(
         status: "in_review",
         takeNumber: 2,
         parentId: draft1.id,
+        route: "revise",
+        confirmedCredits: 20,
       });
-      expect(fixed1.prompt).toContain("RETRY (draft)");
-      expect(fixed1.damiRunId).not.toBe(draft1.damiRunId);
+      expect(fixed1.blockId).not.toBe(draft1.blockId);
 
       // Accept it → a final from that exact draft.
       expect(
@@ -402,11 +458,10 @@ describe.skipIf(!hasFfmpeg)(
           decision: "rejected",
           note: "The video flickers.",
         }),
-      ).toBe("draft_generating");
+      ).toBe("preparing");
       await drain(projectId);
       const redraft2 = await takeRow(await latestTakeId(l2, userId));
       expect(redraft2).toMatchObject({ stage: "draft", status: "in_review", parentId: final2 });
-      expect(redraft2.prompt).toContain("RETRY (final)");
       await production.submitTakeReview({ takeId: redraft2.id, userId, decision: "accepted" });
       await drain(projectId);
       await production.submitTakeReview({
@@ -695,9 +750,10 @@ describe.skipIf(!hasFfmpeg)(
       await expect(reject(undefined)).rejects.toBeInstanceOf(PriceChangedError);
       await expect(reject(60)).rejects.toBeInstanceOf(PriceChangedError);
       expect((await takeRow(draft.id)).status).toBe("in_review");
-      expect(await reject(20)).toBe("draft_generating");
+      expect(await reject(20)).toBe("preparing");
+      await drain(projectId);
       const next = await takeRow(await latestTakeId(l1, userId));
-      expect(next).toMatchObject({ stage: "draft", confirmedCredits: 20 });
+      expect(next).toMatchObject({ stage: "draft", confirmedCredits: 20, route: "revise" });
 
       // The quotes: what each decision would cost.
       await drain(projectId);

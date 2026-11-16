@@ -28,6 +28,8 @@ function take(n: number, patch: Partial<TakeView> = {}): TakeView {
     failure: null,
     isSample: true,
     priceCredits: 20,
+    route: "initial",
+    review: { state: "skipped", findings: [], keeps: [] },
     createdAt: at(n),
     decidedAt: null,
     ...patch,
@@ -177,5 +179,19 @@ describe("small helpers", () => {
     const base = { id: "b", stage: "draft_review" as const, busy: false, takes: [take(1)] };
     const changed = { ...base, takes: [take(1, { status: "accepted" })] };
     expect(detailKey(base)).not.toBe(detailKey(changed));
+  });
+
+  it("changes the key when the check of a clip finishes", () => {
+    const pending = {
+      id: "b",
+      stage: "draft_review" as const,
+      busy: false,
+      takes: [take(1, { review: { state: "pending", findings: [], keeps: [] } })],
+    };
+    const ready = {
+      ...pending,
+      takes: [take(1, { review: { state: "ready", findings: [], keeps: [] } })],
+    };
+    expect(detailKey(pending)).not.toBe(detailKey(ready));
   });
 });

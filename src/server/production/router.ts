@@ -2,7 +2,8 @@
  * The router of the video review (the owner's <router>): code, not a dami, and pure (no database,
  * no Claude). It takes the review report after the user has confirmed, dismissed or added issues
  * and returns an ordered plan: what to fix in the binding, what to send to the block revision, and
- * whether to regenerate with the same prompt (a reroll). Nothing here is wired yet.
+ * whether to regenerate with the same prompt (a reroll). `take-routing.ts` builds its input from the
+ * database and carries the plan out when a clip is rejected.
  *
  * Rules, in the owner's order:
  * 1. rebind: a confirmed binding_suspect issue whose asset's binding is wrong (token missing, wrong

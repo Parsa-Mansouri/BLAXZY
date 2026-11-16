@@ -25,7 +25,6 @@ describe("dami registry", () => {
         "sheet-generator-character",
         "sheet-generator-location",
         "sheet-generator-prop",
-        "take-fixer",
         "video-review",
       ].sort(),
     );

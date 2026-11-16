@@ -2,7 +2,7 @@
 
 import { quoteAssetReview, quoteAssetSpend } from "@/server/assets";
 import { getSkipCreditConfirm, setSkipCreditConfirm } from "@/server/billing";
-import { quoteProduction, quoteTakeSpend } from "@/server/production";
+import { quoteProduction, quoteShotUpdate, quoteTakeSpend } from "@/server/production";
 import { isUuid, userAction, type ActionResult } from "./action";
 
 /** What a step costs, as the confirmation shows it. */
@@ -18,6 +18,8 @@ export interface SpendQuoteData {
   skip: boolean;
   /** Drafts only: how many shots the total covers and what one final costs. */
   drafts?: { count: number; finalsEach: number };
+  /** A clip rejection: what the router will do (every route makes one new draft). */
+  route?: "reroll" | "revise" | "rebind";
 }
 
 /** The step to price. */
@@ -30,8 +32,21 @@ export type SpendTarget =
       decision: "accepted" | "rejected";
       designChange?: boolean;
     }
-  | { kind: "take"; takeId: string; action: "accept" | "reject" | "retry" }
-  | { kind: "drafts"; projectId: string };
+  | {
+      kind: "take";
+      takeId: string;
+      action: "accept" | "reject" | "retry";
+      /** For a rejection: what the user decided, so the quote names the route that will run. */
+      review?: {
+        note?: string;
+        confirmedIssueIds?: string[];
+        keepIds?: string[];
+        timedNotes?: { fromS: number; toS: number; text: string }[];
+      };
+    }
+  | { kind: "drafts"; projectId: string }
+  /** Updating a shot after the one before it changed its ending ("next": the shot after this one). */
+  | { kind: "shot_update"; lineageId: string; of: "self" | "next" };
 
 const GONE = { ok: false, error: "This is no longer available. Reload the page." } as const;
 
@@ -53,6 +68,10 @@ export async function quoteSpendAction(target: SpendTarget): Promise<ActionResul
       }
       case "take": {
         const q = await quoteTakeSpend({ ...target, userId: user.id });
+        return q ? { ok: true, data: { ...q, skip } } : GONE;
+      }
+      case "shot_update": {
+        const q = await quoteShotUpdate({ ...target, userId: user.id });
         return q ? { ok: true, data: { ...q, skip } } : GONE;
       }
       case "drafts": {

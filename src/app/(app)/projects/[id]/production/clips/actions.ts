@@ -51,6 +51,10 @@ export async function finishProductionAction(projectId: string): Promise<ActionR
 export interface ReviewInput {
   decision: "accepted" | "rejected";
   note?: string;
+  /** Rejections: findings left standing, points to keep, and notes on a part of the clip. */
+  confirmedIssueIds?: string[];
+  keepIds?: string[];
+  timedNotes?: { fromS: number; toS: number; text: string }[];
 }
 
 /** Where to go after a decision: the next shot waiting for review, or null for the board. */

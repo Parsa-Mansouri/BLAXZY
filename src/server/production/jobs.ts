@@ -16,14 +16,7 @@ import {
   storeBlockPreparation,
   type PromptBlock,
 } from "@/server/blocks";
-import {
-  ASSET_TAG_PATTERN,
-  assetTag,
-  isVoiceRef,
-  MAX_BLOCK_SECONDS,
-  TAKE_ISSUE_CODES,
-  type TakeFixerInput,
-} from "@/server/damis";
+import { ASSET_TAG_PATTERN, assetTag, isVoiceRef } from "@/server/damis";
 import { getDb } from "@/server/db/client";
 import {
   blockTake,
@@ -32,15 +25,16 @@ import {
   promptBlock,
   review,
   type ProjectStyle,
-  type ReviewSubject,
 } from "@/server/db/schema";
 import { enqueueGeneration, requestGeneration, type FinishedGeneration } from "@/server/generation";
 import { logProjectEvent } from "@/server/projects";
-import { blockRevise, enqueue, productionPrepare, takeFix, takeGenerate } from "@/server/jobs";
+import { blockRevise, enqueue, productionPrepare, takeGenerate, takeReview } from "@/server/jobs";
 import { isUuid, STALE_MESSAGE } from "./access";
 import { ProductionInputError } from "./errors";
 import { MAX_BLOCK_ASSETS } from "./inputs";
 import { type RevisionRequest, revisionRequestSchema } from "./revision-request";
+import { startDraftAfterRevision } from "./revision-draft";
+import { usableDirection } from "./take-check";
 import { getTake, type TakeRow } from "./takes";
 
 export type ProductionJobProject = { id: string; ownerId: string; style: ProjectStyle | null };
@@ -62,9 +56,6 @@ export type TakeJob = {
   /** The lineage's current version (null when the block left the film). */
   current: PromptBlock | null;
   project: ProductionJobProject;
-  /** Fixes: the rejected take and the review that rejected it. */
-  parent: TakeRow | null;
-  review: ProductionJobReview | null;
 };
 
 export const TAKE_FAILED =
@@ -102,25 +93,6 @@ export function promptTail(prompt: string, max = PROMPT_TAIL_LENGTH): string {
 
 export function blockTitle(block: Pick<PromptBlock, "title" | "orderIndex">): string {
   return clip(block.title || `Shot ${block.orderIndex + 1}`, 200);
-}
-
-async function loadRejection(
-  subjectType: ReviewSubject,
-  subjectId: string,
-): Promise<ProductionJobReview | null> {
-  const [row] = await getDb()
-    .select({ issueCodes: review.issueCodes, note: review.note })
-    .from(review)
-    .where(
-      and(
-        eq(review.subjectType, subjectType),
-        eq(review.subjectId, subjectId),
-        eq(review.decision, "rejected"),
-      ),
-    )
-    .orderBy(desc(review.createdAt))
-    .limit(1);
-  return row ?? null;
 }
 
 /** The newest revision request on a block version (a rejected review that carries one). */
@@ -213,6 +185,8 @@ export async function storePreparation(input: {
   return getDb().transaction(async (tx) => {
     const row = await storeBlockPreparation(input, tx);
     if (!row) return false;
+    // A shot revised from a clip review goes straight to its new draft.
+    await startDraftAfterRevision(tx, row);
     await logProjectEvent(tx, {
       projectId: row.projectId,
       userId: null,
@@ -264,19 +238,7 @@ export async function loadTakeJob(takeId: string): Promise<TakeJob | null> {
   const owner = await loadProject(take.projectId);
   const block = await getBlockVersion(take.blockId);
   if (!owner || !block) return null;
-  const parent = take.parentId ? await getTake(db, take.parentId) : null;
-  return {
-    take,
-    block,
-    current: await getCurrentBlock(take.lineageId),
-    project: owner,
-    parent,
-    review: parent ? await loadRejection("generation", parent.id) : null,
-  };
-}
-
-function isTakeIssue(code: string): code is (typeof TAKE_ISSUE_CODES)[number] {
-  return (TAKE_ISSUE_CODES as readonly string[]).includes(code);
+  return { take, block, current: await getCurrentBlock(take.lineageId), project: owner };
 }
 
 /** Refuses work on a take whose block changed under it or is waiting for a script edit. */
@@ -287,51 +249,6 @@ export function assertTakeBlockUsable(job: TakeJob): void {
   if (current.productionState !== "ready") {
     throw new ProductionInputError("This shot is being prepared again. Review it first.");
   }
-}
-
-/** The take-fixer input: the rejected take's prompt and the review, with the block's references. */
-export function takeFixerInput(job: TakeJob, style: ProjectStyle): TakeFixerInput {
-  const { parent, review: rejection, block } = job;
-  if (!parent?.prompt || !rejection) {
-    throw new ProductionInputError("The review this clip answers is missing. Ask again.");
-  }
-  return {
-    style,
-    block: {
-      title: blockTitle(block),
-      scriptExcerpt: clip(block.scriptExcerpt, 20_000),
-      durationSeconds: block.durationSeconds
-        ? Math.min(MAX_BLOCK_SECONDS, Math.max(1, block.durationSeconds))
-        : undefined,
-    },
-    previousPrompt: parent.prompt,
-    assetRefs: block.productionAssetRefs ?? [],
-    stage: parent.stage,
-    review: {
-      issueCodes: rejection.issueCodes.filter(isTakeIssue),
-      note: rejection.note ?? undefined,
-    },
-  };
-}
-
-/** Stores the take-fixer's prompt on a pending take that has none yet. False when another run did. */
-export async function storeTakePrompt(input: {
-  takeId: string;
-  prompt: string;
-  damiRunId: string;
-}): Promise<boolean> {
-  const updated = await getDb()
-    .update(blockTake)
-    .set({ prompt: input.prompt, damiRunId: input.damiRunId })
-    .where(
-      and(
-        eq(blockTake.id, input.takeId),
-        eq(blockTake.status, "pending"),
-        isNull(blockTake.prompt),
-      ),
-    )
-    .returning({ id: blockTake.id });
-  return updated.length > 0;
 }
 
 /**
@@ -393,7 +310,10 @@ export async function requestTakeGeneration(takeId: string): Promise<RequestOutc
     referenceFileIds = draft.referenceFileIds;
     draftGenerationId = draft.generationId;
   } else {
-    referenceFileIds = await draftReferences(block);
+    // A draft that already carries its references (a rebind's corrected ones, a reroll's) keeps
+    // them; any other draft attaches what its block's assets are now.
+    referenceFileIds =
+      take.referenceFileIds.length > 0 ? take.referenceFileIds : await draftReferences(block);
   }
   const label = clip(
     `B${String(block.orderIndex + 1).padStart(3, "0")} ${blockTitle(block)}`,
@@ -422,6 +342,8 @@ export async function requestTakeGeneration(takeId: string): Promise<RequestOutc
         durationSeconds: block.durationSeconds ?? undefined,
         sound: true,
         draftGenerationId,
+        // A reroll or a rebind is the same request again: a new variant makes it a new render.
+        ...(take.route === "reroll" || take.route === "rebind" ? { variant: take.id } : {}),
         maxCredits: row.confirmedCredits,
       },
       tx,
@@ -499,8 +421,26 @@ export async function applyTakeGenerationResult(g: FinishedGeneration): Promise<
           eq(blockTake.generationId, g.id),
         ),
       )
-      .returning({ id: blockTake.id, lineageId: blockTake.lineageId, stage: blockTake.stage });
+      .returning({
+        id: blockTake.id,
+        blockId: blockTake.blockId,
+        lineageId: blockTake.lineageId,
+        stage: blockTake.stage,
+      });
     if (row) {
+      if (succeeded) {
+        // The Video Review runs beside the user's own review; blocks cut before the Director
+        // (no usable direction) are not reviewed, so they never wait for it.
+        const [blockRow] = await tx
+          .select({ direction: promptBlock.direction })
+          .from(promptBlock)
+          .where(eq(promptBlock.id, row.blockId))
+          .limit(1);
+        if (usableDirection(blockRow?.direction)) {
+          await tx.update(blockTake).set({ autoReview: "pending" }).where(eq(blockTake.id, row.id));
+          await enqueue(takeReview, { takeId: row.id }, { tx });
+        }
+      }
       await logProjectEvent(tx, {
         projectId,
         userId: null,
@@ -519,7 +459,7 @@ export async function applyTakeGenerationResult(g: FinishedGeneration): Promise<
  * Queues the per-row job of every pending row of a project (worker, `production.dispatch`):
  * `prepare`: each current, non-stale block waiting for preparation gets `block.revise` when it
  * answers a revision request on its predecessor, else `production.prepare`; `takes`: each
- * pending take without a generation gets `take.generate` (prompt stored) or `take.fix`. Safe to
+ * pending take without a generation gets `take.generate`. Safe to
  * run any number of times: the per-row jobs are keyed by their row (a duplicate send is dropped)
  * and their handlers check the row is still waiting. Returns how many rows it covered.
  */
@@ -594,7 +534,7 @@ export async function dispatchProductionJobs(
     .orderBy(asc(blockTake.createdAt))
     .limit(MAX_PRODUCTION_BLOCKS);
   for (const take of takes) {
-    await enqueue(take.prompt ? takeGenerate : takeFix, { takeId: take.id });
+    await enqueue(takeGenerate, { takeId: take.id });
   }
   return takes.length;
 }

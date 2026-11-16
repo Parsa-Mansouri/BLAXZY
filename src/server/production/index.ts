@@ -15,7 +15,8 @@ export {
   type StageBlock,
   type StageTake,
 } from "./stage";
-export type { TakeView } from "./takes";
+export type { TakeReviewView, TakeView } from "./takes";
+export { reviewFindings, type ReviewFindings } from "./findings";
 export type { ProductionBlock, ProductionBlockAsset } from "./views";
 /*
  * The services: every current block is prepared (text-blocks, `preparation`), reviewed and
@@ -32,7 +33,13 @@ export type { ProductionBlock, ProductionBlockAsset } from "./views";
  */
 export { approveAllBlocks, setBlockAssets, submitBlockReview } from "./block-review";
 export { completeProduction } from "./complete";
-export { requestBlockRevision, requestNextShotUpdate } from "./revision";
+export { requestBlockRevision } from "./revision";
+export {
+  quoteShotUpdate,
+  requestNextShotUpdate,
+  updateShotForHandoff,
+  type ShotUpdateQuote,
+} from "./handoff";
 export {
   revisionRequestSchema,
   type ObservedIssue,
@@ -66,7 +73,7 @@ export {
   type ProductionSectionStatus,
 } from "./read";
 export { retryTake, submitTakeReview } from "./take-review";
-export { quoteTakeSpend } from "./spend";
+export { quoteTakeSpend, type TakeSpendQuote } from "./spend";
 export {
   DEFAULT_CLIP_PAGE_SIZE,
   getClipDownloadUrl,
@@ -91,8 +98,6 @@ export {
   promptTail,
   requestTakeGeneration,
   storePreparation,
-  storeTakePrompt,
-  takeFixerInput,
   TAKE_FAILED,
   tooManyAssetsMessage,
   type PreparationJob,
@@ -100,4 +105,5 @@ export {
 } from "./jobs";
 export { prepareBlockPrompt, type PreparedPrompt } from "./binding";
 export { buildBlockRevisionInput, revisionStorage, type RevisionContext } from "./revision-job";
+export { failTakeReview, runTakeCheck, type CheckOutcome } from "./take-check";
 export { buildExport, EXPORT_CHANGED, EXPORT_TOO_LARGE, failExport } from "./exports";

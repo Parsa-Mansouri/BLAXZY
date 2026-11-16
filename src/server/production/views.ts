@@ -42,6 +42,8 @@ export type ProductionBlock = {
    * version is approved (stages `preparing`, `prepare_failed` and `block_review` only).
    */
   scriptChanged: boolean;
+  /** The shot before it was accepted ending differently: it can be updated (see `updateShotForHandoff`). */
+  handoffChanged: boolean;
 };
 
 const SCRIPT_CHANGE_STAGES: readonly BlockProductionStage[] = [
@@ -105,6 +107,7 @@ export async function toProductionBlocks(
         : block.productionState === "failed"
           ? block.productionFailure
           : null,
+      handoffChanged: !block.stale && block.handoffNotice !== null,
       scriptChanged: !block.stale && reset.has(block.id) && SCRIPT_CHANGE_STAGES.includes(stage),
     };
   });

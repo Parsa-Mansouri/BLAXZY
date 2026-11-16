@@ -39,7 +39,9 @@ import type { ShotRef } from "../../../_lib/clip-data";
 import { boardHref, clipHref } from "../../../_lib/routes";
 import { pollClip } from "@/app/(app)/_lib/poll-client";
 import { reviewTakeAction } from "../../../actions";
+import type { SpendQuoteData } from "@/app/(app)/_lib/spend-actions";
 import { useClips, useShown } from "../../../_components/clips-context";
+import { HandoffNotice } from "../../../../_components/handoff-notice";
 import { ShotDetails } from "./shot-details";
 import {
   BeforeClipsPanel,
@@ -129,13 +131,37 @@ function useClipSync(lineageId: string, key: string, unsettled: boolean) {
 const isTyping = (target: EventTarget | null) =>
   isTypingTarget(target, "[role='dialog'],[role='alertdialog'],[data-change-request]");
 
+/** What the confirmation says a rejection will do, by the route the router chose. */
+function rejectionWords(route: SpendQuoteData["route"]): string {
+  switch (route) {
+    case "revise":
+      return "The shot is rewritten with your changes first, then its new draft is made.";
+    case "rebind":
+      return "The shot's references are corrected and the same shot is rendered again.";
+    case "reroll":
+      return "The same shot is rendered again, as a new draft.";
+    default:
+      return "A new draft is made with your changes.";
+  }
+}
+
+/** The part of a request the quote needs (the words are not needed to price a draft). */
+function pickRequest(review: ReviewRequest) {
+  return {
+    note: review.note,
+    confirmedIssueIds: review.confirmedIssueIds,
+    keepIds: review.keepIds,
+    timedNotes: review.timedNotes,
+  };
+}
+
 function decisionWords(
   stage: TakeView["stage"],
   decision: ReviewRequest["decision"],
   shot: number,
 ): string {
   if (decision === "rejected") {
-    return `Changes requested for Shot ${shot}. A new draft of it is rendering.`;
+    return `Changes requested for Shot ${shot}. Its new draft is on the way.`;
   }
   return stage === "draft"
     ? `Draft of Shot ${shot} accepted. The final is rendering.`
@@ -180,7 +206,8 @@ export function ClipScreen(props: ClipScreenProps) {
   const { announce, markArrival } = useClips();
   const shown = useShown();
   const refreshList = useRefreshReviewList();
-  const unsettled = isUnsettled(shot.stage, shot.busy);
+  // The automatic check of the latest clip finishes by itself: keep looking until it has.
+  const unsettled = isUnsettled(shot.stage, shot.busy) || shot.takes[0]?.review.state === "pending";
   const refresh = useClipSync(shot.lineageId, detailKey(shot), unsettled);
 
   // Announce a stage change, but not the stage the page opened on.
@@ -210,6 +237,8 @@ export function ClipScreen(props: ClipScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [askError, setAskError] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  // Reads the playhead of the player, for marking a part of the clip.
+  const timeRef = useRef<(() => number) | null>(null);
 
   function decide(take: TakeView, review: ReviewRequest, fromAsk: boolean) {
     (fromAsk ? setAskError : setError)(null);
@@ -218,11 +247,16 @@ export function ClipScreen(props: ClipScreenProps) {
       try {
         const accepted = review.decision === "accepted";
         const result = await spend.run({
-          target: { kind: "take", takeId: take.id, action: accepted ? "accept" : "reject" },
+          target: {
+            kind: "take",
+            takeId: take.id,
+            action: accepted ? "accept" : "reject",
+            ...(accepted ? {} : { review: pickRequest(review) }),
+          },
           title: accepted ? "Make the final clip?" : "Make a new draft?",
           description: accepted
             ? "Accepting this draft makes the full-quality clip from it."
-            : "A new draft is made with your changes.",
+            : (quote) => rejectionWords(quote.route),
           confirmLabel: accepted ? "Accept and make final" : "Make new draft",
           submit: (expectedCredits) =>
             reviewTakeAction(
@@ -298,6 +332,7 @@ export function ClipScreen(props: ClipScreenProps) {
           prices={prices}
           balance={balance}
           maxNote={props.maxNote}
+          timeRef={timeRef}
           deciding={deciding}
           error={error}
           askError={askError}
@@ -362,6 +397,10 @@ export function ClipScreen(props: ClipScreenProps) {
           </nav>
         </header>
 
+        {shot.handoffChanged ? (
+          <HandoffNotice projectId={projectId} lineageId={shot.lineageId} onDone={refresh} />
+        ) : null}
+
         {viewing ? (
           <div className="flex swap-in flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-card bg-elevated px-4 py-3">
             <p className="text-body text-pretty text-label">
@@ -384,6 +423,7 @@ export function ClipScreen(props: ClipScreenProps) {
                 orientation={orientation}
                 label={`${playingLabel} of ${title}`}
                 pageKeys
+                timeRef={viewing ? undefined : timeRef}
                 caption={
                   <div className="flex flex-col gap-1 px-0.5">
                     {!viewing && playing.id !== latest?.id && playingLabel ? (

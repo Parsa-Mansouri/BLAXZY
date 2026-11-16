@@ -2,7 +2,7 @@
  * Helpers for the sample-mode generators: a seeded picker (deterministic for a given input) and
  * light screenplay parsing. Nothing here calls Claude or the database.
  */
-import { isEpisodeHeading, isSceneHeading, splitLines } from "../shared/script-lines";
+import { isEpisodeHeading, isSceneHeading } from "../shared/script-lines";
 
 /** FNV-1a, 32 bit. */
 export function hashString(text: string): number {
@@ -112,33 +112,6 @@ export function cueName(lines: string[], index: number): string | null {
     return null;
   }
   return name;
-}
-
-export type ParsedScene = {
-  /** The heading line as written (trimmed), or `Scene N` when the script has no headings. */
-  heading: string;
-  /** Whether `heading` is a real line of the script. */
-  real: boolean;
-  /** 1-based inclusive line range, heading included. */
-  startLine: number;
-  endLine: number;
-};
-
-/** Scenes by heading; a script without headings is one positional scene. */
-export function parseScenes(content: string): ParsedScene[] {
-  const lines = splitLines(content);
-  const scenes: ParsedScene[] = [];
-  lines.forEach((line, i) => {
-    if (isSceneHeading(line)) {
-      const previous = scenes.at(-1);
-      if (previous) previous.endLine = i;
-      scenes.push({ heading: line.trim(), real: true, startLine: i + 1, endLine: lines.length });
-    }
-  });
-  if (scenes.length === 0) {
-    scenes.push({ heading: "Scene 1", real: false, startLine: 1, endLine: lines.length });
-  }
-  return scenes;
 }
 
 /** The place in a heading: `EXT. HARBOUR PIER - DUSK` → `HARBOUR PIER`. */

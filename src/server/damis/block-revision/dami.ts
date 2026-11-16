@@ -20,14 +20,14 @@ export const BLOCK_REVISION_MAX_OUTPUT_TOKENS = 16_000;
 
 /**
  * BLOCK_REVISION (owner v1.4): the next version of one Seedance block from free-text change
- * requests, confirmed video-review issues, timed notes and asset corrections. Not wired yet.
+ * requests, confirmed video-review issues, timed notes and asset corrections.
  * Default model is Sonnet; use `blockRevisionRunContext(input)` for the run context, which picks
  * Opus when `regenerate` is requested (the owner's rule).
  */
 export const blockRevision = defineDami({
   key: "block-revision",
   version: BLOCK_REVISION_VERSION,
-  description: `BLOCK_REVISION (owner v${BLOCK_REVISION_OWNER_VERSION}): revises one Seedance block (version N to N+1) with a minimal diff; Opus when regenerate is requested. Not wired yet.`,
+  description: `BLOCK_REVISION (owner v${BLOCK_REVISION_OWNER_VERSION}): revises one Seedance block (version N to N+1) with a minimal diff; Opus when regenerate is requested.`,
   input: blockRevisionInputSchema,
   output: blockRevisionOutputSchema,
   model: CLAUDE_MODELS.sonnet,

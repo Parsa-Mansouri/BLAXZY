@@ -1,6 +1,6 @@
 /**
  * Deterministic line handling for scripts. Damis that point at script passages (reviser,
- * sectioner) refer to 1-based line numbers instead of copying text, so the code can apply and
+ * Director) refer to 1-based line numbers instead of copying text, so the code can apply and
  * verify their output exactly.
  */
 
@@ -26,13 +26,6 @@ export function numberLines(lines: string[], from = 1, to = lines.length): strin
 /** Lines joined back, inclusive 1-based range. */
 export function sliceLines(lines: string[], startLine: number, endLine: number): string {
   return lines.slice(startLine - 1, endLine).join("\n");
-}
-
-/** Character offset of the start of a 1-based line in the LF-joined script. */
-export function lineStartOffset(lines: string[], line: number): number {
-  let offset = 0;
-  for (let i = 0; i < line - 1; i++) offset += (lines[i]?.length ?? 0) + 1;
-  return offset;
 }
 
 export function isBlank(line: string | undefined): boolean {

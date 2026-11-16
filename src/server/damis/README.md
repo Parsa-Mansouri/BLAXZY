@@ -84,8 +84,8 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   `shared/creative-dna-input.ts`): `script-writer` and `script-writer-outline` take
   `script_writer`; `script-checker` takes `script_checker`; `character-generator`,
   `location-generator` and `prop-generator` take `asset_generation`; the three
-  `sheet-generator-*` take `sheet_generator`. The asset detector and the production damis are
-  wired by their own phases. With `creativeDna` the dami appends it as the last system block
+  `sheet-generator-*` take `sheet_generator`; `asset-detector` takes `asset_detector`. The
+  Director and Block Revision read the bible directly (below). With `creativeDna` the dami appends it as the last system block
   (cached, so one more breakpoint: the most any of them reaches is 3 of 4); without it the prompt
   is exactly what it was. `script-checker` uses the bible INSTEAD of `composeModules` (the bible
   already carries genre, style, format and orientation) and keeps `composeModules` as the
@@ -122,7 +122,7 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   `placeholder`, so a rename by the user (`user`) always wins and a name is only ever made once.
   A failed name is only logged; the project keeps "Untitled project".
 
-## Director (wired) and Block Revision (not wired yet)
+## Director and Block Revision
 
 - `director/` is the owner's DIRECTOR v1.3 (output_22): the approved script becomes 15 or 30 second
   Seedance blocks with staging, a shot plan, rationales and a self-contained `prompt_text`. Two
@@ -157,7 +157,7 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   counts, which a compiled bible already passed) so the stub validates.
 - `director/excerpts.ts` (pure): the script text of each block from its `script_coverage` quotes.
 
-### The pipeline (Phase 4)
+### The pipeline
 
 - `script.direct` (replaces `script.section`) is queued after detection, by a correction round
   (`resection`) and by the retry path. The handler (`worker/handlers/script-direct.ts`) reads the
@@ -183,7 +183,7 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   timed notes, keep list, attempt history). The owner's review options and sliders are not part
   of the input by decision; the output keeps `slider_state` (always zeros). Sonnet by default;
   `blockRevisionRunContext(input)` gives the context that selects Opus when `regenerate` is set.
-  Wired (Phase 5): `block.revise` builds the input in `production/revision-job.ts` (current block,
+  `block.revise` builds the input in `production/revision-job.ts` (current block,
   continuity bible and Creative Bible of the Director run, neighbours, the review's
   `revisionRequest`, asset correction, attempt history) and stores the revised block as the new
   version (`direction.revision` holds change log, fix map, flags). The input takes the Director's
@@ -192,7 +192,7 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
 - Sample mode (`sample/director.ts`, `sample/block-revision.ts`) is deterministic, passes the
   dami's own `check()`, and covers all three Director modes.
 
-## Video Review (wired) and the router
+## Video Review and the router
 
 - `video-review/` is the owner's VIDEO_REVIEW v1.0 (Sonnet, medium effort): it compares a generated
   clip's keyframes, the server's detected cuts and the asset sheets with the block that asked for it
@@ -244,6 +244,15 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   system hand-off note in any state; with clips it supersedes them and the revised version gets a
   draft at the price the user confirmed (stored on the review row). A new version has no notice.
 
+## Agent drafts and retired damis
+
+- Still on agent-written prompts (no owner file yet): `script-checker/` (reads the `script_checker`
+  slice) and `script-reviser/`.
+- Retired and deleted: `prompt-sectioner` and `text-blocks` (the Director writes the final prompts;
+  binding is code), `block-reviser` (Block Revision v1.4), `take-fixer` (Video Review + the router
+  - Block Revision), `asset-prompt-writer` and `asset-fixer`, `sheet-generator` and `sheet-fixer`
+    (the owner's designers and sheet makers). The Asset Detector v1 is replaced by v2.
+
 ## Runs, concurrency and the light entry
 
 - `dami_run.status` is `queued`, `running`, `succeeded`, `failed` or `aborted`. `aborted` means
@@ -255,8 +264,8 @@ now?, db? })` marks `running` rows older than 90 minutes (default) as `aborted`;
 - `DAMI_MAX_CONCURRENCY` limits concurrent Claude calls per process, not per fleet: one shared
   `Semaphore` (`getProcessClaudeLimiter`) covers every dami in the process, and a call waiting for
   a slot leaves the queue when its signal aborts. The fleet total is processes times the limit.
-- `@/server/damis/light` is the entry for pages and other web-bundle code: review catalogs and
-  their helpers, issue and reason code lists, and the mode helpers, with no runner, no sample
+- `@/server/damis/light` is the entry for pages and other web-bundle code: the catalog reader, the
+  designer lookups, the mode getter and a few constants, with no runner, no sample
   client and no prompt text. Import it instead of `@/server/damis` when that is all you need.
 
 ## Registry

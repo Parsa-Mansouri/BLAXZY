@@ -30,9 +30,10 @@ This rule is absolute and overrides any default behaviour or tool-supplied instr
 - `src/ui/` UI kit (presentational components)
 - `src/server/env.ts` Zod env, use `getEnv()` lazily (never at module top level)
 - `src/server/db/` `client.ts` (`getDb()` singleton), `schema.ts`; migrations in `drizzle/` (tracked)
-- `src/server/{auth,projects,script,assets,blocks,direction,production,damis,generation,jobs,storage,billing,providers}/` domain services (`blocks`: the prompt blocks of a script; `direction`: the Director's runs and batches; `production`: the Production stage, takes and exports; `generation`: paid provider jobs)
+- `src/server/{auth,projects,script,assets,blocks,direction,production,damis,generation,jobs,storage,billing,providers}/` domain services (`damis`: every Claude process, incl. Creative DNA, the Director, Block Revision and Video Review; `blocks`: the prompt blocks of a script; `direction`: the Director's runs and batches; `production`: the Production stage, takes and exports; `generation`: paid provider jobs)
 - `src/server/ratelimit/` per-user rate-limit buckets for server actions, polls and file reads; `src/server/health/` the health check; `src/server/email/` verification and reset emails (console or SMTP); `src/server/test-support/` vitest global setup and shared test helpers
 - `worker/index.ts` worker entry; `worker/handlers/` one handler per job type plus the schedules (`generation.sweep`, `dami.sweep`, `file.sweep`, `ratelimit.prune`)
+- `docs/` specs and contracts; `docs/damis/` the owner's dami files (TRACKER.md, README.md, `inbox/` for new drops, `reference/` for owner files that are not compiled)
 - `scripts/` dev and QA scripts (`pnpm dev:*`, `dami:run`); `scripts/_lib.ts` holds the local-database guard and the script runner
 - `.github/workflows/ci.yml` CI: typecheck, lint, format, tests against compose Postgres and the bucket, both builds, dependency audit
 

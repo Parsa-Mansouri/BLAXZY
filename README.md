@@ -180,7 +180,7 @@ whole Script stage then runs end to end locally:
 
 ```bash
 pnpm worker            # in one terminal
-pnpm dev:script-flow   # creates a project for testuser@gmail.com and runs brief → blocks
+pnpm dev:script-flow   # creates a project for testuser@gmail.com and runs brief → review → detection → directed blocks
 ```
 
 ## Generation and credits

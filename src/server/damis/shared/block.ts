@@ -1,23 +1,13 @@
 /**
- * Pieces shared by the production damis (retired) and the Director's binding: the asset
- * and review schemas, the `<<<image_N>>>` token rules and their code check, and the renderers for
- * the user message. Prompt text here is part of each dami's stable base prompt: changing it means
- * bumping their versions.
+ * The `<<<image_N>>>` token rules shared by the Director's binding and the production binding, and
+ * the code check of a prepared prompt (used by the binding tests).
  */
 import { z } from "zod";
 import { ASSET_KINDS } from "@/server/db/schema";
 import { assetRefSchema, assetTagPattern, formatAssetRef } from "./asset-ref";
 
-export { assetRefSchema };
-
 /** The most reference images the video model accepts for one block. */
 export const MAX_REFERENCE_IMAGES = 9;
-
-/** The longest block (clip) in seconds: the Director writes 15 or 30 second blocks. */
-export const MAX_BLOCK_SECONDS = 30;
-
-/** The longest prompt the production damis return (their input prompts stay under 6000). */
-export const MAX_PRODUCTION_PROMPT = 8000;
 
 /** A strict token: `<<<image_3>>>`. */
 export const IMAGE_TOKEN_PATTERN = /<<<image_([1-9]\d*)>>>/g;
@@ -42,21 +32,6 @@ export const blockAssetSchema = z
   });
 
 export type BlockAsset = z.output<typeof blockAssetSchema>;
-
-/** The refs a production prompt calls, in token order. */
-export const productionAssetRefsSchema = z
-  .array(assetRefSchema)
-  .max(MAX_REFERENCE_IMAGES)
-  .describe(
-    `The kind:Name of each referenced asset; the position (1-based) is the N of its <<<image_N>>> token. At most ${MAX_REFERENCE_IMAGES}.`,
-  );
-
-export const productionPromptSchema = z
-  .string()
-  .trim()
-  .min(20)
-  .max(MAX_PRODUCTION_PROMPT)
-  .describe("The finished video prompt, in English, with <<<image_N>>> tokens.");
 
 /** Tokens of a prompt in order of first appearance, as numbers. */
 export function tokenSequence(prompt: string): number[] {
@@ -129,49 +104,4 @@ export function checkBlockPrompt(
     );
   }
   return issues;
-}
-
-/** The previous tokens must survive a fix unchanged and in the same order of first appearance. */
-export function checkTokenOrder(prompt: string, previousPrompt: string): string[] {
-  const before = tokenSequence(previousPrompt);
-  const after = tokenSequence(prompt);
-  if (before.join(",") === after.join(",")) return [];
-  const show = (seq: number[]) => (seq.length === 0 ? "(none)" : seq.map(imageToken).join(" "));
-  return [
-    `the tokens must stay as they were, in the same order of first appearance: expected ${show(before)}, got ${show(after)}`,
-  ];
-}
-
-/** The reference rules every production prompt repeats (identical text in all three damis). */
-export const IMAGE_TOKEN_RULES = `## Reference tokens
-The video model receives the block's prompt plus a numbered list of reference images, one per asset in assetRefs. A token \`<<<image_N>>>\` in the prompt binds the words next to it to reference image N, where N is the 1-based position of that asset in assetRefs.
-- Write the token right after the asset's name where the prompt names it: "Ines <<<image_1>>> turns the map over". The name stays readable; the token never replaces it. Put the token at the first mention of the asset and again at its first mention in each later shot where it matters, so every shot binds the same look.
-- assetRefs lists the referenced assets as kind:Name in the order of their numbers. Every listed asset is called by at least one token and every token has an entry in assetRefs: numbers run 1 to N with no gaps, and no asset is listed twice.
-- Only assets in the asset list may be referenced. A voice is never an image reference: write the speaker's name and the line, without a token.
-- An asset that is named in the block but is not referenced (no sheet available, over the limit of ${MAX_REFERENCE_IMAGES} references) stays a plain name with a few look words from its description.
-- Never write \`[kind:Name]\` tags in the result, never invent other token forms, and never reuse a token number from text of another block.`;
-
-/** Renders the available assets for the user message, in the order given. */
-export function renderBlockAssets(assets: readonly BlockAsset[]): string {
-  if (assets.length === 0) {
-    return "## Assets available as references\n(none: reference nothing, assetRefs is empty, name everything in words)";
-  }
-  const rows = assets.map((a) => {
-    const description = a.description ? ` - ${a.description.replace(/\s+/g, " ")}` : "";
-    const voice = a.kind === "voice" ? " (voice: never an image reference)" : "";
-    return `- ${a.ref}${voice}${description}`;
-  });
-  return ["## Assets available as references", ...rows].join("\n");
-}
-
-/** The numbered reference list of an existing prompt: token = kind:Name. */
-export function renderRefList(assetRefs: readonly string[], assets: readonly BlockAsset[]): string {
-  if (assetRefs.length === 0) return "(none)";
-  const byRef = new Map(assets.map((a) => [a.ref, a]));
-  return assetRefs
-    .map((ref, i) => {
-      const known = byRef.has(ref) ? "" : " (no longer in the asset list)";
-      return `${imageToken(i + 1)} = ${ref}${known}`;
-    })
-    .join("\n");
 }

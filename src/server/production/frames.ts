@@ -3,7 +3,6 @@
  * `frame-plan.ts` decides which moments to take; this file finds the cuts, grabs the frames and
  * stores them. A video is a path on disk or bytes (written to a temporary file, removed after).
  */
-import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -254,9 +253,4 @@ export async function storeReviewFrames(input: {
   };
   await Promise.all(Array.from({ length: Math.min(2, input.frames.length) }, lane));
   return out;
-}
-
-/** A unique, file-name-safe key for one extraction when the caller has no take id. */
-export function newTakeKey(): string {
-  return `take-${randomUUID().slice(0, 8)}`;
 }

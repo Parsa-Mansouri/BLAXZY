@@ -139,17 +139,17 @@ three sheet makers replaced the draft `sheet-generator` and `sheet-fixer` (Phase
 exported for the UI: `designerQuestions(kind, context)` (each generator's `questions.ts`, with its
 skip logic; `GuidedQuestion` gains `advanced?` and `prefill?`; every question also takes the
 user's own words or `ai_decides`), `REFERENCE_ROLES`, `REFERENCE_CONFLICTS`, `LOOK_FRAMES` and the
-designers' review catalogs (`getReviewCatalog(DESIGNER_CATALOGS[designer])`). Look reviews send
-catalog `selections` (stored as `review.fix_requests`, codes in `issue_codes`), spec-card edits,
+designers' review catalogs (`getReviewCatalog(DESIGNER_CATALOGS[designer])`, used for their rules only). Look reviews send
+a free-text `note` (the whole change request; `issue_codes` stays empty), spec-card edits,
 answers to the designer's questions and a changed photo list; a `regenerate` option alone re-rolls
 with the same prompt and a new variant (no dami call). Sheets and pack views are reviewed
-with the sheet makers' catalogs (`sheet-generator-character`, `-location`, `-prop`) the same way. Marks a reviewer drops on the picture are folded into the
+with a free-text note too (`sheet-generator-character`, `-location`, `-prop`). Marks a reviewer drops on the picture are folded into the
 note as plain text. Each dami has a sample generator in `src/server/damis/sample/`.
 
 ## Pre-production: `@/server/assets` (additions)
 
 State of an asset, derived: `needs_image` → `generating` (→ `needs_answer`) → `look_review` →
-`building_sheet` → `sheet_review` → `ready` (plus `failed` with what failed). Voices:
+`building_sheet` → `sheet_review` → `ready` (plus `failed` with what failed). Legacy voice assets (Asset Detector v1; v2 creates none, voices are chosen in Production):
 `needs_recording` → `ready` (upload only, accepted on upload, no sheet).
 
 A character's sheet is one image (`asset_sheet.prompt`, `spec` with the six detail frames). A
@@ -196,25 +196,25 @@ getAssetDetail(assetId, userId): Promise<{
 } | null>
 
 startLookFromUpload(input: { assetId; userId; fileId }): Promise<LookView | null>
-  // image assets: look in_review at once. Voice assets: audio file, accepted at once.
+  // image assets: look in_review at once. Legacy voice assets: audio file, accepted at once.
 startLookFromPrompt(input: { assetId; userId; prompt: string }): Promise<LookView | null>
 startLookFromGuided(input: { assetId; userId; answers: Record<string,string> }): Promise<LookView | null>
   // both: look pending, enqueue asset.look.generate
-submitLookReview(input: { lookId; userId; decision; selections?; note?; references?; specEdits?;
-                           clarifyAnswers?; confirmedFields? }): Promise<AssetStage | null>
+submitLookReview(input: { lookId; userId; decision; note?; regenerate?; references?; specEdits?;
+                           clarifyAnswers?; confirmedFields?; expectedCredits? }): Promise<AssetStage | null>
   // accepted (critical inferred spec fields confirmed) → previous accepted look superseded, create
   //   sheet (pending), enqueue asset.sheet.generate (character) or asset.sheet.plan (location, prop)
-  // rejected (needs a reason) → uploaded look: back to needs_image;
+  // rejected (needs a note, or `regenerate`) → uploaded look: back to needs_image;
   //   generated look: new look (pending, parentId), enqueue asset.look.fix
-submitSheetReview(input: { sheetId; userId; decision; selections?; note? }): Promise<AssetStage | null>
-  // character sheets. Rejected: SR01 alone re-rolls (same prompt, new seed); SX01 (or a pack's
-  //   LSX01/ASX01) sends the asset back to its designer (the accepted look is rejected with the
+submitSheetReview(input: { sheetId; userId; decision; note?; regenerate?; designChange?; expectedCredits? }): Promise<AssetStage | null>
+  // character sheets. Rejected: `regenerate` alone re-rolls (same prompt, new seed); `designChange`
+  //   sends the asset back to its designer (the accepted look is rejected with the
   //   request, a designer fix round starts, the sheet rebuilds once the new look is accepted);
   //   anything else → new sheet (pending, parentId), enqueue asset.sheet.fix
-submitSheetViewReview(input: { viewRowId; userId; decision; selections?; note?;
+submitSheetViewReview(input: { viewRowId; userId; decision; note?; regenerate?; designChange?; expectedCredits?;
                                hypothesesApproved? }): Promise<AssetStage | null>
   // accepted (proposed parts approved with it) → enqueue asset.sheet.views.advance;
-  // rejected → LSR01/ASR01 re-roll, LSX01/ASX01 back to the designer, else a new planned
+  // rejected → `regenerate` re-rolls, `designChange` goes back to the designer, else a new planned
   //   version without a prompt and asset.sheet.plan { sheetId, viewRowId } (only_views)
 retrySheetView(input: { viewRowId; userId }): Promise<AssetStage | null>
 lockSheet(input: { sheetId; userId }): Promise<AssetStage | null>

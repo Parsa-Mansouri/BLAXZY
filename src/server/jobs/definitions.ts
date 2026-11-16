@@ -294,7 +294,7 @@ export const assetSheetAssemble = defineJob({
 const blockPayload = z.object({ blockId: z.string().uuid() });
 const takePayload = z.object({ takeId: z.string().uuid() });
 
-/** Prepare a block version for generation (text-blocks). */
+/** Prepare a block version for generation (code only: binds the prompt's asset tags to image tokens). */
 export const productionPrepare = defineJob({
   name: "production.prepare",
   payload: blockPayload,

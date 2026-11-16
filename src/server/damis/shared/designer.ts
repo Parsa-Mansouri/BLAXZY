@@ -110,15 +110,6 @@ export function ownerFixRequests(requests: readonly DesignerFixRequest[]) {
   }));
 }
 
-/** Guided answers without the ones the user left to the designer, or null when none remain. */
-export function decidedAnswers(
-  answers: Readonly<Record<string, string>> | undefined,
-): Record<string, string> | null {
-  if (!answers) return null;
-  const kept = Object.entries(answers).filter(([, v]) => v !== AI_DECIDES);
-  return kept.length > 0 ? Object.fromEntries(kept) : null;
-}
-
 /** Problems with `applied_fixes`: every requested code must be applied, and only those. */
 export function appliedFixProblems(
   applied: readonly string[],

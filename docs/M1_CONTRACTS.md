@@ -70,10 +70,10 @@ getScriptVersion(versionId, userId): Promise<ScriptVersionView | null>
 submitScriptReview(input: {
   projectId; userId; versionId;
   decision: "accepted" | "rejected";
-  issueCodes?: ScriptIssueCode[]; note?: string; comments?: ReviewComment[];
+  note?: string; comments?: ReviewComment[];
 }): Promise<ScriptVersionView | null>
 // only on a version in_review. Writes a review row (with the version's damiRunId).
-// rejected: needs at least one of issueCodes / note / comments; marks the version rejected,
+// rejected: needs a note or comments (free text; `issue_codes` stays empty); marks the version rejected,
 //   creates the next version (source revised, pending, parentId) and enqueues script.revise.
 // accepted: marks it accepted (previous accepted → superseded), advances script → pre_production,
 //   enqueues script.detect-assets.
@@ -106,7 +106,7 @@ countAssetsByKind(projectId, userId): Promise<Record<AssetKind, number> | null>
 ## `@/server/blocks`
 
 ```ts
-replaceBlocks(input: { projectId; scriptVersionId; blocks: SectionedBlock[]; damiRunIds: string[] }):
+replaceBlocks(input: { projectId; scriptVersionId; blocks: DirectedBlock[]; damiRunIds: string[] }):
   Promise<{ created: number; carried: number; superseded: number; reset: number; skipped?: "not_latest" }>
 // `skipped: "not_latest"`: the version is no longer the newest accepted one (checked under the
 // project lock), so nothing changed.
@@ -139,7 +139,7 @@ Sectioning state lives in `project.stageState.sectioning`
 | `script.detect-assets` | `{ scriptVersionId }` | version id (one paid detection per version at a time; the handler also skips a version that is no longer the accepted one) | runDami(assetDetector, knownAssets) → `applyDetection`; mark blocks stale; enqueue `script.direct` |
 | `script.direct` | `{ scriptVersionId, resection?, bibleWaits? }` | `<version id>:direct`, or `:resection` when `resection` is set (a re-direction although blocks exist, after a correction round changed the detected assets); one run per key at a time | Director: `full` (about 8 blocks or fewer) stored with `replaceBlocks`, else `director-plan`, a `direction` row and one `direction.write` job per batch; sectioning state done when the blocks are stored. Skips a version that is no longer the accepted one; defers while the Creative Bible compiles |
 | `direction.write` | `{ directionId, batchIndex }` | `<direction id>:<batch index>` | `write_blocks` for the batch's block range over the saved plan; the last batch to finish assembles all blocks in one transaction (idempotent) |
-| `asset.detect.fix` | `{ reviewId }` | review id | one correction round of the detected asset list ("Something wrong with this list?"): the Asset Detector in fix mode or a re-scan → `applyDetection`; may send `script.section` with `resection` |
+| `asset.detect.fix` | `{ reviewId }` | review id | one correction round of the detected asset list ("Something wrong with this list?"): the Asset Detector in fix mode or a re-scan → `applyDetection`; may send `script.direct` with `resection` |
 
 Every handler first loads the row and returns if the work is already done (idempotent), stores
 `damiRunId` on what it produced, and on a non-retryable failure (or the last attempt) records a

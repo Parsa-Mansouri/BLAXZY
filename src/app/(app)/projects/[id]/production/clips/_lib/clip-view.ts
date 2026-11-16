@@ -161,11 +161,6 @@ export function detailKey(detail: {
   return [detail.id, detail.stage, detail.busy ? "busy" : "idle", ...takes].join("|");
 }
 
-/** A fingerprint of the board's tiles. */
-export function boardKey(tiles: readonly ClipTileData[]): string {
-  return tiles.map((t) => `${t.lineageId}:${t.stage}:${t.posterFileId ?? ""}`).join("|");
-}
-
 /** True when a generation failed for lack of credits (the reason then names the balance). */
 export function isCreditsFailure(failure: string | null): boolean {
   return failure !== null && /credit/i.test(failure);

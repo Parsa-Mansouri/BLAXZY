@@ -1,5 +1,5 @@
 /**
- * Preparing blocks (text-blocks): claiming the blocks that were never prepared when Production is
+ * Preparing blocks (binding the Director's prompts to their assets): claiming the blocks that were never prepared when Production is
  * entered, retrying a failed preparation, and reopening a finished film whose shots changed.
  */
 import { and, eq, isNotNull } from "drizzle-orm";

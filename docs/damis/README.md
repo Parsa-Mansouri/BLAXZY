@@ -1,11 +1,15 @@
 # Owner dami files
 
-The status of every dami (live, upgrade available, delivered but not wired, agent draft) is in
-[TRACKER.md](TRACKER.md). New owner drops are unpacked into `inbox/<date>/` until they are wired in.
+The status of every dami (live, agent draft, retired) is in [TRACKER.md](TRACKER.md). New owner
+drops are unpacked into `inbox/<date>/` and removed from there once their files are copied into the
+dami's `source/` folder and wired in (the question bank stays until its plan starts).
+`reference/` holds owner files that are not code we run: `creativeDna.ts`, the owner's sample
+runner for Creative DNA (it reads files at module load, uses `any` and calls the SDK directly).
 
-Hamed's dami instructions (delivered 2026-11-12) live next to the code that implements them. Each
-dami folder under `src/server/damis/` keeps the original files in `source/` and its review catalog
-(the "complaint menu" users pick rejection reasons from) as `review-catalog.json`.
+Hamed's dami instructions (drops of 2026-11-12 and 2026-11-16) live next to the code that
+implements them. Each dami folder under `src/server/damis/` keeps the original files in `source/`
+and, for the older designers and detector, the owner's review catalog as `review-catalog.json`
+(the screens no longer show its options, see below; code still reads its rules and edit-eligible codes).
 
 The code copies the system-prompt text from `source/` into `prompt.ts`, and a test checks that each
 copied block still matches the source. To take a new version from Hamed:
@@ -16,31 +20,36 @@ copied block still matches the source. To take a new version from Hamed:
 
 | Owner file | Folder | Kind |
 |---|---|---|
+| `dami_00_creative_dna.system.md` | `creative-dna/source/` | Job description (Creative DNA, DAMI-00) |
+| `creative_modules_registry.v1.json` | `creative-dna/source/` | Rulebook (6 genres, 7 styles, shared core) |
+| `output_10.schema.json` | `creative-dna/source/` | Creative Bible form (output schema) |
+| `creative_dna.tests.json` | `creative-dna/source/` | Regression cases |
 | `dami_script_writer_v0.2.md` | `script-writer/source/` | Job description |
 | `script_output.schema.json` | `script-writer/source/` | Script form (output schema) |
 | `blaxzy_enhancer_dami.md` | `enhancer/source/` | Job description |
 | `asset_detector_dami_v2.md` | `asset-detector/source/` | Job description |
-| `asset_detector_review_catalog_v2.json` | `asset-detector/review-catalog.json` | Complaint menu |
+| `asset_detector_review_catalog_v2.json` | `asset-detector/review-catalog.json` | Complaint menu (rules only) |
 | `character_generator_dami_v5.md` | `character-generator/source/` | Job description |
-| `character_review_catalog_v2.json` | `character-generator/review-catalog.json` | Complaint menu |
+| `character_review_catalog_v2.json` | `character-generator/review-catalog.json` | Complaint menu (rules only) |
 | `location_generator_dami_v1.md` | `location-generator/source/` | Job description |
 | `location_shared_modules_v1.md` | `location-shared/source/` | Rulebook (shared with the location sheet) |
-| `location_review_catalog_v1.json` | `location-generator/review-catalog.json` | Complaint menu |
+| `location_review_catalog_v1.json` | `location-generator/review-catalog.json` | Complaint menu (rules only) |
 | `prop_generator_dami_v1.md` | `prop-generator/source/` | Job description |
 | `prop_shared_modules_v1.md` | `prop-shared/source/` | Rulebook (shared with the prop sheet) |
-| `prop_review_catalog_v1.json` | `prop-generator/review-catalog.json` | Complaint menu |
+| `prop_review_catalog_v1.json` | `prop-generator/review-catalog.json` | Complaint menu (rules only) |
 | `sheet_generator_character_v4.md` | `sheet-generator-character/source/` | Job description |
-| `sheet_review_catalog_character_v3.json` | `sheet-generator-character/review-catalog.json` | Complaint menu |
+| `sheet_review_catalog_character_v3.json` | `sheet-generator-character/review-catalog.json` | Complaint menu (rules only) |
 | `sheet_generator_location_v1.md` | `sheet-generator-location/source/` | Job description |
-| `sheet_review_catalog_location_v1.json` | `sheet-generator-location/review-catalog.json` | Complaint menu |
+| `sheet_review_catalog_location_v1.json` | `sheet-generator-location/review-catalog.json` | Complaint menu (rules only) |
 | `sheet_generator_prop_v1.md` | `sheet-generator-prop/source/` | Job description |
-| `sheet_review_catalog_prop_v1.json` | `sheet-generator-prop/review-catalog.json` | Complaint menu |
+| `sheet_review_catalog_prop_v1.json` | `sheet-generator-prop/review-catalog.json` | Complaint menu (rules only) |
+| `dami_director.system.md` (v1.3) | `director/source/` | Job description (Director, output_22) |
+| `dami_block_revision.system.md` (v1.4) | `block-revision/source/` | Job description (Block Revision) |
+| `dami_video_review.system.md` (v1.0) | `video-review/source/` | Job description (Video Review; its router is our code) |
 
-## Pending
-
-`pending/blaxzy_director_dami.md` is not wired in. The owner marked this version as wrong, so
-Production keeps the current prompt-sectioner, and text-blocks flow until a
-corrected Director arrives.
+Retired owner files: Text Blocks, Prompt Sectioner and Take Fixer (replaced by the Director, by
+Video Review plus the router, and by Block Revision). The Asset Detector v1 files are in git
+history only.
 
 ## Settings that differ from the files
 
@@ -48,8 +57,22 @@ corrected Director arrives.
   (`output_config.format`) instead, which guarantees the same schema.
 - **Temperature.** The installed Anthropic SDK has no temperature setting, so each dami sets `effort`
   instead: `low` where a file says 0.3 or lower, `medium` otherwise.
-- **Asset ids.** The detector's `char_1` / `loc_1` ids are translated to BLAXZY's real-name ids
-  ("Mara", "Mara (2)") inside the worker. They never reach the database or the UI.
+- **Asset ids.** The detector's `char_1` / `loc_1` ids and the Director's `@char_1` tokens are
+  translated to BLAXZY's real-name ids ("Mara", "Mara (2)") inside the worker. They never reach the
+  database or the UI; blocks store `[kind:Name]` tags and Preparation binds them to `<<<image_N>>>`.
+- **Free-text change requests.** Every review screen has one free-text box instead of the owner's
+  catalogs (reason codes, follow-ups, sliders, technical/preference step). The catalogs stay in
+  the repo for their rules (edit-eligible codes, design-change routing); Creative DNA's `review_options` are not shown. Block Revision takes free
+  text only and keeps `slider_state` (always zeros) in its output.
+- **No generation cap, credits confirmed.** The owner's 6-generation limit per block is not
+  applied. Every paid generation (looks, sheets, drafts, finals, fixes, retries, regenerations)
+  asks the user to confirm the credits first; the Account page can turn the prompt off.
+- **Voices.** Asset Detector v2 does not treat voices as assets. Voices are chosen in Production,
+  per block; the `voices` arrays in the Director's and Block Revision's data are expected empty.
+- **Project names.** `project-namer/` has no owner file; it is ours. Script Checker and Script
+  Reviser also run on agent-written prompts until the owner sends files.
+- **Video Review.** The file's `<frame_extraction_spec>` and `<router>` are server code, not part
+  of the prompt. Block length is 15 or 30 s (the Director picks).
 - **Sample mode.** During testing every dami runs in sample mode (`DAMI_MODE=sample`). Each one has
   a deterministic sample generator in `src/server/damis/sample/`, and every wait takes 3 seconds.
 - **Designers.** The character, location and prop generators take their reference photos as file

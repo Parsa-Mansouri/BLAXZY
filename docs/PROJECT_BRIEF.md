@@ -65,10 +65,10 @@ tailor the script dami for exactly this project.
 - On acceptance the **asset detector** dami lists every character, prop, location and other asset
   in the story (Output_021).
 - The user moves straight on to pre-production. In the background another dami turns the script
-  into divided, sectioned screenplay-style prompts (Output_022).
+  into directed 15 or 30 second blocks with ready-to-paste prompts (Output_022, the Director).
 
 ### 3. Pre-production → Output_030
-- A large category screen (characters, locations, props, voices, ...), not a list.
+- A large category screen (characters, locations, props, ...), not a list. Voices are not assets: they are chosen in Production, per block.
 - Inside a category, each detected asset has a + to add its image: **upload** it or **generate**
   it. Generating offers a full prompt written by the user, or a series of guided questions that
   capture the best descriptors for that kind of asset.
@@ -77,19 +77,20 @@ tailor the script dami for exactly this project.
 - When every asset is done, the user reviews every sheet and sends back any that are wrong.
 
 ### 4. Production → Output_04
-- The **text blocks** dami takes the prompts (Output_022) and sheets (Output_030), orders them
-  into blocks and suggests the right assets for each.
+- The directed blocks (Output_022) get their assets bound by code: the approved sheets (Output_030)
+  are attached to each block in order.
 - The user previews each block (assets, prompt, script section), checks the assets, then does a
   final review of all blocks.
 - Blocks go to Higgsfield. **BLAXZY chooses the models; the Wizard user never does.**
-- The user reviews the generations, accepting or denying each. When all are accepted they receive
+- The user confirms the credits before every paid generation (there is no cap), then reviews each clip, accepting or denying it; a dami checks every clip first and a router turns a rejection into a rebind, a revision or a re-roll. When all are accepted they receive
   every plan, scene and output.
 
 ## How review works (everywhere)
 
-Whenever a user rejects something, ask **what the issue is**: offer concrete options ("the face is
-not fully generated") that map to a dami built to fix exactly that, plus a free-text reason. The
-earlier idea of first asking "technical or personal preference?" was dropped; the system can
+Whenever a user rejects something, they say **what the issue is in their own words**: one free-text
+box, no catalog of reasons (an earlier idea offered concrete options such as "the face is not fully
+generated"; it was dropped, and so was the question). The
+earlier idea of first asking "technical or personal preference?" was dropped too; the system can
 classify that itself.
 
 Every review stores the decision, the reason and the version of the dami that produced the

@@ -315,20 +315,7 @@ export {
   nonDefaultStates,
   PROP_LEVEL_MAX_IMAGES,
 } from "./sheet-generator-prop/dami";
-export {
-  referenceAssetSchema,
-  type ChangeSummaryItem,
-  type ReferenceAsset,
-} from "./shared/reference";
-
-export {
-  blockAssetSchema,
-  checkBlockPrompt,
-  imageToken,
-  IMAGE_TOKEN_PATTERN,
-  MAX_REFERENCE_IMAGES,
-  type BlockAsset,
-} from "./shared/block";
+export { imageToken, IMAGE_TOKEN_PATTERN, MAX_REFERENCE_IMAGES } from "./shared/block";
 
 /** Every dami by key (for the CLI and, later, Pro's dami picker). */
 export const DAMIS: Readonly<Record<string, AnyDami>> = {
@@ -421,7 +408,7 @@ export {
   type ProjectNamerOutput,
 } from "./project-namer/schema";
 
-// Director (owner v1.3, wired: `script.direct`) and Block Revision (owner v1.4, not wired yet)
+// Director (owner v1.3, wired: `script.direct`) and Block Revision (owner v1.4, wired: `block.revise`)
 export { director, directorPlan, DIRECTOR_VERSION, DIRECTOR_OWNER_VERSION } from "./director/dami";
 export {
   assetRegistrySchema,
@@ -459,7 +446,6 @@ export { checkDirector, checkDirectorPlan } from "./director/validate";
 export { stubCreativeBible } from "./director/stub";
 export { blockExcerpts } from "./director/excerpts";
 export { creativeBibleShape } from "./creative-dna/schema";
-export { MAX_BLOCK_SECONDS } from "./shared/block";
 export { WORDS_PER_MINUTE } from "./shared/style";
 export {
   bindAssetTokens,

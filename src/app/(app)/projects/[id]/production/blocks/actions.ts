@@ -6,7 +6,6 @@ import {
   approveAllBlocks,
   getBlockDetail,
   PriceChangedError,
-  quoteProduction,
   requestNextShotUpdate,
   updateShotForHandoff,
   retryPreparation,
@@ -27,13 +26,6 @@ export interface PickerAsset {
   name: string;
   kind: string;
   thumbnailFileId: string | null;
-}
-
-export interface Quote {
-  count: number;
-  credits: number;
-  finalsEach: number;
-  balance: number;
 }
 
 const MISSING = SHOTS_MISSING;
@@ -65,22 +57,6 @@ export async function approveAllAction(
     await approveAllBlocks({ projectId, userId: user.id });
     const snapshot = await readSnapshot(projectId, user.id, null, clampCount(loaded, PAGE, 500));
     return snapshot ? { ok: true, data: snapshot } : MISSING_RESULT;
-  });
-}
-
-export async function quoteAction(projectId: string): Promise<ActionResult<Quote>> {
-  return userAction("read", "blocks.quote", async (user) => {
-    const quote = await quoteProduction(projectId, user.id);
-    if (!quote) return PROJECT_GONE;
-    return {
-      ok: true,
-      data: {
-        count: quote.drafts.count,
-        credits: quote.drafts.credits,
-        finalsEach: quote.finalsEach,
-        balance: quote.balance,
-      },
-    };
   });
 }
 

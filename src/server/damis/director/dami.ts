@@ -26,12 +26,12 @@ export const DIRECTOR_MAX_OUTPUT_TOKENS = 32_000;
 /**
  * DIRECTOR (owner v1.3): directs the approved script and divides it into Seedance blocks. This
  * dami answers `full` (for scripts of up to ~8 blocks) and `write_blocks` (a batch of a saved
- * plan). Not wired into the pipeline yet.
+ * plan). Run by `script.direct` and `direction.write`.
  */
 export const director = defineDami({
   key: "director",
   version: DIRECTOR_VERSION,
-  description: `DIRECTOR (owner v${DIRECTOR_OWNER_VERSION}, output_22), modes full and write_blocks: directs the approved script and writes its 15 or 30 second Seedance prompt blocks with staging, shot plan and continuity bible. Runs once in the background after script approval. Not wired yet.`,
+  description: `DIRECTOR (owner v${DIRECTOR_OWNER_VERSION}, output_22), modes full and write_blocks: directs the approved script and writes its 15 or 30 second Seedance prompt blocks with staging, shot plan and continuity bible. Runs once in the background after script approval.`,
   input: directorInputSchema,
   output: directorOutputSchema,
   // Opus: one expensive call per project that every block of the film depends on; the owner
@@ -52,7 +52,7 @@ export const director = defineDami({
 export const directorPlan = defineDami({
   key: "director-plan",
   version: DIRECTOR_VERSION,
-  description: `DIRECTOR (owner v${DIRECTOR_OWNER_VERSION}, output_22), mode plan: the plan pass for longer scripts (blocks without shots or prompt_text); write_blocks then writes them in batches. Not wired yet.`,
+  description: `DIRECTOR (owner v${DIRECTOR_OWNER_VERSION}, output_22), mode plan: the plan pass for longer scripts (blocks without shots or prompt_text); write_blocks then writes them in batches.`,
   input: directorPlanInputSchema,
   output: directorPlanOutputSchema,
   model: CLAUDE_MODELS.opus,

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectStyle } from "@/server/db/schema";
 import { renderProjectParameters, renderStyleReferences } from "./project";
-import { renderImageStyle } from "./reference";
 import { projectStyleSchema } from "./style";
 
 const IMAGE = "6f1f0b8e-2f4a-4b8e-9d2a-0c6b1f0e3a11";
@@ -39,7 +38,6 @@ describe("style references in the prompts", () => {
       "- Visual style reference images: 1 supplied by the user",
     ]);
     expect(renderProjectParameters(withReferences)).toContain(lines[0]);
-    expect(renderImageStyle(withReferences)).toContain(lines[0]);
   });
 });
 

@@ -221,7 +221,7 @@ export const videoReview = defineDami({
   key: "video-review",
   version: VIDEO_REVIEW_VERSION,
   description:
-    "Inspects a generated clip: compares up to 28 keyframes, the server's detected cuts and the sheets with the block that asked for it, and reports every difference with its cause (rendering failure, wrong reference, or missed instruction) so the router can pick the fix. Not wired yet.",
+    "Inspects a generated clip: compares up to 28 keyframes, the server's detected cuts and the sheets with the block that asked for it, and reports every difference with its cause (rendering failure, wrong reference, or missed instruction) so the router can pick the fix.",
   input: videoReviewInputSchema,
   output: videoReviewOutputSchema,
   // Sonnet (the owner's choice, vision): one review per generated clip, so volume matters more

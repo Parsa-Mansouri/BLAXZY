@@ -73,11 +73,10 @@ type BlockProductionStage =
 |---|---|---|
 | `block-revision` | see `src/server/damis/block-revision/schema.ts`; assembled from the DB by `production/revision-job.ts` | revised block, `change_log`, `fix_map`, `flags` |
 
-`prompt` uses `<<<image_N>>>` tokens, N being the 1-based position in the returned `assetRefs`;
+A block stores its prompt with `[kind:Name]` tags; preparation (`production/binding.ts`, code only) turns them into `<<<image_N>>>` tokens, N being the 1-based position in `assetRefs`;
 every listed ref is called at least once and every token has a ref (checked in code). Only assets
-passed in may be referenced. Voices are never image references. Exports for the UI:
-`BLOCK_ISSUE_LIST`, `TAKE_ISSUE_LIST` (shape of `SCRIPT_ISSUE_LIST`), with their code unions and
-Zod enums. Sample generators for all three.
+passed in may be referenced. Voices are never image references.
+Sample generators exist for the production damis (`director`, `block-revision`, `video-review`).
 
 ## Production: `@/server/production`
 
@@ -116,7 +115,7 @@ getBlockDetail(lineageId, userId): Promise<(ProductionBlock & { takes: TakeView[
 setBlockAssets(input: { lineageId; userId; assetIds: string[] }): Promise<ProductionBlock | null>
   // only before generation; ready, non-voice assets of the project; creates the next block
   // version and re-prepares it (the prompt's tokens must match the new list)
-submitBlockReview(input: { lineageId; userId; decision; issueCodes?; note? }): Promise<BlockProductionStage | null>
+submitBlockReview(input: { lineageId; userId; decision; note?; regenerate? }): Promise<BlockProductionStage | null>
   // accepted → approvedAt; rejected → next version, block.revise job
 approveAllBlocks(input: { projectId; userId }): Promise<number>     // approves every block in block_review
 
@@ -131,7 +130,7 @@ startDrafts(input: { projectId; userId; expectedCredits: number }): Promise<{ st
   // `instanceof PriceChangedError` or `code === "price_changed"`, then show the new quote) or
   // credits are short. Creates the draft takes and sends ONE production.dispatch
   // { projectId, kind: "takes" } on the same transaction
-submitTakeReview(input: { takeId; userId; decision; issueCodes?; note? }): Promise<BlockProductionStage | null>
+submitTakeReview(input: { takeId; userId; decision; note?; confirmedIssueIds?; keepIds?; timedNotes?; expectedCredits? }): Promise<BlockProductionStage | null>
   // draft accepted → final take (pending), take.generate; final accepted → done (PREV_END, stale-next rule)
   // rejected (any take) → the router (production/take-routing.ts) from the clip's Video Review report:
   //   reroll / rebind → a new draft of the same prompt (take.generate); revise → requestBlockRevision, and the

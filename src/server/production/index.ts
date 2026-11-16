@@ -19,7 +19,7 @@ export type { TakeReviewView, TakeView } from "./takes";
 export { reviewFindings, type ReviewFindings } from "./findings";
 export type { ProductionBlock, ProductionBlockAsset } from "./views";
 /*
- * The services: every current block is prepared (text-blocks, `preparation`), reviewed and
+ * The services: every current block is prepared (`preparation`, code only), reviewed and
  * approved (`block-review`); then each approved block gets a cheap draft take (`drafts`), an
  * accepted draft is finished as a final take (`take-review`), and the project is done when every
  * block has an accepted final (`complete`). `read` serves the screens.

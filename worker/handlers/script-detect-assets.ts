@@ -1,16 +1,28 @@
-import { applyDetection, hasDetectionFor, loadDetectorState } from "../../src/server/assets";
+import {
+  applyDetection,
+  hasDetectionFor,
+  isDetectedKind,
+  loadDetectorState,
+} from "../../src/server/assets";
 import { hasCurrentBlocksFor, markBlocksStale, setSectioningState } from "../../src/server/blocks";
 import { defineHandler, enqueue, scriptDetectAssets, scriptSection } from "../../src/server/jobs";
 import { loadScriptJob, ScriptInputError } from "../../src/server/script";
-import { detectorProject, detectorScript, runDetector, viewFor } from "./asset-detection";
+import {
+  detectorBible,
+  detectorProject,
+  detectorScript,
+  runDetector,
+  viewFor,
+} from "./asset-detection";
 import { handleFailure } from "./failure";
 import { classifyFailure } from "./script-failure";
 
 /**
- * Detects the assets of the accepted script with Asset Detector v1, applies the result, marks the
+ * Detects the assets of the accepted script with Asset Detector v2, applies the result, marks the
  * old blocks stale, then queues sectioning. The first detection is full; later ones (an edited
  * script) are incremental with every stored asset as `known_assets` (approved ones keep their
- * names). Skips a version that is no longer the accepted one.
+ * names). The Creative Bible's slice goes in when one is ready; a bible still compiling is not
+ * waited for (the detection runs on its own prompt). Skips a version that is no longer the accepted one.
  */
 export const scriptDetectAssetsHandler = defineHandler(
   scriptDetectAssets,
@@ -35,7 +47,10 @@ export const scriptDetectAssetsHandler = defineHandler(
       });
       const state = await loadDetectorState(project.id);
       const hasDetected = state.rows.some(
-        (r) => r.asset.status === "active" && r.asset.origin === "detected",
+        (r) =>
+          r.asset.status === "active" &&
+          r.asset.origin === "detected" &&
+          isDetectedKind(r.asset.kind),
       );
       const mode = hasDetected ? "incremental" : "full";
       const view = viewFor(state.rows, state.latest?.sceneIndex ?? [], mode);
@@ -44,6 +59,7 @@ export const scriptDetectAssetsHandler = defineHandler(
           mode,
           project: detectorProject(project.style, "wizard"),
           script: detectorScript(version),
+          ...(await detectorBible(project.id)),
           ...(mode === "incremental" ? { known_assets: view.known } : {}),
         },
         { userId: project.ownerId, projectId: project.id, signal: context.signal },

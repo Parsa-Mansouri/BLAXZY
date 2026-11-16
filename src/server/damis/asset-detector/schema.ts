@@ -1,10 +1,11 @@
 /**
- * Asset Detector v1 (the owner's `asset_detector`, output_21). The output schema mirrors the
+ * Asset Detector v2 (the owner's `asset_detector`, output_21). The output schema mirrors the
  * owner's `submit_output_21` tool field for field; the framework sends it as structured JSON
- * output. The detector speaks `char_1` / `loc_1` / `prop_1` / `voice_1` ids: the worker
+ * output. The detector speaks `char_1` / `loc_1` / `prop_1` ids: the worker
  * translates them to and from BLAXZY's real-name ids, so they never reach the database or the UI.
  */
 import { z } from "zod";
+import { creativeDnaTextSchema } from "../shared/creative-dna-input";
 
 export const DETECTOR_MODES = ["full", "incremental", "fix"] as const;
 export type DetectorMode = (typeof DETECTOR_MODES)[number];
@@ -37,6 +38,7 @@ export const PROP_CATEGORIES = [
   "set_dressing",
   "prop_group",
 ] as const;
+/** How a character's voice is heard (`voice_delivery`). */
 export const VOICE_DELIVERIES = [
   "on_screen",
   "voice_over",
@@ -86,7 +88,8 @@ export const sceneIndexEntrySchema = z.object({
   time_of_day: z.enum(TIMES_OF_DAY),
   characters_present: z.array(z.string()),
   char_looks: z.array(z.object({ char_id: z.string(), look_id: z.string() })),
-  voices_heard: z.array(z.string()),
+  heard_only: z.array(z.string()),
+  speakers: z.array(z.string()),
   props_present: z.array(z.string()),
 });
 
@@ -107,6 +110,9 @@ export const detectedCharacterSchema = z.object({
   signature_prop_ids: z.array(z.string()),
   speaks: z.boolean(),
   dialogue_line_count: z.number().int().min(0),
+  dialogue_language: z.string().nullable(),
+  voice_delivery: z.array(z.enum(VOICE_DELIVERIES)),
+  voice_hints: z.array(factSchema),
   relationships: z.array(z.object({ char_id: z.string(), relation: z.string() })),
   scene_refs: z.array(z.string()),
   first_scene: z.string(),
@@ -155,17 +161,6 @@ export const detectedPropSchema = z.object({
   ui_summary: z.string(),
 });
 
-export const detectedVoiceSchema = z.object({
-  voice_id: z.string().regex(/^voice_[0-9]+$/),
-  owner_char_id: z.string(),
-  delivery: z.array(z.enum(VOICE_DELIVERIES)),
-  language: z.string(),
-  hints: z.array(factSchema),
-  dialogue_line_count: z.number().int().min(0),
-  scene_refs: z.array(z.string()),
-  ui_summary: z.string(),
-});
-
 /** The owner's `submit_output_21` input schema. */
 export const assetDetectorOutputSchema = z.object({
   output_version: z.literal("output_21"),
@@ -174,7 +169,6 @@ export const assetDetectorOutputSchema = z.object({
   characters: z.array(detectedCharacterSchema),
   locations: z.array(detectedLocationSchema),
   props: z.array(detectedPropSchema),
-  voices: z.array(detectedVoiceSchema),
   diff: z.object({
     added: z.array(z.string()),
     updated: z.array(z.string()),
@@ -185,7 +179,6 @@ export const assetDetectorOutputSchema = z.object({
     character_count: z.number().int().min(0),
     location_count: z.number().int().min(0),
     prop_count: z.number().int().min(0),
-    voice_count: z.number().int().min(0),
   }),
   applied_fixes: z.array(
     z.object({ code: z.string(), target_ids: z.array(z.string()), change: z.string() }),
@@ -211,7 +204,7 @@ export const detectorSceneSchema = z.object({
  * status. Only the entry's own fields are carried (whatever the type needs).
  */
 export const knownAssetSchema = z.object({
-  id: z.string().regex(/^(char|loc|prop|voice)_[0-9]+$/),
+  id: z.string().regex(/^(char|loc|prop)_[0-9]+$/),
   status: z.enum(["detected", "in_progress", "approved"]),
   /** The entry, as the detector wrote it (or as rebuilt from the stored asset). */
   entry: z.record(z.string(), z.unknown()),
@@ -247,6 +240,12 @@ export const assetDetectorInputSchema = z
     known_assets: z.array(knownAssetSchema).max(1000).optional(),
     previous_output: assetDetectorOutputSchema.optional(),
     fix_requests: z.array(detectorFixRequestSchema).max(40).optional(),
+    /**
+     * BLAXZY-side, not part of the owner's input: the project's Creative Bible block for the
+     * detector (`renderCreativeDna("asset_detector", bible).text`), like every other consumer. It
+     * becomes a cached system block and is left out of the `<input>` JSON.
+     */
+    creativeDna: creativeDnaTextSchema.optional(),
   })
   .refine((i) => (i.script.scenes?.length ?? 0) > 0 || i.script.raw_text !== undefined, {
     message: "the script needs scenes or raw_text",
@@ -262,7 +261,6 @@ export type DetectorFact = z.output<typeof factSchema>;
 export type DetectedCharacter = z.output<typeof detectedCharacterSchema>;
 export type DetectedLocation = z.output<typeof detectedLocationSchema>;
 export type DetectedProp = z.output<typeof detectedPropSchema>;
-export type DetectedVoice = z.output<typeof detectedVoiceSchema>;
 export type SceneIndexEntry = z.output<typeof sceneIndexEntrySchema>;
 export type KnownAsset = z.output<typeof knownAssetSchema>;
 export type DetectorFixRequest = z.output<typeof detectorFixRequestSchema>;

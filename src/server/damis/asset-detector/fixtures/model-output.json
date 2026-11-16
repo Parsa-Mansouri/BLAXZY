@@ -11,7 +11,8 @@
       "time_of_day": "dusk",
       "characters_present": ["char_1"],
       "char_looks": [],
-      "voices_heard": [],
+      "heard_only": [],
+      "speakers": ["char_1"],
       "props_present": ["prop_1"]
     },
     {
@@ -23,7 +24,8 @@
       "time_of_day": "night",
       "characters_present": ["char_1", "char_2"],
       "char_looks": [],
-      "voices_heard": [],
+      "heard_only": [],
+      "speakers": ["char_1"],
       "props_present": ["prop_1"]
     },
     {
@@ -35,7 +37,8 @@
       "time_of_day": "night",
       "characters_present": [],
       "char_looks": [],
-      "voices_heard": ["voice_1"],
+      "heard_only": ["char_1"],
+      "speakers": ["char_1"],
       "props_present": ["prop_2"]
     }
   ],
@@ -86,6 +89,17 @@
       "signature_prop_ids": ["prop_1"],
       "speaks": true,
       "dialogue_line_count": 3,
+      "dialogue_language": "English",
+      "voice_delivery": ["on_screen", "voice_over"],
+      "voice_hints": [
+        {
+          "field": "emotional register",
+          "value": "breathless",
+          "status": "stated",
+          "scene": "1",
+          "evidence": "(breathless)"
+        }
+      ],
       "relationships": [],
       "scene_refs": ["1", "2", "3"],
       "first_scene": "1",
@@ -130,6 +144,9 @@
       "signature_prop_ids": [],
       "speaks": false,
       "dialogue_line_count": 0,
+      "dialogue_language": null,
+      "voice_delivery": [],
+      "voice_hints": [],
       "relationships": [],
       "scene_refs": ["2"],
       "first_scene": "2",
@@ -199,7 +216,11 @@
         }
       ],
       "fixed_elements_from_script": [
-        { "element": "rows of empty benches", "scene": "2", "evidence": "Rows of empty benches." },
+        {
+          "element": "rows of empty benches",
+          "scene": "2",
+          "evidence": "Rows of empty benches."
+        },
         {
           "element": "spray-streaked window",
           "scene": "2",
@@ -282,33 +303,16 @@
       "ui_summary": "An old lantern on the pier; scene 3."
     }
   ],
-  "voices": [
-    {
-      "voice_id": "voice_1",
-      "owner_char_id": "char_1",
-      "delivery": ["on_screen", "voice_over"],
-      "language": "English",
-      "hints": [
-        {
-          "field": "emotional register",
-          "value": "breathless",
-          "status": "stated",
-          "scene": "1",
-          "evidence": "(breathless)"
-        }
-      ],
-      "dialogue_line_count": 3,
-      "scene_refs": ["1", "2", "3"],
-      "ui_summary": "Mara's voice, on screen and in voice-over; scenes 1 to 3."
-    }
-  ],
-  "diff": { "added": [], "updated": [], "removed": [] },
+  "diff": {
+    "added": [],
+    "updated": [],
+    "removed": []
+  },
   "summary": {
     "scene_count": 3,
     "character_count": 2,
     "location_count": 2,
-    "prop_count": 2,
-    "voice_count": 1
+    "prop_count": 2
   },
   "applied_fixes": [],
   "assumptions": ["Jonas's age range is read from the parenthetical (60s)."],

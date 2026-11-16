@@ -1023,6 +1023,50 @@ describe.skipIf(!reachable)(
       expect((await assets.getPreProductionOverview(projectId, userId))?.canComplete).toBe(false);
     });
 
+    it("a voice-only narrator is a hidden character that never blocks completion", async () => {
+      const { userId, projectId } = await setup(100);
+      const tomas = await add(projectId, userId);
+      const narrator = await add(projectId, userId, "character", "Narrator");
+      await getDb()
+        .update(s.asset)
+        .set({ details: { subkind: "voice_only", needsVisual: false, speaks: true } })
+        .where(eq(s.asset.id, narrator.id));
+
+      // Not listed, not counted, not waited for.
+      const overview = await assets.getPreProductionOverview(projectId, userId);
+      expect(overview).toEqual({
+        kinds: [{ kind: "character", total: 1, ready: 0 }],
+        total: 1,
+        ready: 0,
+        canComplete: false,
+      });
+      const cards = await assets.listAssetCards(projectId, userId, { kind: "character" });
+      expect(cards?.items.map((c) => c.asset.name)).toEqual(["Tomas"]);
+      expect((await assets.countAssetsByKind(projectId, userId))?.character).toBe(1);
+      expect(await assets.nextAssetNeedingInput(projectId, userId, tomas.id)).toBeNull();
+      // No designer is ever started for it.
+      await expect(
+        assets.startLookFromPrompt({ assetId: narrator.id, userId, prompt: "A deep voice" }),
+      ).rejects.toThrow(/only a voice/);
+      // The sectioner does not see it either (it has no image to attach).
+      expect((await assets.getSectionerAssets(projectId)).map((a) => a.name)).toEqual(["Tomas"]);
+
+      const look = await produceLook(
+        (await assets.startLookFromPrompt({ assetId: tomas.id, userId, prompt: "A man" }))?.id ??
+          "",
+      );
+      await assets.submitLookReview({ lookId: look?.id ?? "", userId, decision: "accepted" });
+      const sheet = (await detail(tomas.id, userId)).sheets[0];
+      await produceSheet(sheet?.id ?? "");
+      await assets.submitSheetReview({ sheetId: sheet?.id ?? "", userId, decision: "accepted" });
+      expect(await assets.getPreProductionOverview(projectId, userId)).toMatchObject({
+        total: 1,
+        ready: 1,
+        canComplete: true,
+      });
+      expect(await assets.completePreProduction({ projectId, userId })).toBe(true);
+    });
+
     /** Runs the pack's advance and every generation it requested. */
     async function advancePack(sheetId: string) {
       await assetSheetViewsAdvanceHandler.run({ sheetId }, jobContext());
@@ -1448,14 +1492,12 @@ describe.skipIf(!reachable)(
         characters: [],
         locations: [],
         props: [],
-        voices: [],
         diff: { added: [], updated: [], removed: [pierTemp] },
         summary: {
           scene_count: 0,
           character_count: 0,
           location_count: 0,
           prop_count: 0,
-          voice_count: 0,
         },
         applied_fixes: [],
         assumptions: [],

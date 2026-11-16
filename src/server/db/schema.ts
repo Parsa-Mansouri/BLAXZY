@@ -335,7 +335,11 @@ export type AssetVariant = {
  * detector's own ids never reach the database.
  */
 export type AssetDetails = {
-  /** Characters: human, animal, creature, robot or background_group (voice_only is a voice). */
+  /**
+   * Characters: human, animal, creature, robot, background_group or voice_only (heard, never
+   * seen; `needsVisual` is false, so no image is designed and the character is hidden in
+   * Pre-production).
+   */
   subkind?: string;
   role?: string;
   /** The detector's own priority, so an asset the user skipped can be included again. */
@@ -356,6 +360,10 @@ export type AssetDetails = {
   signatureProps?: string[];
   speaks?: boolean;
   dialogueLineCount?: number;
+  /** Characters (detector v2): what Production's voice box needs. Null language: never speaks. */
+  dialogueLanguage?: string | null;
+  voiceDelivery?: string[];
+  voiceHints?: AssetFact[];
   /** Locations. */
   locationGroup?: string | null;
   interiorExterior?: "interior" | "exterior" | "int_ext";
@@ -372,7 +380,10 @@ export type AssetDetails = {
   locationIds?: string[];
   /** Related assets as `kind:Name` refs. */
   relatedAssets?: string[];
-  /** Voices: the speaking character's name, how and in what language it is heard. */
+  /**
+   * Legacy `voice` rows only (detector v1; new detections never create them): the speaking
+   * character's name, how and in what language it is heard.
+   */
   owner?: string;
   delivery?: string[];
   language?: string;
@@ -779,7 +790,12 @@ export type DetectionSceneIndexEntry = {
   timeOfDay: string;
   characters: string[];
   characterLooks: { character: string; look: string }[];
-  voices: string[];
+  /** Characters heard but not seen in the scene (detector v2). */
+  heardOnly?: string[];
+  /** Characters who speak in the scene, seen or not (detector v2). */
+  speakers?: string[];
+  /** Legacy (detector v1): the voices heard; rows written before v2 have this and no `heardOnly`. */
+  voices?: string[];
   props: string[];
 };
 

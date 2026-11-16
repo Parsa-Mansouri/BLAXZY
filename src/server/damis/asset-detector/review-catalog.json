@@ -1,12 +1,13 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "dami": "asset_detector",
   "output": "output_21",
   "meta": {
-    "where": "No separate approval screen. Every category screen in Pre-production (char, loc, prop, voice) has a 'Something wrong with this list?' button and a per-asset menu. Both open this catalog.",
+    "where": "No separate approval screen. Every category screen in Pre-production (char, loc, prop) has a 'Something wrong with this list?' button and a per-asset menu. Both open this catalog.",
     "flow": "UI asks technical or preference, shows the reasons below, collects targets (tap the asset cards) and optional text, then sends fix_requests with mode 'fix' and previous_output. Several requests can be sent in one round.",
     "max_rounds_before_suggestion": 4,
-    "suggestion_after_max_rounds": "Offer manual add, rename or delete (backend operations) instead of another dami round."
+    "suggestion_after_max_rounds": "Offer manual add, rename or delete (backend operations) instead of another dami round.",
+    "voice_note": "Voices are not reviewed here. They are handled in Production per text block (upload, generate, or let the video model create them)."
   },
   "rules": {
     "approved_assets": "Requests that would rename, redescribe, merge away or delete an asset whose status is 'approved' make the UI ask for confirmation first, because generated images depend on it. Pre-production work already done on a merged-away asset is kept as a version but detached.",

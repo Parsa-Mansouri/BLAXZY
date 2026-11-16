@@ -73,13 +73,10 @@ describe("the detector boundary", () => {
 
   it("turns detector ids into names, everywhere", () => {
     expect(plan.assets.map((a) => `${a.kind}:${a.name}`)).toEqual(
-      expect.arrayContaining([
-        "character:Mara",
-        "location:Ferry Cabin",
-        "prop:brass locket",
-        "voice:Mara",
-      ]),
+      expect.arrayContaining(["character:Mara", "location:Ferry Cabin", "prop:brass locket"]),
     );
+    // Voices are not assets any more.
+    expect(plan.assets.some((a) => (a.kind as string) === "voice")).toBe(false);
     expect(plan.sceneIndex[0]?.characters).toContain("Mara");
     // What gets stored: the scene index, the diff, every asset's details and the warnings.
     const stored = {
@@ -132,7 +129,6 @@ describe("the detector boundary", () => {
       ...view.previousOutput.characters,
       ...view.previousOutput.locations,
       ...view.previousOutput.props,
-      ...view.previousOutput.voices,
     ];
     expect(entries.every((e) => e.scene_refs.length > 0)).toBe(true);
   });
@@ -172,6 +168,108 @@ describe("the detector boundary", () => {
     const fresh = planDetection({ output, byTemp: new Map(), existing });
     expect(fresh.assets.some((a) => a.kind === "character" && /^mara/i.test(a.name))).toBe(false);
     expect(fresh.assets.find((a) => a.existing?.id === cabin.id)?.name).toBe("Ferry Cabin");
+  });
+
+  it("stores speakers and heard-only characters by name, and the voice facts on the character", () => {
+    const mara = plan.assets.find((a) => a.kind === "character" && a.name === "Mara");
+    expect(mara?.details.speaks).toBe(true);
+    expect(mara?.details.dialogueLanguage).toBe("English");
+    expect(mara?.details.voiceDelivery).toContain("on_screen");
+    expect(plan.sceneIndex.some((s) => s.speakers?.includes("Mara"))).toBe(true);
+    expect(plan.sceneIndex.every((s) => s.voices === undefined)).toBe(true);
+    expect(plan.sceneIndex.every((s) => Array.isArray(s.heardOnly))).toBe(true);
+  });
+
+  it("keeps a voice-only narrator as a hidden character, never as a voice asset", () => {
+    const withNarrator = structuredClone(output);
+    const base = withNarrator.characters[0];
+    if (!base) throw new Error("sample changed");
+    withNarrator.characters.push({
+      ...base,
+      char_id: "char_9",
+      name: "Narrator",
+      name_latin: "Narrator",
+      aliases: [],
+      kind: "voice_only",
+      needs_visual: false,
+      facts: [],
+      looks: [],
+      voice_hints: [
+        { field: "age", value: "old", status: "implied", scene: "1", evidence: "an old voice" },
+      ],
+      scene_refs: ["1"],
+      first_scene: "1",
+    });
+    const first = withNarrator.scene_index[0];
+    if (!first) throw new Error("sample changed");
+    first.heard_only.push("char_9");
+    first.speakers.push("char_9");
+    const narrated = planDetection({ output: withNarrator, byTemp: new Map(), existing: [] });
+    const narrator = narrated.assets.find((a) => a.name === "Narrator");
+    expect(narrator?.kind).toBe("character");
+    expect(narrator?.details).toMatchObject({
+      subkind: "voice_only",
+      needsVisual: false,
+      speaks: true,
+    });
+    expect(narrator?.details.voiceHints?.[0]?.value).toBe("old");
+    expect(narrated.sceneIndex[0]?.heardOnly).toEqual(["Narrator"]);
+    expect(narrated.sceneIndex[0]?.speakers).toContain("Narrator");
+    expect(narrated.assets.some((a) => (a.kind as string) === "voice")).toBe(false);
+
+    // Fed back (incremental and fix mode), the narrator is a voice_only character again.
+    const rows = narrated.assets.map(row);
+    const view = detectorView(
+      rows.map((a) => ({ asset: a, status: "detected" as const })),
+      narrated.sceneIndex,
+    );
+    expect(assetDetectorOutputSchema.safeParse(view.previousOutput).success).toBe(true);
+    expect(view.previousOutput).not.toHaveProperty("voices");
+    const back = view.previousOutput.characters.find((c) => c.name === "Narrator");
+    expect(back).toMatchObject({ kind: "voice_only", needs_visual: false, speaks: true });
+    expect(view.previousOutput.scene_index[0]?.heard_only).toContain(back?.char_id);
+  });
+
+  it("leaves legacy voice rows alone: not shown to the detector, not matched, not removed", () => {
+    const rows = plan.assets.map(row);
+    const legacy: Asset = {
+      ...row({ ...plan.assets[0]!, name: "Mara", details: { owner: "Mara", language: "English" } }),
+      kind: "voice",
+    };
+    const view = detectorView(
+      [...rows, legacy].map((a) => ({ asset: a, status: "detected" as const })),
+      plan.sceneIndex,
+    );
+    expect(view.known.length).toBe(rows.length);
+    expect([...view.byTemp.values()]).not.toContain(legacy);
+    expect(view.previousOutput).not.toHaveProperty("voices");
+    const again = planDetection({
+      output: view.previousOutput,
+      byTemp: view.byTemp,
+      existing: [...rows, legacy],
+    });
+    expect(again.assets.every((a) => a.existing !== null && a.existing.id !== legacy.id)).toBe(
+      true,
+    );
+    expect(again.removed).toEqual([]);
+  });
+
+  it("reads a scene index stored before v2 (voices, no heardOnly or speakers)", () => {
+    const rows = plan.assets.map(row);
+    const old = plan.sceneIndex.map((s) => ({
+      ...s,
+      heardOnly: undefined,
+      speakers: undefined,
+      voices: ["Mara"],
+    }));
+    const view = detectorView(
+      rows.map((a) => ({ asset: a, status: "detected" as const })),
+      old,
+    );
+    expect(assetDetectorOutputSchema.safeParse(view.previousOutput).success).toBe(true);
+    const maraId = tempIdsFor(["character:mara"], view.tempByName)[0];
+    expect(view.previousOutput.scene_index[0]?.heard_only).toEqual([maraId]);
+    expect(view.previousOutput.scene_index[0]?.speakers).toEqual([]);
   });
 
   it("hides MINOR_PRESENT from the user", () => {

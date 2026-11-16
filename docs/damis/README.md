@@ -19,8 +19,8 @@ copied block still matches the source. To take a new version from Hamed:
 | `dami_script_writer_v0.2.md` | `script-writer/source/` | Job description |
 | `script_output.schema.json` | `script-writer/source/` | Script form (output schema) |
 | `blaxzy_enhancer_dami.md` | `enhancer/source/` | Job description |
-| `asset_detector_dami_v1.md` | `asset-detector/source/` | Job description |
-| `asset_detector_review_catalog_v1.json` | `asset-detector/review-catalog.json` | Complaint menu |
+| `asset_detector_dami_v2.md` | `asset-detector/source/` | Job description |
+| `asset_detector_review_catalog_v2.json` | `asset-detector/review-catalog.json` | Complaint menu |
 | `character_generator_dami_v5.md` | `character-generator/source/` | Job description |
 | `character_review_catalog_v2.json` | `character-generator/review-catalog.json` | Complaint menu |
 | `location_generator_dami_v1.md` | `location-generator/source/` | Job description |

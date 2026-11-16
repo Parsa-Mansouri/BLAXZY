@@ -102,9 +102,8 @@ function detectorInput(style: ProjectStyle, content: string): AssetDetectorInput
   };
 }
 
-/** The detector's entries as the prompt-sectioner's assets (voices named after their owner). */
+/** The detector's entries as the prompt-sectioner's assets (voices are no longer assets). */
 function sectionerAssets(output: AssetDetectorOutput) {
-  const nameOf = new Map(output.characters.map((c) => [c.char_id, c.name]));
   return [
     ...output.characters
       .filter((c) => c.kind !== "voice_only")
@@ -122,11 +121,6 @@ function sectionerAssets(output: AssetDetectorOutput) {
       kind: "prop" as const,
       name: p.name,
       description: p.script_description,
-    })),
-    ...output.voices.map((v) => ({
-      kind: "voice" as const,
-      name: nameOf.get(v.owner_char_id) ?? v.voice_id,
-      description: v.ui_summary,
     })),
   ];
 }
@@ -183,7 +177,8 @@ describe("sample generators", () => {
       expect(kinds).toContain("character");
       expect(kinds).toContain("location");
       expect(kinds).toContain("prop");
-      expect(kinds).toContain("voice");
+      expect(kinds).not.toContain("voice");
+      expect(detected.output.scene_index.some((s) => s.speakers.length > 0)).toBe(true);
       const characters = detected.output.characters;
       expect(characters.length).toBeGreaterThanOrEqual(style.totalDurationSeconds < 30 ? 1 : 2);
       expect(characters.length).toBeLessThanOrEqual(3);

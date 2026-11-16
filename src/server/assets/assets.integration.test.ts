@@ -52,7 +52,7 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
   async function detect(projectId: string, entries: Entry[], removedNames: string[] = []) {
     const state = await assets.loadDetectorState(projectId);
     const view = assets.detectorView(state.rows, state.latest?.sceneIndex ?? []);
-    const counters: Record<string, number> = { char: 50, loc: 50, prop: 50, voice: 50 };
+    const counters: Record<string, number> = { char: 50, loc: 50, prop: 50 };
     const idFor = (kind: string, prefix: string, name: string) =>
       view.tempByName.get(`${kind}:${name.trim().toLowerCase()}`) ??
       `${prefix}_${++counters[prefix]!}`;
@@ -81,6 +81,9 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
         signature_prop_ids: [],
         speaks: e.kind === "voice_only",
         dialogue_line_count: 0,
+        dialogue_language: e.kind === "voice_only" ? "English" : null,
+        voice_delivery: e.kind === "voice_only" ? ["voice_over" as const] : [],
+        voice_hints: [],
         relationships: [],
       }));
     const removed = removedNames
@@ -123,25 +126,12 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
           location_ids: [],
           related_asset_ids: [],
         })),
-      voices: characters
-        .filter((c) => c.kind === "voice_only")
-        .map((c, i) => ({
-          voice_id: `voice_${60 + i}`,
-          owner_char_id: c.char_id,
-          delivery: ["voice_over" as const],
-          language: "en",
-          hints: [],
-          dialogue_line_count: 1,
-          scene_refs: ["1"],
-          ui_summary: "Narrator",
-        })),
       diff: { added: [], updated: [], removed },
       summary: {
         scene_count: 0,
         character_count: 0,
         location_count: 0,
         prop_count: 0,
-        voice_count: 0,
       },
       applied_fixes: [],
       assumptions: [],
@@ -185,10 +175,20 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     expect(await assets.hasDetectionFor(projectId, first.versionId)).toBe(true);
     const chars = await assets.listAssets(projectId, userId, { kind: "character" });
     expect(chars?.items.map((a) => a.name)).toEqual(["Mara", "Jonas", "Mara (2)"]);
-    const voices = await assets.listAssets(projectId, userId, { kind: "voice" });
-    expect(voices?.items.map((a) => [a.name, a.details?.subkind])).toEqual([
-      ["Narrator", "voice_only"],
-    ]);
+    // A voice-only narrator is a character that is heard, never designed: hidden by default.
+    const everyone = await assets.listAssets(projectId, userId, {
+      kind: "character",
+      includeVoiceOnly: true,
+    });
+    expect(
+      everyone?.items.map((a) => [a.name, a.details?.subkind, a.details?.needsVisual]),
+    ).toEqual(expect.arrayContaining([["Narrator", "voice_only", false]]));
+    expect(await assets.listAssets(projectId, userId, { kind: "voice" })).toMatchObject({
+      items: [],
+    });
+    const counts = await assets.countAssetsByKind(projectId, userId);
+    expect(counts?.character).toBe(3);
+    expect(counts?.voice).toBe(0);
 
     // A manual asset; Harbour Pier gets an accepted look (approved: never silently removed).
     await getDb().insert(asset).values({ projectId, kind: "prop", name: "Hat", origin: "manual" });
@@ -258,6 +258,49 @@ describe.skipIf(!reachable)("assets service (integration)", async () => {
     await apply(projectId, third, "incremental", [{ kind: "character", name: "mara (2)" }]);
     const revived = await assets.listAssets(projectId, userId, { kind: "character" });
     expect(revived?.items.map((a) => a.name)).toContain("Mara (2)");
+  });
+
+  it("leaves legacy voice rows alone: no removal, no duplicate, still listed and counted", async () => {
+    const userId = await fixtures.newUser();
+    const projectId = await fixtures.newProject(userId);
+    // Rows written by detector v1: a voice with its owner, and a voice-only narrator's voice.
+    await getDb()
+      .insert(asset)
+      .values([
+        { projectId, kind: "voice", name: "Mara", origin: "detected", details: { owner: "Mara" } },
+        {
+          projectId,
+          kind: "voice",
+          name: "Narrator",
+          origin: "detected",
+          details: { owner: "Narrator", subkind: "voice_only" },
+        },
+      ]);
+    const first = await versionAndRun(projectId, 1);
+    // A full detection that finds Mara and the narrator (now a hidden character).
+    const r1 = await apply(projectId, first, "full", [
+      { kind: "character", name: "Mara" },
+      { kind: "voice_only", name: "Narrator" },
+    ]);
+    expect(r1).toMatchObject({ added: 2, kept: 0, removed: 0 });
+    // A second full detection that no longer finds anyone removes only the detected characters.
+    const second = await versionAndRun(projectId, 2);
+    const r2 = await apply(projectId, second, "full", []);
+    expect(r2).toMatchObject({ added: 0, removed: 2 });
+
+    const all = await assets.listAssets(projectId, userId, {
+      includeRemoved: true,
+      includeVoiceOnly: true,
+    });
+    const voices = all?.items.filter((a) => a.kind === "voice");
+    expect(voices?.map((a) => [a.name, a.status]).sort()).toEqual([
+      ["Mara", "active"],
+      ["Narrator", "active"],
+    ]);
+    // The legacy voices still show in the category and the counts.
+    const listed = await assets.listAssets(projectId, userId, { kind: "voice" });
+    expect(listed?.items.map((a) => a.name).sort()).toEqual(["Mara", "Narrator"]);
+    expect((await assets.countAssetsByKind(projectId, userId))?.voice).toBe(2);
   });
 
   it("skips assets without a dami and checks what a correction round needs", async () => {

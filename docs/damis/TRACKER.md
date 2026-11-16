@@ -23,7 +23,7 @@ Wizard question bank).
 | 3 | Script Writer + outline | Script | `script-writer/source/dami_script_writer_v0.2.md` + `script_output.schema.json` | live (owner) | `script-writer/` | Has its own revise mode (19 reason codes). |
 | 4 | Script Checker | Script | none | agent draft | `script-checker/` | Creative DNA has a `for_script_checker` slice, so the owner expects this dami. File owed. |
 | 5 | Script Reviser | Script | none | agent draft | `script-reviser/` | May be redundant with the Script Writer's revise mode. Ask the owner. |
-| 6 | Asset Detector (output_21) | Pre-production | `inbox/2026-11-16/asset_detector_dami_v2.md` + `asset_detector_review_catalog_v2.json` | upgrade available (v1 live) | `asset-detector/` | v2 drops voices as assets: no `voices[]`, no `voice_` ids; adds per-character `dialogue_language`, `voice_delivery`, `voice_hints` and per-scene `speakers` / `heard_only`. |
+| 6 | Asset Detector (output_21) | Pre-production | `inbox/2026-11-16/asset_detector_dami_v2.md` + `asset_detector_review_catalog_v2.json` | v2 live (2.0.0) | `asset-detector/` | v2 drops voices as assets: no `voices[]`, no `voice_` ids; adds per-character `dialogue_language`, `voice_delivery`, `voice_hints` and per-scene `speakers` / `heard_only`. |
 | 7 | Character Generator | Pre-production | `character-generator/source/character_generator_dami_v5.md` | live (owner) | `character-generator/` | |
 | 8 | Location Generator | Pre-production | `location-generator/source/location_generator_dami_v1.md` (+ `location_shared_modules_v1.md`) | live (owner) | `location-generator/`, `location-shared/` | |
 | 9 | Prop Generator | Pre-production | `prop-generator/source/prop_generator_dami_v1.md` (+ `prop_shared_modules_v1.md`) | live (owner) | `prop-generator/`, `prop-shared/` | |
@@ -73,8 +73,8 @@ module + project brief instead).
 
 ## Owner files in the inbox not needed
 
-- `inbox/2026-11-16/asset_detector_dami_v1.md`: identical to `asset-detector/source/asset_detector_dami_v1.md`.
-- `inbox/2026-11-16/asset_detector_review_catalog_v1.json`: identical to `asset-detector/review-catalog.json` (except a trailing newline).
+- `inbox/2026-11-16/asset_detector_dami_v1.md`: superseded by v2 (v1 is no longer kept in `asset-detector/source/`).
+- `inbox/2026-11-16/asset_detector_review_catalog_v1.json`: superseded by v2 (`asset-detector/review-catalog.json` is v2).
 - `inbox/2026-11-16/creativeDna.ts`: the owner's sample runner. Reference only; it reads files at module load, uses `any` and calls the SDK directly, so it is not used as code.
 
 ## Open questions for the owner

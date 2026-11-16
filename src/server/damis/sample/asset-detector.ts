@@ -2,8 +2,9 @@
  * Sample Asset Detector (output_21), deterministic and offline. It reads the script the way the
  * owner's prompt asks (scene by scene, scene index first) with simple rules: locations from scene
  * headings (English or Persian), characters from dialogue cues and ALL-CAPS introductions, props
- * from a small lexicon, one voice per speaking character. Every fact, state, fixed element and
- * hint quotes the script exactly (at most 20 words), so the output passes `checkDetection`.
+ * from a small lexicon. Voices are not assets (v2): each scene lists who speaks and who is only
+ * heard, and each speaking character carries its language, delivery and voice hints. Every fact,
+ * state, fixed element and hint quotes the script exactly (at most 20 words), so the output passes `checkDetection`.
  * Incremental mode reuses known ids; fix mode applies ADT01, ADT02, ADT04, ADT05, ADT06 and ADP02
  * to `previous_output` and records every request in `applied_fixes`.
  */
@@ -15,7 +16,6 @@ import {
   type DetectedCharacter,
   type DetectedLocation,
   type DetectedProp,
-  type DetectedVoice,
   type DetectorFact,
   type DetectorFixRequest,
   type KnownAsset,
@@ -40,7 +40,7 @@ const ARABIC_SCRIPT = new RegExp(`[${String.fromCharCode(0x0600)}-${String.fromC
 type TimeOfDay = (typeof TIMES_OF_DAY)[number];
 type Delivery = (typeof VOICE_DELIVERIES)[number];
 type InteriorExterior = DetectedLocation["interior_exterior"];
-type AssetType = "char" | "loc" | "prop" | "voice";
+type AssetType = "char" | "loc" | "prop";
 
 /* ------------------------------------------------------------------------------------------ */
 /* Reading the script                                                                          */
@@ -430,8 +430,6 @@ type CharDraft = {
   present: Set<number>;
   heard: Set<number>;
   cueScenes: Set<number>;
-  /** Where the character first speaks (voices are numbered in this order). */
-  firstCue: Position | null;
   lines: number;
   deliveries: Set<Delivery>;
   hints: DetectorFact[];
@@ -480,7 +478,6 @@ function collectCharacters(scenes: Scene[]): CharDraft[] {
         present: new Set(),
         heard: new Set(),
         cueScenes: new Set(),
-        firstCue: null,
         lines: 0,
         deliveries: new Set(),
         hints: [],
@@ -522,7 +519,6 @@ function collectCharacters(scenes: Scene[]): CharDraft[] {
         if (!speaker) return;
         speaker.lines += 1;
         speaker.cueScenes.add(s);
-        speaker.firstCue ??= { scene: s, line: l };
         if (line.ext) {
           speaker.deliveries.add(line.ext);
           speaker.heard.add(s);
@@ -640,9 +636,7 @@ function idNumber(id: string): number {
 
 function typeOf(id: string): AssetType | null {
   const prefix = id.slice(0, id.lastIndexOf("_"));
-  return prefix === "char" || prefix === "loc" || prefix === "prop" || prefix === "voice"
-    ? prefix
-    : null;
+  return prefix === "char" || prefix === "loc" || prefix === "prop" ? prefix : null;
 }
 
 /** Hands out ids: next after the highest id of each type seen so far (never reused). */
@@ -688,17 +682,6 @@ class KnownMatcher {
     return found ?? null;
   }
 
-  voiceOf(ownerId: string): KnownAsset | null {
-    const found = this.known.find(
-      (k) =>
-        !this.used.has(k.id) &&
-        typeOf(k.id) === "voice" &&
-        stringField(k.entry, "owner_char_id") === ownerId,
-    );
-    if (found) this.used.add(found.id);
-    return found ?? null;
-  }
-
   unused(): string[] {
     return this.known.filter((k) => !this.used.has(k.id)).map((k) => k.id);
   }
@@ -736,19 +719,15 @@ function sceneList(numbers: readonly string[]): string {
 
 function uiSummary(
   lang: string,
-  kind: "character" | "location" | "prop" | "voice",
+  kind: "character" | "location" | "prop",
   name: string,
   refs: readonly string[],
 ): string {
   if (lang.toLowerCase().startsWith("fa")) {
-    const label = { character: "شخصیت", location: "مکان", prop: "وسیله", voice: "صدای" }[kind];
-    return kind === "voice"
-      ? `${label} ${name}، صحنه‌های ${sceneList(refs)}`
-      : `${name}: ${label}، صحنه‌های ${sceneList(refs)}`;
+    const label = { character: "شخصیت", location: "مکان", prop: "وسیله" }[kind];
+    return `${name}: ${label}، صحنه‌های ${sceneList(refs)}`;
   }
-  return kind === "voice"
-    ? `${name}'s voice, scene(s) ${sceneList(refs)}`
-    : `${name}: ${kind} in scene(s) ${sceneList(refs)}`;
+  return `${name}: ${kind} in scene(s) ${sceneList(refs)}`;
 }
 
 function minorFromAge(age: string): "yes" | "no" | "unknown" {
@@ -766,14 +745,12 @@ function emptyOutput(mode: AssetDetectorOutput["mode"]): AssetDetectorOutput {
     characters: [],
     locations: [],
     props: [],
-    voices: [],
     diff: { added: [], updated: [], removed: [] },
     summary: {
       scene_count: 0,
       character_count: 0,
       location_count: 0,
       prop_count: 0,
-      voice_count: 0,
     },
     applied_fixes: [],
     assumptions: [],
@@ -787,7 +764,6 @@ function withSummary(output: AssetDetectorOutput): AssetDetectorOutput {
     character_count: output.characters.length,
     location_count: output.locations.length,
     prop_count: output.props.length,
-    voice_count: output.voices.length,
   };
   return output;
 }
@@ -825,7 +801,8 @@ function detect(input: AssetDetectorParsedInput): AssetDetectorOutput {
     time_of_day: scene.time,
     characters_present: [],
     char_looks: [],
-    voices_heard: [],
+    heard_only: [],
+    speakers: [],
     props_present: [],
   }));
 
@@ -896,6 +873,9 @@ function detect(input: AssetDetectorParsedInput): AssetDetectorOutput {
       signature_prop_ids: [],
       speaks,
       dialogue_line_count: d.lines,
+      dialogue_language: speaks ? (ARABIC_SCRIPT.test(d.label) ? "Persian" : "English") : null,
+      voice_delivery: speaks ? VOICE_DELIVERIES.filter((v) => d.deliveries.has(v)) : [],
+      voice_hints: speaks ? d.hints : [],
       relationships: [],
       scene_refs: refs,
       first_scene: refs[0] ?? numberOf(0),
@@ -903,30 +883,13 @@ function detect(input: AssetDetectorParsedInput): AssetDetectorOutput {
     });
     if (isMinor === "yes") output.warnings.push(`MINOR_PRESENT: ${id}`);
     for (const s of d.present) rows[s]?.characters_present.push(id);
+    for (const s of d.heard) rows[s]?.heard_only.push(id);
+    for (const s of d.cueScenes) rows[s]?.speakers.push(id);
   }
-  for (const row of rows) row.characters_present.sort((a, b) => idNumber(a) - idNumber(b));
-
-  // Voices: one per speaking character, in order of first line.
-  const speakers = charDrafts
-    .flatMap((d) => (d.firstCue ? [{ d, firstCue: d.firstCue }] : []))
-    .sort((a, b) => (before(a.firstCue, b.firstCue) ? -1 : before(b.firstCue, a.firstCue) ? 1 : 0));
-
-  for (const { d } of speakers) {
-    const ownerId = charIdByKey.get(d.key) ?? "";
-    const id = assign("voice", matcher.voiceOf(ownerId));
-    const refs = ordered(d.cueScenes).map(numberOf);
-    const owner = output.characters.find((c) => c.char_id === ownerId);
-    output.voices.push({
-      voice_id: id,
-      owner_char_id: ownerId,
-      delivery: VOICE_DELIVERIES.filter((v) => d.deliveries.has(v)),
-      language: ARABIC_SCRIPT.test(d.label) ? "Persian" : "English",
-      hints: d.hints,
-      dialogue_line_count: d.lines,
-      scene_refs: refs,
-      ui_summary: uiSummary(lang, "voice", owner?.name ?? d.name, refs),
-    });
-    for (const s of d.heard) rows[s]?.voices_heard.push(id);
+  for (const row of rows) {
+    for (const list of [row.characters_present, row.heard_only, row.speakers]) {
+      list.sort((a, b) => idNumber(a) - idNumber(b));
+    }
   }
 
   // Locations.
@@ -1110,14 +1073,13 @@ function changed(known: KnownAsset, output: AssetDetectorOutput): boolean {
   return previous !== JSON.stringify([entry.scene_refs, aliases]);
 }
 
-type AnyEntry = DetectedCharacter | DetectedLocation | DetectedProp | DetectedVoice;
+type AnyEntry = DetectedCharacter | DetectedLocation | DetectedProp;
 
 function findEntry(output: AssetDetectorOutput, id: string): AnyEntry | undefined {
   return (
     output.characters.find((c) => c.char_id === id) ??
     output.locations.find((l) => l.loc_id === id) ??
-    output.props.find((p) => p.prop_id === id) ??
-    output.voices.find((v) => v.voice_id === id)
+    output.props.find((p) => p.prop_id === id)
   );
 }
 
@@ -1139,7 +1101,8 @@ function rewriteIds(output: AssetDetectorOutput, map: ReadonlyMap<string, string
     uniq(ids.map(one).filter((x): x is string => x !== null));
   for (const s of output.scene_index) {
     s.characters_present = list(s.characters_present);
-    s.voices_heard = list(s.voices_heard);
+    s.heard_only = list(s.heard_only);
+    s.speakers = list(s.speakers);
     s.props_present = list(s.props_present);
     s.char_looks = s.char_looks.flatMap((cl) => {
       const id = one(cl.char_id);
@@ -1185,11 +1148,8 @@ function rebuildRefs(output: AssetDetectorOutput, id: string): void {
   if (type === "char") {
     const c = output.characters.find((x) => x.char_id === id);
     if (!c) return;
-    const own = output.voices.filter((v) => v.owner_char_id === id).map((v) => v.voice_id);
     c.scene_refs = rows
-      .filter(
-        (s) => s.characters_present.includes(id) || own.some((v) => s.voices_heard.includes(v)),
-      )
+      .filter((s) => s.characters_present.includes(id) || s.heard_only.includes(id))
       .map((s) => s.scene_number);
     c.first_scene = c.scene_refs[0] ?? c.first_scene;
   } else if (type === "loc") {
@@ -1331,29 +1291,18 @@ function addFromScript(ctx: FixContext, req: DetectorFixRequest): void {
       signature_prop_ids: [],
       speaks: lines > 0,
       dialogue_line_count: lines,
+      dialogue_language: lines > 0 ? (ARABIC_SCRIPT.test(text) ? "Persian" : "English") : null,
+      voice_delivery: lines > 0 ? VOICE_DELIVERIES.filter((v) => deliveries.has(v)) : [],
+      voice_hints: [],
       relationships: [],
       scene_refs: refs,
       first_scene: refs[0] ?? "1",
       ui_summary: uiSummary(lang, "character", name, refs),
     });
     for (const s of present) output.scene_index[s]?.characters_present.push(id);
+    for (const s of heard) output.scene_index[s]?.heard_only.push(id);
+    for (const s of cueScenes) output.scene_index[s]?.speakers.push(id);
     const addedIds = [id];
-    if (lines > 0) {
-      const voiceId = ctx.pool.next("voice");
-      const voiceRefs = [...cueScenes].sort((a, b) => a - b).map(numberOf);
-      output.voices.push({
-        voice_id: voiceId,
-        owner_char_id: id,
-        delivery: VOICE_DELIVERIES.filter((v) => deliveries.has(v)),
-        language: ARABIC_SCRIPT.test(text) ? "Persian" : "English",
-        hints: [],
-        dialogue_line_count: lines,
-        scene_refs: voiceRefs,
-        ui_summary: uiSummary(lang, "voice", name, voiceRefs),
-      });
-      for (const s of heard) output.scene_index[s]?.voices_heard.push(voiceId);
-      addedIds.push(voiceId);
-    }
     output.diff.added.push(...addedIds);
     record(
       ctx,
@@ -1407,7 +1356,7 @@ function mergeLabels(keepName: string, labels: Iterable<string>): string[] {
 /** ADT02: merge same-type targets into the approved or lowest id. */
 function mergeTargets(ctx: FixContext, req: DetectorFixRequest): void {
   const { output } = ctx;
-  const ids = uniq(req.target_ids).filter((id) => findEntry(output, id) && typeOf(id) !== "voice");
+  const ids = uniq(req.target_ids).filter((id) => findEntry(output, id));
   const types = uniq(ids.map(typeOf));
   if (ids.length < 2 || types.length !== 1) {
     record(ctx, req, req.target_ids, "not applied: pick two or more assets of the same category");
@@ -1440,26 +1389,12 @@ function mergeTargets(ctx: FixContext, req: DetectorFixRequest): void {
     if (os.some((o) => o.asset_priority === "required")) k.asset_priority = "required";
     k.scene_refs = sortRefs(output, [...k.scene_refs, ...os.flatMap((o) => o.scene_refs)]);
     k.first_scene = k.scene_refs[0] ?? k.first_scene;
-    // Voices of the merged characters become one voice of the kept character.
-    const own = output.voices.filter(
-      (v) => v.owner_char_id === keep || others.includes(v.owner_char_id),
+    k.dialogue_language =
+      k.dialogue_language ?? os.find((o) => o.dialogue_language)?.dialogue_language ?? null;
+    k.voice_delivery = VOICE_DELIVERIES.filter(
+      (d) => k.voice_delivery.includes(d) || os.some((o) => o.voice_delivery.includes(d)),
     );
-    const main = own.find((v) => v.owner_char_id === keep) ?? own[0];
-    if (main) {
-      main.owner_char_id = keep;
-      for (const v of own) {
-        if (v === main) continue;
-        main.delivery = VOICE_DELIVERIES.filter(
-          (d) => main.delivery.includes(d) || v.delivery.includes(d),
-        );
-        main.hints = [...main.hints, ...v.hints];
-        main.dialogue_line_count += v.dialogue_line_count;
-        main.scene_refs = sortRefs(output, [...main.scene_refs, ...v.scene_refs]);
-        map.set(v.voice_id, main.voice_id);
-        removed.push(v.voice_id);
-      }
-      output.voices = output.voices.filter((v) => v === main || !own.includes(v));
-    }
+    k.voice_hints = [...k.voice_hints, ...os.flatMap((o) => o.voice_hints)];
     output.characters = output.characters.filter((c) => !others.includes(c.char_id));
   } else if (type === "loc") {
     const k = output.locations.find((l) => l.loc_id === keep);
@@ -1510,7 +1445,7 @@ const CATEGORY: Readonly<Record<string, AssetType>> = {
 /** ADT04: move the target to the category named in custom_text, with a new id. */
 function moveTarget(ctx: FixContext, req: DetectorFixRequest): void {
   const { output } = ctx;
-  const id = req.target_ids.find((t) => findEntry(output, t) && typeOf(t) !== "voice");
+  const id = req.target_ids.find((t) => findEntry(output, t));
   const word = (req.custom_text ?? "").trim().toLowerCase();
   const to = Object.entries(CATEGORY).find(([w]) => word.includes(w))?.[1];
   const from = id ? typeOf(id) : null;
@@ -1548,11 +1483,6 @@ function moveTarget(ctx: FixContext, req: DetectorFixRequest): void {
   const removed = [id];
   const map = new Map<string, string | null>([[id, null]]);
   if (from === "char") {
-    for (const v of output.voices.filter((x) => x.owner_char_id === id)) {
-      map.set(v.voice_id, null);
-      removed.push(v.voice_id);
-    }
-    output.voices = output.voices.filter((x) => x.owner_char_id !== id);
     output.characters = output.characters.filter((c) => c.char_id !== id);
   } else if (from === "loc") {
     output.locations = output.locations.filter((l) => l.loc_id !== id);
@@ -1584,6 +1514,9 @@ function moveTarget(ctx: FixContext, req: DetectorFixRequest): void {
       signature_prop_ids: [],
       speaks: false,
       dialogue_line_count: 0,
+      dialogue_language: null,
+      voice_delivery: [],
+      voice_hints: [],
       relationships: [],
       scene_refs: refs,
       first_scene: refs[0] ?? old.first_scene,
@@ -1654,7 +1587,6 @@ function sampleFix(input: AssetDetectorParsedInput): AssetDetectorOutput {
     ...output.characters.map((c) => c.char_id),
     ...output.locations.map((l) => l.loc_id),
     ...output.props.map((p) => p.prop_id),
-    ...output.voices.map((v) => v.voice_id),
     ...previous.diff.removed,
     ...(input.known_assets ?? []).map((k) => k.id),
   ]) {

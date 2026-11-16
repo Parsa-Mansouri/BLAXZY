@@ -1,5 +1,5 @@
 /**
- * Running the Asset Detector v1 from the worker: build its input from a script version (the
+ * Running the Asset Detector v2 from the worker: build its input from a script version (the
  * structured scenes of a generated script, or the raw text of an uploaded, edited or enhanced
  * one), translate stored assets to the run's temporary ids, and, when the answer is cut off
  * (max_tokens), split the script into scene ranges and continue incrementally.
@@ -12,6 +12,7 @@ import {
   flattenForDetector,
   isSceneHeading,
   parseStoredScreenplay,
+  renderCreativeDna,
   runDami,
   type AssetDetectorInput,
   type AssetDetectorOutput,
@@ -19,6 +20,7 @@ import {
   type DetectorMode,
 } from "../../src/server/damis";
 import type { DetectionSceneIndexEntry, ProjectStyle } from "../../src/server/db/schema";
+import { getReadyBible } from "../../src/server/projects";
 import { readScriptNotes, type ScriptVersionRow } from "../../src/server/script";
 
 type Scene = NonNullable<AssetDetectorInput["script"]["scenes"]>[number];
@@ -38,6 +40,18 @@ export function detectorScript(version: ScriptVersionRow): AssetDetectorInput["s
   };
   if (stored) return { ...base, scenes: flattenForDetector(stored) };
   return { ...base, raw_text: version.content ?? "" };
+}
+
+/**
+ * The input field carrying the project's Creative Bible, when one is ready. Detection runs right
+ * after the script is accepted, so a bible still compiling (or failed, or none for an "Other"
+ * style) is not waited for: the detector then runs on its own prompt, unchanged.
+ */
+export async function detectorBible(
+  projectId: string,
+): Promise<Pick<AssetDetectorInput, "creativeDna">> {
+  const ready = await getReadyBible(projectId);
+  return ready ? { creativeDna: renderCreativeDna("asset_detector", ready.bible).text } : {};
 }
 
 export function detectorProject(
@@ -109,6 +123,9 @@ export function mergeRangeOutputs(
         ),
         speaks: p.speaks || q.speaks,
         dialogue_line_count: p.dialogue_line_count + q.dialogue_line_count,
+        dialogue_language: p.dialogue_language ?? q.dialogue_language,
+        voice_delivery: [...new Set([...p.voice_delivery, ...q.voice_delivery])],
+        voice_hints: [...p.voice_hints, ...q.voice_hints],
         scene_refs,
         first_scene: first(scene_refs),
       };
@@ -169,23 +186,10 @@ export function mergeRangeOutputs(
       };
     },
   );
-  const voices = mergeBy(
-    a.voices,
-    b.voices,
-    (v) => v.voice_id,
-    (p, q) => ({
-      ...p,
-      delivery: [...new Set([...p.delivery, ...q.delivery])],
-      hints: [...p.hints, ...q.hints],
-      dialogue_line_count: p.dialogue_line_count + q.dialogue_line_count,
-      scene_refs: union(p.scene_refs, q.scene_refs),
-    }),
-  );
   const firstIds = new Set([
     ...a.characters.map((c) => c.char_id),
     ...a.locations.map((l) => l.loc_id),
     ...a.props.map((p) => p.prop_id),
-    ...a.voices.map((v) => v.voice_id),
   ]);
   return {
     ...a,
@@ -193,7 +197,6 @@ export function mergeRangeOutputs(
     characters,
     locations,
     props,
-    voices,
     diff: {
       added: union(a.diff.added, b.diff.added),
       updated: union(a.diff.updated, b.diff.updated).filter((id) => !a.diff.added.includes(id)),
@@ -208,7 +211,6 @@ export function mergeRangeOutputs(
       character_count: characters.length,
       location_count: locations.length,
       prop_count: props.length,
-      voice_count: voices.length,
     },
     applied_fixes: [...a.applied_fixes, ...b.applied_fixes],
     assumptions: [...a.assumptions, ...b.assumptions],
@@ -227,7 +229,6 @@ function knownFrom(
   for (const c of output.characters) add(c.char_id, c);
   for (const l of output.locations) add(l.loc_id, l);
   for (const p of output.props) add(p.prop_id, p);
-  for (const v of output.voices) add(v.voice_id, v);
   return [...known.values()];
 }
 

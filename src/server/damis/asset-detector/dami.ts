@@ -1,8 +1,9 @@
 /**
- * Asset Detector v1 (the owner's `asset_detector`, output_21): reads one accepted script and
- * returns every character, location, prop and voice with evidence and scene references, plus a
- * scene index. `checkDetection` runs the owner's backend validators (section 8) and the prompt's
- * own cross-check (STEP 6); any issue triggers one corrective retry. `finalizeDetection` drops the
+ * Asset Detector v2 (the owner's `asset_detector`, output_21): reads one accepted script and
+ * returns every character, location and prop with evidence and scene references, plus a scene
+ * index that also records who speaks in each scene (voices are not assets: they are added in
+ * Production). `checkDetection` runs the owner's backend validators (section 8) and the prompt's
+ * own cross-check (STEP 5); any issue triggers one corrective retry. `finalizeDetection` drops the
  * few evidence-bearing items whose evidence is not in the script (the owner's validator 5).
  */
 import { defineDami } from "../framework/define";
@@ -32,9 +33,9 @@ export function detectorScriptText(input: AssetDetectorParsedInput): string {
   return input.script.raw_text ?? "";
 }
 
-type EvidenceType = "characters" | "locations" | "props" | "voices";
+type EvidenceType = "characters" | "locations" | "props";
 type EvidenceList =
-  "facts" | "looks" | "states" | "hints" | "fixed_elements_from_script" | "text_on_object";
+  "facts" | "looks" | "voice_hints" | "states" | "fixed_elements_from_script" | "text_on_object";
 
 /** One item that carries an `evidence` excerpt, with where it sits in the output. */
 export type EvidenceItem = {
@@ -50,7 +51,7 @@ export type EvidenceItem = {
 };
 
 /**
- * Every evidence-bearing item: facts of characters, locations and props, voice hints, character
+ * Every evidence-bearing item: facts of characters (and their voice hints), locations and props, character
  * looks, location and prop states, fixed elements and text on objects.
  */
 export function evidenceItems(output: AssetDetectorOutput): EvidenceItem[] {
@@ -76,6 +77,7 @@ export function evidenceItems(output: AssetDetectorOutput): EvidenceItem[] {
   output.characters.forEach((c, i) => {
     add("characters", c.char_id, i, "facts", c.facts);
     add("characters", c.char_id, i, "looks", c.looks);
+    add("characters", c.char_id, i, "voice_hints", c.voice_hints);
   });
   output.locations.forEach((l, i) => {
     add("locations", l.loc_id, i, "facts", l.facts);
@@ -87,7 +89,6 @@ export function evidenceItems(output: AssetDetectorOutput): EvidenceItem[] {
     add("props", p.prop_id, i, "states", p.states);
     add("props", p.prop_id, i, "text_on_object", p.text_on_object);
   });
-  output.voices.forEach((v, i) => add("voices", v.voice_id, i, "hints", v.hints));
   return items;
 }
 
@@ -96,6 +97,28 @@ function failingEvidence(output: AssetDetectorOutput, script: string): EvidenceI
   return evidenceItems(output).filter(
     (item) => !normalizeQuoteText(item.evidence) || !containsQuote(script, item.evidence),
   );
+}
+
+/**
+ * Whether a scene's text has at least one dialogue block: a paragraph whose first line is an
+ * upper-case character cue (optionally with an extension such as (V.O.)) followed by a spoken
+ * line. Deliberately conservative: scripts without upper-case cues (Persian, say) count as none.
+ */
+export function hasDialogue(text: string): boolean {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .split(/\n\s*\n/)
+    .some((block) => {
+      const lines = block
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      const cue = lines[0];
+      if (lines.length < 2 || cue === undefined) return false;
+      if (/[.:]$/.test(cue) || cue.length > 50) return false;
+      const name = cue.replace(/\s*\([^)]*\)\s*$/, "").trim();
+      return /^[A-Z][A-Z0-9 '’.-]*$/.test(name) && name.split(/\s+/).length <= 4;
+    });
 }
 
 function listed(values: readonly string[], max = MAX_LISTED): string {
@@ -127,7 +150,7 @@ export function checkDetection(
   input: AssetDetectorParsedInput,
 ): string[] {
   const issues: string[] = [];
-  const { scene_index: index, characters, locations, props, voices } = output;
+  const { scene_index: index, characters, locations, props } = output;
 
   // Mode.
   if (output.mode !== input.mode) {
@@ -156,7 +179,6 @@ export function checkDetection(
     ["character_count", characters.length, "characters"],
     ["location_count", locations.length, "locations"],
     ["prop_count", props.length, "props"],
-    ["voice_count", voices.length, "voices"],
   ];
   for (const [field, actual, array] of counts) {
     if (output.summary[field] !== actual) {
@@ -217,14 +239,12 @@ export function checkDetection(
   const charIds = new Set(characters.map((c) => c.char_id));
   const locIds = new Set(locations.map((l) => l.loc_id));
   const propIds = new Set(props.map((p) => p.prop_id));
-  const voiceIds = new Set(voices.map((v) => v.voice_id));
-  const allIds = new Set([...charIds, ...locIds, ...propIds, ...voiceIds]);
+  const allIds = new Set([...charIds, ...locIds, ...propIds]);
   const knownIds = new Set((input.known_assets ?? []).map((k) => k.id));
   for (const [label, ids] of [
     ["char_id", characters.map((c) => c.char_id)],
     ["loc_id", locations.map((l) => l.loc_id)],
     ["prop_id", props.map((p) => p.prop_id)],
-    ["voice_id", voices.map((v) => v.voice_id)],
   ] as const) {
     const dup = duplicatesOf(ids);
     if (dup.length > 0) {
@@ -253,7 +273,8 @@ export function checkDetection(
   index.forEach((s) => {
     const at = `scene_index scene ${s.scene_number}`;
     refsExist(s.characters_present, charIds, `${at} characters_present`, "character");
-    refsExist(s.voices_heard, voiceIds, `${at} voices_heard`, "voice");
+    refsExist(s.heard_only, charIds, `${at} heard_only`, "character");
+    refsExist(s.speakers, charIds, `${at} speakers`, "character");
     refsExist(s.props_present, propIds, `${at} props_present`, "prop");
     s.char_looks.forEach(({ char_id, look_id }) => {
       if (!charIds.has(char_id)) unknown(`${at} char_looks`, char_id, "character");
@@ -341,9 +362,6 @@ export function checkDetection(
     refsExist(p.location_ids, locIds, `${p.prop_id}.location_ids`, "location");
     refsExist(p.related_asset_ids, allIds, `${p.prop_id}.related_asset_ids`, "asset");
   }
-  for (const v of voices) {
-    checkSceneRefs(v.voice_id, v.scene_refs, null);
-  }
   for (const list of ["added", "updated"] as const) {
     output.diff[list].forEach((id) => {
       if (!allIds.has(id) && !knownIds.has(id)) unknown(`diff.${list}`, id, "asset");
@@ -372,22 +390,17 @@ export function checkDetection(
     }
   };
   const sceneByNumber = new Map(index.map((s) => [s.scene_number, s]));
-  const voicesOfChar = new Map<string, string[]>();
-  for (const v of voices)
-    voicesOfChar.set(v.owner_char_id, [...(voicesOfChar.get(v.owner_char_id) ?? []), v.voice_id]);
   for (const c of characters) {
-    const own = voicesOfChar.get(c.char_id) ?? [];
     consistency(
       c.char_id,
       c.scene_refs,
       (n) => {
         const s = sceneByNumber.get(n);
         return (
-          !!s &&
-          (s.characters_present.includes(c.char_id) || own.some((v) => s.voices_heard.includes(v)))
+          !!s && (s.characters_present.includes(c.char_id) || s.heard_only.includes(c.char_id))
         );
       },
-      "present (characters_present, or its voice in voices_heard)",
+      "present (characters_present, or heard_only)",
     );
   }
   for (const p of props) {
@@ -416,14 +429,32 @@ export function checkDetection(
     );
   }
 
-  // 6. Voice owners exist and speak.
+  // 4 (cont.). Every speaker is in the scene (seen or heard) and speaks.
   const charById = new Map(characters.map((c) => [c.char_id, c]));
-  for (const v of voices) {
-    const owner = charById.get(v.owner_char_id);
-    if (!owner) unknown(`${v.voice_id}.owner_char_id`, v.owner_char_id, "character");
-    else if (!owner.speaks) {
+  for (const s of index) {
+    for (const id of s.speakers) {
+      const speaker = charById.get(id);
+      if (!speaker) continue; // reported above as an unknown id
+      if (!s.characters_present.includes(id) && !s.heard_only.includes(id)) {
+        issues.push(
+          `scene_index scene ${s.scene_number}: speaker ${id} is in neither characters_present nor heard_only; add it to one of them`,
+        );
+      }
+      if (!speaker.speaks) {
+        issues.push(
+          `scene_index scene ${s.scene_number}: speaker ${id} has speaks false; set speaks true on the character or remove it from speakers`,
+        );
+      }
+    }
+  }
+
+  // 6. A scene whose text has dialogue lists its speakers.
+  const sceneTexts = new Map(inputScenes.map((s) => [s.scene_number, s.text]));
+  for (const s of index) {
+    const text = sceneTexts.get(s.scene_number);
+    if (text !== undefined && s.speakers.length === 0 && hasDialogue(text)) {
       issues.push(
-        `${v.voice_id} belongs to ${owner.char_id}, whose speaks is false; set speaks true or remove the voice`,
+        `scene_index scene ${s.scene_number}: the scene text has dialogue but speakers is empty; list every character who speaks in it`,
       );
     }
   }
@@ -495,6 +526,7 @@ export function finalizeDetection(
   const droppedStates = new Set<string>();
   next.characters.forEach((c, i) => {
     c.facts = c.facts.filter(keep("characters", i, "facts"));
+    c.voice_hints = c.voice_hints.filter(keep("characters", i, "voice_hints"));
     const looks = c.looks.filter(keep("characters", i, "looks"));
     c.looks
       .filter((l) => !looks.includes(l))
@@ -517,9 +549,6 @@ export function finalizeDetection(
     p.states = p.states.filter(keep("props", i, "states"));
     p.text_on_object = p.text_on_object.filter(keep("props", i, "text_on_object"));
   });
-  next.voices.forEach((v, i) => {
-    v.hints = v.hints.filter(keep("voices", i, "hints"));
-  });
   for (const s of next.scene_index) {
     s.char_looks = s.char_looks.filter((cl) => !droppedLooks.has(`${cl.char_id}|${cl.look_id}`));
     if (
@@ -539,9 +568,9 @@ export function finalizeDetection(
 
 export const assetDetector = defineDami({
   key: "asset-detector",
-  version: "1.0.0",
+  version: "2.0.0",
   description:
-    "The owner's Asset Detector v1: lists every character, location, prop and voice of an accepted script with evidence and scene references, plus a scene index (output_21).",
+    "The owner's Asset Detector v2: lists every character, location and prop of an accepted script with evidence and scene references, plus a scene index that records who speaks in each scene (output_21).",
   input: assetDetectorInputSchema,
   output: assetDetectorOutputSchema,
   // The owner's file: claude-sonnet-5-5, max_tokens 32000.

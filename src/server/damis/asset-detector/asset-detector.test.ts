@@ -10,9 +10,13 @@ import {
   detectorScriptText,
   evidenceItems,
   finalizeDetection,
+  hasDialogue,
 } from "./dami";
 import inputJson from "./fixtures/input.json";
 import outputJson from "./fixtures/model-output.json";
+import creativeBibleJson from "../creative-dna/fixtures/model-output.json";
+import { creativeBibleSchema } from "../creative-dna/schema";
+import { renderCreativeDna } from "../shared/creative-context";
 import { ASSET_DETECTOR_SYSTEM } from "./prompt";
 import {
   assetDetectorInputSchema,
@@ -23,7 +27,7 @@ import {
 
 const input = assetDetectorInputSchema.parse(inputJson);
 const output = assetDetectorOutputSchema.parse(outputJson);
-const source = readFileSync(join(__dirname, "source", "asset_detector_dami_v1.md"), "utf8").replace(
+const source = readFileSync(join(__dirname, "source", "asset_detector_dami_v2.md"), "utf8").replace(
   /\r\n/g,
   "\n",
 );
@@ -38,7 +42,7 @@ function issuesOf(o: AssetDetectorOutput, i: AssetDetectorParsedInput = input): 
   return checkDetection(o, i);
 }
 
-describe("asset-detector v1", () => {
+describe("asset-detector v2", () => {
   it("copies the owner's system prompt verbatim", () => {
     expect(ASSET_DETECTOR_SYSTEM.startsWith("# ROLE\nYou are the Asset Detector Dami")).toBe(true);
     expect(ASSET_DETECTOR_SYSTEM.endsWith("Keep each one short.")).toBe(true);
@@ -47,7 +51,7 @@ describe("asset-detector v1", () => {
 
   it("uses the owner's settings", () => {
     expect(assetDetector.key).toBe("asset-detector");
-    expect(assetDetector.version).toBe("1.0.0");
+    expect(assetDetector.version).toBe("2.0.0");
     expect(assetDetector.model).toBe("claude-sonnet-5-5");
     expect(assetDetector.effort).toBe("low");
     expect(assetDetector.maxOutputTokens).toBe(32_000);
@@ -61,6 +65,22 @@ describe("asset-detector v1", () => {
     expect(user).toBe(`<input>\n${JSON.stringify(input, null, 2)}\n</input>`);
     // The script goes in unchanged.
     expect(JSON.parse(user.slice("<input>\n".length, -"\n</input>".length))).toEqual(input);
+  });
+
+  it("adds the Creative Bible slice as a second cached block, and leaves it out of <input>", () => {
+    const bible = creativeBibleSchema.parse(creativeBibleJson);
+    const creativeDna = renderCreativeDna("asset_detector", bible).text;
+    const prompt = assetDetector.build({ ...input, creativeDna });
+    expect(prompt.system).toEqual([
+      { text: ASSET_DETECTOR_SYSTEM, cache: true },
+      { text: creativeDna, cache: true },
+    ]);
+    expect(prompt.system.filter((b) => b.cache).length).toBeLessThanOrEqual(4);
+    expect(partText(prompt.messages[0]?.content[0])).toBe(
+      `<input>
+${JSON.stringify(input, null, 2)}
+</input>`,
+    );
   });
 
   it("fixture output parses and passes every check", () => {
@@ -99,7 +119,7 @@ describe("asset-detector v1", () => {
     expect(paths).toContain("char_1.facts[0]");
     expect(paths).toContain("loc_1.states[0]");
     expect(paths).toContain("loc_2.fixed_elements_from_script[1]");
-    expect(paths).toContain("voice_1.hints[0]");
+    expect(paths).toContain("char_1.voice_hints[0]");
   });
 
   describe("validators", () => {
@@ -208,26 +228,84 @@ describe("asset-detector v1", () => {
       );
       expect(extraRef.some((i) => i.startsWith("prop_2.scene_refs lists scene(s) 1"))).toBe(true);
 
-      // A character heard only through its voice counts as in the scene.
+      // A character heard but not seen (heard_only) counts as in the scene.
       const voiceGone = issuesOf(
         edit((o) => {
           const last = o.scene_index[2];
-          if (last) last.voices_heard = [];
+          if (last) last.heard_only = [];
         }),
       );
       expect(voiceGone.some((i) => i.startsWith("char_1.scene_refs lists scene(s) 3"))).toBe(true);
     });
 
-    it("6: a voice's owner must speak", () => {
+    it("4: every speaker is in the scene and speaks", () => {
       const issues = issuesOf(
         edit((o) => {
-          const voice = o.voices[0];
-          if (voice) voice.owner_char_id = "char_2";
+          const last = o.scene_index[2];
+          // Jonas never speaks and is not in scene 3.
+          if (last) last.speakers.push("char_2");
         }),
       );
       expect(issues).toContain(
-        "voice_1 belongs to char_2, whose speaks is false; set speaks true or remove the voice",
+        "scene_index scene 3: speaker char_2 is in neither characters_present nor heard_only; add it to one of them",
       );
+      expect(issues).toContain(
+        "scene_index scene 3: speaker char_2 has speaks false; set speaks true on the character or remove it from speakers",
+      );
+      const unknown = issuesOf(
+        edit((o) => {
+          o.scene_index[0]?.speakers.push("char_9");
+        }),
+      );
+      expect(unknown).toContain(
+        'scene_index scene 1 speakers refers to character "char_9", which does not exist in this output',
+      );
+    });
+
+    it("6: a scene with dialogue needs a non-empty speakers list", () => {
+      const issues = issuesOf(
+        edit((o) => {
+          const first = o.scene_index[0];
+          if (first) first.speakers = [];
+        }),
+      );
+      expect(issues).toEqual([
+        "scene_index scene 1: the scene text has dialogue but speakers is empty; list every character who speaks in it",
+      ]);
+    });
+
+    it("recognizes dialogue blocks and ignores action lines and transitions", () => {
+      expect(hasDialogue("MARA\nWait.")).toBe(true);
+      expect(hasDialogue("Rain.\n\nMARA (V.O.)\n(softly)\nYou were late.")).toBe(true);
+      expect(hasDialogue("MARA (60s), wiry, hurries down the planks.")).toBe(false);
+      expect(hasDialogue("Rain falls.\nIt does not stop.")).toBe(false);
+      expect(hasDialogue("CUT TO:\nThe next room.")).toBe(false);
+      expect(hasDialogue("")).toBe(false);
+    });
+
+    it("keeps a voice-only narrator as a character that is heard, not seen", () => {
+      const o = edit((x) => {
+        const mara = structuredClone(x.characters[0]);
+        if (!mara) throw new Error("fixture changed");
+        x.characters.push({
+          ...mara,
+          char_id: "char_3",
+          name: "NARRATOR",
+          name_latin: "Narrator",
+          aliases: [],
+          kind: "voice_only",
+          needs_visual: false,
+          facts: [],
+          looks: [],
+          voice_hints: [],
+          scene_refs: ["3"],
+          first_scene: "3",
+        });
+        const last = x.scene_index[2];
+        if (last) last.heard_only.push("char_3");
+        x.summary.character_count = 3;
+      });
+      expect(issuesOf(o)).toEqual([]);
     });
 
     it("7: duplicate names need same_person_as or a MERGE_CHECK warning", () => {
@@ -347,7 +425,8 @@ describe("asset-detector v1", () => {
             time_of_day: "night",
             characters_present: ["char_1"],
             char_looks: [],
-            voices_heard: [],
+            heard_only: [],
+            speakers: [],
             props_present: [],
           },
         ];
@@ -361,13 +440,11 @@ describe("asset-detector v1", () => {
         x.characters = [maryam];
         x.locations = [];
         x.props = [];
-        x.voices = [];
         x.summary = {
           scene_count: 1,
           character_count: 1,
           location_count: 0,
           prop_count: 0,
-          voice_count: 0,
         };
       });
       expect(issuesOf(o, persian)).toEqual([]);

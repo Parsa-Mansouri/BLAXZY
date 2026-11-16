@@ -220,7 +220,6 @@ export {
   type DetectedCharacter,
   type DetectedLocation,
   type DetectedProp,
-  type DetectedVoice,
   type DetectorFact,
   type DetectorFixRequest,
   type DetectorMode,

@@ -54,7 +54,7 @@ export default async function PreProductionPage({ params }: { params: Promise<{ 
     ? "Pre-production is complete."
     : allReady
       ? "Every asset is ready."
-      : "Give every character, location, prop and voice its look.";
+      : "Give every character, location and prop its look.";
 
   const reviewButton = hasSheets ? (
     <Button variant="outlined" size="large" render={<Link href={reviewHref(project.id)} />}>

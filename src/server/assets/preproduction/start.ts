@@ -72,6 +72,9 @@ function uploadRule(kind: AssetKind): { purpose: FilePurpose; message: string } 
 /** Refuses a new look unless the asset is waiting for one (or its last look failed). */
 async function assertCanStartLook(tx: DbTx, row: AssetRow): Promise<void> {
   assertActive(row);
+  if (row.details?.needsVisual === false) {
+    throw new AssetInputError("This character is only a voice, so there is nothing to design.");
+  }
   const { state } = await loadAssetState(tx, row);
   if (state.busy) throw new AssetInputError(BUSY_MESSAGE);
   if (row.kind === "voice") return; // a new recording replaces the accepted one

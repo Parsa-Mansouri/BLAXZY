@@ -9,7 +9,13 @@ import {
 import { queueResection, sectioningOwedAfterDetection } from "../../src/server/assets/jobs";
 import { assetDetectFix, defineHandler } from "../../src/server/jobs";
 import { loadScriptJob, ScriptInputError } from "../../src/server/script";
-import { detectorProject, detectorScript, runDetector, viewFor } from "./asset-detection";
+import {
+  detectorBible,
+  detectorProject,
+  detectorScript,
+  runDetector,
+  viewFor,
+} from "./asset-detection";
 import { handleFailure } from "./failure";
 import { classifyFailure } from "./script-failure";
 
@@ -48,6 +54,7 @@ export const assetDetectFixHandler = defineHandler(assetDetectFix, async (payloa
         mode,
         project: detectorProject(script.project.style, "wizard"),
         script: detectorScript(script.version),
+        ...(await detectorBible(job.projectId)),
         known_assets: view.known,
         ...(mode === "fix"
           ? {

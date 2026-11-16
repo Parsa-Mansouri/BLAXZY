@@ -96,7 +96,14 @@ describe("sample asset detector", () => {
     expect(output.locations[0]?.interior_exterior).toBe("exterior");
     expect(output.props.map((p) => p.name)).toEqual(["old radio", "paper map"]);
     expect(output.props[0]?.aliases).toEqual(["radio"]);
-    expect(output.voices.map((v) => v.owner_char_id)).toEqual(["char_2", "char_1"]);
+    expect(output.characters.map((c) => [c.char_id, c.speaks])).toEqual([
+      ["char_1", true],
+      ["char_2", true],
+    ]);
+    // Everyone who speaks in a scene is listed as its speaker; nobody is only heard here.
+    expect(output.scene_index.every((s) => s.heard_only.length === 0)).toBe(true);
+    expect(output.scene_index.some((s) => s.speakers.length > 0)).toBe(true);
+    expect(output).not.toHaveProperty("voices");
     expect(output.diff).toEqual({ added: [], updated: [], removed: [] });
     expect(output.applied_fixes).toEqual([]);
   });
@@ -114,9 +121,19 @@ describe("sample asset detector", () => {
     expect(output.props.map((p) => p.name)).toEqual(["brass locket", "lantern"]);
     // Mara is heard in voice-over only in scene 3.
     expect(output.scene_index[2]?.characters_present).toEqual([]);
-    expect(output.scene_index[2]?.voices_heard).toEqual(["voice_1"]);
-    expect(output.voices[0]?.delivery).toEqual(["on_screen", "voice_over"]);
-    expect(output.voices[0]?.hints[0]?.evidence).toBe("(breathless)");
+    expect(output.scene_index[2]?.heard_only).toEqual(["char_1"]);
+    expect(output.scene_index.map((s) => s.speakers)).toEqual([["char_1"], ["char_1"], ["char_1"]]);
+    const mara = output.characters[0];
+    expect(mara?.voice_delivery).toEqual(["on_screen", "voice_over"]);
+    expect(mara?.voice_hints[0]?.evidence).toBe("(breathless)");
+    expect(mara?.dialogue_language).toBe("English");
+    // Jonas never speaks: no language, delivery or hints.
+    expect(output.characters[1]).toMatchObject({
+      speaks: false,
+      dialogue_language: null,
+      voice_delivery: [],
+      voice_hints: [],
+    });
   });
 
   it("splits a raw upload at its headings and anchors each scene", () => {
@@ -156,7 +173,7 @@ describe("sample asset detector", () => {
       ["حیاط", "exterior", "dawn"],
     ]);
     expect(output.props.map((p) => p.name_latin)).toEqual(["oil lamp", "letter", "suitcase"]);
-    expect(output.voices.map((v) => v.language)).toEqual(["Persian", "Persian"]);
+    expect(output.characters.map((c) => c.dialogue_language)).toEqual(["Persian", "Persian"]);
     expect(output.characters[0]?.ui_summary).toContain("شخصیت");
   });
 
@@ -217,7 +234,7 @@ describe("sample asset detector", () => {
       expect(fixed.characters).toEqual(output.characters);
     });
 
-    it("ADT01 adds a speaking character with its voice", () => {
+    it("ADT01 adds a speaking character with its voice facts", () => {
       const input: AssetDetectorInput = {
         mode: "full",
         project,
@@ -229,12 +246,11 @@ describe("sample asset detector", () => {
       const output = detect(input);
       const without = structuredClone(output);
       without.characters = without.characters.filter((c) => c.name !== "Ben");
-      without.voices = without.voices.filter((v) => v.owner_char_id !== "char_2");
       without.scene_index.forEach((s) => {
-        s.voices_heard = [];
+        s.heard_only = [];
+        s.speakers = s.speakers.filter((id) => id !== "char_2");
       });
       without.summary.character_count = 1;
-      without.summary.voice_count = 1;
       const fixed = fix(without, input, [
         {
           type: "technical",
@@ -248,10 +264,12 @@ describe("sample asset detector", () => {
       const ben = fixed.characters.find((c) => c.name === "Ben");
       expect(ben?.char_id).toBe("char_2");
       expect(ben?.kind).toBe("voice_only");
-      const voice = fixed.voices.find((v) => v.owner_char_id === "char_2");
-      expect(voice?.delivery).toEqual(["off_screen"]);
-      expect(fixed.scene_index[0]?.voices_heard).toEqual([voice?.voice_id]);
-      expect(fixed.diff.added).toEqual(["char_2", voice?.voice_id]);
+      expect(ben?.needs_visual).toBe(false);
+      expect(ben?.voice_delivery).toEqual(["off_screen"]);
+      expect(ben?.dialogue_language).toBe("English");
+      expect(fixed.scene_index[0]?.heard_only).toEqual(["char_2"]);
+      expect(fixed.scene_index[0]?.speakers).toEqual(["char_1", "char_2"]);
+      expect(fixed.diff.added).toEqual(["char_2"]);
     });
 
     it("ADT02 merges duplicates into the lowest id", () => {
@@ -266,9 +284,12 @@ describe("sample asset detector", () => {
       ]);
       expect(fixed.characters.map((c) => c.char_id)).toEqual(["char_1"]);
       expect(fixed.characters[0]?.aliases).toEqual(["Tomas"]);
-      expect(fixed.voices).toHaveLength(1);
-      expect(fixed.voices[0]?.owner_char_id).toBe("char_1");
-      expect(fixed.diff.removed.sort()).toEqual(["char_2", "voice_1"].sort());
+      expect(fixed.diff.removed).toEqual(["char_2"]);
+      // The merged character's speaker entries point at the kept id, once.
+      expect(fixed.scene_index.every((s) => !s.speakers.includes("char_2"))).toBe(true);
+      expect(fixed.characters[0]?.dialogue_line_count).toBe(
+        output.characters.reduce((n, c) => n + c.dialogue_line_count, 0),
+      );
       expect(fixed.diff.updated).toEqual(["char_1"]);
       expect(fixed.applied_fixes).toEqual([
         { code: "ADT02", target_ids: ["char_1", "char_2"], change: "merged char_2 into char_1" },

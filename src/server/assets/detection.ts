@@ -1,5 +1,5 @@
 /**
- * The Asset Detector boundary. The detector speaks `char_1` / `loc_1` / `prop_1` / `voice_1`;
+ * The Asset Detector boundary. The detector speaks `char_1` / `loc_1` / `prop_1`;
  * BLAXZY identifies assets by kind and real name. For one run, `detectorView` gives the stored
  * assets temporary ids (as `known_assets`, and as `previous_output` for a fix round), and
  * `planDetection` turns the detector's answer back into names: which rows to update, which to
@@ -15,7 +15,6 @@ import {
   type DetectedCharacter,
   type DetectedLocation,
   type DetectedProp,
-  type DetectedVoice,
   type DetectorFact,
   type KnownAsset,
   type SceneIndexEntry,
@@ -32,8 +31,12 @@ import type {
 
 type Asset = typeof asset.$inferSelect;
 
-/** The kinds the detector manages. Legacy creature, costume and other rows are left alone. */
-export const DETECTED_KINDS = ["character", "location", "prop", "voice"] as const;
+/**
+ * The kinds the detector manages. Legacy creature, costume and other rows are left alone, and so
+ * are legacy `voice` rows (written by detector v1; v2 never creates voice assets, and a voice
+ * row is neither matched, updated nor removed by a detection).
+ */
+export const DETECTED_KINDS = ["character", "location", "prop"] as const;
 export type DetectedKind = (typeof DETECTED_KINDS)[number];
 
 export function isDetectedKind(kind: AssetKind): kind is DetectedKind {
@@ -67,15 +70,14 @@ const PREFIX: Record<DetectedKind, string> = {
   character: "char",
   location: "loc",
   prop: "prop",
-  voice: "voice",
 };
 
 /** A temporary id, also inside a longer id the detector built from it (`loc_1_night`). */
-const TEMP_ID = /\b(?:char|loc|prop|voice)_\d+(?![0-9])/g;
+const TEMP_ID = /\b(?:char|loc|prop)_\d+(?![0-9])/g;
 
 export type DetectorView = {
   known: KnownAsset[];
-  /** temp id → stored asset (characters that are only a voice map to their voice asset). */
+  /** temp id → stored asset. */
   byTemp: Map<string, Asset>;
   /** `kind:name-key` → temp id. */
   tempByName: Map<string, string>;
@@ -116,7 +118,7 @@ export function detectorView(
       isDetectedKind(r.asset.kind) &&
       (r.asset.origin !== "manual" || (r.asset.details?.sceneRefs?.length ?? 0) > 0),
   );
-  const counters: Record<string, number> = { char: 0, loc: 0, prop: 0, voice: 0 };
+  const counters: Record<string, number> = { char: 0, loc: 0, prop: 0 };
   const byTemp = new Map<string, Asset>();
   const tempByName = new Map<string, string>();
   const statusByTemp = new Map<string, KnownStatus>();
@@ -128,17 +130,6 @@ export function detectorView(
     byTemp.set(id, r.asset);
     statusByTemp.set(id, r.status);
     tempByName.set(refKey(kind, r.asset.name), id);
-  }
-  // A voice whose owner has no character asset (heard, never seen) gets a voice_only character.
-  for (const r of active) {
-    if (r.asset.kind !== "voice") continue;
-    const owner = r.asset.details?.owner ?? r.asset.name;
-    if (!tempByName.has(refKey("character", owner))) {
-      const id = next("char");
-      byTemp.set(id, r.asset);
-      statusByTemp.set(id, r.status);
-      tempByName.set(refKey("character", owner), id);
-    }
   }
   const temp = (kind: DetectedKind, name: string | null | undefined) =>
     name ? (tempByName.get(refKey(kind, name)) ?? null) : null;
@@ -158,11 +149,10 @@ export function detectorView(
   const characters: DetectedCharacter[] = [];
   const locations: DetectedLocation[] = [];
   const props: DetectedProp[] = [];
-  const voices: DetectedVoice[] = [];
   for (const [id, a] of byTemp) {
     const d: AssetDetails = a.details ?? {};
     const common = {
-      name: d.owner && id.startsWith("char_") && a.kind === "voice" ? d.owner : a.name,
+      name: a.name,
       name_latin: d.nameLatin ?? a.name,
       aliases: d.aliases ?? [],
       script_description: a.description ?? "",
@@ -173,13 +163,11 @@ export function detectorView(
       ui_summary: d.uiSummary ?? a.description ?? "",
     };
     if (id.startsWith("char_")) {
-      const voiceOnly = a.kind === "voice";
+      const voiceOnly = d.subkind === "voice_only";
       characters.push({
         char_id: id,
         ...common,
-        kind: voiceOnly
-          ? "voice_only"
-          : ((d.subkind as DetectedCharacter["kind"] | undefined) ?? "human"),
+        kind: (d.subkind as DetectedCharacter["kind"] | undefined) ?? "human",
         role: (d.role as DetectedCharacter["role"] | undefined) ?? "supporting",
         needs_visual: voiceOnly ? false : (d.needsVisual ?? true),
         is_minor: d.isMinor ?? "unknown",
@@ -191,8 +179,11 @@ export function detectorView(
           evidence: l.evidence,
         })),
         signature_prop_ids: temps("prop", d.signatureProps),
-        speaks: voiceOnly ? true : (d.speaks ?? false),
+        speaks: d.speaks ?? false,
         dialogue_line_count: d.dialogueLineCount ?? 0,
+        dialogue_language: d.dialogueLanguage ?? null,
+        voice_delivery: (d.voiceDelivery ?? []) as DetectedCharacter["voice_delivery"],
+        voice_hints: (d.voiceHints ?? []).map(toDetectorFact),
         relationships: (d.relationships ?? [])
           .map((r) => ({ char_id: temp("character", r.name), relation: r.relation }))
           .filter((r): r is { char_id: string; relation: string } => r.char_id !== null),
@@ -231,17 +222,6 @@ export function detectorView(
         location_ids: temps("location", d.locationIds),
         related_asset_ids: relatedTemps(d.relatedAssets),
       });
-    } else {
-      voices.push({
-        voice_id: id,
-        owner_char_id: temp("character", d.owner ?? a.name) ?? "",
-        delivery: (d.delivery ?? ["on_screen"]) as DetectedVoice["delivery"],
-        language: d.language ?? "",
-        hints: (d.hints ?? []).map(toDetectorFact),
-        dialogue_line_count: d.dialogueLineCount ?? 0,
-        scene_refs: d.sceneRefs ?? [],
-        ui_summary: d.uiSummary ?? a.description ?? "",
-      });
     }
   }
 
@@ -256,7 +236,9 @@ export function detectorView(
     char_looks: s.characterLooks
       .map((l) => ({ char_id: temp("character", l.character), look_id: l.look }))
       .filter((l): l is { char_id: string; look_id: string } => l.char_id !== null),
-    voices_heard: temps("voice", s.voices),
+    // Rows written before v2 have `voices` (voice asset names: the speaking character's name).
+    heard_only: temps("character", s.heardOnly ?? s.voices),
+    speakers: temps("character", s.speakers),
     props_present: temps("prop", s.props),
   }));
 
@@ -264,7 +246,6 @@ export function detectorView(
     characters.find((c) => c.char_id === id) ??
     locations.find((l) => l.loc_id === id) ??
     props.find((p) => p.prop_id === id) ??
-    voices.find((v) => v.voice_id === id) ??
     {};
   const known: KnownAsset[] = [...byTemp.keys()].map((id) => ({
     id,
@@ -283,14 +264,12 @@ export function detectorView(
       characters,
       locations,
       props,
-      voices,
       diff: { added: [], updated: [], removed: [] },
       summary: {
         scene_count: scene_index.length,
         character_count: characters.length,
         location_count: locations.length,
         prop_count: props.length,
-        voice_count: voices.length,
       },
       applied_fixes: [],
       assumptions: [],
@@ -333,8 +312,8 @@ function fromFact(f: DetectorFact): AssetFact {
  * row's name; a new entry whose name matches a removed detected row of its kind revives it;
  * other new entries get a unique name ("Mara (2)"). An entry that is an asset the user removed
  * (through `byTemp`, when the user removed it while the detector ran, or by name) is dropped: the
- * user's removal is never undone and no "Mara (2)" stands in for it. `voice_only` characters
- * become voice assets only. Temporary ids inside warnings and assumptions are replaced by names.
+ * user's removal is never undone and no "Mara (2)" stands in for it. `voice_only` characters are
+ * stored as characters with `needsVisual` false (they are heard, never designed). Temporary ids inside warnings and assumptions are replaced by names.
  */
 export function planDetection(input: {
   output: AssetDetectorOutput;
@@ -389,29 +368,12 @@ export function planDetection(input: {
     names.set(tempId, { kind, name, row: null });
   };
 
-  const charName = new Map<string, string>();
-  for (const c of output.characters) {
-    if (c.kind === "voice_only") {
-      charName.set(c.char_id, cleanAssetName(c.name) || c.name_latin);
-      continue;
-    }
-    resolve(c.char_id, "character", c.name);
-    charName.set(c.char_id, names.get(c.char_id)?.name ?? c.name);
-  }
+  for (const c of output.characters) resolve(c.char_id, "character", c.name);
   for (const l of output.locations) resolve(l.loc_id, "location", l.name);
   for (const p of output.props) resolve(p.prop_id, "prop", p.name);
-  for (const v of output.voices) {
-    const owner = output.characters.find((c) => c.char_id === v.owner_char_id);
-    const knownVoice = byTemp.get(v.voice_id);
-    resolve(
-      v.voice_id,
-      "voice",
-      knownVoice?.name ?? charName.get(v.owner_char_id) ?? owner?.name ?? "Voice",
-    );
-  }
 
   const nameOf = (tempId: string | null | undefined): string | null =>
-    tempId ? (names.get(tempId)?.name ?? charName.get(tempId) ?? null) : null;
+    tempId ? (names.get(tempId)?.name ?? null) : null;
   const namesOf = (ids: readonly string[]) =>
     ids.map((id) => nameOf(id)).filter((n): n is string => n !== null);
   const refOf = (tempId: string): string | null => {
@@ -447,14 +409,13 @@ export function planDetection(input: {
   };
 
   for (const c of output.characters) {
-    if (c.kind === "voice_only") continue;
     push(c.char_id, "character", c.script_description, c.asset_priority, {
       subkind: c.kind,
       role: c.role,
       aliases: c.aliases,
       nameLatin: c.name_latin,
       isMinor: c.is_minor,
-      needsVisual: c.needs_visual,
+      needsVisual: c.kind === "voice_only" ? false : c.needs_visual,
       samePersonAs: nameOf(c.same_person_as),
       facts: c.facts.map(fromFact),
       looks: c.looks.map((l) => ({
@@ -472,6 +433,9 @@ export function planDetection(input: {
       signatureProps: namesOf(c.signature_prop_ids),
       speaks: c.speaks,
       dialogueLineCount: c.dialogue_line_count,
+      dialogueLanguage: c.dialogue_language,
+      voiceDelivery: c.voice_delivery,
+      voiceHints: c.voice_hints.map(fromFact),
     });
   }
   for (const l of output.locations) {
@@ -518,27 +482,6 @@ export function planDetection(input: {
       uiSummary: p.ui_summary,
     });
   }
-  for (const v of output.voices) {
-    const owner = output.characters.find((c) => c.char_id === v.owner_char_id);
-    const description =
-      owner?.kind === "voice_only" && owner.script_description
-        ? owner.script_description
-        : [v.ui_summary, ...v.hints.map((h) => `${h.field}: ${h.value}`)].join(" ");
-    push(v.voice_id, "voice", description, owner?.asset_priority ?? "required", {
-      owner: nameOf(v.owner_char_id) ?? undefined,
-      ...(owner?.kind === "voice_only"
-        ? { subkind: "voice_only", aliases: owner.aliases, isMinor: owner.is_minor }
-        : {}),
-      delivery: v.delivery,
-      language: v.language,
-      hints: v.hints.map(fromFact),
-      dialogueLineCount: v.dialogue_line_count,
-      sceneRefs: v.scene_refs,
-      firstScene: v.scene_refs[0],
-      uiSummary: v.ui_summary,
-    });
-  }
-
   const kept = new Set(assets.map((a) => a.existing?.id).filter(Boolean));
   const removed = output.diff.removed
     .map((id) => byTemp.get(id))
@@ -555,7 +498,8 @@ export function planDetection(input: {
     characterLooks: s.char_looks
       .map((l) => ({ character: nameOf(l.char_id), look: localId(l.look_id) }))
       .filter((l): l is { character: string; look: string } => l.character !== null),
-    voices: namesOf(s.voices_heard),
+    heardOnly: namesOf(s.heard_only),
+    speakers: namesOf(s.speakers),
     props: namesOf(s.props_present),
   }));
 

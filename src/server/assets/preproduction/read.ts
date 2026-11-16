@@ -32,7 +32,7 @@ import {
   type PackLockGate,
   type PackView,
 } from "../packs";
-import { type Asset, listAssetPage, parse } from "../service";
+import { type Asset, listAssetPage, needsVisualAsset, parse } from "../service";
 import { type AssetStage, deriveAssetState, pickNextAsset } from "../stage";
 import { assertPreProductionOpen, isUuid, openProject } from "./access";
 import { cardsInput } from "./inputs";
@@ -100,6 +100,8 @@ export async function readiness(db: DbExecutor, projectId: string): Promise<Read
         eq(asset.status, "active"),
         // A skipped asset (ADP01) is not designed: it never blocks the stage.
         ne(asset.priority, "skipped"),
+        // A voice-only character (details.needsVisual false) is never designed: it never blocks.
+        needsVisualAsset,
       ),
     );
   const { looks, sheets } = await latestByAsset(
@@ -246,6 +248,8 @@ export async function nextAssetNeedingInput(
         eq(asset.status, "active"),
         // A skipped asset (ADP01) is not designed: it never blocks the stage.
         ne(asset.priority, "skipped"),
+        // A voice-only character (details.needsVisual false) is never designed: it never blocks.
+        needsVisualAsset,
       ),
     );
   const { looks, sheets } = await latestByAsset(

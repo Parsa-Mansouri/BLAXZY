@@ -22,28 +22,40 @@ export class AssetInputError extends UserInputError {
   }
 }
 
+/**
+ * Excludes the characters that are only a voice (`details.needsVisual` false, detector v2's
+ * `voice_only`): nothing is designed for them in Pre-production, so they are neither listed,
+ * counted, nor waited for. Rows without the flag (every older row) count as visual.
+ */
+export const needsVisualAsset = sql`coalesce(${asset.details}->>'needsVisual', 'true') <> 'false'`;
+
 /** Validates input; the first issue's message becomes an `AssetInputError`. */
 export const parse = makeParser(AssetInputError);
 
 const listAssetsSchema = z.object({
   kind: z.enum(ASSET_KINDS).optional(),
   includeRemoved: z.boolean().default(false),
+  /** Also the characters that are only a voice (hidden from Pre-production by default). */
+  includeVoiceOnly: z.boolean().default(false),
   limit: z.number().int().min(1).max(MAX_ASSET_PAGE_SIZE).default(DEFAULT_ASSET_PAGE_SIZE),
   cursor: z.string().max(200).nullish(),
 });
 
 /** The active assets, as the prompt-sectioner's asset list. */
 export async function getSectionerAssets(projectId: string): Promise<SectionerAsset[]> {
-  return getDb()
-    .select({
-      kind: asset.kind,
-      name: asset.name,
-      description: asset.description,
-    })
-    .from(asset)
-    .where(and(eq(asset.projectId, projectId), eq(asset.status, "active")))
-    .orderBy(asc(asset.displayOrder), asc(asset.id))
-    .limit(MAX_DAMI_ASSETS);
+  return (
+    getDb()
+      .select({
+        kind: asset.kind,
+        name: asset.name,
+        description: asset.description,
+      })
+      .from(asset)
+      // A voice-only character has no image to attach to a block, so the sectioner never sees it.
+      .where(and(eq(asset.projectId, projectId), eq(asset.status, "active"), needsVisualAsset))
+      .orderBy(asc(asset.displayOrder), asc(asset.id))
+      .limit(MAX_DAMI_ASSETS)
+  );
 }
 
 async function ownsProject(projectId: string, userId: string): Promise<boolean> {
@@ -64,6 +76,7 @@ export async function listAssets(
   opts: {
     kind?: AssetKind;
     includeRemoved?: boolean;
+    includeVoiceOnly?: boolean;
     limit?: number;
     cursor?: string | null;
   } = {},
@@ -79,9 +92,15 @@ export async function listAssets(
  */
 export async function listAssetPage(
   projectId: string,
-  opts: { kind?: AssetKind; includeRemoved?: boolean; limit?: number; cursor?: string | null },
+  opts: {
+    kind?: AssetKind;
+    includeRemoved?: boolean;
+    includeVoiceOnly?: boolean;
+    limit?: number;
+    cursor?: string | null;
+  },
 ): Promise<{ items: Asset[]; nextCursor: string | null }> {
-  const { kind, includeRemoved, limit, cursor } = parse(listAssetsSchema, opts);
+  const { kind, includeRemoved, includeVoiceOnly, limit, cursor } = parse(listAssetsSchema, opts);
   const after = cursor ? decodeCursor(cursor) : null;
   const rows = await getDb()
     .select()
@@ -91,6 +110,7 @@ export async function listAssetPage(
         eq(asset.projectId, projectId),
         kind ? eq(asset.kind, kind) : undefined,
         includeRemoved ? undefined : eq(asset.status, "active"),
+        includeVoiceOnly ? undefined : needsVisualAsset,
         after
           ? sql`(${asset.displayOrder}, ${asset.id}) > (${after.order}, ${after.id}::uuid)`
           : undefined,
@@ -106,7 +126,7 @@ export async function listAssetPage(
   };
 }
 
-/** Active assets per kind (every kind present, zero when none). */
+/** Active assets per kind (every kind present, zero when none), voice-only characters left out. */
 export async function countAssetsByKind(
   projectId: string,
   userId: string,
@@ -115,7 +135,7 @@ export async function countAssetsByKind(
   const rows = await getDb()
     .select({ kind: asset.kind, n: count() })
     .from(asset)
-    .where(and(eq(asset.projectId, projectId), eq(asset.status, "active")))
+    .where(and(eq(asset.projectId, projectId), eq(asset.status, "active"), needsVisualAsset))
     .groupBy(asset.kind);
   const counts = Object.fromEntries(ASSET_KINDS.map((k) => [k, 0])) as Record<AssetKind, number>;
   for (const row of rows) counts[row.kind] = row.n;

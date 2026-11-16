@@ -646,6 +646,217 @@
   animation: drift-b 21s ease-in-out infinite alternate;
 }
 
+/* ---------- Landing page ---------- */
+
+/*
+  Scroll reveal (src/app/_landing/reveal.tsx). The component sets data-reveal-ready on mount, so
+  with scripts off nothing is ever hidden, and data-in the first time it scrolls into view.
+  `reveal` fades the block itself in; `reveal-group` leaves the block alone and holds back the
+  entrances inside it (enter, rise, rule-in) until it is in view, so they play on sight.
+*/
+@utility reveal {
+  &[data-reveal-ready]:not([data-in]) {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  &[data-in] {
+    animation: page-in var(--dur-rise) var(--ease-curve) both;
+  }
+}
+@utility reveal-group {
+  &[data-reveal-ready]:not([data-in]) :is(.enter, .settle) {
+    animation: none;
+    opacity: 0;
+  }
+  &[data-reveal-ready]:not([data-in]) .rise {
+    animation: none;
+    transform: translateY(140%) rotate(10deg);
+  }
+  &[data-reveal-ready]:not([data-in]) .rule-in {
+    animation: none;
+    transform: scaleX(0);
+  }
+}
+
+/*
+  The landing's "opening credits" type, taken from the wordmark: wide-tracked capitals.
+  `credit` is the wordmark itself (small labels, buttons, captions), `credit-lg` a step up,
+  `credit-title` the one title per section. Trailing tracking is pulled back with a negative
+  right margin so centred lines sit on the true centre.
+*/
+@utility credit {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-right: -0.22em;
+}
+@utility credit-lg {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-right: -0.22em;
+}
+@utility credit-title {
+  font-size: clamp(24px, 4.2vw, 64px);
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-right: -0.18em;
+}
+
+/* A slate's clapper: diagonal stripes, white for the open plan, quiet for the one to come. */
+@utility clapper {
+  background-image: repeating-linear-gradient(-55deg, var(--label) 0 26px, var(--ground) 26px 52px);
+  border: 1px solid var(--label);
+}
+@utility clapper-quiet {
+  background-image: repeating-linear-gradient(-55deg, var(--fill) 0 26px, var(--ground) 26px 52px);
+  border: 1px solid var(--separator-opaque);
+}
+
+/*
+  "Four steps. One film." (src/app/_landing/call-sheet.tsx): one 10s loop walks the four
+  stages. Each stage owns a 2.5s turn, set by its --i (stage) and, inside it, --l (element
+  stagger). In its turn the bar fills, the name lights and the scene plays; it then holds
+  finished until just before its next turn. The resting styles are the finished state, so
+  reduced motion shows every stage done.
+*/
+.st-bar,
+.st-name,
+.st-line,
+.st-pop,
+.st-play,
+.st-pick {
+  --turn: calc(var(--i, 0) * 2.5s);
+  animation-duration: 10s;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+  animation-timing-function: var(--ease-curve);
+}
+.st-bar {
+  animation-name: st-grow;
+  animation-delay: var(--turn);
+}
+.st-play {
+  animation-name: st-grow;
+  animation-timing-function: linear;
+  animation-delay: calc(var(--turn) + 0.9s);
+}
+.st-line {
+  animation-name: st-grow;
+  animation-delay: calc(var(--turn) + 0.25s + var(--l, 0) * 0.22s);
+}
+.st-pop {
+  animation-name: st-pop;
+  animation-delay: calc(var(--turn) + 0.2s + var(--l, 0) * 0.3s);
+}
+.st-pick {
+  animation-name: st-pick;
+  animation-delay: var(--turn);
+  transform: translateX(calc(100% + 0.5rem));
+}
+.st-name {
+  animation-name: st-name;
+  animation-delay: var(--turn);
+  color: var(--label);
+}
+@keyframes st-grow {
+  0% {
+    transform: scaleX(0);
+  }
+  14%,
+  96% {
+    transform: scaleX(1);
+  }
+  100% {
+    transform: scaleX(0);
+  }
+}
+@keyframes st-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  6%,
+  96% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes st-pick {
+  0% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  3%,
+  7% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  11%,
+  15% {
+    transform: translateX(calc(200% + 1rem));
+  }
+  19%,
+  96% {
+    opacity: 1;
+    transform: translateX(calc(100% + 0.5rem));
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+}
+@keyframes st-name {
+  0% {
+    color: var(--label-3);
+  }
+  4%,
+  96% {
+    color: var(--label);
+  }
+  100% {
+    color: var(--label-3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-bar,
+  .st-name,
+  .st-line,
+  .st-pop,
+  .st-play,
+  .st-pick {
+    animation: none;
+  }
+}
+
+/* A title's letters settle into place: the tracking closes in as it fades up. */
+@keyframes settle {
+  from {
+    opacity: 0;
+    letter-spacing: 0.4em;
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.18em;
+  }
+}
+@utility settle {
+  animation: settle 1600ms var(--ease-curve) both;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
 /* ---------- Demo hints ---------- */
 /*
   A quiet animation behind a card's label that shows what the card does (src/ui/DemoHint.tsx,

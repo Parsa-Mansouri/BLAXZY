@@ -1,0 +1,1 @@
+ALTER TABLE "project" ADD COLUMN "title_source" text DEFAULT 'user' NOT NULL;

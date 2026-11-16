@@ -91,7 +91,8 @@ function EmptyHero() {
           </div>
           <div aria-hidden="true" className="h-[3px] w-12 rule-in rounded-capsule bg-brand" />
           <p className="max-w-(--measure) in-1 text-body text-pretty text-label-2">
-            Give your first film a working title. You choose its style next.
+            Start your first film. You choose its style next, and Claude names it once you describe
+            the story.
           </p>
         </div>
         <div className="in-3">

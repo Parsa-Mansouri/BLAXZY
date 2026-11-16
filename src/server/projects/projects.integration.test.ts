@@ -45,7 +45,13 @@ describe.skipIf(!reachable)("projects service (integration)", async () => {
   it("creates a wizard project at the style stage and logs an event", async () => {
     const ownerId = await newUser();
     const created = await projects.createProject({ ownerId, title: "  Midnight  " });
-    expect(created).toMatchObject({ title: "Midnight", mode: "wizard", stage: "style", ownerId });
+    expect(created).toMatchObject({
+      title: "Midnight",
+      titleSource: "user",
+      mode: "wizard",
+      stage: "style",
+      ownerId,
+    });
     const events = await getDb()
       .select()
       .from(projectEvent)
@@ -53,11 +59,34 @@ describe.skipIf(!reachable)("projects service (integration)", async () => {
     expect(events.map((e) => e.type)).toEqual(["project.created"]);
   });
 
-  it("rejects empty and overlong titles", async () => {
+  it('creates a project without a title as "Untitled project", waiting for a name', async () => {
     const ownerId = await newUser();
-    await expect(projects.createProject({ ownerId, title: "   " })).rejects.toBeInstanceOf(
-      projects.ProjectInputError,
-    );
+    for (const input of [{ ownerId }, { ownerId, title: "   " }, { ownerId, title: "" }]) {
+      const created = await projects.createProject(input);
+      expect(created).toMatchObject({ title: "Untitled project", titleSource: "placeholder" });
+    }
+  });
+
+  it("a rename makes the title the user's, also over an automatic one", async () => {
+    const ownerId = await newUser();
+    const created = await projects.createProject({ ownerId });
+    const renamed = await projects.renameProject({
+      projectId: created.id,
+      ownerId,
+      title: "Salt",
+    });
+    expect(renamed).toMatchObject({ title: "Salt", titleSource: "user" });
+    await getDb().update(project).set({ titleSource: "auto" }).where(eq(project.id, created.id));
+    const again = await projects.renameProject({ projectId: created.id, ownerId, title: "Brine" });
+    expect(again).toMatchObject({ title: "Brine", titleSource: "user" });
+  });
+
+  it("rejects overlong titles and empty renames", async () => {
+    const ownerId = await newUser();
+    const created = await projects.createProject({ ownerId, title: "Keep" });
+    await expect(
+      projects.renameProject({ projectId: created.id, ownerId, title: "  " }),
+    ).rejects.toBeInstanceOf(projects.ProjectInputError);
     await expect(projects.createProject({ ownerId, title: "x".repeat(121) })).rejects.toThrow(
       /under 120/,
     );

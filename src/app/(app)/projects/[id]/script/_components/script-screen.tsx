@@ -39,7 +39,14 @@ export function ScriptScreen(props: ScriptScreenProps) {
   }
 
   if (current.status === "pending") {
-    return <ScriptWorking projectId={projectId} version={current} previous={props.previous} />;
+    return (
+      <ScriptWorking
+        projectId={projectId}
+        projectTitle={props.projectTitle}
+        version={current}
+        previous={props.previous}
+      />
+    );
   }
 
   if (current.status === "failed") {

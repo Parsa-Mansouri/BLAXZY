@@ -29,6 +29,12 @@ export {
   type CreativeBibleRow,
   type ReadyCreativeBible,
 } from "./creative-bible";
+export {
+  applyAutoName,
+  loadProjectNameJob,
+  requestProjectName,
+  type ProjectNameJob,
+} from "./naming";
 export { episodeCount, episodeCountOf } from "./episodes";
 export { logProjectEvent } from "./events";
 export { findOwnedProject, type ProjectLock } from "./ownership";

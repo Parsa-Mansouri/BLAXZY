@@ -14,6 +14,7 @@ describe("dami registry", () => {
         "creative-dna",
         "enhancer",
         "location-generator",
+        "project-namer",
         "prompt-sectioner",
         "prop-generator",
         "script-checker",

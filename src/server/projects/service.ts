@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
-import { project } from "@/server/db/schema";
+import { PLACEHOLDER_TITLE, project } from "@/server/db/schema";
 import { decodeTimestampCursor, encodeTimestampCursor } from "./cursor";
 import { logProjectEvent } from "./events";
 import { findOwnedProject } from "./ownership";
@@ -18,7 +18,8 @@ export type Project = typeof project.$inferSelect;
 
 export type ProjectPage = { items: Project[]; nextCursor: string | null };
 
-export type CreateProjectInput = { ownerId: string; title: string };
+/** Without a title (or with a blank one) the project is "Untitled project" until it is named. */
+export type CreateProjectInput = { ownerId: string; title?: string };
 export type ListProjectsInput = { ownerId: string; limit?: number; cursor?: string | null };
 export type RenameProjectInput = { projectId: string; ownerId: string; title: string };
 export type ArchiveProjectInput = { projectId: string; ownerId: string };
@@ -34,20 +35,32 @@ function decodeCursor(cursor: string): { updatedAt: string; id: string } {
   return { updatedAt: decoded.timestamp, id: decoded.id };
 }
 
-/** Creates a Wizard project at the Style stage and logs `project.created`, in one transaction. */
+/**
+ * Creates a Wizard project at the Style stage and logs `project.created`, in one transaction. A
+ * given title is the user's (`title_source` `user`); without one the title is the placeholder
+ * and the first story the user gives names the project (`project.name`).
+ */
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  const { ownerId, title } = parseInput(createProjectSchema, input);
+  const { ownerId, title: given } = parseInput(createProjectSchema, input);
+  const named = given !== undefined && given.length > 0;
+  const title = named ? given : PLACEHOLDER_TITLE;
   return getDb().transaction(async (tx) => {
     const [created] = await tx
       .insert(project)
-      .values({ ownerId, title, mode: "wizard", stage: "style" })
+      .values({
+        ownerId,
+        title,
+        titleSource: named ? "user" : "placeholder",
+        mode: "wizard",
+        stage: "style",
+      })
       .returning();
     if (!created) throw new Error("Project insert returned no row.");
     await logProjectEvent(tx, {
       projectId: created.id,
       userId: ownerId,
       type: "project.created",
-      payload: { title },
+      payload: { title, titleSource: created.titleSource },
     });
     return created;
   });
@@ -98,7 +111,7 @@ export async function renameProject(input: RenameProjectInput): Promise<Project 
     if (!existing) return null;
     const [updated] = await tx
       .update(project)
-      .set({ title })
+      .set({ title, titleSource: "user" })
       .where(eq(project.id, projectId))
       .returning();
     await logProjectEvent(tx, {

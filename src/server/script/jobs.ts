@@ -14,7 +14,7 @@ import {
   type ReviewFixRequest,
 } from "@/server/db/schema";
 import { enqueue, scriptWriteSegment } from "@/server/jobs";
-import { logProjectEvent } from "@/server/projects";
+import { logProjectEvent, requestProjectName } from "@/server/projects";
 import { getOwnedFileInfo, type FileInfo } from "@/server/storage";
 import { uuidSchema } from "./schemas";
 import {
@@ -146,6 +146,10 @@ export async function completeScriptVersion(input: {
       type: "script.ready",
       payload: { versionId: row.id, source: row.source },
     });
+    // An uploaded script is the first story the worker can read: it names an untitled project.
+    if (row.source === "uploaded") {
+      await requestProjectName(tx, { projectId: row.projectId, scriptVersionId: row.id });
+    }
     return true;
   });
 }

@@ -23,6 +23,7 @@ import { productionGenerationHook } from "./production-generation-hook";
 import { blockReviseHandler, productionPrepareHandler } from "./production-prepare";
 import { takeFixHandler, takeGenerateHandler } from "./production-take";
 import { projectCreativeDnaHandler } from "./project-creative-dna";
+import { projectNameHandler } from "./project-name";
 import { ratelimitPruneHandler, ratelimitPruneSchedule } from "./ratelimit-prune";
 import { scriptCheckHandler } from "./script-check";
 import { scriptDetectAssetsHandler } from "./script-detect-assets";
@@ -53,6 +54,7 @@ export const schedules: JobSchedule[] = [
 export const handlers: JobHandler[] = [
   systemPingHandler,
   projectCreativeDnaHandler,
+  projectNameHandler,
   scriptWriteHandler,
   scriptWriteSegmentHandler,
   scriptEnhanceHandler,

@@ -182,7 +182,7 @@ export interface SidebarActionProps extends Omit<
 > {
   children: ReactNode;
   icon?: ReactNode;
-  /** Render as another element, e.g. `render={<Link href="/projects/new" />}`. */
+  /** Render as another element, e.g. `render={<Link href="/dashboard" />}`. */
   render?: ReactElement;
 }
 

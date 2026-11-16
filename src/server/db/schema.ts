@@ -45,6 +45,12 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const PROJECT_MODES = ["wizard", "pro"] as const;
 export type ProjectMode = (typeof PROJECT_MODES)[number];
 
+/** Where a project's title came from: the placeholder, Claude's automatic name, or the user. */
+export const TITLE_SOURCES = ["placeholder", "auto", "user"] as const;
+export type TitleSource = (typeof TITLE_SOURCES)[number];
+/** The title a project has until it is named. */
+export const PLACEHOLDER_TITLE = "Untitled project";
+
 /** Wizard stages, in order. Pro may use other stage keys; the column is free text. */
 export const WIZARD_STAGES = ["style", "script", "pre_production", "production", "done"] as const;
 export type WizardStage = (typeof WIZARD_STAGES)[number];
@@ -501,6 +507,8 @@ export const project = pgTable(
       .notNull()
       .references(() => user.id),
     title: text("title").notNull(),
+    /** `placeholder` until Claude names the project once or the user renames it; `user` is final. */
+    titleSource: text("title_source").$type<TitleSource>().notNull().default("user"),
     mode: text("mode").$type<ProjectMode>().notNull().default("wizard"),
     /** Current stage key of the project's flow (a WizardStage for wizard projects). */
     stage: text("stage").notNull().default("style"),

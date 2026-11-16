@@ -2,7 +2,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { review, scriptVersion } from "@/server/db/schema";
-import { logProjectEvent } from "@/server/projects";
+import { logProjectEvent, requestProjectName } from "@/server/projects";
 import { FILE_PURPOSES, getOwnedFileInfo } from "@/server/storage";
 import { ScriptInputError } from "./errors";
 import {
@@ -60,6 +60,11 @@ async function startVersion(
           : { versionId: row.id, source: values.source },
     });
     await enqueueForVersion(tx, row);
+    // The first story names a project that has no title yet. An upload's text only exists once
+    // the worker has read the file, so its job is queued then (completeScriptVersion).
+    if (values.source !== "uploaded" && owned.titleSource === "placeholder") {
+      await requestProjectName(tx, { projectId, scriptVersionId: row.id });
+    }
     return row;
   });
   if (!created) return null;

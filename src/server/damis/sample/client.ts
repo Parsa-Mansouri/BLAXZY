@@ -19,6 +19,7 @@ import { sampleSheetGeneratorCharacter } from "./sheet-generator-character";
 import { sampleSheetGeneratorLocation } from "./sheet-generator-location";
 import { sampleSheetGeneratorProp } from "./sheet-generator-prop";
 import { sampleBlockReviser, sampleTakeFixer, sampleTextBlocks } from "./production";
+import { sampleProjectNamer } from "./project-namer";
 import { samplePromptSectioner } from "./prompt-sectioner";
 import { sampleScriptChecker } from "./script-checker";
 import { sampleScriptReviser } from "./script-reviser";
@@ -28,6 +29,7 @@ import { sampleScriptOutline, sampleScriptWriter } from "./script-writer";
 /** Sample output by dami key. Each generator validates the input with the dami's schema. */
 export const SAMPLE_GENERATORS: Readonly<Record<string, (input: unknown) => unknown>> = {
   "creative-dna": sampleCreativeDna,
+  "project-namer": sampleProjectNamer,
   "script-writer": sampleScriptWriter,
   "script-writer-outline": sampleScriptOutline,
   enhancer: sampleEnhancer,

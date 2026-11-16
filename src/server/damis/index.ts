@@ -7,6 +7,7 @@ import { characterGenerator } from "./character-generator/dami";
 import { creativeDna } from "./creative-dna/dami";
 import { blockReviser } from "./block-reviser/dami";
 import { locationGenerator } from "./location-generator/dami";
+import { projectNamer } from "./project-namer/dami";
 import { propGenerator } from "./prop-generator/dami";
 import type { AnyDami } from "./framework/define";
 import { promptSectioner } from "./prompt-sectioner/dami";
@@ -398,6 +399,7 @@ export {
 /** Every dami by key (for the CLI and, later, Pro's dami picker). */
 export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [creativeDna.key]: creativeDna,
+  [projectNamer.key]: projectNamer,
   [scriptWriter.key]: scriptWriter,
   [scriptOutliner.key]: scriptOutliner,
   [enhancer.key]: enhancer,
@@ -469,3 +471,15 @@ export {
   type ReviewOptionKind,
   type ReviewSector,
 } from "./shared/review-catalog";
+
+// Project namer: the automatic title of a project
+export { projectNamer, checkProjectName, PROJECT_NAMER_VERSION } from "./project-namer/dami";
+export {
+  NAME_MAX_CHARS,
+  NAME_STORY_MAX_CHARS,
+  projectNamerInputSchema,
+  projectNamerOutputSchema,
+  storyExcerpt,
+  type ProjectNamerInput,
+  type ProjectNamerOutput,
+} from "./project-namer/schema";

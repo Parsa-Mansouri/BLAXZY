@@ -12,6 +12,7 @@ import {
   SidebarSection,
 } from "@/ui";
 import { Wordmark } from "@/app/_components/wordmark";
+import { useCreateProject } from "../dashboard/_components/use-create-project";
 import { SidebarAccount } from "./sidebar-account";
 
 /**
@@ -20,12 +21,13 @@ import { SidebarAccount } from "./sidebar-account";
  */
 export function LibrarySidebarView({ name, email }: { name: string; email: string }) {
   const pathname = usePathname();
+  const { pending, create } = useCreateProject();
   return (
     <>
       <SidebarHeader>
         <Wordmark href="/dashboard" />
       </SidebarHeader>
-      <SidebarAction icon={<Plus strokeWidth={1.5} />} render={<Link href="/projects/new" />}>
+      <SidebarAction icon={<Plus strokeWidth={1.5} />} onClick={create} disabled={pending}>
         New Project
       </SidebarAction>
       <SidebarBody aria-label="Library">

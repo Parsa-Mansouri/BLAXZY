@@ -56,7 +56,7 @@ describe("answers", () => {
   it("returns the payload of a 200 JSON answer, null included", async () => {
     expect(await pollAsset(ID, { fetcher: fetching(json("key-1")) })).toBe("key-1");
     expect(await pollAsset(ID, { fetcher: fetching(json(null)) })).toBeNull();
-    const poll = { versionId: ID, status: "pending" };
+    const poll = { versionId: ID, status: "pending", title: "Salt" };
     expect(await pollScript(ID, { fetcher: fetching(json(poll)) })).toEqual(poll);
     const result = { ok: true, data: { id: "e", status: "working" } };
     expect(await pollExport(ID, { fetcher: fetching(json(result)) })).toEqual(result);

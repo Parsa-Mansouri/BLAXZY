@@ -1,29 +1,30 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/ui";
 import { createProjectAction } from "../actions";
 
-/** Creates a project from a working title, then opens it. Shared by Home and New Project. */
+/**
+ * Creates a project at once, with no title (Claude names it from the first story), and opens it
+ * at its Style stage. Shared by Home, Projects and the sidebar.
+ */
 export function useCreateProject() {
   const router = useRouter();
-  const [title, setTitle] = useState("");
-  const [error, setError] = useState<string | undefined>();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
-  const ready = title.trim().length > 0;
 
   function create() {
-    if (!ready || pending) return;
-    setError(undefined);
+    if (pending) return;
     startTransition(async () => {
-      const result = await createProjectAction(title);
+      const result = await createProjectAction();
       if (result.ok) {
         router.push(`/projects/${result.id}`);
       } else {
-        setError(result.error);
+        toast.danger("The project could not be created", result.error);
       }
     });
   }
 
-  return { title, setTitle, error, setError, pending, ready, create };
+  return { pending, create };
 }

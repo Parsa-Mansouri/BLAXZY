@@ -47,10 +47,20 @@ export function createFixtures() {
     return id;
   }
 
-  /** A wizard project with its style saved (stage `script`). */
-  async function newProject(ownerId: string, style: ProjectStyle = TEST_STYLE): Promise<string> {
+  /**
+   * A wizard project with its style saved (stage `script`). It is titled "Script IT" (the user's
+   * title); `untitled` makes it "Untitled project", waiting for its automatic name.
+   */
+  async function newProject(
+    ownerId: string,
+    style: ProjectStyle = TEST_STYLE,
+    options: { untitled?: boolean } = {},
+  ): Promise<string> {
     const projects = await import("@/server/projects");
-    const created = await projects.createProject({ ownerId, title: "Script IT" });
+    const created = await projects.createProject({
+      ownerId,
+      ...(options.untitled ? {} : { title: "Script IT" }),
+    });
     await projects.saveStyle({ projectId: created.id, userId: ownerId, style });
     return created.id;
   }

@@ -27,6 +27,18 @@ export const projectCreativeDna = defineJob({
   dedupeKey: (p) => p.bibleId,
 });
 
+/**
+ * Name a project (the Project Namer dami) from the first story the user gave: the script version
+ * that holds it. One per project; the handler does nothing unless the title is still the
+ * placeholder, and applies the name only if it still is.
+ */
+export const projectName = defineJob({
+  name: "project.name",
+  payload: z.object({ projectId: z.string().uuid(), scriptVersionId: z.string().uuid() }),
+  options: { ...damiJob, expireInSeconds: 10 * 60 },
+  dedupeKey: (p) => p.projectId,
+});
+
 /** Write a script from the user's brief. */
 export const scriptWrite = defineJob({
   name: "script.write",
@@ -313,6 +325,7 @@ export const productionDispatch = defineJob({
 export const ALL_JOBS = [
   systemPing,
   projectCreativeDna,
+  projectName,
   scriptWrite,
   scriptWriteSegment,
   scriptEnhance,

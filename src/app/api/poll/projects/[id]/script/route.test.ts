@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   checkRateLimit: vi.fn(),
   getScriptState: vi.fn(),
+  getProjectForUser: vi.fn(),
 }));
 
 vi.mock("@/server/auth", () => ({ getSession: () => mocks.getSession() }));
@@ -13,6 +14,11 @@ vi.mock("@/server/ratelimit", () => ({
 vi.mock("@/server/script", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/script")>()),
   getScriptState: (...args: unknown[]) => mocks.getScriptState(...args),
+}));
+
+vi.mock("@/server/projects", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/server/projects")>()),
+  getProjectForUser: (...args: unknown[]) => mocks.getProjectForUser(...args),
 }));
 
 const { GET } = await import("./route");
@@ -26,14 +32,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.getSession.mockResolvedValue({ user: { id: "u1", emailVerified: true } });
   mocks.checkRateLimit.mockResolvedValue({ ok: true });
+  mocks.getProjectForUser.mockResolvedValue({ title: "Salt" });
 });
 
 describe("GET /api/poll/projects/[id]/script", () => {
-  it("answers the latest version and its status, as the action did", async () => {
+  it("answers the latest version, its status and the project title", async () => {
     mocks.getScriptState.mockResolvedValue({ current: { id: VERSION, status: "pending" } });
     const res = await GET(request(), context(PROJECT));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ versionId: VERSION, status: "pending" });
+    expect(await res.json()).toEqual({ versionId: VERSION, status: "pending", title: "Salt" });
     expect(mocks.getScriptState).toHaveBeenCalledWith(PROJECT, "u1");
   });
 
@@ -42,6 +49,7 @@ describe("GET /api/poll/projects/[id]/script", () => {
     expect(await (await GET(request(), context(PROJECT))).json()).toEqual({
       versionId: null,
       status: null,
+      title: "Salt",
     });
     mocks.getScriptState.mockResolvedValue(null);
     expect(await (await GET(request(), context(PROJECT))).json()).toBeNull();

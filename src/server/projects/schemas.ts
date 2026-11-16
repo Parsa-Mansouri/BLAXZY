@@ -13,7 +13,15 @@ export const titleSchema = z
 
 export const uuidSchema = z.uuid();
 
-export const createProjectSchema = z.object({ ownerId: z.string().min(1), title: titleSchema });
+/** A new project may come without a title: it is named automatically later. Blank means none. */
+export const createProjectSchema = z.object({
+  ownerId: z.string().min(1),
+  title: z
+    .string()
+    .trim()
+    .max(MAX_TITLE_LENGTH, `Keep the title under ${MAX_TITLE_LENGTH} characters.`)
+    .optional(),
+});
 export const renameProjectSchema = z.object({
   projectId: z.string(),
   ownerId: z.string().min(1),

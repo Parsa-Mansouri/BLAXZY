@@ -23,6 +23,7 @@ export {
   generationRun,
   productionPrepare,
   projectCreativeDna,
+  projectName,
   takeFix,
   takeGenerate,
   generationSweep,

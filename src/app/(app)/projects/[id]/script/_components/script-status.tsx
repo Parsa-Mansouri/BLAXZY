@@ -44,15 +44,21 @@ const FAILED_HEADING: Record<Source, string> = {
   enhanced: "Your idea could not be expanded.",
 };
 
-/** Polls until the latest version leaves `pending`, then refreshes the page. */
-function useRefreshWhenDone(projectId: string, versionId: string) {
+/**
+ * Polls until the latest version leaves `pending`, then refreshes the page. It also refreshes
+ * when the project's title changed (Claude named an untitled project from this first story), so
+ * the toolbar and sidebar show the name without waiting for the script.
+ */
+function useRefreshWhenDone(projectId: string, versionId: string, title: string) {
   const router = useRouter();
   usePolling(async (isActive, signal) => {
     const poll = await pollScript(projectId, { signal });
     if (!isActive()) return;
     // No answer (signed out, rate limited, a failed poll) is not a change.
     if (!poll) return;
-    if (poll.versionId !== versionId || poll.status !== "pending") router.refresh();
+    if (poll.versionId !== versionId || poll.status !== "pending" || poll.title !== title) {
+      router.refresh();
+    }
   }, true);
 }
 
@@ -72,15 +78,17 @@ function AskedFor({ brief }: { brief: string }) {
 
 export function ScriptWorking({
   projectId,
+  projectTitle,
   version,
   previous,
 }: {
   projectId: string;
+  projectTitle: string;
   version: VersionView;
   /** The version being revised, still readable while the revision is written. */
   previous: VersionView | null;
 }) {
-  useRefreshWhenDone(projectId, version.id);
+  useRefreshWhenDone(projectId, version.id, projectTitle);
   const status = WORKING_STATUS[version.source];
   const previousContent = previous?.content ?? "";
   const previousScenes = useMemo(() => splitScenes(previousContent), [previousContent]);

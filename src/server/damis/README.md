@@ -85,6 +85,20 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   options) are checked by Zod after the answer; a `rejected` skeleton keeps the full shape with
   empty lists and skips them.
 
+## Project namer
+
+- `project-namer/` (ours, no owner file; v1.0.0) gives an untitled project its name: Haiku, `low`
+  effort, 1024 output tokens. Input: genre, visual style, format (as stored) and the first ~6000
+  characters of the story; output `{ title }` (1 to 60 characters, story's language, no quotes, no
+  trailing period, never "Untitled"; `check()` enforces it).
+- A project made without a title is "Untitled project" with `project.title_source` `placeholder`.
+  The first story queues `project.name` on the same transaction: an idea or brief in
+  `startVersion` (`script/start.ts`), an upload in `completeScriptVersion` (the text only exists
+  once the worker has read the file). `worker/handlers/project-name.ts` runs the dami and
+  `applyAutoName` (`projects/naming.ts`) sets the title with `title_source` `auto`, conditional on
+  `placeholder`, so a rename by the user (`user`) always wins and a name is only ever made once.
+  A failed name is only logged; the project keeps "Untitled project".
+
 ## Runs, concurrency and the light entry
 
 - `dami_run.status` is `queued`, `running`, `succeeded`, `failed` or `aborted`. `aborted` means

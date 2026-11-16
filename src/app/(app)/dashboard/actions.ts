@@ -7,11 +7,10 @@ import { toSummary, type ProjectListPage, type ProjectSummary } from "./_lib/sum
 
 const NOT_FOUND = "This project no longer exists. It may have been archived. Reload the page.";
 
-export async function createProjectAction(
-  title: string,
-): Promise<{ ok: true; id: string } | ActionFailure> {
+/** Starts a project with no title: Claude names it from the first story (`project.name`). */
+export async function createProjectAction(): Promise<{ ok: true; id: string } | ActionFailure> {
   return userAction("mutate", "dashboard.createProject", async (user) => {
-    const created = await createProject({ ownerId: user.id, title });
+    const created = await createProject({ ownerId: user.id });
     revalidatePath("/dashboard");
     return { ok: true, id: created.id };
   });

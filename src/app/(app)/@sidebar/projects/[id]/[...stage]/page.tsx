@@ -1,11 +1,11 @@
-import { LibrarySidebar } from "../../../../_components/library-sidebar";
+import { ProjectSidebar } from "../../../../_components/project-sidebar";
 
-/** The same library sidebar on every page inside a project (`/projects/[id]/style`, ...). */
+/** Inside a project (`/projects/[id]/style`, ...): the film navigator. */
 export default async function ProjectStageSidebarSlot({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string; stage: string[] }>;
 }) {
-  const { id } = await params;
-  return <LibrarySidebar currentProjectId={id} />;
+  const { id, stage } = await params;
+  return <ProjectSidebar projectId={id} path={stage} />;
 }

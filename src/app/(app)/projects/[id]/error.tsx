@@ -18,9 +18,9 @@ export default function ProjectError({ error, retry }: { error: unknown; retry: 
         <Button
           variant="outlined"
           size="large"
-          render={<Link href={projectId ? `/projects/${projectId}` : "/projects"} />}
+          render={<Link href={projectId ? `/projects/${projectId}` : "/dashboard"} />}
         >
-          {projectId ? "Back to Project" : "Projects"}
+          {projectId ? "Back to Project" : "Home"}
         </Button>
       }
     />

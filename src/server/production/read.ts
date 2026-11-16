@@ -178,3 +178,117 @@ export async function getBlockDetail(
     busy: isBusy(opened.block, take),
   };
 }
+
+/** One Production section's status in the film navigator. */
+export type ProductionSectionStatus = { toReview: number; rendering: number; failed: number };
+
+export type ProductionNavigatorStatuses = {
+  shots: ProductionSectionStatus;
+  clips: ProductionSectionStatus;
+  /** Some shot has an accepted final: the finished film can be watched. */
+  finished: boolean;
+};
+
+/**
+ * The navigator's Shots, Clips and Finished statuses from the per-stage counts. Pure. Shots:
+ * shots to review, being prepared, whose preparation failed. Clips: drafts and finals to review,
+ * being rendered, failed.
+ */
+export function productionNavigatorStatuses(
+  counts: Record<BlockProductionStage, number>,
+): ProductionNavigatorStatuses {
+  return {
+    shots: {
+      toReview: counts.block_review,
+      rendering: counts.preparing,
+      failed: counts.prepare_failed,
+    },
+    clips: {
+      toReview: counts.draft_review + counts.final_review,
+      rendering: counts.draft_generating + counts.final_generating,
+      failed: counts.failed,
+    },
+    finished: counts.done > 0,
+  };
+}
+
+/** Stages in which a dami or a generation works on a shot. */
+export const BUSY_BLOCK_STAGES: readonly BlockProductionStage[] = [
+  "preparing",
+  "draft_generating",
+  "final_generating",
+];
+
+/** How many busy shots the navigator names. */
+export const DEFAULT_BUSY_BLOCK_LIMIT = 5;
+const MAX_BUSY_BLOCK_LIMIT = 20;
+
+const busyLimit = (limit: number) =>
+  Math.min(MAX_BUSY_BLOCK_LIMIT, Math.max(1, Math.trunc(limit) || 1));
+
+/** A shot being prepared or rendered, as the navigator names it. */
+export type BusyBlock = {
+  lineageId: string;
+  orderIndex: number;
+  /** The block's title; screens fall back to "Shot <orderIndex + 1>". */
+  title: string | null;
+  stage: BlockProductionStage;
+};
+
+async function busyBlocks(db: DbExecutor, projectId: string, limit: number): Promise<BusyBlock[]> {
+  const rows = await pageBlocksInStages(db, projectId, BUSY_BLOCK_STAGES, { limit, after: null });
+  const views = await toProductionBlocks(db, projectId, rows);
+  // The views derive the stage again; a shot that settled between the two reads is left out.
+  return views
+    .filter((v) => BUSY_BLOCK_STAGES.includes(v.stage))
+    .map((v) => ({
+      lineageId: v.lineageId,
+      orderIndex: v.orderIndex,
+      title: v.title,
+      stage: v.stage,
+    }));
+}
+
+/**
+ * The first shots (in story order) being prepared or rendered, at most `limit` (one keyset page,
+ * on the same query as the stage filter of `listProductionBlocks`). Null when the project is not
+ * the user's.
+ */
+export async function listBusyBlocks(
+  projectId: string,
+  userId: string,
+  limit = DEFAULT_BUSY_BLOCK_LIMIT,
+): Promise<BusyBlock[] | null> {
+  const db = getDb();
+  if (!(await openProject(db, projectId, userId))) return null;
+  return busyBlocks(db, projectId, busyLimit(limit));
+}
+
+export type ProductionNavigator = ProductionNavigatorStatuses & {
+  /** The first busy shots, in story order. */
+  busy: BusyBlock[];
+  /** Busy shots beyond `busy`. */
+  moreBusy: number;
+};
+
+/**
+ * Everything the film navigator shows of Production: the section statuses and the first busy
+ * shots. Reads the stages of every current block (as the overview) and, when some are busy, one
+ * page of them. Null when the project is not the user's.
+ */
+export async function getProductionNavigator(
+  projectId: string,
+  userId: string,
+  limit = DEFAULT_BUSY_BLOCK_LIMIT,
+): Promise<ProductionNavigator | null> {
+  const db = getDb();
+  if (!(await openProject(db, projectId, userId))) return null;
+  const { counts } = await projectStages(db, projectId);
+  const busyCount = BUSY_BLOCK_STAGES.reduce((sum, stage) => sum + counts[stage], 0);
+  const busy = busyCount > 0 ? await busyBlocks(db, projectId, busyLimit(limit)) : [];
+  return {
+    ...productionNavigatorStatuses(counts),
+    busy,
+    moreBusy: Math.max(0, busyCount - busy.length),
+  };
+}

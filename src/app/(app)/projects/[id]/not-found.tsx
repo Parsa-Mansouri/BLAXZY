@@ -27,8 +27,8 @@ export default function ProjectNotFound() {
                 Back to Project
               </Button>
             ) : null}
-            <Button variant="outlined" size="large" render={<Link href="/projects" />}>
-              Projects
+            <Button variant="outlined" size="large" render={<Link href="/dashboard" />}>
+              Home
             </Button>
           </>
         }

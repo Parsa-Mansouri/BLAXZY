@@ -52,8 +52,13 @@ export function SidebarFooter({
 }
 
 export interface SidebarSectionProps {
-  /** Accessible name of the group. Not shown: the sidebar has no section captions. */
+  /**
+   * Accessible name of the group. Not shown unless `showTitle`: the sidebar has no section
+   * captions, except over a group that is there only now and then ("Now Rendering").
+   */
   title?: string;
+  /** Show `title` as a quiet capital caption over the rows. */
+  showTitle?: boolean;
   /**
    * A separate group (the recent films). Set apart by space only: the hairline it used to draw
    * is gone (group with spacing, not rules).
@@ -66,13 +71,16 @@ export interface SidebarSectionProps {
 /** A group of sidebar rows. */
 export function SidebarSection({
   title,
+  showTitle = false,
   divided = false,
   children,
   className,
 }: SidebarSectionProps) {
   return (
     <div className={cn("flex flex-col", divided && "pt-3", className)}>
-      {title ? <h2 className="sr-only">{title}</h2> : null}
+      {title ? (
+        <h2 className={showTitle ? "px-3 pb-2 caps-label text-label-3" : "sr-only"}>{title}</h2>
+      ) : null}
       <ul className="flex flex-col gap-0.5">{children}</ul>
     </div>
   );
@@ -95,6 +103,16 @@ export interface SidebarItemProps extends Omit<React.ComponentPropsWithoutRef<"a
   render?: ReactElement;
   /** Full text shown on hover, for rows whose label may be cut off (e.g. long project titles). */
   tooltip?: string;
+  /**
+   * A row under another row (a stage's areas): the label lines up with the parent's label, past
+   * its icon column. Ignored when the row has its own icon.
+   */
+  inset?: boolean;
+  /**
+   * A row that cannot be opened yet (a locked stage): label-3 text, no hover fill, no press.
+   * Render it as a non-link (`render={<span />}`) and say why in `tooltip`.
+   */
+  disabled?: boolean;
 }
 
 /** A sidebar row. Renders a link by default; pass `render` for a Next Link or a button. */
@@ -107,6 +125,8 @@ export const SidebarItem = forwardRef<HTMLElement, SidebarItemProps>(function Si
     accessory,
     render,
     tooltip,
+    inset = false,
+    disabled = false,
     className,
     ...rest
   },
@@ -115,15 +135,24 @@ export const SidebarItem = forwardRef<HTMLElement, SidebarItemProps>(function Si
   const props = mergeProps<"a">(
     {
       "aria-current": selected ? "page" : undefined,
+      "aria-disabled": disabled ? true : undefined,
       className: cn(
-        "row-wipe press flex min-h-(--sidebar-row-h) w-full items-center gap-2.5 rounded-nested px-3 text-left font-medium focus-ring",
+        "row-wipe flex min-h-(--sidebar-row-h) w-full items-center gap-2.5 rounded-nested px-3 text-left font-medium focus-ring",
         variant === "nav" ? "caps-label" : "text-body font-medium",
-        selected ? "text-label" : "text-label-2 hover:bg-fill-4 hover:text-label",
+        disabled
+          ? "cursor-default text-label-3"
+          : selected
+            ? "press text-label"
+            : "press text-label-2 hover:bg-fill-4 hover:text-label",
         className,
       ),
       children: (
         <>
-          {icon ? <span className="flex shrink-0 [&_svg]:size-(--icon)">{icon}</span> : null}
+          {icon ? (
+            <span className="flex shrink-0 [&_svg]:size-(--icon)">{icon}</span>
+          ) : inset ? (
+            <span aria-hidden="true" className="w-(--icon) shrink-0" />
+          ) : null}
           <span className="min-w-0 flex-1 truncate">{children}</span>
           {accessory ? (
             <span className="shrink-0 text-label-2 tabular-nums">{accessory}</span>

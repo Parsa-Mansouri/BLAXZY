@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { stageLabel } from "@/lib/stages";
-import { Button, StatusLine, Toolbar } from "@/ui";
+import { Button, StatusLine, Tabs, Toolbar } from "@/ui";
 import {
   projectHref,
   scriptHref,
@@ -101,6 +102,83 @@ function EmptyHero() {
   );
 }
 
+type Filter = "all" | "progress" | "finished";
+
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "progress", label: "In Progress" },
+  { value: "finished", label: "Finished" },
+];
+
+const EMPTY: Record<Exclude<Filter, "all">, { title: string; text: string }> = {
+  progress: { title: "No films in progress", text: "Every film you started is finished." },
+  finished: {
+    title: "No finished films yet",
+    text: "A film appears here once its production is complete.",
+  },
+};
+
+const isFilter = (value: string): value is Filter => FILTERS.some((f) => f.value === value);
+
+/** Your films as tiles, under the All / In Progress / Finished filter. */
+function YourFilms({ list }: { list: ReturnType<typeof useProjectList> }) {
+  const [filter, setFilter] = useState<Filter>("all");
+  const hasMore = Boolean(list.cursor);
+
+  function shown(value: Filter): ProjectSummary[] {
+    if (value === "all") return list.items;
+    return list.items.filter((p) => (p.stage === "done") === (value === "finished"));
+  }
+
+  return (
+    <section aria-labelledby="your-films" className="flex flex-col gap-5">
+      <h2 id="your-films" className="text-section">
+        Your Films
+      </h2>
+      <Tabs
+        aria-label="Filter films"
+        tabs={FILTERS}
+        value={filter}
+        onValueChange={(next) => {
+          if (isFilter(next)) setFilter(next);
+        }}
+        panelClassName="pt-6"
+      >
+        {(value) => {
+          const current: Filter = isFilter(value) ? value : "all";
+          const items = shown(current);
+          if (current !== "all" && items.length === 0 && !hasMore) {
+            const empty = EMPTY[current];
+            return (
+              <div className="flex max-w-(--measure) flex-col items-start gap-2 py-6">
+                <p className="text-heading-sm text-balance">{empty.title}</p>
+                <p className="text-body text-pretty text-label-2">{empty.text}</p>
+                {current === "finished" ? (
+                  <Button variant="outlined" className="mt-6" onClick={() => setFilter("progress")}>
+                    Show In Progress
+                  </Button>
+                ) : null}
+              </div>
+            );
+          }
+          return (
+            <ProjectGrid
+              items={items}
+              hasMore={hasMore}
+              loadingMore={list.loadingMore}
+              onLoadMore={list.loadMore}
+              onRenamed={list.onRenamed}
+              onArchived={list.onArchived}
+              baseDelay={current === "all" ? 460 : 40}
+              archivedNote
+            />
+          );
+        }}
+      </Tabs>
+    </section>
+  );
+}
+
 export function DashboardView({
   initialItems,
   initialCursor,
@@ -124,20 +202,7 @@ export function DashboardView({
               </h2>
               <StartFilm />
             </section>
-            <section aria-labelledby="your-films" className="flex flex-col gap-5">
-              <h2 id="your-films" className="text-section">
-                Your Films
-              </h2>
-              <ProjectGrid
-                items={list.items}
-                hasMore={Boolean(list.cursor)}
-                loadingMore={list.loadingMore}
-                onLoadMore={list.loadMore}
-                onRenamed={list.onRenamed}
-                onArchived={list.onArchived}
-                baseDelay={460}
-              />
-            </section>
+            <YourFilms list={list} />
           </div>
         </>
       ) : (

@@ -77,13 +77,22 @@ export type PreProductionOverview = {
   canComplete: boolean;
 };
 
-/** Readiness of every active asset (bounded by the project's asset count). */
-export async function readiness(
-  db: DbExecutor,
-  projectId: string,
-): Promise<{ kind: AssetKind; ready: boolean }[]> {
+/** One active asset with its pre-production stage (what the overview and the navigator read). */
+export type ReadinessRow = {
+  id: string;
+  name: string;
+  kind: AssetKind;
+  stage: AssetStage;
+  ready: boolean;
+};
+
+/**
+ * Every active asset with its stage (bounded by the project's asset count), in kind order
+ * (`ASSET_KINDS`) and then display order.
+ */
+export async function readiness(db: DbExecutor, projectId: string): Promise<ReadinessRow[]> {
   const active = await db
-    .select({ id: asset.id, kind: asset.kind })
+    .select({ id: asset.id, name: asset.name, kind: asset.kind, displayOrder: asset.displayOrder })
     .from(asset)
     .where(
       and(
@@ -97,11 +106,18 @@ export async function readiness(
     db,
     active.map((a) => a.id),
   );
-  return active.map((a) => ({
-    kind: a.kind,
-    ready:
-      deriveAssetState(a.kind, looks.get(a.id) ?? null, sheets.get(a.id) ?? null).stage === "ready",
-  }));
+  const kindIndex = (kind: AssetKind) => ASSET_KINDS.indexOf(kind);
+  return [...active]
+    .sort(
+      (a, b) =>
+        kindIndex(a.kind) - kindIndex(b.kind) ||
+        a.displayOrder - b.displayOrder ||
+        a.id.localeCompare(b.id),
+    )
+    .map((a) => {
+      const { stage } = deriveAssetState(a.kind, looks.get(a.id) ?? null, sheets.get(a.id) ?? null);
+      return { id: a.id, name: a.name, kind: a.kind, stage, ready: stage === "ready" };
+    });
 }
 
 export function summarise(
@@ -120,6 +136,78 @@ export function summarise(
     ready,
     canComplete: stage === "pre_production" && total > 0 && ready === total,
   };
+}
+
+/** Stages that wait for the user: a look or a sheet to review, or a question to answer. */
+const TO_REVIEW_STAGES: readonly AssetStage[] = ["look_review", "sheet_review", "needs_answer"];
+/** Stages in which a look or a sheet is being made. */
+const RENDERING_STAGES: readonly AssetStage[] = ["generating", "building_sheet"];
+/** How many busy assets the navigator names; the others are only counted (`moreBusy`). */
+export const NAVIGATOR_BUSY_LIMIT = 5;
+
+export type PreProductionNavigator = {
+  /** Only kinds that have active assets, in the order of `ASSET_KINDS`. */
+  kinds: { kind: AssetKind; toReview: number; rendering: number; failed: number }[];
+  /** The first assets whose look or sheet is being made, in the overview's order. */
+  busy: { id: string; name: string; kind: AssetKind }[];
+  /** Busy assets beyond `busy`. */
+  moreBusy: number;
+};
+
+/** What the film navigator shows of pre-production, from `readiness` rows (in their order). Pure. */
+export function navigatorCounts(
+  rows: readonly Pick<ReadinessRow, "id" | "name" | "kind" | "stage">[],
+  busyLimit = NAVIGATOR_BUSY_LIMIT,
+): PreProductionNavigator {
+  const kinds = ASSET_KINDS.flatMap((kind) => {
+    const ofKind = rows.filter((r) => r.kind === kind);
+    if (ofKind.length === 0) return [];
+    const count = (stages: readonly AssetStage[]) =>
+      ofKind.filter((r) => stages.includes(r.stage)).length;
+    return [
+      {
+        kind,
+        toReview: count(TO_REVIEW_STAGES),
+        rendering: count(RENDERING_STAGES),
+        failed: count(["failed"]),
+      },
+    ];
+  });
+  const busy = rows.filter((r) => RENDERING_STAGES.includes(r.stage));
+  const limit = Math.max(0, Math.trunc(busyLimit));
+  return {
+    kinds,
+    busy: busy.slice(0, limit).map((r) => ({ id: r.id, name: r.name, kind: r.kind })),
+    moreBusy: Math.max(0, busy.length - limit),
+  };
+}
+
+/**
+ * Per-kind statuses of the project's active assets for the film navigator, and the assets being
+ * made. The same three bounded queries as the overview; null when the project is not the user's.
+ */
+export async function getPreProductionNavigator(
+  projectId: string,
+  userId: string,
+): Promise<PreProductionNavigator | null> {
+  const db = getDb();
+  if (!(await openProject(db, projectId, userId))) return null;
+  return navigatorCounts(await readiness(db, projectId));
+}
+
+/**
+ * The kind of one of the user's assets (removed ones too), or null when it is not theirs: what
+ * the navigator selects on an asset's page. One query on the primary keys.
+ */
+export async function getAssetKind(assetId: string, userId: string): Promise<AssetKind | null> {
+  if (!isUuid(assetId)) return null;
+  const [row] = await getDb()
+    .select({ kind: asset.kind })
+    .from(asset)
+    .innerJoin(project, eq(project.id, asset.projectId))
+    .where(and(eq(asset.id, assetId), eq(project.ownerId, userId), isNull(project.archivedAt)))
+    .limit(1);
+  return row?.kind ?? null;
 }
 
 /** Per-kind totals and readiness of the project's active assets. */

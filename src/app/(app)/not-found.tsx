@@ -16,10 +16,10 @@ export default function AppNotFound() {
         <NotFoundView
           heading="h1"
           title="This Page Is Not in Your Account"
-          message="It does not exist, or it belongs to someone else. Your films are in Projects."
+          message="It does not exist, or it belongs to someone else. Your films are on Home."
           actions={
-            <Button variant="primary" size="large" render={<Link href="/projects" />}>
-              Projects
+            <Button variant="primary" size="large" render={<Link href="/dashboard" />}>
+              Home
             </Button>
           }
         />

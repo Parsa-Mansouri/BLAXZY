@@ -14,6 +14,7 @@
 import type { FinishedAssetEvent, FinishedFeedPage } from "@/server/assets";
 import type { ExportView } from "@/server/production";
 import type { BackgroundStatus } from "@/app/(app)/projects/[id]/_lib/background-status";
+import type { NavigatorView } from "@/app/(app)/projects/[id]/_lib/load-navigator";
 import type { CardsPage } from "@/app/(app)/projects/[id]/pre-production/[kind]/_lib/read-cards";
 import type { BlocksSnapshot } from "@/app/(app)/projects/[id]/production/blocks/_lib/read-snapshot";
 import type { BoardPage } from "@/app/(app)/projects/[id]/production/clips/_lib/clip-data";
@@ -130,6 +131,11 @@ export function pollOverview(projectId: string, options?: PollOptions) {
     options,
     isRecordOrNull,
   );
+}
+
+/** The film navigator of the in-film sidebar (null: nothing to say). */
+export function pollNavigator(projectId: string, options?: PollOptions) {
+  return pollOrNull<NavigatorView>(`${project(projectId)}/navigator`, options, isRecordOrNull);
 }
 
 /** The latest script version and its status. */

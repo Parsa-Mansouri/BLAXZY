@@ -29,7 +29,7 @@ export async function loadProduction(
     phase: overview.phase,
     finalCount: overview.counts.done,
   };
-  if (page === "entry") redirect(productionRedirect(project.id, null, state) ?? "/projects");
+  if (page === "entry") redirect(productionRedirect(project.id, null, state) ?? "/dashboard");
   if (page.screen !== null) {
     const target = productionRedirect(project.id, page.screen, state);
     if (target) redirect(target);

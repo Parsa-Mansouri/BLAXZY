@@ -12,6 +12,11 @@ export default function DashboardLoading() {
         </div>
         <div className="flex flex-col gap-5">
           <Skeleton className="h-6 w-32 rounded-row" />
+          <div className="flex gap-6">
+            <Skeleton className="h-6 w-12 rounded-row" />
+            <Skeleton className="h-6 w-24 rounded-row" />
+            <Skeleton className="h-6 w-20 rounded-row" />
+          </div>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-x-6 gap-y-9">
             {[0, 1, 2].map((key) => (
               <div key={key} className="flex flex-col gap-3">

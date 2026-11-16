@@ -1,7 +1,7 @@
-import { LibrarySidebar } from "../../../_components/library-sidebar";
+import { ProjectSidebar } from "../../../_components/project-sidebar";
 
-/** Inside a project the library sidebar stays, with that project's row selected. */
+/** A project's own address (it redirects to the current stage): the film navigator already. */
 export default async function ProjectSidebarSlot({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <LibrarySidebar currentProjectId={id} />;
+  return <ProjectSidebar projectId={id} />;
 }

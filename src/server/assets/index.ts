@@ -66,6 +66,8 @@ export {
   DEFAULT_CARD_PAGE_SIZE,
   fieldsToConfirm,
   getAssetDetail,
+  getAssetKind,
+  getPreProductionNavigator,
   getPreProductionOverview,
   includeSkippedAsset,
   listAssetCards,
@@ -77,6 +79,8 @@ export {
   MAX_LOOK_PROMPT_LENGTH,
   MAX_REVIEW_NOTE_LENGTH,
   mergeAssets,
+  NAVIGATOR_BUSY_LIMIT,
+  navigatorCounts,
   nextAssetNeedingInput,
   removeAsset,
   replaceLook,
@@ -97,6 +101,7 @@ export {
   type AssetCard,
   type AssetDetail,
   type NextAsset,
+  type PreProductionNavigator,
   type PreProductionOverview,
 } from "./preproduction";
 /** For `@/server/production`: assets as block references (no ownership checks). */

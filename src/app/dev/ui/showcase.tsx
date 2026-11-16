@@ -923,7 +923,7 @@ function Content() {
             <Mono className="text-label">120</Mono> credits
           </span>
           <span className="text-body text-label-2">
-            Hide the sidebar with <Kbd>⌘\</Kbd>
+            Hide the sidebar with <Kbd>⌘B</Kbd>
           </span>
         </Row>
         <Row label="Activity">
@@ -1069,7 +1069,7 @@ function Content() {
           <Popover trigger={<Button>Popover</Button>} aria-label="Note">
             <p className="w-56 text-secondary text-label-2">Small, optional content.</p>
           </Popover>
-          <Tooltip content="Hide Sidebar" shortcut="⌘\">
+          <Tooltip content="Hide Sidebar" shortcut="⌘B">
             <Button variant="plain">Tooltip</Button>
           </Tooltip>
         </Row>

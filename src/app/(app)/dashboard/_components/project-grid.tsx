@@ -33,7 +33,7 @@ export function ProjectGrid({
   onArchived: (id: string) => void;
   /** Delay (ms) of the first tile's entrance; later tiles follow in 40ms steps. */
   baseDelay?: number;
-  /** Quiet note that archived projects are left out (Projects page only). */
+  /** Quiet note that archived projects are left out (Home's Your Films). */
   archivedNote?: boolean;
 }) {
   return (

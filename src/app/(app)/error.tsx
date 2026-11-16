@@ -12,8 +12,8 @@ export default function AppError({ error, retry }: { error: unknown; retry: () =
         error={error}
         retry={retry}
         way={
-          <Button variant="outlined" size="large" render={<Link href="/projects" />}>
-            Projects
+          <Button variant="outlined" size="large" render={<Link href="/dashboard" />}>
+            Home
           </Button>
         }
       />

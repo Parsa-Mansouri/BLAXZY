@@ -115,13 +115,18 @@ export function SplitView({
     });
   }, [cookieName]);
 
-  // Keyboard shortcut.
+  // Keyboard shortcut: Ctrl/⌘+B (Ctrl/⌘+\ kept as an alias). Left alone in rich-text editors,
+  // where Ctrl/⌘+B means bold.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key === "\\") {
-        event.preventDefault();
-        toggle();
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      const key = event.key.toLowerCase();
+      if (key !== "b" && key !== "\\") return;
+      if (key === "b" && event.target instanceof HTMLElement && event.target.isContentEditable) {
+        return;
       }
+      event.preventDefault();
+      toggle();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -203,7 +208,7 @@ export function SplitView({
               {sidebar}
               <IconButton
                 label="Hide Sidebar"
-                shortcut={mac ? "⌘\\" : "Ctrl+\\"}
+                shortcut={mac ? "⌘B" : "Ctrl+B"}
                 icon={<PanelLeft />}
                 aria-controls={sidebarId}
                 aria-expanded={sidebarVisible}
@@ -231,11 +236,11 @@ export function SidebarToggle({ className }: { className?: string }) {
     <IconButton
       ref={registerToggle}
       label={sidebarVisible ? "Hide Sidebar" : "Show Sidebar"}
-      shortcut={mac ? "⌘\\" : "Ctrl+\\"}
+      shortcut={mac ? "⌘B" : "Ctrl+B"}
       icon={<PanelLeft />}
       aria-controls={sidebarId}
       aria-expanded={sidebarVisible}
-      aria-keyshortcuts={"Control+\\ Meta+\\"}
+      aria-keyshortcuts="Control+B Meta+B Control+\ Meta+\"
       onClick={toggle}
       className={cn("text-label-2 hover:text-label", className)}
     />

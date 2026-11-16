@@ -13,6 +13,7 @@ export function ChangeRequest({
   sending,
   serverError,
   onSubmit,
+  secondaryAction,
   onCancel,
   notePlaceholder,
   cost,
@@ -22,6 +23,8 @@ export function ChangeRequest({
   sending: boolean;
   serverError: string | null;
   onSubmit: (input: { note: string }) => void;
+  /** A second send beside "Send Back" (a note is optional for it). */
+  secondaryAction?: { label: string; onSelect: (note: string) => void };
   onCancel: () => void;
   notePlaceholder: string;
   /** A plain line about the price, under the note. */
@@ -63,6 +66,7 @@ export function ChangeRequest({
         blocked={blocked}
         submitLabel="Send Back"
         onSubmit={(note) => onSubmit({ note })}
+        secondaryAction={secondaryAction}
         onCancel={onCancel}
       >
         {cost}

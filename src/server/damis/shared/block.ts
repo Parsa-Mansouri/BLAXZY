@@ -1,5 +1,5 @@
 /**
- * Pieces shared by the production damis (block-reviser, take-fixer) and the Director's binding: the asset
+ * Pieces shared by the production damis (take-fixer) and the Director's binding: the asset
  * and review schemas, the `<<<image_N>>>` token rules and their code check, and the renderers for
  * the user message. Prompt text here is part of each dami's stable base prompt: changing it means
  * bumping their versions.

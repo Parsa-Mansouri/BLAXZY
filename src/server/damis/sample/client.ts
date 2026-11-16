@@ -20,7 +20,7 @@ import { samplePropGenerator } from "./prop-generator";
 import { sampleSheetGeneratorCharacter } from "./sheet-generator-character";
 import { sampleSheetGeneratorLocation } from "./sheet-generator-location";
 import { sampleSheetGeneratorProp } from "./sheet-generator-prop";
-import { sampleBlockReviser, sampleTakeFixer } from "./production";
+import { sampleTakeFixer } from "./production";
 import { sampleProjectNamer } from "./project-namer";
 import { sampleScriptChecker } from "./script-checker";
 import { sampleScriptReviser } from "./script-reviser";
@@ -44,7 +44,6 @@ export const SAMPLE_GENERATORS: Readonly<Record<string, (input: unknown) => unkn
   "sheet-generator-character": sampleSheetGeneratorCharacter,
   "sheet-generator-location": sampleSheetGeneratorLocation,
   "sheet-generator-prop": sampleSheetGeneratorProp,
-  "block-reviser": sampleBlockReviser,
   "take-fixer": sampleTakeFixer,
   director: sampleDirector,
   "director-plan": sampleDirector,

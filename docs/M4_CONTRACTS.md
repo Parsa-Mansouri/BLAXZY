@@ -71,7 +71,7 @@ type BlockProductionStage =
 
 | Dami | Input | Output |
 |---|---|---|
-| `block-reviser` | `{ style, block: { title, scriptExcerpt, prompt, assetRefs }, assets, review: { issueCodes[], note? } }` | `{ prompt, assetRefs, changeSummary[] }` |
+| `block-revision` | see `src/server/damis/block-revision/schema.ts`; assembled from the DB by `production/revision-job.ts` | revised block, `change_log`, `fix_map`, `flags` |
 | `take-fixer` | `{ style, block, previousPrompt, assetRefs, stage: "draft" | "final", review }` | `{ prompt, changeSummary[] }` |
 
 `prompt` uses `<<<image_N>>>` tokens, N being the 1-based position in the returned `assetRefs`;
@@ -167,7 +167,7 @@ Jobs (handlers in `worker/handlers/`):
 |---|---|---|
 | `production.dispatch` | `{ projectId, kind: "prepare" \| "takes" }`, `<projectId>:<kind>` (with a follow-up: one may wait beside a running one) | fan-out: `prepare` queues `block.revise` (block answers its predecessor's rejected review) or `production.prepare` for every pending, non-stale block; `takes` queues `take.generate` (prompt stored) or `take.fix` for every pending take without a generation. Idempotent (each per-row job is keyed by its row); sent on the transaction that created the rows |
 | `production.prepare` | `{ blockId }`, block id | binds the block's `[kind:Name]` tags to `<<<image_N>>>` tokens for the project's ready assets (code, `production/binding.ts`) → production fields, state ready |
-| `block.revise` | `{ blockId }`, block id | runDami(block-reviser) on the parent version + its review → production fields |
+| `block.revise` | `{ blockId }`, block id | runDami(block-revision) on the parent version + the review's `revisionRequest` → revised block and production fields |
 | `take.generate` | `{ takeId }`, take id | requestGeneration (draft or final; references = each `productionAssetRefs` asset's file, in order: a character's accepted sheet, a location's or prop's approved Hero; `ReferenceAsset.views` lists a locked pack's approved views for later use) |
 | `take.fix` | `{ takeId }`, take id | runDami(take-fixer) on the parent take's prompt + review → prompt → requestGeneration |
 | `export.build` | `{ exportId }`, export id | build and store the ZIP (stream the clips from and the ZIP to object storage; refuse above 20 GB) |

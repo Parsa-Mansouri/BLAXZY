@@ -4,7 +4,7 @@
  * record the outcome, always with conditional updates so a duplicate or stale run cannot
  * overwrite newer state.
  */
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { describeAssetRefs, listReadyReferenceAssets, type ReferenceAsset } from "@/server/assets";
 import {
@@ -19,12 +19,9 @@ import {
 import {
   ASSET_TAG_PATTERN,
   assetTag,
-  BLOCK_ISSUE_CODES,
   isVoiceRef,
   MAX_BLOCK_SECONDS,
   TAKE_ISSUE_CODES,
-  type BlockIssueCode,
-  type BlockReviserInput,
   type TakeFixerInput,
 } from "@/server/damis";
 import { getDb } from "@/server/db/client";
@@ -43,6 +40,7 @@ import { blockRevise, enqueue, productionPrepare, takeFix, takeGenerate } from "
 import { isUuid, STALE_MESSAGE } from "./access";
 import { ProductionInputError } from "./errors";
 import { MAX_BLOCK_ASSETS } from "./inputs";
+import { type RevisionRequest, revisionRequestSchema } from "./revision-request";
 import { getTake, type TakeRow } from "./takes";
 
 export type ProductionJobProject = { id: string; ownerId: string; style: ProjectStyle | null };
@@ -51,8 +49,8 @@ export type ProductionJobReview = { issueCodes: string[]; note: string | null };
 export type PreparationJob = {
   block: PromptBlock;
   project: ProductionJobProject;
-  /** Set when this version answers the rejected review of its predecessor (`block.revise`). */
-  revision: { parent: PromptBlock; review: ProductionJobReview } | null;
+  /** Set when this version answers a revision request on its predecessor (`block.revise`). */
+  revision: { parent: PromptBlock; request: RevisionRequest } | null;
   /** The project's ready image assets: what the block may reference. */
   readyAssets: ReferenceAsset[];
 };
@@ -125,6 +123,25 @@ async function loadRejection(
   return row ?? null;
 }
 
+/** The newest revision request on a block version (a rejected review that carries one). */
+async function loadRevisionRequest(blockId: string): Promise<RevisionRequest | null> {
+  const [row] = await getDb()
+    .select({ request: review.revisionRequest })
+    .from(review)
+    .where(
+      and(
+        eq(review.subjectType, "prompt_block"),
+        eq(review.subjectId, blockId),
+        eq(review.decision, "rejected"),
+        isNotNull(review.revisionRequest),
+      ),
+    )
+    .orderBy(desc(review.createdAt))
+    .limit(1);
+  const parsed = revisionRequestSchema.safeParse(row?.request);
+  return parsed.success ? parsed.data : null;
+}
+
 async function loadProject(projectId: string): Promise<ProductionJobProject | null> {
   const [row] = await getDb()
     .select({ id: project.id, ownerId: project.ownerId, style: project.style })
@@ -146,11 +163,11 @@ export async function loadPreparationJob(blockId: string): Promise<PreparationJo
   const owner = await loadProject(block.projectId);
   if (!owner) return null;
   const parent = await getPreviousVersion(block);
-  const rejection = parent ? await loadRejection("prompt_block", parent.id) : null;
+  const request = parent ? await loadRevisionRequest(parent.id) : null;
   return {
     block,
     project: owner,
-    revision: parent && rejection ? { parent, review: rejection } : null,
+    revision: parent && request ? { parent, request } : null,
     readyAssets: await listReadyReferenceAssets(block.projectId),
   };
 }
@@ -179,42 +196,6 @@ export function promptForChosenAssets(
   return `${stripped.trimEnd()}\nALSO IN THIS SHOT: ${line}.`;
 }
 
-function asBlockAsset(asset: ReferenceAsset) {
-  return {
-    ref: asset.ref,
-    kind: asset.kind,
-    name: clip(asset.name, 200),
-    description: clip(asset.description, 4000),
-  };
-}
-
-function isBlockIssue(code: string): code is BlockIssueCode {
-  return (BLOCK_ISSUE_CODES as readonly string[]).includes(code);
-}
-
-/** The block-reviser input: the rejected version's prepared prompt and the review. */
-export function blockReviserInput(job: PreparationJob, style: ProjectStyle): BlockReviserInput {
-  const revision = job.revision;
-  if (!revision?.parent.productionPrompt || !revision.parent.productionAssetRefs) {
-    throw new ProductionInputError("The review this shot answers is missing. Ask again.");
-  }
-  const { parent, review: rejection } = revision;
-  return {
-    style,
-    block: {
-      title: blockTitle(parent),
-      scriptExcerpt: clip(parent.scriptExcerpt, 20_000),
-      prompt: parent.productionPrompt ?? "",
-      assetRefs: parent.productionAssetRefs ?? [],
-    },
-    assets: job.readyAssets.map(asBlockAsset),
-    review: {
-      issueCodes: rejection.issueCodes.filter(isBlockIssue),
-      note: rejection.note ?? undefined,
-    },
-  };
-}
-
 /** The message when a prepared shot calls more references than a clip can take. */
 export function tooManyAssetsMessage(count: number): string {
   return `This shot uses ${count} assets, but a clip can use at most ${MAX_BLOCK_ASSETS}. Change its assets to choose which ones.`;
@@ -227,6 +208,7 @@ export async function storePreparation(input: {
   assetRefs: string[];
   notes: string[];
   damiRunId: string | null;
+  revised?: { direction: unknown; prompt: string; assetRefs: string[] };
 }): Promise<boolean> {
   return getDb().transaction(async (tx) => {
     const row = await storeBlockPreparation(input, tx);
@@ -536,7 +518,7 @@ export async function applyTakeGenerationResult(g: FinishedGeneration): Promise<
 /**
  * Queues the per-row job of every pending row of a project (worker, `production.dispatch`):
  * `prepare`: each current, non-stale block waiting for preparation gets `block.revise` when it
- * answers the rejected review of its predecessor, else `production.prepare`; `takes`: each
+ * answers a revision request on its predecessor, else `production.prepare`; `takes`: each
  * pending take without a generation gets `take.generate` (prompt stored) or `take.fix`. Safe to
  * run any number of times: the per-row jobs are keyed by their row (a duplicate send is dropped)
  * and their handlers check the row is still waiting. Returns how many rows it covered.
@@ -566,7 +548,7 @@ export async function dispatchProductionJobs(
       .orderBy(asc(promptBlock.orderIndex), asc(promptBlock.id))
       .limit(MAX_PRODUCTION_BLOCKS);
     if (blocks.length === 0) return 0;
-    // A revision answers a rejected review of the version right before it in its lineage.
+    // A revision answers a rejected review with a revision request on the version right before it.
     const previous = alias(promptBlock, "previous");
     const revisions = await db
       .selectDistinct({ id: promptBlock.id })
@@ -584,6 +566,7 @@ export async function dispatchProductionJobs(
           eq(review.subjectType, "prompt_block"),
           eq(review.subjectId, previous.id),
           eq(review.decision, "rejected"),
+          isNotNull(review.revisionRequest),
         ),
       )
       .where(

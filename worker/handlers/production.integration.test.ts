@@ -97,6 +97,15 @@ describe.skipIf(!hasFfmpeg)(
       return { userId, projectId, scriptVersionId, tomas, lighthouse, lamp };
     }
 
+    /** A project whose blocks were written by the (sample) Director, with every asset ready. */
+    async function setupDirected(credits: number) {
+      const userId = await fixtures.newUser();
+      const { projectId, scriptVersionId } = await fixtures.newProductionProject(userId);
+      if (credits > 0) await billing.grantCredits({ userId, amount: credits });
+      const directed = await fixtures.setDirectedBlocks(projectId, userId, scriptVersionId);
+      return { userId, projectId, scriptVersionId, ...directed };
+    }
+
     /** Runs every pending preparation, take job and generation of the project until none is left. */
     async function drain(projectId: string): Promise<void> {
       const db = getDb();
@@ -241,39 +250,18 @@ describe.skipIf(!hasFfmpeg)(
         .where(eq(s.damiRun.projectId, projectId));
       expect(prepareRuns.filter((r) => r.key === "text-blocks")).toHaveLength(0);
 
-      // Block review: reject the first with a note → a revised version.
+      // A shot cut before the Director existed has no direction to revise: asking for changes
+      // fails clearly and leaves the shot as it is (revisions are covered by the directed tests).
       await expect(
-        production.submitBlockReview({ lineageId: l1, userId, decision: "rejected" }),
-      ).rejects.toThrow(production.ProductionInputError);
-      expect(
-        await production.submitBlockReview({
+        production.submitBlockReview({
           lineageId: l1,
           userId,
           decision: "rejected",
           note: "Closer on his hands.",
         }),
-      ).toBe("preparing");
-      const [blockReview] = await getDb()
-        .select()
-        .from(s.review)
-        .where(eq(s.review.subjectId, d1.id));
-      expect(blockReview).toMatchObject({
-        subjectType: "prompt_block",
-        decision: "rejected",
-        issueCodes: [],
-        note: "Closer on his hands.",
-      });
-      const [prepared1] = await getDb()
-        .select({ run: s.promptBlock.productionDamiRunId })
-        .from(s.promptBlock)
-        .where(eq(s.promptBlock.id, d1.id));
-      expect(blockReview?.damiRunId).toBe(prepared1?.run);
-      await drain(projectId);
-      const revised = await detail(l1, userId);
-      expect(revised.id).not.toBe(d1.id);
-      expect(revised.stage).toBe("block_review");
-      expect(revised.prompt).toContain("REVISED");
-      expect(revised.notes.length).toBeGreaterThan(0);
+      ).rejects.toThrow(/before the Director existed/);
+      expect((await detail(l1, userId)).id).toBe(d1.id);
+      expect((await detail(l1, userId)).stage).toBe("block_review");
 
       // Change the third block's assets: the lighthouse and the lamp (not named there before).
       await expect(
@@ -494,7 +482,6 @@ describe.skipIf(!hasFfmpeg)(
       for (const type of [
         "production.prepare_started",
         "production.block_prepared",
-        "production.block_rejected",
         "production.block_assets_set",
         "production.blocks_approved",
         "production.drafts_started",
@@ -929,8 +916,14 @@ describe.skipIf(!hasFfmpeg)(
       await productionDispatchHandler.run({ projectId, kind: "prepare" }, jobContext());
       expect(await queuedForBlocks("production.prepare", projectId)).toBe(3);
 
-      // A rejected block's next version is a revision: its job is sent on the review's
-      // transaction, and the fan-out picks the revision job for it too (deduplicated).
+      await drain(projectId);
+    });
+
+    it("a rejected directed block's revision job is sent on the review and the fan-out picks it too", async () => {
+      const { userId, projectId, scriptVersionId } = await setupDirected(1000);
+      const [l1] = await lineages(projectId);
+      if (!l1) throw new Error("blocks missing");
+      await production.ensurePrepared(projectId, userId);
       await drain(projectId);
       await production.submitBlockReview({
         lineageId: l1,
@@ -938,6 +931,7 @@ describe.skipIf(!hasFfmpeg)(
         decision: "rejected",
         note: "Wrong camera angle.",
       });
+      expect(scriptVersionId).toBeTruthy();
       expect(await queuedForBlocks("block.revise", projectId)).toBe(1);
       expect(await production.dispatchProductionJobs(projectId, "prepare")).toBe(1);
       expect(await queuedForBlocks("block.revise", projectId)).toBe(1);

@@ -1,25 +1,10 @@
 /**
- * Sample-mode generators for the production damis (block-reviser and take-fixer). Each derives its output from the input
+ * Sample-mode generators for the production damis (take-fixer). Each derives its output from the input
  * alone (deterministic, no randomness) and validates the input with the dami's own schema.
  */
-import { BLOCK_ISSUES, type BlockIssueCode } from "../block-reviser/issues";
-import { blockReviserInputSchema } from "../block-reviser/schema";
 import { TAKE_ISSUES, type TakeIssueCode } from "../take-fixer/issues";
 import { takeFixerInputSchema } from "../take-fixer/schema";
 import { truncate } from "./util";
-
-const BLOCK_FIX_TEXT: Record<BlockIssueCode, string> = {
-  wrong_assets: "only the assets that belong in this shot are attached and named",
-  missing_asset: "every asset the script puts in this shot is attached and named",
-  wrong_camera: "shot size, angle and one simple named camera move are stated for each shot",
-  action_unclear: "each shot has one clear action with a clear subject and direction",
-  dialogue_wrong: "every line is verbatim from the script, with the right speaker and shot",
-  too_much_happening: "the block holds only what fits its duration, one action per shot",
-  continuity_break: "wardrobe, light and positions carry over from the previous shot",
-  tone_off: "the mood is carried by light, pace and framing as the moment needs",
-  wrong_setting: "the place, time of day and light are as the script states",
-  invented_content: "nothing is shown that the script does not support",
-};
 
 const TAKE_FIX_TEXT: Record<TakeIssueCode, string> = {
   face_distorted:
@@ -66,18 +51,6 @@ function revise<C extends string>(
     });
   }
   return { prompt: `${previous}.\n${lead}: ${additions.join("; ")}.`, changeSummary };
-}
-
-export function sampleBlockReviser(raw: unknown) {
-  const input = blockReviserInputSchema.parse(raw);
-  const result = revise(
-    input.block.prompt,
-    input.review,
-    BLOCK_FIX_TEXT,
-    (code) => BLOCK_ISSUES[code].label,
-    "REVISED",
-  );
-  return { ...result, assetRefs: [...input.block.assetRefs] };
 }
 
 export function sampleTakeFixer(raw: unknown) {

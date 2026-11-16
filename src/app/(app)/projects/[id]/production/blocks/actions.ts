@@ -7,6 +7,7 @@ import {
   getBlockDetail,
   PriceChangedError,
   quoteProduction,
+  requestNextShotUpdate,
   retryPreparation,
   setBlockAssets,
   startDrafts,
@@ -139,7 +140,7 @@ export interface ReviewOutcome {
 export async function reviewBlockAction(
   projectId: string,
   lineageId: string,
-  review: { decision: "accepted" | "rejected"; note?: string },
+  review: { decision: "accepted" | "rejected"; note?: string; regenerate?: boolean },
 ): Promise<ActionResult<ReviewOutcome>> {
   return userAction("expensive", "blocks.review", async (user) => {
     if (!isUuid(projectId) || !isUuid(lineageId)) return MISSING_RESULT;
@@ -153,6 +154,21 @@ export async function reviewBlockAction(
         ? await nextToReviewHref(projectId, user.id, before.orderIndex, lineageId)
         : blockHref(projectId, lineageId);
     return { ok: true, data: { nextHref } };
+  });
+}
+
+/** Revises the shot after this one so it opens from the new ending of this shot. */
+export async function updateNextShotAction(
+  projectId: string,
+  lineageId: string,
+): Promise<ActionResult<{ nextHref: string }>> {
+  return userAction("expensive", "blocks.updateNextShot", async (user) => {
+    if (!isUuid(projectId) || !isUuid(lineageId)) return MISSING_RESULT;
+    const nextLineageId = await requestNextShotUpdate({ lineageId, userId: user.id });
+    if (!nextLineageId) return MISSING_RESULT;
+    revalidatePath(blockHref(projectId, lineageId));
+    revalidatePath(blockHref(projectId, nextLineageId));
+    return { ok: true, data: { nextHref: blockHref(projectId, nextLineageId) } };
   });
 }
 

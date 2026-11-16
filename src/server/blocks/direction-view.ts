@@ -34,6 +34,26 @@ const shotView = z.object({
   dialogue: z.array(z.object({ speaker_id: text, line: text, delivery: text })).catch([]),
 });
 
+/** What the last Block Revision of the block reported (stored under `direction.revision`). */
+const revisionView = z.object({
+  based_on_version: num,
+  change_log: z.array(text).catch([]),
+  flags: z
+    .object({
+      split_required: z.boolean().catch(false),
+      next_block_needs_update: z.boolean().catch(false),
+      structural_suggestion: text.catch("none"),
+      not_applied: z.array(text).catch([]),
+    })
+    .catch({
+      split_required: false,
+      next_block_needs_update: false,
+      structural_suggestion: "none",
+      not_applied: [],
+    }),
+});
+export type RevisionView = z.output<typeof revisionView>;
+
 export const blockDirectionSchema = z.object({
   scene_heading: text,
   dramatic_function: text,
@@ -51,6 +71,8 @@ export const blockDirectionSchema = z.object({
   shots: z.array(shotView).catch([]),
   /** The Director's ids (`char_1`) to the names of the assets they stand for. */
   asset_names: z.record(z.string(), z.string()).catch({}),
+  /** Set on a block that Block Revision rewrote; absent on the Director's own version. */
+  revision: revisionView.nullable().catch(null),
 });
 
 export type BlockDirectionView = z.output<typeof blockDirectionSchema>;

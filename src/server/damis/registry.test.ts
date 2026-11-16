@@ -9,7 +9,6 @@ describe("dami registry", () => {
     expect(keys).toEqual(
       [
         "asset-detector",
-        "block-reviser",
         "character-generator",
         "block-revision",
         "creative-dna",

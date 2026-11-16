@@ -19,6 +19,15 @@ import { ProductionInputError } from "./errors";
 import { blockReviewInput, projectInput, setAssetsInput } from "./inputs";
 import { BUSY_MESSAGE, NOT_IN_REVIEW } from "./messages";
 import { enqueuePreparation } from "./preparation";
+import {
+  assetCorrectionForChange,
+  ASSETS_ONLY_REQUEST,
+  directedBlockOf,
+  isEmptyCorrection,
+  NOT_DIRECTED_MESSAGE,
+  requestBlockRevision,
+} from "./revision";
+import type { RevisionRequest } from "./revision-request";
 import { blockView } from "./read";
 import type { BlockProductionStage } from "./stage";
 import { supersedeLineageTakes } from "./takes";
@@ -75,11 +84,36 @@ export async function setBlockAssets(input: {
       refs.push(asset.ref);
     }
     const voices = block.assetRefs.filter((r) => isVoiceRef(r));
-    const next = await createNextBlockVersion(
-      block,
-      { assetRefs: [...refs, ...voices], productionState: "pending", productionAssetRefs: refs },
-      tx,
-    );
+    const changes = { assetRefs: [...refs, ...voices], productionAssetRefs: refs };
+    // A directed block whose cast changed is revised (Block Revision adds, removes or swaps the
+    // asset in its text); any other change is only a new binding of references (code, free).
+    const correction = await assetCorrectionForChange(block, refs);
+    let next;
+    if (correction && !isEmptyCorrection(correction)) {
+      const [row] = await tx
+        .insert(review)
+        .values({
+          projectId: project.id,
+          userId,
+          subjectType: "prompt_block",
+          subjectId: block.id,
+          decision: "rejected",
+          revisionRequest: ASSETS_ONLY_REQUEST,
+          damiRunId: block.productionDamiRunId,
+        })
+        .returning({ id: review.id });
+      if (!row) throw new Error("review insert returned no row");
+      next = await requestBlockRevision({
+        tx,
+        blockId: block.id,
+        userId,
+        reviewId: row.id,
+        changes,
+      });
+    } else {
+      next = await createNextBlockVersion(block, { ...changes, productionState: "pending" }, tx);
+      await enqueuePreparation(tx, next, false);
+    }
     await supersedeLineageTakes(tx, project.id, [lineageId]);
     await logProjectEvent(tx, {
       projectId: project.id,
@@ -92,7 +126,6 @@ export async function setBlockAssets(input: {
         assetRefs: refs,
       },
     });
-    await enqueuePreparation(tx, next, false);
     return next;
   });
   if (!created) return null;
@@ -109,11 +142,17 @@ export async function submitBlockReview(input: {
   userId: string;
   decision: "accepted" | "rejected";
   note?: string;
+  /** Ask for a new shot plan instead of a small change (the note is then optional). */
+  regenerate?: boolean;
 }): Promise<BlockProductionStage | null> {
   const parsed = parse(blockReviewInput, input);
   const { lineageId, userId, decision } = parsed;
   if (!isUuid(lineageId)) return null;
-  const reason = reviewReason(decision, parsed.note);
+  const regenerate = decision === "rejected" && parsed.regenerate === true;
+  const reason =
+    regenerate && !parsed.note
+      ? { issueCodes: [], note: null }
+      : reviewReason(decision, parsed.note);
   const outcome = await getDb().transaction(async (tx) => {
     const locked = await lockLineage(tx, lineageId, userId);
     if (!locked) return null;
@@ -123,16 +162,35 @@ export async function submitBlockReview(input: {
     const { stage } = await lineageStage(tx, block);
     const allowed = stage === "block_review" || (decision === "rejected" && stage === "approved");
     if (!allowed) throw new ProductionInputError(NOT_IN_REVIEW);
-    await tx.insert(review).values({
-      projectId: project.id,
-      userId,
-      subjectType: "prompt_block",
-      subjectId: block.id,
-      decision,
-      issueCodes: reason.issueCodes,
-      note: reason.note,
-      damiRunId: block.productionDamiRunId,
-    });
+    if (decision === "rejected" && !directedBlockOf(block)) {
+      throw new ProductionInputError(NOT_DIRECTED_MESSAGE);
+    }
+    const request: RevisionRequest | undefined =
+      decision === "rejected"
+        ? {
+            source: "block_review",
+            ...(reason.note ? { note: reason.note } : {}),
+            timedNotes: [],
+            observedIssues: [],
+            keep: [],
+            regenerate,
+          }
+        : undefined;
+    const [row] = await tx
+      .insert(review)
+      .values({
+        projectId: project.id,
+        userId,
+        subjectType: "prompt_block",
+        subjectId: block.id,
+        decision,
+        issueCodes: reason.issueCodes,
+        note: reason.note,
+        revisionRequest: request,
+        damiRunId: block.productionDamiRunId,
+      })
+      .returning({ id: review.id });
+    if (!row) throw new Error("review insert returned no row");
     if (decision === "accepted") {
       await approveBlocks([block.id], tx);
       await logProjectEvent(tx, {
@@ -146,7 +204,7 @@ export async function submitBlockReview(input: {
       });
       return { stage: "approved" as const, next: null };
     }
-    const next = await createNextBlockVersion(block, { productionState: "pending" }, tx);
+    const next = await requestBlockRevision({ tx, blockId: block.id, userId, reviewId: row.id });
     await logProjectEvent(tx, {
       projectId: project.id,
       userId,
@@ -158,7 +216,6 @@ export async function submitBlockReview(input: {
         issueCodes: reason.issueCodes,
       },
     });
-    await enqueuePreparation(tx, next, true);
     return { stage: "preparing" as const, next };
   });
   if (!outcome) return null;

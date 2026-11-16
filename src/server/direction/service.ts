@@ -81,6 +81,31 @@ export async function getLatestDirection(
   return row ?? null;
 }
 
+/**
+ * The newest finished run (`ready`, or `superseded` by a later one) of a script version: the
+ * Director's header (its continuity bible) and frozen context (platform numbers, Creative Bible
+ * or the stub) that a block of that version was written under. Null when there is none.
+ */
+export async function getFinishedDirection(
+  projectId: string,
+  scriptVersionId: string,
+): Promise<DirectionRow | null> {
+  const [row] = await getDb()
+    .select()
+    .from(direction)
+    .where(
+      and(
+        eq(direction.projectId, projectId),
+        eq(direction.scriptVersionId, scriptVersionId),
+        inArray(direction.status, ["ready", "superseded"]),
+        sql`${direction.header} is not null`,
+      ),
+    )
+    .orderBy(sql`(${direction.status} = 'ready') desc`, desc(direction.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function listBatches(directionId: string) {
   return getDb()
     .select()

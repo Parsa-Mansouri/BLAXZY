@@ -26,6 +26,7 @@ import {
   uuid,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import type { RevisionRequest } from "@/server/production/revision-request";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 const createdAt = () => ts("created_at").notNull().defaultNow();
@@ -1045,6 +1046,8 @@ export const review = pgTable(
       .default(sql`'[]'::jsonb`),
     /** The user's free-text reason. */
     note: text("note"),
+    /** What a block revision was asked to do (see `production/revision-request.ts`). */
+    revisionRequest: jsonb("revision_request").$type<RevisionRequest>(),
     /** Comments anchored to passages (script review). */
     comments: jsonb("comments")
       .$type<ReviewComment[]>()

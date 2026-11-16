@@ -18,6 +18,7 @@ export {
 export { bindingsMap, directedBlocks } from "./blocks";
 export {
   failDirection,
+  getFinishedDirection,
   getLatestDirection,
   isDirectionOpen,
   listBatches,

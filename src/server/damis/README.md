@@ -175,7 +175,7 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
 - A block stores the Director's data in `prompt_block.direction` (with `asset_names`), its prompt
   with `[kind:Name]` tags, its ordered refs, 15 or 30 s. Preparation (`production.prepare`) is
   code only: `production/binding.ts` turns the tags into `<<<image_N>>>` for ready assets.
-  `block.revise` still uses the draft block-reviser until Block Revision is wired.
+  `block.revise` runs Block Revision (below); the draft block-reviser is retired.
 - Failures go through `handleFailure`; a blocked or invalid Director fails the direction and the
   sectioning state, and the user retries through the existing retry path.
 - `block-revision/` is BLOCK_REVISION v1.4 (`block-revision`): the next version of one block from
@@ -183,6 +183,12 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   timed notes, keep list, attempt history). The owner's review options and sliders are not part
   of the input by decision; the output keeps `slider_state` (always zeros). Sonnet by default;
   `blockRevisionRunContext(input)` gives the context that selects Opus when `regenerate` is set.
+  Wired (Phase 5): `block.revise` builds the input in `production/revision-job.ts` (current block,
+  continuity bible and Creative Bible of the Director run, neighbours, the review's
+  `revisionRequest`, asset correction, attempt history) and stores the revised block as the new
+  version (`direction.revision` holds change log, fix map, flags). The input takes the Director's
+  lenient bible shape so a project with the stub bible can be revised. Older blocks without
+  Director data cannot be revised.
 - Sample mode (`sample/director.ts`, `sample/block-revision.ts`) is deterministic, passes the
   dami's own `check()`, and covers all three Director modes.
 

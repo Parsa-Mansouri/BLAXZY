@@ -24,13 +24,19 @@ import { pollBlock } from "@/app/(app)/_lib/poll-client";
 import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import { blocksHref } from "../../../_lib/production-routes";
 import { assetHref } from "../../../_lib/asset-kinds";
-import { retryPreparationAction, reviewBlockAction, setAssetsAction } from "../actions";
+import {
+  retryPreparationAction,
+  reviewBlockAction,
+  setAssetsAction,
+  updateNextShotAction,
+} from "../actions";
 import { focusIsFree, markArrival, takeArrival } from "../_lib/arrival";
 import { blockKey } from "../_lib/block-key";
 import { BLOCK_STATE_TONES, blockStateLabel, scriptChangeNotice } from "../_lib/block-state";
 import { AssetPickerSheet } from "./asset-picker-sheet";
 import { DirectionPanel } from "./direction-panel";
 import { PromptView } from "./prompt-view";
+import { RevisionPanel } from "./revision-panel";
 import { ClosedSection, Section } from "./section";
 import { Mono } from "@/app/(app)/_components/values";
 
@@ -157,6 +163,10 @@ export function BlockScreen({
   const title = block.title ?? `Shot ${position}`;
   const canAsk = (reviewable || approved) && !asking;
   const changeNotice = scriptChangeNotice(block);
+  // A revised shot lists its change log under "What Changed"; Notes keeps the rest.
+  const notes = block.revision
+    ? block.notes.filter((note) => !block.revision?.changeLog.includes(note))
+    : block.notes;
 
   // Arriving from Approve on the previous shot: focus starts at this shot's heading.
   useEffect(() => {
@@ -197,7 +207,7 @@ export function BlockScreen({
     });
   }
 
-  function requestChanges(input: { note: string }) {
+  function requestChanges(input: { note: string; regenerate?: boolean }) {
     setChangesError(null);
     startPending(async () => {
       const result = await reviewBlockAction(projectId, block.lineageId, {
@@ -232,6 +242,19 @@ export function BlockScreen({
       setPickerOpen(false);
       refresh();
       refreshList();
+    });
+  }
+
+  function updateNext() {
+    setActionError(null);
+    startPending(async () => {
+      const result = await updateNextShotAction(projectId, block.lineageId);
+      if (!result.ok) {
+        setActionError(result.error);
+        return;
+      }
+      refreshList();
+      router.push(result.data.nextHref);
     });
   }
 
@@ -338,6 +361,10 @@ export function BlockScreen({
               serverError={changesError}
               notePlaceholder="The jacket should be red, and the camera should stay on her face when she turns."
               onSubmit={requestChanges}
+              secondaryAction={{
+                label: "Regenerate This Block",
+                onSelect: (note) => requestChanges({ note, regenerate: true }),
+              }}
               onCancel={() => setAsking(false)}
             />
           </div>
@@ -467,6 +494,10 @@ export function BlockScreen({
         </Section>
       </div>
 
+      {block.revision && !preparing ? (
+        <RevisionPanel revision={block.revision} updating={pending} onUpdateNext={updateNext} />
+      ) : null}
+
       {block.direction ? (
         <DirectionPanel direction={block.direction} durationSeconds={block.durationSeconds} />
       ) : null}
@@ -481,10 +512,10 @@ export function BlockScreen({
         </Section>
       ) : null}
 
-      {block.notes.length > 0 ? (
+      {notes.length > 0 ? (
         <Section title="Notes">
           <ul className="flex max-w-(--measure) flex-col gap-1.5">
-            {block.notes.map((note, i) => (
+            {notes.map((note, i) => (
               <li key={i} className="text-body text-label-2">
                 {note}
               </li>

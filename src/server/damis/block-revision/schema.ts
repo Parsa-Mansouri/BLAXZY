@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { creativeBibleSchema } from "../creative-dna/schema";
+import { creativeBibleShape } from "../creative-dna/schema";
 import {
   blockSchema,
   continuityBibleSchema,
@@ -105,7 +105,8 @@ export const blockRevisionInputSchema = z
   .object({
     ui_language: z.string().trim().min(1).max(40),
     platform_config: platformConfigSchema.default(defaultPlatformConfig),
-    creative_bible: creativeBibleSchema,
+    /** The bible the Director ran with: a compiled one, or the stub of a project without one. */
+    creative_bible: creativeBibleShape,
     continuity_bible: continuityBibleSchema,
     script_excerpt: z.string().trim().min(1).max(20_000),
     neighbours: z.object({

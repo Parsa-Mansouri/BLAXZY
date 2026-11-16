@@ -32,6 +32,13 @@ export type { ProductionBlock, ProductionBlockAsset } from "./views";
  */
 export { approveAllBlocks, setBlockAssets, submitBlockReview } from "./block-review";
 export { completeProduction } from "./complete";
+export { requestBlockRevision, requestNextShotUpdate } from "./revision";
+export {
+  revisionRequestSchema,
+  type ObservedIssue,
+  type RevisionRequest,
+  type TimedNote,
+} from "./revision-request";
 export { quoteProduction, startDrafts, type ProductionQuote } from "./drafts";
 export {
   DEFAULT_BLOCK_PAGE_SIZE,
@@ -51,6 +58,7 @@ export {
   listProductionBlocks,
   productionNavigatorStatuses,
   type BlockDetail,
+  type BlockRevisionNotes,
   type BusyBlock,
   type ProductionNavigator,
   type ProductionNavigatorStatuses,
@@ -74,7 +82,6 @@ export { clipDownloadName, exportDownloadName, fileSlug, shotsCsv } from "./name
 export {
   applyTakeGenerationResult,
   assertTakeBlockUsable,
-  blockReviserInput,
   dispatchProductionJobs,
   failPreparation,
   failTake,
@@ -92,4 +99,5 @@ export {
   type TakeJob,
 } from "./jobs";
 export { prepareBlockPrompt, type PreparedPrompt } from "./binding";
+export { buildBlockRevisionInput, revisionStorage, type RevisionContext } from "./revision-job";
 export { buildExport, EXPORT_CHANGED, EXPORT_TOO_LARGE, failExport } from "./exports";

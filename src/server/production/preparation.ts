@@ -2,7 +2,7 @@
  * Preparing blocks (text-blocks): claiming the blocks that were never prepared when Production is
  * entered, retrying a failed preparation, and reopening a finished film whose shots changed.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import {
   claimBlocksForPreparation,
   getPreviousVersion,
@@ -30,7 +30,7 @@ import type { BlockProductionStage } from "./stage";
 import { supersedeDroppedLineageTakes, supersedeLineageTakes } from "./takes";
 import { projectStages } from "./views";
 
-/** True when this version answers the rejected review of its predecessor (`block.revise`). */
+/** True when this version answers a revision request on its predecessor (`block.revise`). */
 async function isRevision(db: DbExecutor, block: PromptBlock): Promise<boolean> {
   const previous = await getPreviousVersion(block, db);
   if (!previous) return false;
@@ -42,6 +42,7 @@ async function isRevision(db: DbExecutor, block: PromptBlock): Promise<boolean> 
         eq(review.subjectType, "prompt_block"),
         eq(review.subjectId, previous.id),
         eq(review.decision, "rejected"),
+        isNotNull(review.revisionRequest),
       ),
     )
     .limit(1);

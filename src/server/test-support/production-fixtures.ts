@@ -147,6 +147,91 @@ export function createProductionFixtures() {
     });
   }
 
+  /**
+   * Replaces the project's blocks with the sample Director's blocks for the Director fixture's
+   * script (five blocks of the same family: Nora, Lina and Sam in the kitchen and on the front
+   * step), stores the finished `direction` run they were written under, makes every asset of the
+   * registry ready, and sets the script version's text. Returns the assets by name.
+   */
+  async function setDirectedBlocks(
+    projectId: string,
+    userId: string,
+    scriptVersionId: string,
+  ): Promise<{ assets: Record<string, { assetId: string; ref: string }>; blockCount: number }> {
+    const { getDb } = await import("@/server/db/client");
+    const { damiRun, direction, scriptVersion } = await import("@/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { replaceBlocks } = await import("@/server/blocks");
+    const { directedBlocks } = await import("@/server/direction/blocks");
+    const { directorInputSchema, directorOutputSchema } =
+      await import("@/server/damis/director/schema");
+    const { sampleDirector } = await import("@/server/damis/sample/director");
+    const raw = (await import("@/server/damis/director/fixtures/input.json")).default;
+    const input = directorInputSchema.parse({ ...raw, mode: "full" });
+    const output = directorOutputSchema.parse(sampleDirector(input));
+    const { blocks: written, ...header } = output;
+    const registry = input.asset_registry;
+    const bindings = [
+      ...registry.characters.map((c) => ({
+        id: c.char_id,
+        kind: "character" as const,
+        name: c.name,
+      })),
+      ...registry.locations.map((l) => ({ id: l.loc_id, kind: "location" as const, name: l.name })),
+      ...registry.props.map((r) => ({ id: r.prop_id, kind: "prop" as const, name: r.name })),
+    ].map((b) => ({ ...b, reference: true }));
+    const assets: Record<string, { assetId: string; ref: string }> = {};
+    for (const b of bindings) {
+      const made = await readyAsset(projectId, userId, b.kind, b.name);
+      assets[b.name] = { assetId: made.assetId, ref: made.ref };
+    }
+    const db = getDb();
+    await db
+      .update(scriptVersion)
+      .set({ content: input.script })
+      .where(eq(scriptVersion.id, scriptVersionId));
+    const [run] = await db
+      .insert(damiRun)
+      .values({
+        damiKey: "director",
+        damiVersion: "test",
+        model: "sample",
+        status: "succeeded",
+        projectId,
+        input: {},
+      })
+      .returning({ id: damiRun.id });
+    await db.insert(direction).values({
+      projectId,
+      scriptVersionId,
+      blockMode: input.block_mode,
+      mode: "full",
+      status: "ready",
+      header,
+      context: {
+        platform_config: input.platform_config,
+        block_mode: input.block_mode,
+        creative_bible: input.creative_bible,
+        asset_registry: input.asset_registry,
+        bindings,
+      },
+      damiRunIds: run ? [run.id] : [],
+      finishedAt: new Date(),
+    });
+    await replaceBlocks({
+      projectId,
+      scriptVersionId,
+      damiRunIds: run ? [run.id] : [],
+      blocks: directedBlocks({
+        blocks: written,
+        script: input.script,
+        bindings,
+        runIds: written.map(() => run?.id),
+      }),
+    });
+    return { assets, blockCount: written.length };
+  }
+
   async function cleanup(): Promise<void> {
     if (projectIds.length > 0) {
       const { getDb } = await import("@/server/db/client");
@@ -167,6 +252,7 @@ export function createProductionFixtures() {
     newProductionProject,
     readyAsset,
     setBlocks,
+    setDirectedBlocks,
     cleanup,
   };
 }

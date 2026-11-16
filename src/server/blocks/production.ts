@@ -5,7 +5,7 @@
  * handlers; every function that changes rows takes the caller's transaction when it must be
  * atomic with other writes. Nothing here checks ownership: callers do.
  */
-import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb, type DbExecutor, type DbTx } from "@/server/db/client";
 import { promptBlock } from "@/server/db/schema";
@@ -160,6 +160,32 @@ export async function getPreviousCurrentBlock(
   return row ?? null;
 }
 
+/** The current block right after this one in the film (same project and episode), if any. */
+export async function getNextCurrentBlock(
+  block: Pick<PromptBlock, "projectId" | "episodeId" | "orderIndex" | "id">,
+  db: DbExecutor = getDb(),
+): Promise<PromptBlock | null> {
+  const [row] = await db
+    .select()
+    .from(promptBlock)
+    .where(
+      and(
+        eq(promptBlock.projectId, block.projectId),
+        block.episodeId === null
+          ? isNull(promptBlock.episodeId)
+          : eq(promptBlock.episodeId, block.episodeId),
+        current,
+        or(
+          gt(promptBlock.orderIndex, block.orderIndex),
+          and(eq(promptBlock.orderIndex, block.orderIndex), gt(promptBlock.id, block.id)),
+        ),
+      ),
+    )
+    .orderBy(asc(promptBlock.orderIndex), asc(promptBlock.id))
+    .limit(1);
+  return row ?? null;
+}
+
 /**
  * Of these block versions, the ones a script edit sent back through preparation: the version
  * before each was cut from another script version and had been in production, and this one does
@@ -267,12 +293,21 @@ export async function storeBlockPreparation(
     assetRefs: string[];
     notes: string[];
     damiRunId: string | null;
+    /** A revision also rewrites the block itself: the Director data, the tagged prompt, refs. */
+    revised?: { direction: unknown; prompt: string; assetRefs: string[] };
   },
   db: DbExecutor = getDb(),
 ): Promise<PromptBlock | null> {
   const [row] = await db
     .update(promptBlock)
     .set({
+      ...(input.revised
+        ? {
+            direction: input.revised.direction,
+            prompt: input.revised.prompt,
+            assetRefs: input.revised.assetRefs,
+          }
+        : {}),
       productionState: "ready",
       productionPrompt: input.prompt,
       productionAssetRefs: input.assetRefs,

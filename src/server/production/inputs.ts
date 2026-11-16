@@ -39,6 +39,8 @@ const noteSchema = z
 export const blockReviewInput = lineageInput.extend({
   decision: z.enum(["accepted", "rejected"], { error: "Approve the shot or ask for changes." }),
   note: noteSchema,
+  /** Ask for a new shot plan (needs no note). */
+  regenerate: z.boolean().optional(),
 });
 
 export const takeReviewInput = takeInput.extend({

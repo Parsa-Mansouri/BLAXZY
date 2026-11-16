@@ -1,10 +1,12 @@
 /** What the Production screens read: the overview, a page of blocks and one block's detail. */
 import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import {
+  getNextCurrentBlock,
   pageCurrentBlocks,
   parseBlockDirection,
   type BlockDirectionView,
   type PromptBlock,
+  type RevisionView,
 } from "@/server/blocks";
 import { type DbExecutor, getDb } from "@/server/db/client";
 import { blockTake, promptBlock } from "@/server/db/schema";
@@ -39,6 +41,20 @@ export type BlockDetail = ProductionBlock & {
   busy: boolean;
   /** The Director's shot plan, staging and reasons; null for a block cut before the Director. */
   direction: BlockDirectionView | null;
+  /** What the block's last revision reported; null for a version the Director wrote. */
+  revision: BlockRevisionNotes | null;
+};
+
+/** The notes Block Revision left for the user, in plain fields. */
+export type BlockRevisionNotes = {
+  changeLog: string[];
+  /** Requests it could not apply, in its own words. */
+  notApplied: string[];
+  splitRequired: boolean;
+  /** `none` when it has nothing to suggest. */
+  structuralSuggestion: string;
+  /** The revision moved the shot's ending and the next shot has not been updated since. */
+  nextNeedsUpdate: boolean;
 };
 
 function decodeCursor(cursor: string): { orderIndex: number; id: string } {
@@ -168,6 +184,27 @@ export async function listProductionBlocks(
   };
 }
 
+async function revisionNotes(
+  db: DbExecutor,
+  block: PromptBlock,
+  revision: RevisionView,
+): Promise<BlockRevisionNotes> {
+  const { flags } = revision;
+  let nextNeedsUpdate = false;
+  if (flags.next_block_needs_update) {
+    // Updated since = the next shot has a version newer than this revision.
+    const next = await getNextCurrentBlock(block, db);
+    nextNeedsUpdate = next !== null && !next.stale && next.createdAt <= block.createdAt;
+  }
+  return {
+    changeLog: revision.change_log,
+    notApplied: flags.not_applied,
+    splitRequired: flags.split_required,
+    structuralSuggestion: flags.structural_suggestion,
+    nextNeedsUpdate,
+  };
+}
+
 /** One block (by lineage) with its newest takes. */
 export async function getBlockDetail(
   lineageId: string,
@@ -179,11 +216,15 @@ export async function getBlockDetail(
   const take = await latestLiveTake(db, lineageId);
   const view = await blockView(db, opened.block);
   if (!view) return null;
+  const direction = parseBlockDirection(opened.block.direction);
   return {
     ...view,
     takes: await listTakeViews(db, lineageId),
     busy: isBusy(opened.block, take),
-    direction: parseBlockDirection(opened.block.direction),
+    direction,
+    revision: direction?.revision
+      ? await revisionNotes(db, opened.block, direction.revision)
+      : null,
   };
 }
 

@@ -302,7 +302,7 @@ export const productionPrepare = defineJob({
   dedupeKey: (p) => p.blockId,
 });
 
-/** Revise a block version from the review of its predecessor (block-reviser). */
+/** Revise a block version from the review of its predecessor (Block Revision). */
 export const blockRevise = defineJob({
   name: "block.revise",
   payload: blockPayload,

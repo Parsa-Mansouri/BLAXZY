@@ -34,6 +34,11 @@ export interface ChangeRequestBoxProps {
   /** The user typed: a screen clears the errors it shows itself. */
   onEdit?: () => void;
   onSubmit: (note: string) => void;
+  /**
+   * A second way to send, beside the first (for example "Regenerate this block"): it hands the
+   * trimmed note (possibly empty) to `onSelect`, so the note stays optional for it.
+   */
+  secondaryAction?: { label: string; onSelect: (note: string) => void };
   onCancel: () => void;
   className?: string;
 }
@@ -58,6 +63,7 @@ export function ChangeRequestBox({
   children,
   onEdit,
   onSubmit,
+  secondaryAction,
   onCancel,
   className,
 }: ChangeRequestBoxProps) {
@@ -77,6 +83,15 @@ export function ChangeRequestBox({
       return;
     }
     onSubmit(trimmed);
+  }
+
+  function submitSecondary() {
+    const trimmed = note.trim();
+    if (trimmed.length > maxLength) {
+      setError(`Keep it under ${maxLength.toLocaleString("en-US")} characters.`);
+      return;
+    }
+    secondaryAction?.onSelect(trimmed);
   }
 
   return (
@@ -115,6 +130,16 @@ export function ChangeRequestBox({
         >
           {submitLabel}
         </Button>
+        {secondaryAction ? (
+          <Button
+            variant="outlined"
+            size="large"
+            disabled={blocked || over || sending}
+            onClick={submitSecondary}
+          >
+            {secondaryAction.label}
+          </Button>
+        ) : null}
         <Button variant="plain" size="large" onClick={onCancel} disabled={sending}>
           Cancel
         </Button>

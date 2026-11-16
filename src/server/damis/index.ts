@@ -5,7 +5,6 @@
 import { assetDetector } from "./asset-detector/dami";
 import { characterGenerator } from "./character-generator/dami";
 import { creativeDna } from "./creative-dna/dami";
-import { blockReviser } from "./block-reviser/dami";
 import { locationGenerator } from "./location-generator/dami";
 import { projectNamer } from "./project-namer/dami";
 import { propGenerator } from "./prop-generator/dami";
@@ -323,23 +322,8 @@ export {
   type ReferenceAsset,
 } from "./shared/reference";
 
-// Production (block and take review)
-export { blockReviser, takeFixer };
-export {
-  blockReviserInputSchema,
-  blockReviserOutputSchema,
-  blockIssueCodeSchema,
-  blockReviewSchema,
-  type BlockReviserInput,
-  type BlockReviserOutput,
-} from "./block-reviser/schema";
-export {
-  BLOCK_ISSUES,
-  BLOCK_ISSUE_CODES,
-  BLOCK_ISSUE_LIST,
-  type BlockIssueCode,
-  type BlockIssueDefinition,
-} from "./block-reviser/issues";
+// Production (take review)
+export { takeFixer };
 export {
   takeFixerInputSchema,
   takeFixerOutputSchema,
@@ -381,7 +365,6 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [sheetGeneratorCharacter.key]: sheetGeneratorCharacter,
   [sheetGeneratorLocation.key]: sheetGeneratorLocation,
   [sheetGeneratorProp.key]: sheetGeneratorProp,
-  [blockReviser.key]: blockReviser,
   [takeFixer.key]: takeFixer,
   [director.key]: director,
   [directorPlan.key]: directorPlan,

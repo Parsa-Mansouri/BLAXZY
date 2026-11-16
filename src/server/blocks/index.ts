@@ -17,6 +17,7 @@ export { rewriteAssetRefs } from "./rewrite";
 export {
   parseBlockDirection,
   type BlockDirectionView,
+  type RevisionView,
   type ShotView,
   type StagingView,
 } from "./direction-view";
@@ -39,6 +40,7 @@ export {
   getBlockVersion,
   getCurrentBlock,
   getCurrentBlocks,
+  getNextCurrentBlock,
   getPreviousCurrentBlock,
   getPreviousVersion,
   listCurrentBlockStates,

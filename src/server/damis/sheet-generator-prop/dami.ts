@@ -124,7 +124,7 @@ export function checkPropSheet(output: PropSheetOutput, input: PropSheetParsedIn
 
 export const sheetGeneratorProp = defineDami({
   key: "sheet-generator-prop",
-  version: "1.0.0",
+  version: "1.1.0",
   description:
     "Writes the prompts for the remaining views of a prop's Adaptive Asset Sheet (orthographic, detail, state, interaction and scale views on the grey studio, in a dependency order) and the scale card's data, from the locked spec and the approved Hero; never redesigns.",
   input: propSheetInputSchema,

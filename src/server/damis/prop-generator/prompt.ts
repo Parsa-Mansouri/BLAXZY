@@ -11,6 +11,7 @@ import {
   PROP_STUDIO_STANDARD,
   PROP_VIEW_LIBRARY,
 } from "../prop-shared/modules";
+import { withCreativeDna } from "../shared/creative-dna-input";
 import { designerMessage, ownerFixRequests, type DesignerScript } from "../shared/designer";
 import { PROP_GENERATOR_CORE } from "./prompt-text";
 import type { PropGeneratorParsedInput } from "./schema";
@@ -131,7 +132,7 @@ export function propInputJson(input: PropGeneratorParsedInput): Record<string, u
 
 export function buildPropGeneratorPrompt(input: PropGeneratorParsedInput): DamiPrompt {
   return {
-    system: [{ text: PROP_GENERATOR_SYSTEM, cache: true }],
+    system: withCreativeDna([{ text: PROP_GENERATOR_SYSTEM, cache: true }], input.creativeDna),
     messages: designerMessage(
       propImageFileIds(input),
       JSON.stringify(propInputJson(input), null, 2),

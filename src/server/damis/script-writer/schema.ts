@@ -4,6 +4,7 @@
  * them as structured JSON output instead of a forced tool call (same guarantee).
  */
 import { z } from "zod";
+import { creativeDnaTextSchema } from "../shared/creative-dna-input";
 
 /* ------------------------------------------------------------------------------------------ */
 /* submit_screenplay                                                                           */
@@ -214,16 +215,26 @@ export const writerFeedbackSchema = z.object({
 
 const story = z.string().trim().min(1).max(40_000);
 
+/** The Creative Bible's `script_writer` block (`renderCreativeDna`); absent: no bible. */
+const creativeDnaField = { creativeDna: creativeDnaTextSchema.optional() };
+
 export const scriptWriterInputSchema = z.discriminatedUnion("mode", [
-  z.object({ mode: z.literal("generate"), project: writerProjectSchema, story }),
+  z.object({
+    mode: z.literal("generate"),
+    project: writerProjectSchema,
+    story,
+    ...creativeDnaField,
+  }),
   z.object({
     mode: z.literal("revise"),
+    ...creativeDnaField,
     project: writerProjectSchema,
     previousScreenplay: screenplaySchema,
     feedback: writerFeedbackSchema,
   }),
   z.object({
     mode: z.literal("write_segment"),
+    ...creativeDnaField,
     project: writerProjectSchema,
     approvedOutline: submitOutlineSchema.extend({
       /** The proposed additions the user approved (indexes into `proposed_additions`). */
@@ -236,6 +247,7 @@ export const scriptWriterInputSchema = z.discriminatedUnion("mode", [
 ]);
 
 export const scriptOutlineInputSchema = z.object({
+  ...creativeDnaField,
   project: writerProjectSchema,
   story,
   /** Only when re-running after the user rejected the outline. */

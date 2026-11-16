@@ -446,18 +446,21 @@ export async function runDesigner(
   ctx: LookJobContext,
   design: DesignContext,
   run: DesignRunContext,
+  /** The project's Creative Bible block for the designer (`asset_generation`), when it has one. */
+  creativeDna?: string,
 ): Promise<DesignOutcome> {
+  const dna = creativeDna ? { creativeDna } : {};
   const designer = designerFor(ctx.asset.kind);
   if (!designer) throw new Error(`no designer for ${ctx.asset.kind}`);
   const fix = fixRoundOf(ctx, designer);
   switch (designer) {
     case "character": {
-      const input = characterInput(ctx, fix);
+      const input = { ...characterInput(ctx, fix), ...dna };
       const result = await runDami(characterGenerator, input, run);
       return characterOutcome(result.output, input, result.runId);
     }
     case "location": {
-      const input = locationInput(ctx, design, fix);
+      const input = { ...locationInput(ctx, design, fix), ...dna };
       const parsed = locationGenerator.input.parse(input);
       const result = await runDami(locationGenerator, input, {
         ...run,
@@ -466,7 +469,7 @@ export async function runDesigner(
       return locationOutcome(result.output, input, result.runId);
     }
     case "prop": {
-      const input = propInput(ctx, design, fix);
+      const input = { ...propInput(ctx, design, fix), ...dna };
       const parsed = propGenerator.input.parse(input);
       const result = await runDami(propGenerator, input, {
         ...run,

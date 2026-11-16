@@ -9,6 +9,7 @@
  */
 import type { z } from "zod";
 import type { DamiPrompt, PromptText } from "../framework/define";
+import { withCreativeDna } from "../shared/creative-dna-input";
 import { SCRIPT_WRITER_CORE, SCRIPT_WRITER_GENRES, SCRIPT_WRITER_STYLES } from "./modules";
 import type {
   scriptOutlineInputSchema,
@@ -65,11 +66,14 @@ export function moduleSlots(project: Pick<Project, "genre" | "visualStyle">): st
   ].join("\n");
 }
 
-function systemPrompt(project: Project): PromptText[] {
-  return [
-    { text: SCRIPT_WRITER_CORE, cache: true },
-    { text: moduleSlots(project), cache: true },
-  ];
+function systemPrompt(project: Project, creativeDna: string | undefined): PromptText[] {
+  return withCreativeDna(
+    [
+      { text: SCRIPT_WRITER_CORE, cache: true },
+      { text: moduleSlots(project), cache: true },
+    ],
+    creativeDna,
+  );
 }
 
 const opt = (value: string | undefined) => value ?? "";
@@ -148,14 +152,14 @@ export function renderOutlineMessage(input: OutlineInput): string {
 
 export function buildScriptWriterPrompt(input: WriterInput): DamiPrompt {
   return {
-    system: systemPrompt(input.project),
+    system: systemPrompt(input.project, input.creativeDna),
     messages: [{ role: "user", content: [{ text: renderWriterMessage(input) }] }],
   };
 }
 
 export function buildScriptOutlinePrompt(input: OutlineInput): DamiPrompt {
   return {
-    system: systemPrompt(input.project),
+    system: systemPrompt(input.project, input.creativeDna),
     messages: [{ role: "user", content: [{ text: renderOutlineMessage(input) }] }],
   };
 }

@@ -5,6 +5,7 @@
  * output); the input is BLAXZY's camelCase, sent as the owner's JSON template (see `prompt.ts`).
  * Characters and locations are named by their real names, never by detector ids.
  */
+import { creativeDnaTextSchema } from "../shared/creative-dna-input";
 import { z } from "zod";
 import {
   designerFixRequestSchema,
@@ -45,6 +46,8 @@ export const propGuidedAnswersSchema = z.object({
 export type PropGuidedAnswers = z.output<typeof propGuidedAnswersSchema>;
 
 export const propGeneratorInputSchema = z.object({
+  /** The project's Creative Bible block for this dami (`renderCreativeDna`); absent: no bible. */
+  creativeDna: creativeDnaTextSchema.optional(),
   asset: z.object({
     name: z.string().trim().min(1).max(120),
     /** The detector's category (hero_prop, hand_prop, functional_prop, set_dressing, prop_group). */

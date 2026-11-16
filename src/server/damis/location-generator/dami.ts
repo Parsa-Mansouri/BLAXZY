@@ -90,7 +90,7 @@ export function checkLocationSpec(
 
 export const locationGenerator = defineDami({
   key: "location-generator",
-  version: "1.0.0",
+  version: "1.1.0",
   description:
     "Defines one location (space first, image second): narrative analysis, a specification with confirmed, inferred and unknown fields, DNA, a layout on a shared compass, a coverage plan and the 16:9 Hero prompt; fix mode applies the reviewer's fix requests to the previous answer.",
   input: locationGeneratorInputSchema,

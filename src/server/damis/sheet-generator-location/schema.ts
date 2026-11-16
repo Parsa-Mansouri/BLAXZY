@@ -5,6 +5,7 @@
  * mirrors the owner's `submit_location_views` tool schema field for field (sent as structured JSON
  * output); the input is BLAXZY's camelCase, sent as the owner's `<input>` JSON (see `prompt.ts`).
  */
+import { creativeDnaTextSchema } from "../shared/creative-dna-input";
 import { z } from "zod";
 import { designerProjectSchema, MAX_DESIGN_TEXT, MAX_SHEET_VIEWS } from "../shared/designer";
 
@@ -21,6 +22,8 @@ export const locationSheetFixRequestSchema = z.object({
 export type LocationSheetFixRequest = z.output<typeof locationSheetFixRequestSchema>;
 
 export const locationSheetInputSchema = z.object({
+  /** The project's Creative Bible block for this dami (`renderCreativeDna`); absent: no bible. */
+  creativeDna: creativeDnaTextSchema.optional(),
   project: designerProjectSchema,
   /** The Location Generator's approved answer (spec fields, DNA, layout, coverage plan, style). */
   lockedSpec: z.record(z.string(), z.unknown()),

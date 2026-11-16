@@ -14,11 +14,12 @@ import {
   assetLookGenerate,
   defineHandler,
   type JobContext,
-  type JobDefinition,
+  type JobPayload,
 } from "../../src/server/jobs";
 import { mergeDamiStyle } from "../../src/server/projects";
 import { classifyAssetFailure } from "./asset-failure";
 import { runDesigner } from "./asset-design";
+import { creativeDnaForRun } from "./creative-bible";
 import { handleFailure } from "./failure";
 
 /** The project's style descriptor is at most this long (see `projectStyleSchema`). */
@@ -33,7 +34,12 @@ const MAX_STYLE_DESCRIPTOR = 2000;
  * designer's reason). A look that already has a prompt (a retry after a failed generation, or a
  * re-roll) goes straight to the generation. The completion hook moves it to review.
  */
-async function produceLook(lookId: string, job: JobDefinition, context: JobContext): Promise<void> {
+async function produceLook(
+  payload: JobPayload<typeof assetLookGenerate>,
+  job: typeof assetLookGenerate | typeof assetLookFix,
+  context: JobContext,
+): Promise<void> {
+  const lookId = payload.lookId;
   const ctx = await loadLookJob(lookId);
   if (!ctx || ctx.look.status !== "pending") return;
   const { look, asset, project } = ctx;
@@ -43,12 +49,20 @@ async function produceLook(lookId: string, job: JobDefinition, context: JobConte
     const style = project.style;
     if (!style) throw new AssetInputError("Choose the project's style first.");
     if (!look.prompt) {
-      const design = await loadDesignContext(asset);
-      const outcome = await runDesigner(ctx, design, {
-        userId: project.ownerId,
+      const dna = await creativeDnaForRun({
         projectId: project.id,
-        signal: context.signal,
+        consumer: "asset_generation",
+        job,
+        payload,
       });
+      if (dna.deferred) return;
+      const design = await loadDesignContext(asset);
+      const outcome = await runDesigner(
+        ctx,
+        design,
+        { userId: project.ownerId, projectId: project.id, signal: context.signal },
+        dna.creativeDna,
+      );
       switch (outcome.kind) {
         case "refused":
           await failLook(lookId, outcome.message, outcome.runId);
@@ -104,10 +118,10 @@ async function produceLook(lookId: string, job: JobDefinition, context: JobConte
 
 /** A first design (or an answered question): designer in create mode → generation. */
 export const assetLookGenerateHandler = defineHandler(assetLookGenerate, (payload, context) =>
-  produceLook(payload.lookId, assetLookGenerate, context),
+  produceLook(payload, assetLookGenerate, context),
 );
 
 /** A rejected look's next version: designer in fix mode (or a re-roll) → generation. */
 export const assetLookFixHandler = defineHandler(assetLookFix, (payload, context) =>
-  produceLook(payload.lookId, assetLookFix, context),
+  produceLook(payload, assetLookFix, context),
 );

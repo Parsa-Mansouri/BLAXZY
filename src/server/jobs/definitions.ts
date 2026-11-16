@@ -12,8 +12,20 @@ export const systemPing = defineJob({
   options: { retryLimit: 1, retryDelaySeconds: 1, expireInSeconds: 60 },
 });
 
+/*
+ * A job that runs a Creative Bible consumer waits for a bible that is still compiling by queueing
+ * a delayed copy of itself with `bibleWaits` raised by one (worker/handlers/creative-bible.ts).
+ * The count is part of the dedupe key from the first wait on, so each follow-up has a key of its
+ * own: it is not deduped against the job that queues it (which is still running) and never
+ * against a fresh request (key without a count). The count is bounded by the 10-minute limit.
+ */
+const bibleWaits = z.number().int().min(1).max(200).optional();
+const waitKey = (key: string, p: { bibleWaits?: number | undefined }) =>
+  p.bibleWaits ? `${key}:wait${p.bibleWaits}` : key;
+
 /* Script stage (see docs/M1_CONTRACTS.md). Dami calls can run for minutes. */
 const scriptPayload = z.object({ scriptVersionId: z.string().uuid() });
+const scriptBiblePayload = scriptPayload.extend({ bibleWaits });
 const damiJob = { retryLimit: 2, retryDelaySeconds: 15, expireInSeconds: 40 * 60 } as const;
 
 /**
@@ -42,9 +54,9 @@ export const projectName = defineJob({
 /** Write a script from the user's brief. */
 export const scriptWrite = defineJob({
   name: "script.write",
-  payload: scriptPayload,
+  payload: scriptBiblePayload,
   options: damiJob,
-  dedupeKey: (p) => p.scriptVersionId,
+  dedupeKey: (p) => waitKey(p.scriptVersionId, p),
 });
 
 /**
@@ -56,9 +68,10 @@ export const scriptWriteSegment = defineJob({
   payload: z.object({
     scriptVersionId: z.string().uuid(),
     segmentIndex: z.number().int().min(0).max(1000),
+    bibleWaits,
   }),
   options: damiJob,
-  dedupeKey: (p) => `${p.scriptVersionId}:${p.segmentIndex}`,
+  dedupeKey: (p) => waitKey(`${p.scriptVersionId}:${p.segmentIndex}`, p),
 });
 
 /** Rewrite the user's quick idea with the Enhancer (their own text is kept if it fails). */
@@ -72,17 +85,17 @@ export const scriptEnhance = defineJob({
 /** Extract an uploaded script's text and check it. */
 export const scriptCheck = defineJob({
   name: "script.check",
-  payload: scriptPayload,
+  payload: scriptBiblePayload,
   options: damiJob,
-  dedupeKey: (p) => p.scriptVersionId,
+  dedupeKey: (p) => waitKey(p.scriptVersionId, p),
 });
 
 /** Revise a rejected script from its review. */
 export const scriptRevise = defineJob({
   name: "script.revise",
-  payload: scriptPayload,
+  payload: scriptBiblePayload,
   options: damiJob,
-  dedupeKey: (p) => p.scriptVersionId,
+  dedupeKey: (p) => waitKey(p.scriptVersionId, p),
 });
 
 /**
@@ -188,15 +201,16 @@ export const ratelimitPrune = defineJob({
  * (unless one is stored already), then requests the generation; the generation's completion hook
  * moves the look or sheet to review.
  */
-const lookPayload = z.object({ lookId: z.string().uuid() });
+const lookPayload = z.object({ lookId: z.string().uuid(), bibleWaits });
 const sheetPayload = z.object({ sheetId: z.string().uuid() });
+const sheetBiblePayload = sheetPayload.extend({ bibleWaits });
 
 /** Design a look with the asset's designer (character, location or prop generator) and request its image. */
 export const assetLookGenerate = defineJob({
   name: "asset.look.generate",
   payload: lookPayload,
   options: damiJob,
-  dedupeKey: (p) => p.lookId,
+  dedupeKey: (p) => waitKey(p.lookId, p),
 });
 
 /** A rejected look's next version: the designer in fix mode (or a re-roll), then the new image. */
@@ -204,23 +218,23 @@ export const assetLookFix = defineJob({
   name: "asset.look.fix",
   payload: lookPayload,
   options: damiJob,
-  dedupeKey: (p) => p.lookId,
+  dedupeKey: (p) => waitKey(p.lookId, p),
 });
 
 /** A character sheet: sheet-generator-character writes its prompt, then the sheet is requested with the approved board attached. */
 export const assetSheetGenerate = defineJob({
   name: "asset.sheet.generate",
-  payload: sheetPayload,
+  payload: sheetBiblePayload,
   options: damiJob,
-  dedupeKey: (p) => p.sheetId,
+  dedupeKey: (p) => waitKey(p.sheetId, p),
 });
 
 /** A rejected character sheet's next version: sheet-generator-character in fix mode (or a re-roll), then the new sheet. */
 export const assetSheetFix = defineJob({
   name: "asset.sheet.fix",
-  payload: sheetPayload,
+  payload: sheetBiblePayload,
   options: damiJob,
-  dedupeKey: (p) => p.sheetId,
+  dedupeKey: (p) => waitKey(p.sheetId, p),
 });
 
 /**
@@ -230,9 +244,9 @@ export const assetSheetFix = defineJob({
  */
 export const assetSheetPlan = defineJob({
   name: "asset.sheet.plan",
-  payload: sheetPayload.extend({ viewRowId: z.string().uuid().optional() }),
+  payload: sheetBiblePayload.extend({ viewRowId: z.string().uuid().optional() }),
   options: damiJob,
-  dedupeKey: (p) => `${p.sheetId}:${p.viewRowId ?? "plan"}`,
+  dedupeKey: (p) => waitKey(`${p.sheetId}:${p.viewRowId ?? "plan"}`, p),
 });
 
 /**

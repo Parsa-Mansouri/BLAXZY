@@ -10,6 +10,7 @@ import {
   LOCATION_ORIENTATION_SYSTEM,
   LOCATION_STYLE_LENSES,
 } from "../location-shared/modules";
+import { withCreativeDna } from "../shared/creative-dna-input";
 import { designerMessage, ownerFixRequests, type DesignerScript } from "../shared/designer";
 import { LOCATION_GENERATOR_CORE } from "./prompt-text";
 import type { LocationGeneratorParsedInput } from "./schema";
@@ -98,7 +99,7 @@ export function buildLocationGeneratorPrompt(input: LocationGeneratorParsedInput
     ...lenses.map((text, i) => (i === lenses.length - 1 ? { text, cache: true } : { text })),
   ];
   return {
-    system,
+    system: withCreativeDna(system, input.creativeDna),
     messages: designerMessage(
       input.referenceImages.map((r) => r.fileId),
       `<input>\n${JSON.stringify(locationInputJson(input), null, 2)}\n</input>`,

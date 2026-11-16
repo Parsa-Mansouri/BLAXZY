@@ -20,11 +20,15 @@ export {
   isTimestampText,
 } from "./cursor";
 export {
+  BIBLE_WAIT_LIMIT_MS,
+  BIBLE_WAIT_RETRY_MS,
+  bibleForRun,
   completeCreativeBible,
   failCreativeBible,
   getLatestBible,
   getReadyBible,
   loadCreativeBibleJob,
+  type BibleForRun,
   type CreativeBibleJob,
   type CreativeBibleRow,
   type ReadyCreativeBible,

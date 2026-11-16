@@ -5,6 +5,7 @@
  * `submit_asset_views` tool schema field for field (sent as structured JSON output); the input is
  * BLAXZY's camelCase, sent as the owner's JSON template (see `prompt.ts`).
  */
+import { creativeDnaTextSchema } from "../shared/creative-dna-input";
 import { z } from "zod";
 import { designerProjectSchema, MAX_DESIGN_TEXT, MAX_SHEET_VIEWS } from "../shared/designer";
 import { PROP_ASPECT_RATIOS, PROP_SHEET_LEVELS } from "../prop-generator/schema";
@@ -30,6 +31,8 @@ export const propSheetFixRequestSchema = z.object({
 export type PropSheetFixRequest = z.output<typeof propSheetFixRequestSchema>;
 
 export const propSheetInputSchema = z.object({
+  /** The project's Creative Bible block for this dami (`renderCreativeDna`); absent: no bible. */
+  creativeDna: creativeDnaTextSchema.optional(),
   /** The Prop Generator's approved answer (classification, DNA, links, sheet plan, style). */
   lockedSpec: z.record(z.string(), z.unknown()),
   /** The approved images attached in this order; `hero_34` is always first. */

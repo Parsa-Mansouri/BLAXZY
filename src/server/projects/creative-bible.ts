@@ -158,7 +158,42 @@ export async function getReadyBible(
   };
 }
 
-/* ---------------------------- worker only ---------------------------------- */
+/** How long a job waits for a bible that is still compiling, counted from the row's creation. */
+export const BIBLE_WAIT_LIMIT_MS = 10 * 60_000;
+/** How long a job that has to wait is deferred before it looks again. */
+export const BIBLE_WAIT_RETRY_MS = 20_000;
+
+/** What a job about to run a consuming dami does about the project's Creative Bible. */
+export type BibleForRun =
+  | { kind: "ready"; bible: ReadyCreativeBible }
+  /** The bible is still compiling and is young enough to wait for: defer the job. */
+  | { kind: "wait" }
+  /** No bible to use (none, failed, superseded, timed out or unreadable): run without one. */
+  | { kind: "none"; reason: "none" | "failed" | "superseded" | "timed_out" | "unreadable" };
+
+/**
+ * Decides what a dami job does about the project's bible, from its newest row: `ready` → use it;
+ * `pending` → wait while the row is younger than `BIBLE_WAIT_LIMIT_MS`, then give up; `failed`,
+ * `superseded` (a typed "Other" style) or no row → none. The job never waits on a row that
+ * cannot finish, and never longer than the limit.
+ */
+export async function bibleForRun(
+  projectId: string,
+  options: { now?: Date; db?: DbExecutor } = {},
+): Promise<BibleForRun> {
+  const db = options.db ?? getDb();
+  const latest = await getLatestBible(projectId, db);
+  if (!latest) return { kind: "none", reason: "none" };
+  if (latest.status === "pending") {
+    const age = (options.now ?? new Date()).getTime() - latest.createdAt.getTime();
+    return age < BIBLE_WAIT_LIMIT_MS ? { kind: "wait" } : { kind: "none", reason: "timed_out" };
+  }
+  if (latest.status !== "ready") return { kind: "none", reason: latest.status };
+  const bible = await getReadyBible(projectId, db);
+  return bible ? { kind: "ready", bible } : { kind: "none", reason: "unreadable" };
+}
+
+/* ---------------------------- worker only/* ---------------------------- worker only ---------------------------------- */
 
 export type CreativeBibleJob = {
   row: CreativeBibleRow;

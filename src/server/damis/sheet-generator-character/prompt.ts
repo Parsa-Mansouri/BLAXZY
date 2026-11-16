@@ -4,6 +4,7 @@
  * approved board first) followed by the input JSON in the owner's field names.
  */
 import type { DamiPrompt } from "../framework/define";
+import { withCreativeDna } from "../shared/creative-dna-input";
 import { designerMessage, ownerFixRequests } from "../shared/designer";
 import { CHARACTER_SHEET_SYSTEM } from "./prompt-text";
 import type { CharacterSheetParsedInput } from "./schema";
@@ -45,7 +46,7 @@ export function characterSheetInputJson(input: CharacterSheetParsedInput): Recor
 
 export function buildCharacterSheetPrompt(input: CharacterSheetParsedInput): DamiPrompt {
   return {
-    system: [{ text: CHARACTER_SHEET_SYSTEM, cache: true }],
+    system: withCreativeDna([{ text: CHARACTER_SHEET_SYSTEM, cache: true }], input.creativeDna),
     messages: designerMessage(
       input.referenceImages.map((r) => r.fileId),
       JSON.stringify(characterSheetInputJson(input), null, 2),

@@ -54,7 +54,7 @@ export function checkCharacterBoard(
 
 export const characterGenerator = defineDami({
   key: "character-generator",
-  version: "5.0.0",
+  version: "5.1.0",
   description:
     "Writes the image prompt for a character's 16:9 reference board (close-up, front and back views in the project's world), from the character's details and optional reference photos; fix mode applies the reviewer's fix requests to the previous prompt.",
   input: characterGeneratorInputSchema,

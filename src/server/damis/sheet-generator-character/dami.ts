@@ -65,7 +65,7 @@ export function checkCharacterSheet(
 
 export const sheetGeneratorCharacter = defineDami({
   key: "sheet-generator-character",
-  version: "4.0.0",
+  version: "4.1.0",
   description:
     "Writes the image prompt for a character's 16:9 sheet on a neutral grey studio (face, headless front and back full-body figures, six numbered detail frames) from the approved board; fix mode applies the reviewer's fix requests to the previous prompt and may edit the previous sheet.",
   input: characterSheetInputSchema,

@@ -64,7 +64,7 @@ code that calls the Claude API and the only writer of `dami_run`.
   QC items and the review options of the reject flow. The system prompt is the owner's file from
   `<role>` on (`prompt-text.ts`, checked against `source/`); `source/` also holds the registry
   (`registry.ts`: the shared core and the 13 modules, server-side only), the output schema and the
-  regression cases. Wiring the bible into the other damis is a later phase.
+  regression cases.
 - It runs once per Style: `saveStyle` calls `refreshCreativeBible` (`src/server/projects/
 creative-bible.ts`) in its transaction, which adds a `creative_bible` row and queues
   `project.creative-dna` when the style is saved for the first time, when the genre, visual style,
@@ -80,6 +80,29 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   `asset_generation`, `sheet_generator`, `director`, `text_blocks_video`. `getReviewOptions`
   gives the review screens their options. `shared/platform.ts` holds the platform numbers
   (block lengths, speech rates).
+- Who consumes which slice (input field `creativeDna`, the rendered block as a string, optional;
+  `shared/creative-dna-input.ts`): `script-writer` and `script-writer-outline` take
+  `script_writer`; `script-checker` takes `script_checker`; `character-generator`,
+  `location-generator` and `prop-generator` take `asset_generation`; the three
+  `sheet-generator-*` take `sheet_generator`. The asset detector and the production damis are
+  wired by their own phases. With `creativeDna` the dami appends it as the last system block
+  (cached, so one more breakpoint: the most any of them reaches is 3 of 4); without it the prompt
+  is exactly what it was. `script-checker` uses the bible INSTEAD of `composeModules` (the bible
+  already carries genre, style, format and orientation) and keeps `composeModules` as the
+  fallback when there is no bible (a typed "Other" style). Each of them moved up one minor version.
+- The wait rule (`bibleForRun(projectId)` in `projects/creative-bible.ts`, used through
+  `worker/handlers/creative-bible.ts`): the handlers of `script.write`, `script.write-segment`,
+  `script.revise` (writer revises only), `script.check`, `asset.look.generate|fix`,
+  `asset.sheet.generate|fix` and `asset.sheet.plan` read the project's newest bible row after
+  deciding the job is still wanted and before the first paid call. `ready` → use it. `pending` and
+  younger than 10 minutes (from the row's `created_at`) → the handler queues a copy of its own job
+  with `bibleWaits` + 1 and `startAfter` 20 s and returns without running a dami. `failed`,
+  `superseded`, none, unreadable, or pending for over 10 minutes → run without a bible and log it
+  (`creative bible not used`), no user-facing error. The wait count is part of the job's dedupe key
+  from the first wait on (`<key>:wait<N>`), so the copy is not deduped against the job that queues
+  it, a retry of the same deferral is, and a fresh request never collides; the deferring job ends
+  successfully without having run a dami, so a dami never runs twice, and the 10-minute limit
+  bounds the chain (at most about 30 hops).
 - The structured output has no free-form objects and nullable fields are required keys holding
   null. The owner's counts (3+ rules per slice, 12+ QC items, 4+ guards, 4 to 7 / 4 to 6 review
   options) are checked by Zod after the answer; a `rejected` skeleton keeps the full shape with

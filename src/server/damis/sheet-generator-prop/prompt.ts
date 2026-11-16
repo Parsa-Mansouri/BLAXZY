@@ -11,6 +11,7 @@ import {
   PROP_STUDIO_STANDARD,
   PROP_VIEW_LIBRARY,
 } from "../prop-shared/modules";
+import { withCreativeDna } from "../shared/creative-dna-input";
 import { designerMessage } from "../shared/designer";
 import { PROP_SHEET_CORE } from "./prompt-text";
 import type { PropSheetParsedInput } from "./schema";
@@ -62,7 +63,7 @@ export function buildPropSheetPrompt(input: PropSheetParsedInput): DamiPrompt {
     PROP_OBJECT_TEXT_RULE,
   ].join("\n\n");
   return {
-    system: [{ text: system, cache: true }],
+    system: withCreativeDna([{ text: system, cache: true }], input.creativeDna),
     messages: designerMessage(
       [
         ...input.approvedImages.map((a) => a.fileId),

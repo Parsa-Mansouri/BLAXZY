@@ -20,6 +20,7 @@ import {
   storeSegmentProgress,
   type SegmentProgress,
 } from "../../src/server/script";
+import { creativeDnaForRun } from "./creative-bible";
 import { handleFailure } from "./failure";
 import { classifyFailure } from "./script-failure";
 import { assumptionsOf, notesFor, stitchSegments } from "./script-writing";
@@ -66,12 +67,21 @@ export const scriptWriteSegmentHandler = defineHandler(
       const sequence = sequences[segmentIndex];
       if (!sequence) throw new ScriptInputError("This part of the outline no longer exists.");
 
+      const dna = await creativeDnaForRun({
+        projectId: project.id,
+        consumer: "script_writer",
+        job: scriptWriteSegment,
+        payload,
+      });
+      if (dna.deferred) return;
+
       const scenes = progress.scenes.map((s) => screenplaySceneSchema.parse(s));
       const ledger = progress.ledger ? continuityLedgerSchema.parse(progress.ledger) : null;
       const run = await runDami(
         scriptWriter,
         {
           mode: "write_segment",
+          ...(dna.creativeDna ? { creativeDna: dna.creativeDna } : {}),
           project: writerProject(style, sequence.target_seconds),
           approvedOutline: { ...outline, approved_additions: notes.approvedAdditions ?? [] },
           segmentId: sequence.id,

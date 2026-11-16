@@ -5,6 +5,7 @@
  * owner's OUTPUT FORMAT field for field; the input is BLAXZY's camelCase, sent to the model as the
  * owner's JSON (see `prompt.ts`).
  */
+import { creativeDnaTextSchema } from "../shared/creative-dna-input";
 import { z } from "zod";
 import {
   designerFixRequestSchema,
@@ -34,6 +35,8 @@ export const detailCellSchema = z.object({
 export type DetailCell = z.output<typeof detailCellSchema>;
 
 export const characterSheetInputSchema = z.object({
+  /** The project's Creative Bible block for this dami (`renderCreativeDna`); absent: no bible. */
+  creativeDna: creativeDnaTextSchema.optional(),
   project: designerProjectSchema,
   character: z.object({
     name: z.string().trim().min(1).max(120),

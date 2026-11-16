@@ -31,9 +31,10 @@ import {
   defineHandler,
   enqueue,
   type JobContext,
-  type JobDefinition,
+  type JobPayload,
 } from "../../src/server/jobs";
 import { classifyAssetFailure } from "./asset-failure";
+import { creativeDnaForRun } from "./creative-bible";
 import { handleFailure } from "./failure";
 
 type OriginalRole = "face" | "outfit" | "full_body" | "other";
@@ -145,10 +146,11 @@ export function characterSheetSpec(
  * (a re-roll keeps it), then requests the generation. The completion hook moves it to review.
  */
 async function produceSheet(
-  sheetId: string,
-  job: JobDefinition,
+  payload: JobPayload<typeof assetSheetGenerate>,
+  job: typeof assetSheetGenerate | typeof assetSheetFix,
   context: JobContext,
 ): Promise<void> {
+  const sheetId = payload.sheetId;
   const ctx = await loadSheetJob(sheetId);
   if (!ctx || ctx.sheet.status !== "pending") return;
   if (packKindOf(ctx.asset.kind)) {
@@ -166,7 +168,17 @@ async function produceSheet(
       if (sheet.parentId && (!ctx.parent?.prompt || !ctx.review)) {
         throw new AssetInputError("The review this sheet answers is missing. Start again.");
       }
-      const input = characterSheetInput(ctx);
+      const dna = await creativeDnaForRun({
+        projectId: project.id,
+        consumer: "sheet_generator",
+        job,
+        payload,
+      });
+      if (dna.deferred) return;
+      const input = {
+        ...characterSheetInput(ctx),
+        ...(dna.creativeDna ? { creativeDna: dna.creativeDna } : {}),
+      };
       const run = await runDami(sheetGeneratorCharacter, input, {
         userId: project.ownerId,
         projectId: project.id,
@@ -203,10 +215,10 @@ async function produceSheet(
 
 /** sheet-generator-character → prompt → generation (the approved board attached). */
 export const assetSheetGenerateHandler = defineHandler(assetSheetGenerate, (payload, context) =>
-  produceSheet(payload.sheetId, assetSheetGenerate, context),
+  produceSheet(payload, assetSheetGenerate, context),
 );
 
 /** A rejected sheet's next version: the sheet maker in fix mode (or a re-roll) → generation. */
 export const assetSheetFixHandler = defineHandler(assetSheetFix, (payload, context) =>
-  produceSheet(payload.sheetId, assetSheetFix, context),
+  produceSheet(payload, assetSheetFix, context),
 );

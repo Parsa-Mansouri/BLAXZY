@@ -7,6 +7,7 @@
 import type { DamiPrompt, PromptText } from "../framework/define";
 import { genreLens, styleLens } from "../location-generator/prompt";
 import { LOCATION_ORIENTATION_SYSTEM } from "../location-shared/modules";
+import { withCreativeDna } from "../shared/creative-dna-input";
 import { designerMessage } from "../shared/designer";
 import { LOCATION_SHEET_CORE } from "./prompt-text";
 import type { LocationSheetParsedInput } from "./schema";
@@ -67,7 +68,7 @@ export function buildLocationSheetPrompt(input: LocationSheetParsedInput): DamiP
     ...lenses.map((text, i) => (i === lenses.length - 1 ? { text, cache: true } : { text })),
   ];
   return {
-    system,
+    system: withCreativeDna(system, input.creativeDna),
     messages: designerMessage(
       input.approvedImages.map((a) => a.fileId),
       `<input>\n${JSON.stringify(locationSheetInputJson(input), null, 2)}\n</input>`,

@@ -20,7 +20,7 @@ import {
   type WriterReasonCode,
 } from "../../src/server/damis";
 import type { ProjectStyle, ReviewComment } from "../../src/server/db/schema";
-import { defineHandler, scriptRevise } from "../../src/server/jobs";
+import { defineHandler, scriptRevise, type JobPayload } from "../../src/server/jobs";
 import {
   completeScriptVersion,
   failScriptVersion,
@@ -29,6 +29,7 @@ import {
   ScriptInputError,
   type ScriptJobContext,
 } from "../../src/server/script";
+import { creativeDnaForRun } from "./creative-bible";
 import { handleFailure } from "./failure";
 import { classifyFailure } from "./script-failure";
 import { notesFor } from "./script-writing";
@@ -76,6 +77,7 @@ async function reviseWithWriter(
   parentStored: StoredScreenplay,
   style: ProjectStyle,
   signal: AbortSignal,
+  payload: JobPayload<typeof scriptRevise>,
 ): Promise<void> {
   const { project, version, review } = job;
   if (!review) throw new ScriptInputError("The review this revision answers is missing.");
@@ -95,10 +97,18 @@ async function reviseWithWriter(
     .filter(Boolean)
     .join("\n");
   const target = runtimeTarget(style, parentStored);
+  const dna = await creativeDnaForRun({
+    projectId: project.id,
+    consumer: "script_writer",
+    job: scriptRevise,
+    payload,
+  });
+  if (dna.deferred) return;
   const run = await runDami(
     scriptWriter,
     {
       mode: "revise",
+      ...(dna.creativeDna ? { creativeDna: dna.creativeDna } : {}),
       project: writerProject(style, target),
       previousScreenplay: parentStored.screenplay,
       feedback: {
@@ -150,7 +160,7 @@ export const scriptReviseHandler = defineHandler(scriptRevise, async (payload, c
     }
     const parentStored = parseStoredScreenplay(parent.screenplay);
     if (parentStored) {
-      await reviseWithWriter(job, parentStored, project.style, context.signal);
+      await reviseWithWriter(job, parentStored, project.style, context.signal, payload);
       return;
     }
     const mapped = new Set<ScriptIssueCode>(review.issueCodes.filter(isIssueCode));

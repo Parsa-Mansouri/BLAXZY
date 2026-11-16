@@ -45,9 +45,11 @@ import {
   defineHandler,
   enqueue,
   type JobContext,
+  type JobPayload,
 } from "../../src/server/jobs";
 import { z } from "zod";
 import { classifyAssetFailure } from "./asset-failure";
+import { creativeDnaForRun } from "./creative-bible";
 import { handleFailure } from "./failure";
 
 const CATALOG = {
@@ -181,10 +183,12 @@ async function runMaker(
   kind: PackKind,
   fix: FixRound | null,
   signal: AbortSignal,
+  creativeDna: string | undefined,
 ): Promise<{ views: PlannedView[]; spec: SheetSpec; runId: string; warnings: string[] }> {
   const style = ctx.project.style as ProjectStyle;
   const run = { userId: ctx.project.ownerId, projectId: ctx.project.id, signal };
   const lookOutput = ctx.look.spec?.output ?? {};
+  const dna = creativeDna ? { creativeDna } : {};
   const fixPart = fix
     ? {
         previousOutput: previousOutput(ctx),
@@ -199,6 +203,7 @@ async function runMaker(
       project: designerProject(style),
       lockedSpec: lookOutput,
       mode: "lock",
+      ...dna,
       approvedImages: approvedImages(ctx, kind),
       ...(fix ? { onlyViews: [fix.view.viewId] } : {}),
       excludeAssets: design.excludeAssets.filter((n) => n !== ctx.asset.name),
@@ -236,6 +241,7 @@ async function runMaker(
   const design = await loadDesignContext(ctx.asset);
   const input: PropSheetInput = {
     lockedSpec: lookOutput,
+    ...dna,
     approvedImages: approvedImages(ctx, kind),
     userReferenceImages: ctx.look.references.slice(0, 4).map((r) => ({
       fileId: r.fileId,
@@ -318,7 +324,8 @@ async function queueAdvance(sheetId: string): Promise<void> {
   await enqueue(assetSheetViewsAdvance, { sheetId });
 }
 
-async function planPack(sheetId: string, viewRowId: string | undefined, context: JobContext) {
+async function planPack(payload: JobPayload<typeof assetSheetPlan>, context: JobContext) {
+  const { sheetId, viewRowId } = payload;
   const ctx = await loadPackJob(sheetId);
   if (!ctx) return;
   const kind = packKindOf(ctx.asset.kind);
@@ -348,10 +355,17 @@ async function planPack(sheetId: string, viewRowId: string | undefined, context:
       throw new AssetInputError("The Hero these views are built from was replaced. Start again.");
     }
     if (!ctx.project.style) throw new AssetInputError("Choose the project's style first.");
+    const dna = await creativeDnaForRun({
+      projectId: ctx.project.id,
+      consumer: "sheet_generator",
+      job: assetSheetPlan,
+      payload,
+    });
+    if (dna.deferred) return;
     if (fixView) {
       const fix = await fixRoundOf(fixView, kind);
       if (!fix) throw new AssetInputError("The review this view answers is missing. Start again.");
-      const result = await runMaker(ctx, kind, fix, context.signal);
+      const result = await runMaker(ctx, kind, fix, context.signal, dna.creativeDna);
       const view = result.views.find((v) => v.viewId === fixView.viewId);
       if (!view) {
         throw new AssetInputError(
@@ -372,7 +386,7 @@ async function planPack(sheetId: string, viewRowId: string | undefined, context:
         damiRunId: result.runId,
       });
     } else {
-      const result = await runMaker(ctx, kind, null, context.signal);
+      const result = await runMaker(ctx, kind, null, context.signal, dna.creativeDna);
       await storePackPlan({
         sheetId,
         spec: result.spec,
@@ -397,7 +411,7 @@ async function planPack(sheetId: string, viewRowId: string | undefined, context:
 
 /** Plans a new pack, or re-writes one rejected view (`viewRowId`). */
 export const assetSheetPlanHandler = defineHandler(assetSheetPlan, (payload, context) =>
-  planPack(payload.sheetId, payload.viewRowId, context),
+  planPack(payload, context),
 );
 
 /** Requests every planned view whose dependencies are approved. */

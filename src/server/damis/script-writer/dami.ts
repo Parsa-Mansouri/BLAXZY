@@ -147,7 +147,7 @@ export function checkOutline(
 
 export const scriptWriter = defineDami({
   key: "script-writer",
-  version: "0.2.0",
+  version: "0.3.0",
   description:
     "Turns a story, genre and visual style into a structured screenplay sized to an exact runtime; also revises one and writes the sequences of a long piece.",
   input: scriptWriterInputSchema,
@@ -164,7 +164,7 @@ export const scriptWriter = defineDami({
 
 export const scriptOutliner = defineDami({
   key: "script-writer-outline",
-  version: "0.2.0",
+  version: "0.3.0",
   description:
     "Plans a long piece (over 15 minutes) as acts, sequences and scenes with locked names, for the user to approve before any scene is written.",
   input: scriptOutlineInputSchema,

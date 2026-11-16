@@ -4,6 +4,7 @@
  * the input JSON in the owner's field names.
  */
 import type { DamiPrompt } from "../framework/define";
+import { withCreativeDna } from "../shared/creative-dna-input";
 import { designerMessage, ownerFixRequests } from "../shared/designer";
 import { CHARACTER_GENERATOR_SYSTEM } from "./prompt-text";
 import type { CharacterGeneratorParsedInput } from "./schema";
@@ -51,7 +52,7 @@ export function characterInputJson(input: CharacterGeneratorParsedInput): Record
 
 export function buildCharacterGeneratorPrompt(input: CharacterGeneratorParsedInput): DamiPrompt {
   return {
-    system: [{ text: CHARACTER_GENERATOR_SYSTEM, cache: true }],
+    system: withCreativeDna([{ text: CHARACTER_GENERATOR_SYSTEM, cache: true }], input.creativeDna),
     messages: designerMessage(
       input.referenceImages.map((r) => r.fileId),
       JSON.stringify(characterInputJson(input), null, 2),

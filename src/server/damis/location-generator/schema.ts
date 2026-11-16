@@ -4,6 +4,7 @@
  * `submit_location_spec` tool schema field for field (sent as structured JSON output); the input
  * is BLAXZY's camelCase, sent as the owner's `<input>` JSON (see `prompt.ts`).
  */
+import { creativeDnaTextSchema } from "../shared/creative-dna-input";
 import { z } from "zod";
 import {
   designerFixRequestSchema,
@@ -26,6 +27,8 @@ export const LOCATION_SOURCE_MODES = [
 ] as const;
 
 export const locationGeneratorInputSchema = z.object({
+  /** The project's Creative Bible block for this dami (`renderCreativeDna`); absent: no bible. */
+  creativeDna: creativeDnaTextSchema.optional(),
   project: designerProjectSchema,
   location: z.object({
     name: z.string().trim().min(1).max(120),

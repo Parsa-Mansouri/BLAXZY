@@ -140,7 +140,7 @@ export function enforceSheetPlan(output: PropGeneratorOutput): PropGeneratorOutp
 
 export const propGenerator = defineDami({
   key: "prop-generator",
-  version: "1.0.0",
+  version: "1.1.0",
   description:
     "Designs one prop: script analysis, classification, a specification with confirmed, inferred and unknown fields, clarifying questions, DNA, project links, a sheet plan and the Hero Design prompt (hero_34 on the grey studio); fix mode applies the reviewer's fix requests to the previous answer.",
   input: propGeneratorInputSchema,

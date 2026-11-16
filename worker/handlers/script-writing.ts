@@ -41,11 +41,12 @@ export async function generateFitted(
   project: WriterProject,
   story: string,
   run: RunContext,
+  creativeDna?: string,
 ): Promise<WrittenScreenplay> {
   const target = project.targetDurationSeconds;
   const first = await runDami(
     scriptWriter,
-    { mode: "generate", project, story },
+    { mode: "generate", project, story, ...(creativeDna ? { creativeDna } : {}) },
     { ...run, maxOutputTokens: writerMaxTokens(target) },
   );
   let output = first.output;
@@ -60,6 +61,7 @@ export async function generateFitted(
       {
         mode: "revise",
         project,
+        ...(creativeDna ? { creativeDna } : {}),
         previousScreenplay: output.screenplay,
         feedback: {
           issueType: "technical",

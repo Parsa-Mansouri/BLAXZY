@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { creativeDnaTextSchema } from "../shared/creative-dna-input";
 import { projectStyleSchema } from "../shared/style";
 
 export const SCRIPT_ISSUE_SEVERITIES = ["blocker", "major", "minor"] as const;
@@ -20,6 +21,8 @@ export type ScriptIssueCategory = (typeof SCRIPT_ISSUE_CATEGORIES)[number];
 
 export const scriptCheckerInputSchema = z.object({
   style: projectStyleSchema,
+  /** The Creative Bible's `script_checker` block; when set it replaces the generic modules. */
+  creativeDna: creativeDnaTextSchema.optional(),
   /** The uploaded script text. */
   content: z.string().trim().min(1).max(600_000),
 });

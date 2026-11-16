@@ -20,6 +20,7 @@ import {
   readScriptNotes,
   ScriptInputError,
 } from "../../src/server/script";
+import { creativeDnaForRun } from "./creative-bible";
 import { handleFailure } from "./failure";
 import { classifyFailure } from "./script-failure";
 import { assumptionsOf, generateFitted, notesFor, stitchEpisodes } from "./script-writing";
@@ -53,6 +54,15 @@ export const scriptWriteHandler = defineHandler(scriptWrite, async (payload, con
       return;
     }
 
+    const dna = await creativeDnaForRun({
+      projectId: project.id,
+      consumer: "script_writer",
+      job: scriptWrite,
+      payload,
+    });
+    if (dna.deferred) return;
+    const { creativeDna } = dna;
+
     if (needsOutline(style)) {
       const target = style.totalDurationSeconds;
       const outline = await runDami(
@@ -60,6 +70,7 @@ export const scriptWriteHandler = defineHandler(scriptWrite, async (payload, con
         {
           project: writerProject(style, target),
           story: version.brief,
+          ...(creativeDna ? { creativeDna } : {}),
           ...(notes.outlineFeedback ? { feedback: notes.outlineFeedback } : {}),
         },
         run,
@@ -100,7 +111,7 @@ export const scriptWriteHandler = defineHandler(scriptWrite, async (payload, con
                 .slice(0, 4000),
             }
           : base;
-      const written = await generateFitted(project, version.brief, run);
+      const written = await generateFitted(project, version.brief, run, creativeDna);
       outputs.push(written.output);
       lastRunId = written.runId;
     }

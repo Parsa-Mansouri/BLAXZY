@@ -4,6 +4,7 @@
  * OUTPUT FORMAT field for field; the input is BLAXZY's camelCase, sent to the model as the
  * owner's JSON (see `prompt.ts`).
  */
+import { creativeDnaTextSchema } from "../shared/creative-dna-input";
 import { z } from "zod";
 import {
   designerFixRequestSchema,
@@ -34,6 +35,8 @@ export type CharacterDetailField = (typeof CHARACTER_DETAIL_FIELDS)[number];
 const detail = z.string().trim().min(1).max(1000);
 
 export const characterGeneratorInputSchema = z.object({
+  /** The project's Creative Bible block for this dami (`renderCreativeDna`); absent: no bible. */
+  creativeDna: creativeDnaTextSchema.optional(),
   project: designerProjectSchema,
   /** Pro only: a style for this character instead of the project's. The Wizard never sends it. */
   styleOverride: z.string().trim().min(1).max(400).optional(),

@@ -154,7 +154,7 @@ export function checkLocationSheet(
 
 export const sheetGeneratorLocation = defineDami({
   key: "sheet-generator-location",
-  version: "1.0.0",
+  version: "1.1.0",
   description:
     "Writes the prompts for the remaining views of a location's pack (lock: one image per view, in a dependency order) or the four-panel concept sheet, from the locked spec and the approved Hero; never redesigns, and fix mode re-writes only the views asked for.",
   input: locationSheetInputSchema,

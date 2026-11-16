@@ -40,7 +40,10 @@ export const BUSY_MESSAGE =
   "A script is still being prepared. Wait for it to finish, then try again.";
 
 /** The job that produces a version of each source. */
-const JOB_FOR_SOURCE: Record<ScriptSource, JobDefinition<typeof scriptWrite.payload> | null> = {
+const JOB_FOR_SOURCE: Record<
+  ScriptSource,
+  JobDefinition<typeof scriptWrite.payload> | JobDefinition<typeof scriptEnhance.payload> | null
+> = {
   generated: scriptWrite,
   uploaded: scriptCheck,
   revised: scriptRevise,

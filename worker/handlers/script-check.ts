@@ -8,6 +8,7 @@ import {
   ScriptInputError,
 } from "../../src/server/script";
 import { readFileBytes } from "../../src/server/storage";
+import { creativeDnaForRun } from "./creative-bible";
 import { handleFailure } from "./failure";
 import { classifyFailure } from "./script-failure";
 
@@ -22,6 +23,13 @@ export const scriptCheckHandler = defineHandler(scriptCheck, async (payload, con
     if (!file || file.status !== "ready") {
       throw new ScriptInputError("The uploaded file is no longer available. Upload it again.");
     }
+    const dna = await creativeDnaForRun({
+      projectId: project.id,
+      consumer: "script_checker",
+      job: scriptCheck,
+      payload,
+    });
+    if (dna.deferred) return;
     const bytes = await readFileBytes(file.id, {
       signal: context.signal,
       ownerId: project.ownerId,
@@ -29,7 +37,11 @@ export const scriptCheckHandler = defineHandler(scriptCheck, async (payload, con
     const content = await extractScriptText(bytes, file.mimeType, file.originalName ?? "script");
     const run = await runDami(
       scriptChecker,
-      { style: project.style, content },
+      {
+        style: project.style,
+        content,
+        ...(dna.creativeDna ? { creativeDna: dna.creativeDna } : {}),
+      },
       { userId: project.ownerId, projectId: project.id, signal: context.signal },
     );
     const { verdict, summary, issues } = run.output;

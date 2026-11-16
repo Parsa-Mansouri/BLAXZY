@@ -10,7 +10,7 @@ import {
 
 export const scriptChecker = defineDami({
   key: "script-checker",
-  version: "1.0.0",
+  version: "1.1.0",
   description:
     "Checks an uploaded screenplay for duration fit, generative-video filmability, format, continuity and anything that would block later stages. Reports; never rewrites.",
   input: scriptCheckerInputSchema,

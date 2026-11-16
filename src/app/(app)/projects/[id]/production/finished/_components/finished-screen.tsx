@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Download, Play } from "lucide-react";
 import type { ProductionPhase } from "@/server/production";
 import {
+  ActionMenu,
   Button,
   PageHeader,
   ProgressBar,
@@ -31,19 +32,10 @@ import {
 } from "../actions";
 import { shotsWords } from "../../_components/format";
 import { afterExportPoll } from "../_lib/export-poll";
+import { videoExtras } from "../../_lib/media-actions";
+import { saveFrom } from "../../_lib/save-from";
 import { ClipPlayer } from "./clip-player";
 import { Mono } from "@/app/(app)/_components/values";
-
-/** Saves a file from a link the server signed, without leaving the page. */
-function saveFrom(url: string) {
-  const link = document.createElement("a");
-  link.href = url;
-  link.rel = "noopener";
-  link.style.display = "none";
-  document.body.append(link);
-  link.click();
-  link.remove();
-}
 
 type ExportState =
   | { phase: "idle" }
@@ -283,54 +275,81 @@ export function FinishedScreen({
             const title = clip.title ?? `Shot ${number}`;
             return (
               <li key={clip.lineageId} className="min-w-0 enter" style={stagger(Math.min(i, 12))}>
-                <PosterTile
-                  label={`${number}, ${title}`}
-                  shape={portrait ? "portrait" : "landscape"}
-                  posterFileId={clip.posterFileId}
-                  placeholder={clip.posterFileId ? undefined : "No poster"}
-                  coverLine={
-                    clip.durationSeconds ? (
-                      <p className="text-secondary text-label-2">
-                        <span className="sr-only">Length </span>
-                        <Mono>{formatDurationLong(clip.durationSeconds)}</Mono>
-                      </p>
-                    ) : null
-                  }
-                  actions={
-                    <>
-                      <Button
-                        variant="dark"
-                        className="pl-4"
-                        leadingIcon={
-                          <Play aria-hidden strokeWidth={1.5} className="translate-x-px" />
-                        }
-                        aria-label={`Play ${title}`}
-                        onClick={(e) => {
-                          returnFocus.current = e.currentTarget;
+                <ActionMenu
+                  button="overlay"
+                  label={`Actions for ${title}`}
+                  buttonLabel={`More for ${title}`}
+                  actions={[
+                    [
+                      {
+                        id: "play",
+                        label: "Play",
+                        icon: <Play />,
+                        onSelect: () => {
+                          returnFocus.current = null;
                           setPlaying(clip);
-                        }}
-                      >
-                        Play
-                      </Button>
-                      <Button
-                        variant="dark"
-                        className="pl-4"
-                        leadingIcon={<Download aria-hidden strokeWidth={1.5} />}
-                        aria-label={`Download ${title}`}
-                        loading={saving === clip.lineageId}
-                        onClick={() => void download(clip)}
-                      >
-                        Download
-                      </Button>
-                    </>
-                  }
-                  caption={
-                    <>
-                      <span className="mr-2 text-label-2 tabular-nums">{number}</span>
-                      {title}
-                    </>
-                  }
-                />
+                        },
+                      },
+                      {
+                        id: "download",
+                        label: "Download",
+                        icon: <Download />,
+                        disabled: saving === clip.lineageId,
+                        onSelect: () => void download(clip),
+                      },
+                    ],
+                    clip.fileId ? videoExtras(clip.fileId) : [],
+                  ]}
+                >
+                  <PosterTile
+                    label={`${number}, ${title}`}
+                    shape={portrait ? "portrait" : "landscape"}
+                    posterFileId={clip.posterFileId}
+                    placeholder={clip.posterFileId ? undefined : "No poster"}
+                    coverLine={
+                      clip.durationSeconds ? (
+                        <p className="text-secondary text-label-2">
+                          <span className="sr-only">Length </span>
+                          <Mono>{formatDurationLong(clip.durationSeconds)}</Mono>
+                        </p>
+                      ) : null
+                    }
+                    actions={
+                      <>
+                        <Button
+                          variant="dark"
+                          className="pl-4"
+                          leadingIcon={
+                            <Play aria-hidden strokeWidth={1.5} className="translate-x-px" />
+                          }
+                          aria-label={`Play ${title}`}
+                          onClick={(e) => {
+                            returnFocus.current = e.currentTarget;
+                            setPlaying(clip);
+                          }}
+                        >
+                          Play
+                        </Button>
+                        <Button
+                          variant="dark"
+                          className="pl-4"
+                          leadingIcon={<Download aria-hidden strokeWidth={1.5} />}
+                          aria-label={`Download ${title}`}
+                          loading={saving === clip.lineageId}
+                          onClick={() => void download(clip)}
+                        >
+                          Download
+                        </Button>
+                      </>
+                    }
+                    caption={
+                      <>
+                        <span className="mr-2 text-label-2 tabular-nums">{number}</span>
+                        {title}
+                      </>
+                    }
+                  />
+                </ActionMenu>
               </li>
             );
           })}

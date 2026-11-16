@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { House, Plus } from "lucide-react";
 import {
+  ActionMenuTarget,
   SidebarAction,
   SidebarBody,
   SidebarFooter,
@@ -13,6 +14,7 @@ import {
 } from "@/ui";
 import { Wordmark } from "@/app/_components/wordmark";
 import { useCreateProject } from "../dashboard/_components/use-create-project";
+import { navActions } from "../_lib/nav-actions";
 import { SidebarAccount } from "./sidebar-account";
 
 /**
@@ -32,14 +34,19 @@ export function LibrarySidebarView({ name, email }: { name: string; email: strin
       </SidebarAction>
       <SidebarBody aria-label="Library">
         <SidebarSection title="Library">
-          <SidebarItem
-            variant="nav"
-            icon={<House strokeWidth={1.5} />}
-            selected={pathname === "/dashboard"}
-            render={<Link href="/dashboard" />}
-          >
-            Home
-          </SidebarItem>
+          <ActionMenuTarget
+            actions={navActions("/dashboard")}
+            render={
+              <SidebarItem
+                variant="nav"
+                icon={<House strokeWidth={1.5} />}
+                selected={pathname === "/dashboard"}
+                render={<Link href="/dashboard" />}
+              >
+                Home
+              </SidebarItem>
+            }
+          />
         </SidebarSection>
       </SidebarBody>
       <SidebarFooter>

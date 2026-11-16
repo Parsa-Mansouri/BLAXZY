@@ -554,6 +554,28 @@
   transition: transform var(--dur-cover) var(--ease-curve);
 }
 /*
+  The "…" button of an object with an action menu (`ActionMenuButton`): with a mouse it shows
+  while its object is hovered or holds focus, or while a menu of it is open; on touch screens,
+  where nothing hovers, it always shows.
+*/
+@utility action-reveal {
+  opacity: 0;
+  transition: opacity var(--dur-press) var(--ease-curve);
+  :where(
+      [data-action-target]:hover,
+      [data-action-target]:focus-within,
+      [data-action-target][data-popup-open]
+    )
+    &,
+  &:focus-visible,
+  &[data-popup-open] {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    opacity: 1;
+  }
+}
+/*
   Feedback motion (150-300ms, the app curve, nothing under reduced motion):
   - `tick-draw` on an SVG whose paths have pathLength="1" (the kit's <Tick />): the tick draws in.
   - `settle` on a row or tile that just changed state (accepted, saved, moved): replay it by

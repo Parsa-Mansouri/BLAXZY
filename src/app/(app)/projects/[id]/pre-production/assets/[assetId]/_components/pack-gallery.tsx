@@ -1,6 +1,7 @@
 "use client";
 
-import { StatusDot, cn, type StatusTone } from "@/ui";
+import { fileSrc } from "@/lib/file-src";
+import { ActionMenu, StatusDot, cn, imageExtras, type StatusTone } from "@/ui";
 import type { PackPicture } from "../_lib/sheet-review";
 import { Artwork } from "./shared";
 
@@ -13,7 +14,7 @@ const WORDS: Partial<Record<PackPicture["status"], { text: string; tone: StatusT
 /**
  * A pack's pictures side by side, each in its own ratio: the approved Hero first, then the views
  * (only views that have an image: nothing stands in for one still to come). With `onSelect` each
- * picture opens that view.
+ * picture opens that view. Right-click or a long press offers View and Open Image in New Tab.
  */
 export function PackGallery({
   pictures,
@@ -58,7 +59,19 @@ export function PackGallery({
           </>
         );
         return (
-          <li key={picture.key} className="min-w-0">
+          <ActionMenu
+            key={picture.key}
+            render={<li className="min-w-0" />}
+            label={`Actions for ${picture.label}`}
+            actions={[
+              [
+                onSelect && !selected
+                  ? { id: "view", label: "View", onSelect: () => onSelect(picture.key) }
+                  : null,
+              ],
+              picture.fileId ? imageExtras(fileSrc(picture.fileId)) : [],
+            ]}
+          >
             {onSelect ? (
               <button
                 type="button"
@@ -71,7 +84,7 @@ export function PackGallery({
             ) : (
               <figure className="flex flex-col gap-2">{body}</figure>
             )}
-          </li>
+          </ActionMenu>
         );
       })}
     </ul>

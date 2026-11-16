@@ -7,14 +7,13 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import type { DetectionPanel } from "@/server/assets";
 import {
   Button,
-  MenuItem,
-  MenuSeparator,
   PageHeader,
   Skeleton,
   StatusLine,
   cn,
   stagger,
   useToast,
+  type ActionGroups,
 } from "@/ui";
 import { ASSET_KIND_LABELS, categoryHref, type AssetKindKey } from "../../../_lib/asset-kinds";
 import { pollDetectionPanel, refreshCards } from "@/app/(app)/_lib/poll-client";
@@ -225,32 +224,50 @@ export function CategoryPanel({
   }
 
   /** The card's menu: fixes to the detected list first, then Rename and Remove. */
-  function menuFor(item: GalleryItem) {
+  function menuFor(item: GalleryItem): ActionGroups {
     const skipped = item.priority === "skipped";
-    return (
-      <>
-        {!skipped && panel ? (
-          <MenuItem onClick={() => skip(item)} disabled={skippingId === item.id}>
-            Not Needed as Its Own Asset
-          </MenuItem>
-        ) : null}
-        {skipped ? (
-          <MenuItem onClick={() => include(item)} disabled={skippingId === item.id}>
-            Include It Again
-          </MenuItem>
-        ) : null}
-        {panel && !skipped ? (
-          <MenuItem disabled={correcting} onClick={() => openReview(aboutAsset(item))}>
-            Something Is Wrong With This One…
-          </MenuItem>
-        ) : null}
-        {panel ? <MenuSeparator /> : null}
-        <MenuItem onClick={() => setEdit({ type: "rename", item })}>Rename…</MenuItem>
-        <MenuItem destructive onClick={() => setEdit({ type: "remove", item })}>
-          Remove…
-        </MenuItem>
-      </>
-    );
+    const busy = skippingId === item.id;
+    return [
+      [
+        !skipped && panel
+          ? {
+              id: "skip",
+              label: "Not Needed as Its Own Asset",
+              disabled: busy,
+              onSelect: () => skip(item),
+            }
+          : null,
+        skipped
+          ? {
+              id: "include",
+              label: "Include It Again",
+              disabled: busy,
+              onSelect: () => include(item),
+            }
+          : null,
+        panel && !skipped
+          ? {
+              id: "review",
+              label: "Something Is Wrong With This One…",
+              disabled: correcting,
+              onSelect: () => openReview(aboutAsset(item)),
+            }
+          : null,
+      ],
+      [
+        {
+          id: "rename",
+          label: "Rename…",
+          onSelect: () => setEdit({ type: "rename", item }),
+        },
+        {
+          id: "remove",
+          label: "Remove…",
+          destructive: true,
+          onSelect: () => setEdit({ type: "remove", item }),
+        },
+      ],
+    ];
   }
 
   const words = statusWords(counts);

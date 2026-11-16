@@ -6,9 +6,11 @@ import Link from "next/link";
 import { fileSrc } from "@/lib/file-src";
 import { stageHref } from "@/lib/stages";
 import {
+  ActionMenuTarget,
   Button,
   cn,
   FocusLayout,
+  linkExtras,
   PageHeader,
   SelectRow,
   Skeleton,
@@ -17,6 +19,7 @@ import {
   StatusLine,
   StoredImage,
   SwapFade,
+  type ActionGroups,
   type StatusTone,
 } from "@/ui";
 import { assetHref, type AssetKindKey } from "../../../_lib/asset-kinds";
@@ -279,6 +282,35 @@ export function SheetsReview({
   const back = items.filter((i) => i.status === "back").length;
   const left = leftWords(todo, back, notReady);
   const allAccepted = todo === 0 && back === 0 && notReady === 0;
+  const canSendBack =
+    current !== null &&
+    current.status !== "back" &&
+    Boolean(sheet) &&
+    !(sheet?.kind === "pack" && sheet.status === "in_review");
+  const canAccept = current?.status === "todo" && sheet?.kind === "character";
+
+  /** A row's menu: open the asset, and on the sheet shown, Accept and Send Back as on screen. */
+  function rowActions(item: ReviewItem): ActionGroups {
+    const href = assetHref(projectId, item.id);
+    const shown = item.id === current?.id && !asking;
+    return [
+      [{ id: "open", label: `Open ${item.name}`, href }],
+      [
+        shown && canAccept
+          ? { id: "accept", label: "Accept", disabled: accepting, onSelect: accept }
+          : null,
+        shown && canSendBack
+          ? {
+              id: "send-back",
+              label: "Send Back…",
+              disabled: accepting,
+              onSelect: () => setAsking(true),
+            }
+          : null,
+      ],
+      linkExtras(href),
+    ];
+  }
 
   const groups: { label: string; rows: { item: ReviewItem; i: number }[] }[] = [];
   items.forEach((item, i) => {
@@ -326,29 +358,35 @@ export function SheetsReview({
             <div key={group.label} className="flex flex-col gap-0.5 not-first:mt-8">
               <h3 className="px-3.5 pb-1.5 text-meta text-label-2">{group.label}</h3>
               {group.rows.map(({ item, i }) => (
-                <SelectRow
+                <ActionMenuTarget
                   key={item.id}
-                  size="regular"
-                  label={item.name}
-                  active={item.id === current?.id}
-                  onClick={() => show(item.id)}
-                  trailing={
-                    item.status === "accepted" ? (
-                      <span className="flex text-done">
-                        <DrawnTick />
-                        <span className="sr-only">{rowWords(item)}</span>
-                      </span>
-                    ) : item.status === "back" ? (
-                      <span>{rowWords(item)}</span>
-                    ) : (
-                      <span className="flex items-center">
-                        <StatusDot tone={TONES[item.status]} />
-                        <span className="sr-only">{rowWords(item)}</span>
-                      </span>
-                    )
+                  actions={rowActions(item)}
+                  label={`Actions for ${item.name}`}
+                  render={
+                    <SelectRow
+                      size="regular"
+                      label={item.name}
+                      active={item.id === current?.id}
+                      onClick={() => show(item.id)}
+                      trailing={
+                        item.status === "accepted" ? (
+                          <span className="flex text-done">
+                            <DrawnTick />
+                            <span className="sr-only">{rowWords(item)}</span>
+                          </span>
+                        ) : item.status === "back" ? (
+                          <span>{rowWords(item)}</span>
+                        ) : (
+                          <span className="flex items-center">
+                            <StatusDot tone={TONES[item.status]} />
+                            <span className="sr-only">{rowWords(item)}</span>
+                          </span>
+                        )
+                      }
+                      className="enter"
+                      style={stagger(Math.min(i, 12))}
+                    />
                   }
-                  className="enter"
-                  style={stagger(Math.min(i, 12))}
                 />
               ))}
             </div>

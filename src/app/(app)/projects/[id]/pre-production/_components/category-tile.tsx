@@ -1,6 +1,16 @@
 import Link from "next/link";
 import { fileSrc } from "@/lib/file-src";
-import { Button, cn, DemoHint, SilhouetteScene, stagger, StatusLine, StoredImage } from "@/ui";
+import {
+  ActionMenu,
+  Button,
+  cn,
+  DemoHint,
+  SilhouetteScene,
+  stagger,
+  StatusLine,
+  StoredImage,
+} from "@/ui";
+import { navActions } from "@/app/(app)/_lib/nav-actions";
 import { assetHref, categoryHref } from "../../_lib/asset-kinds";
 import { ASSET_STATUS_LABELS } from "../../_lib/asset-status";
 import type { OverviewAsset, OverviewCategory } from "../_lib/load-categories";
@@ -138,7 +148,10 @@ export function CategoryFeature({
   );
 }
 
-/** A quieter category: its name, what it needs, and a row of small thumbnails. */
+/**
+ * A quieter category: its name, what it needs, and a row of small thumbnails. Right-click or a
+ * long press offers Open, Open in New Tab and Copy Link.
+ */
 export function CategoryTile({
   projectId,
   category,
@@ -151,38 +164,47 @@ export function CategoryTile({
   const words = statusWords(category.counts);
   const aspect = KIND_ASPECTS[category.kind];
   const voice = category.kind === "voice";
+  const href = categoryHref(projectId, category.kind);
   return (
-    <Link
-      href={categoryHref(projectId, category.kind)}
-      className="flex min-h-50 press enter flex-col justify-between gap-8 rounded-card bg-elevated p-6 focus-ring hover:bg-elevated-2"
-      style={stagger(index, 500)}
+    <ActionMenu
+      actions={navActions(href, `Open ${category.plural}`)}
+      label={`Actions for ${category.plural}`}
+      className="flex"
     >
-      <span className="flex flex-col gap-2">
-        <span className="text-heading-sm break-words text-label uppercase">{category.plural}</span>
-        <StatusLine as="span" tone={words.tone} className="tabular-nums">
-          {words.text}
-        </StatusLine>
-      </span>
-      <span aria-hidden="true" className="flex flex-wrap gap-2">
-        {category.assets.slice(0, TILE_THUMBS).map((asset) => (
-          <span
-            key={asset.id}
-            className={cn(
-              "demo-host relative h-11 bg-selected",
-              aspect === "video" ? "w-17" : "w-11",
-              voice ? "rounded-full" : "rounded-row",
-            )}
-          >
-            {asset.thumbnailFileId ? (
-              <Thumb fileId={asset.thumbnailFileId} />
-            ) : needsUser(asset) ? (
-              <DemoHint trigger="hover" mask="none">
-                <SilhouetteScene kind={category.kind} className="[--demo-sil-top:18%]" />
-              </DemoHint>
-            ) : null}
+      <Link
+        href={href}
+        className="flex min-h-50 flex-1 press enter flex-col justify-between gap-8 rounded-card bg-elevated p-6 focus-ring hover:bg-elevated-2"
+        style={stagger(index, 500)}
+      >
+        <span className="flex flex-col gap-2">
+          <span className="text-heading-sm break-words text-label uppercase">
+            {category.plural}
           </span>
-        ))}
-      </span>
-    </Link>
+          <StatusLine as="span" tone={words.tone} className="tabular-nums">
+            {words.text}
+          </StatusLine>
+        </span>
+        <span aria-hidden="true" className="flex flex-wrap gap-2">
+          {category.assets.slice(0, TILE_THUMBS).map((asset) => (
+            <span
+              key={asset.id}
+              className={cn(
+                "demo-host relative h-11 bg-selected",
+                aspect === "video" ? "w-17" : "w-11",
+                voice ? "rounded-full" : "rounded-row",
+              )}
+            >
+              {asset.thumbnailFileId ? (
+                <Thumb fileId={asset.thumbnailFileId} />
+              ) : needsUser(asset) ? (
+                <DemoHint trigger="hover" mask="none">
+                  <SilhouetteScene kind={category.kind} className="[--demo-sil-top:18%]" />
+                </DemoHint>
+              ) : null}
+            </span>
+          ))}
+        </span>
+      </Link>
+    </ActionMenu>
   );
 }

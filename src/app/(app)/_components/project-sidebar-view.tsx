@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Check, ChevronLeft, Lock } from "lucide-react";
 import type { ProjectStageKey } from "@/lib/stages";
 import {
+  ActionMenuTarget,
   cn,
   SidebarBody,
   SidebarFooter,
@@ -14,6 +15,7 @@ import {
   SidebarSection,
   StatusDot,
 } from "@/ui";
+import { navActions } from "../_lib/nav-actions";
 import { Wordmark } from "@/app/_components/wordmark";
 import { pollNavigator } from "../_lib/poll-client";
 import { usePolling } from "../_lib/use-polling";
@@ -131,15 +133,20 @@ function NavRow({
     );
   }
   return (
-    <SidebarItem
-      {...shared}
-      selected={selected}
-      accessory={accessory}
-      render={<Link href={href} />}
-    >
-      {label}
-      {srState}
-    </SidebarItem>
+    <ActionMenuTarget
+      actions={navActions(href)}
+      render={
+        <SidebarItem
+          {...shared}
+          selected={selected}
+          accessory={accessory}
+          render={<Link href={href} />}
+        >
+          {label}
+          {srState}
+        </SidebarItem>
+      }
+    />
   );
 }
 
@@ -265,13 +272,18 @@ export function ProjectSidebarView({
       <SidebarBody aria-label="Film">
         <div className="flex flex-col gap-3">
           <ul>
-            <SidebarItem
-              icon={<ChevronLeft />}
-              render={<Link href="/dashboard" />}
-              className="text-secondary"
-            >
-              All Films
-            </SidebarItem>
+            <ActionMenuTarget
+              actions={navActions("/dashboard")}
+              render={
+                <SidebarItem
+                  icon={<ChevronLeft />}
+                  render={<Link href="/dashboard" />}
+                  className="text-secondary"
+                >
+                  All Films
+                </SidebarItem>
+              }
+            />
           </ul>
           <p
             title={view.title}
@@ -308,22 +320,27 @@ export function ProjectSidebarView({
         {view.busy.items.length > 0 ? (
           <SidebarSection title="Now Rendering" showTitle divided className="swap-in">
             {view.busy.items.map((item) => (
-              <SidebarItem
+              <ActionMenuTarget
                 key={item.key}
-                icon={
-                  <span className="flex size-(--icon) items-center justify-center">
-                    <StatusDot
-                      tone="working"
-                      className="animate-pulse motion-reduce:animate-none"
-                    />
-                  </span>
+                actions={navActions(item.href)}
+                render={
+                  <SidebarItem
+                    icon={
+                      <span className="flex size-(--icon) items-center justify-center">
+                        <StatusDot
+                          tone="working"
+                          className="animate-pulse motion-reduce:animate-none"
+                        />
+                      </span>
+                    }
+                    tooltip={item.name}
+                    render={<Link href={item.href} />}
+                    className="text-secondary"
+                  >
+                    {item.name}
+                  </SidebarItem>
                 }
-                tooltip={item.name}
-                render={<Link href={item.href} />}
-                className="text-secondary"
-              >
-                {item.name}
-              </SidebarItem>
+              />
             ))}
             {view.busy.more > 0 ? (
               <li className="flex min-h-(--sidebar-row-h) items-center gap-2.5 px-3 text-secondary text-label-3 tabular-nums">

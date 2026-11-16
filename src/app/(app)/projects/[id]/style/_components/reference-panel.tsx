@@ -16,6 +16,7 @@ import {
   type StyleReferenceInput,
 } from "@/lib/style-references";
 import {
+  ActionMenu,
   AnimatedPlaceholder,
   Button,
   cn,
@@ -208,8 +209,20 @@ export function ReferencePanel({
             {value.titles.map((t) => (
               // A removable chip (the kit has none yet): a capsule round a capsule button, so
               // the corners stay concentric.
-              <li
+              <ActionMenu
                 key={t}
+                render={<li />}
+                label={`Actions for ${t}`}
+                actions={[
+                  [
+                    {
+                      id: "remove",
+                      label: "Remove",
+                      destructive: true,
+                      onSelect: () => removeTitle(t),
+                    },
+                  ],
+                ]}
                 className="flex max-w-full swap-in items-center gap-1 rounded-capsule bg-elevated-2 py-0.5 pr-0.5 pl-4 text-body text-label"
               >
                 <span className="min-w-0 break-words">{t}</span>
@@ -221,7 +234,7 @@ export function ReferencePanel({
                   icon={<X aria-hidden="true" strokeWidth={1.5} />}
                   onClick={() => removeTitle(t)}
                 />
-              </li>
+              </ActionMenu>
             ))}
           </ul>
         ) : null}
@@ -242,8 +255,34 @@ export function ReferencePanel({
           )}
         >
           {value.fileIds.map((fileId, i) => (
-            <div
+            <ActionMenu
               key={fileId}
+              label={`Actions for reference image ${i + 1}`}
+              buttonLabel={`More for reference image ${i + 1}`}
+              button="overlay"
+              buttonClassName="top-2 right-11"
+              actions={[
+                [
+                  {
+                    id: "open-image",
+                    label: "Open Image in New Tab",
+                    href: fileSrc(fileId),
+                    newTab: true,
+                  },
+                ],
+                [
+                  {
+                    id: "remove",
+                    label: "Remove",
+                    destructive: true,
+                    onSelect: () =>
+                      onChange((prev) => ({
+                        ...prev,
+                        fileIds: prev.fileIds.filter((f) => f !== fileId),
+                      })),
+                  },
+                ],
+              ]}
               className="group/ref relative swap-in overflow-hidden rounded-tile bg-elevated"
             >
               {/* Stored images are served through /api/files; next/image is not needed here. */}
@@ -266,7 +305,7 @@ export function ReferencePanel({
                   }))
                 }
               />
-            </div>
+            </ActionMenu>
           ))}
           {uploads.map((u) => (
             <div

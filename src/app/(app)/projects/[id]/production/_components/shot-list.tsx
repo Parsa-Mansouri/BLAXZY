@@ -1,7 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Button, SelectRow, Skeleton, StatusDot, stagger, type StatusTone } from "@/ui";
+import {
+  ActionMenu,
+  ActionMenuButton,
+  Button,
+  SelectRow,
+  Skeleton,
+  StatusDot,
+  stagger,
+  type StatusTone,
+} from "@/ui";
+import { navActions } from "@/app/(app)/_lib/nav-actions";
 import { DrawnTick, Settle, useChangedKeys } from "./feedback";
 
 export interface ShotListItem {
@@ -45,20 +55,32 @@ export function ShotList({
           const title = item.title?.trim() || `Shot ${item.orderIndex + 1}`;
           return (
             <li key={item.lineageId} className="enter" style={stagger(Math.min(i, 12))}>
-              <SelectRow
-                size="regular"
-                active={item.lineageId === activeId}
-                render={<Link href={item.href} />}
-                label={
-                  <span className="flex min-w-0 items-baseline gap-2.5">
-                    <span className="shrink-0 text-meta text-label-2 tabular-nums">
-                      {item.orderIndex + 1}
+              <ActionMenu
+                actions={navActions(item.href)}
+                label={`Actions for ${title}`}
+                className="relative"
+              >
+                <SelectRow
+                  size="regular"
+                  className="pr-12"
+                  active={item.lineageId === activeId}
+                  render={<Link href={item.href} />}
+                  label={
+                    <span className="flex min-w-0 items-baseline gap-2.5">
+                      <span className="shrink-0 text-meta text-label-2 tabular-nums">
+                        {item.orderIndex + 1}
+                      </span>
+                      <span className="min-w-0 break-words">{title}</span>
                     </span>
-                    <span className="min-w-0 break-words">{title}</span>
-                  </span>
-                }
-                trailing={<RowStatus item={item} settle={changed.has(item.lineageId)} />}
-              />
+                  }
+                  trailing={<RowStatus item={item} settle={changed.has(item.lineageId)} />}
+                />
+                <ActionMenuButton
+                  actions={navActions(item.href)}
+                  label={`More for ${title}`}
+                  className="absolute top-1/2 right-2 -translate-y-1/2"
+                />
+              </ActionMenu>
             </li>
           );
         })}

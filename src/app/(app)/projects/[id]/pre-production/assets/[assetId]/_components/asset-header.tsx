@@ -2,16 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Ellipsis } from "lucide-react";
 import {
+  ActionMenuButton,
   Alert,
   Button,
   Field,
-  IconButton,
   Input,
-  Menu,
-  MenuItem,
-  MenuSeparator,
   PageHeader,
   Sheet,
   StatusLine,
@@ -61,23 +57,24 @@ export function AssetHeader({
         }
         actions={
           asset.removed ? undefined : (
-            <Menu
-              align="end"
-              trigger={
-                <IconButton
-                  label={`Actions for ${asset.name}`}
-                  tooltip={false}
-                  variant="outlined"
-                  icon={<Ellipsis strokeWidth={1.5} />}
-                />
-              }
-            >
-              <MenuItem onClick={() => setDialog("edit")}>Edit Details…</MenuItem>
-              <MenuSeparator />
-              <MenuItem destructive disabled={busy} onClick={() => setDialog("remove")}>
-                Remove Asset…
-              </MenuItem>
-            </Menu>
+            <ActionMenuButton
+              label={`Actions for ${asset.name}`}
+              variant="outlined"
+              size="regular"
+              reveal={false}
+              actions={[
+                [{ id: "edit", label: "Edit Details…", onSelect: () => setDialog("edit") }],
+                [
+                  {
+                    id: "remove",
+                    label: "Remove Asset…",
+                    destructive: true,
+                    disabled: busy,
+                    onSelect: () => setDialog("remove"),
+                  },
+                ],
+              ]}
+            />
           )
         }
       />

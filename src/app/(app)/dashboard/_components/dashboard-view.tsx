@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { stageLabel } from "@/lib/stages";
-import { Button, StatusLine, Tabs, Toolbar } from "@/ui";
+import { ActionMenu, Button, StatusLine, Tabs, Toolbar } from "@/ui";
 import {
   projectHref,
   scriptHref,
@@ -11,6 +11,7 @@ import {
   stageTone,
   type ProjectSummary,
 } from "../_lib/summary";
+import { useProjectActions } from "./project-actions";
 import { ProjectGrid } from "./project-grid";
 import { StartFilm } from "./start-film";
 import { useProjectList } from "./use-project-list";
@@ -31,46 +32,66 @@ function HeroGlows() {
   );
 }
 
-/** The hero for a library that has films: the most recent one rises large with Continue. */
-function ContinueHero({ film }: { film: ProjectSummary }) {
-  const verb = film.stage === "done" ? "Open" : "Continue";
+/**
+ * The hero for a library that has films: the most recent one rises large with Continue. The
+ * film's other actions are on right-click, a long press and the item keys.
+ */
+function ContinueHero({
+  film,
+  onRenamed,
+  onArchived,
+}: {
+  film: ProjectSummary;
+  onRenamed: (project: ProjectSummary) => void;
+  onArchived: (id: string) => void;
+}) {
+  const { verb, actions, dialogs } = useProjectActions(film, {
+    onRenamed,
+    onArchived,
+    formId: "rename-hero-project",
+  });
   const script = scriptHref(film);
   return (
-    <section
-      aria-label="Continue your film"
-      className="relative mx-3 mb-3 flex min-h-[max(520px,56dvh)] flex-col justify-end gap-10 overflow-hidden rounded-block bg-hero p-5 sm:p-10"
-    >
-      <HeroGlows />
-      <div className="relative flex min-w-0 flex-col gap-5">
-        <div className="rise-mask">
-          <h1
-            title={film.title}
-            className="-ml-[0.04em] rise line-clamp-3 max-w-(--measure) text-hero-title text-balance break-words"
-          >
-            {film.title}
-          </h1>
+    <>
+      <ActionMenu
+        actions={actions}
+        label={`Actions for ${film.title}`}
+        render={<section aria-label="Continue your film" />}
+        className="relative mx-3 mb-3 flex min-h-[max(520px,56dvh)] flex-col justify-end gap-10 overflow-hidden rounded-block bg-hero p-5 sm:p-10"
+      >
+        <HeroGlows />
+        <div className="relative flex min-w-0 flex-col gap-5">
+          <div className="rise-mask">
+            <h1
+              title={film.title}
+              className="-ml-[0.04em] rise line-clamp-3 max-w-(--measure) text-hero-title text-balance break-words"
+            >
+              {film.title}
+            </h1>
+          </div>
+          <div aria-hidden="true" className="h-[3px] w-12 rule-in rounded-capsule bg-brand" />
+          <StatusLine tone={stageTone(film.stage)} className="in-2">
+            {stageLabel(film.stage)} · {stageLine(film)}
+          </StatusLine>
         </div>
-        <div aria-hidden="true" className="h-[3px] w-12 rule-in rounded-capsule bg-brand" />
-        <StatusLine tone={stageTone(film.stage)} className="in-2">
-          {stageLabel(film.stage)} · {stageLine(film)}
-        </StatusLine>
-      </div>
-      <div className="relative flex in-3 flex-wrap items-center gap-3">
-        <Button variant="primary" size="large" render={<Link href={projectHref(film)} />}>
-          {verb}
-        </Button>
-        {script ? (
-          <Button
-            variant="outlined"
-            size="large"
-            className="border-outline-hero"
-            render={<Link href={script} />}
-          >
-            Open Script
+        <div className="relative flex in-3 flex-wrap items-center gap-3">
+          <Button variant="primary" size="large" render={<Link href={projectHref(film)} />}>
+            {verb}
           </Button>
-        ) : null}
-      </div>
-    </section>
+          {script ? (
+            <Button
+              variant="outlined"
+              size="large"
+              className="border-outline-hero"
+              render={<Link href={script} />}
+            >
+              Open Script
+            </Button>
+          ) : null}
+        </div>
+      </ActionMenu>
+      {dialogs}
+    </>
   );
 }
 
@@ -195,7 +216,7 @@ export function DashboardView({
       <Toolbar />
       {upNext ? (
         <>
-          <ContinueHero film={upNext} />
+          <ContinueHero film={upNext} onRenamed={list.onRenamed} onArchived={list.onArchived} />
           <div className="flex flex-col gap-16 px-(--content-x) pt-11 pb-18">
             <section aria-labelledby="start-film" className="flex in-3 flex-col gap-4">
               <h2 id="start-film" className="text-section">

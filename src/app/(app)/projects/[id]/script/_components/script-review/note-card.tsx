@@ -1,3 +1,4 @@
+import { ActionMenuButton, ActionMenuTarget } from "@/ui";
 import { findQuote } from "../../_lib/screenplay";
 import { FindingNote } from "../finding-note";
 import { LineComment, type DraftComment } from "../review-comments";
@@ -35,28 +36,41 @@ export function NoteCard({
   if (!comments) return null;
   const c = note.comment;
   const shortQuote = c.quote.length > 160 ? `${c.quote.slice(0, 160)}…` : c.quote;
+  const actions = [
+    [
+      {
+        id: "edit",
+        label: "Edit",
+        onSelect: () => document.getElementById(noteFieldId(c.id))?.focus(),
+      },
+      { id: "remove", label: "Remove", destructive: true, onSelect: () => onRemove(c) },
+    ],
+  ];
   return (
-    <div
-      data-active={active ? "" : undefined}
-      className="border-l-2 border-transparent pl-3 transition-colors duration-(--dur-press) ease-out data-active:border-brand"
-      onPointerEnter={() => onActivate(c.id)}
-      onPointerLeave={() => onActivate("")}
-      onFocus={() => onActivate(c.id)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onActivate("");
-      }}
-    >
-      <span id={quoteId(c.id)} className="sr-only">
-        On “{shortQuote}”
-      </span>
-      <LineComment
-        comment={c}
-        fieldId={noteFieldId(c.id)}
-        describedBy={quoteId(c.id)}
-        onChange={(text) => comments.update(c.id, text)}
-        onRemove={() => onRemove(c)}
-        onDiscard={() => comments.remove(c.id)}
-      />
-    </div>
+    <ActionMenuTarget actions={actions} label="Actions for this comment">
+      <div
+        data-active={active ? "" : undefined}
+        className="border-l-2 border-transparent pl-3 transition-colors duration-(--dur-press) ease-out data-active:border-brand"
+        onPointerEnter={() => onActivate(c.id)}
+        onPointerLeave={() => onActivate("")}
+        onFocus={() => onActivate(c.id)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onActivate("");
+        }}
+      >
+        <span id={quoteId(c.id)} className="sr-only">
+          On “{shortQuote}”
+        </span>
+        <LineComment
+          comment={c}
+          fieldId={noteFieldId(c.id)}
+          describedBy={quoteId(c.id)}
+          onChange={(text) => comments.update(c.id, text)}
+          onRemove={() => onRemove(c)}
+          onDiscard={() => comments.remove(c.id)}
+          menu={<ActionMenuButton actions={actions} label="More for this comment" />}
+        />
+      </div>
+    </ActionMenuTarget>
   );
 }

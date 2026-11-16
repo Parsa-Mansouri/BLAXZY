@@ -1,6 +1,6 @@
 "use client";
 
-import { SelectRow, stagger } from "@/ui";
+import { ActionMenu, SelectRow, stagger } from "@/ui";
 import type { Scene } from "../_lib/scenes";
 
 /** Name of a scene in the list: its heading, or "Opening" for the text before the first one. */
@@ -44,16 +44,22 @@ export function SceneList({
       {scenes.map((scene, i) => {
         const count = counts?.[i] ?? 0;
         return (
-          <SelectRow
+          // Right-click or long press only: a "…" would crowd the note count.
+          <ActionMenu
             key={scene.key}
-            size="regular"
-            label={sceneName(scene)}
-            active={i === index}
-            onClick={() => onSelect(i)}
-            trailing={count > 0 ? <NoteCount count={count} /> : undefined}
+            label={`Actions for ${sceneName(scene)}`}
+            actions={[[{ id: "go-to-scene", label: "Go to Scene", onSelect: () => onSelect(i) }]]}
             className="enter"
             style={stagger(i)}
-          />
+          >
+            <SelectRow
+              size="regular"
+              label={sceneName(scene)}
+              active={i === index}
+              onClick={() => onSelect(i)}
+              trailing={count > 0 ? <NoteCount count={count} /> : undefined}
+            />
+          </ActionMenu>
         );
       })}
     </nav>

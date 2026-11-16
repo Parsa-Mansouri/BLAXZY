@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { Button, Textarea } from "@/ui";
 import {
   createDraftStore,
@@ -86,6 +86,7 @@ export function LineComment({
   onChange,
   onRemove,
   onDiscard,
+  menu,
 }: {
   comment: DraftComment;
   /** id of the textarea, so the sheet can focus a new comment. */
@@ -97,6 +98,8 @@ export function LineComment({
   onRemove: () => void;
   /** Left empty when focus moved elsewhere: removed without moving focus. */
   onDiscard?: () => void;
+  /** The "…" menu button, shown beside Remove. */
+  menu?: ReactNode;
 }) {
   const tooLong = comment.note.trim().length > MAX_COMMENT_CHARS;
   return (
@@ -130,9 +133,12 @@ export function LineComment({
           Keep the comment under 4,000 characters.
         </p>
       ) : null}
-      <Button variant="plain" size="small" onClick={onRemove}>
-        Remove
-      </Button>
+      <div className="flex items-center gap-1">
+        <Button variant="plain" size="small" onClick={onRemove}>
+          Remove
+        </Button>
+        {menu}
+      </div>
     </div>
   );
 }

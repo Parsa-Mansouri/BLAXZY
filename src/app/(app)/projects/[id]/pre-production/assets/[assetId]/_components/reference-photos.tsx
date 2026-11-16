@@ -14,9 +14,11 @@ import { ImagePlus, X } from "lucide-react";
 import { fileSrc } from "@/lib/file-src";
 import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
 import {
+  ActionMenu,
   Button,
   cn,
   DemoHint,
+  imageExtras,
   DropScene,
   IconButton,
   ProgressBar,
@@ -67,7 +69,10 @@ export function roleLabel(designer: Pick<DesignerInfo, "roles">, role: string): 
   return designer.roles.find((r) => r.value === role)?.label ?? role;
 }
 
-/** One photo: the picture, its role as tiles, and what to keep from it. */
+/**
+ * One photo: the picture, its role as tiles, and what to keep from it. Right-click or a long
+ * press on the picture offers Open Image in New Tab and Remove.
+ */
 function PhotoCard({
   photo,
   index,
@@ -97,7 +102,22 @@ function PhotoCard({
       )}
     >
       <div className="flex shrink-0 items-start justify-between gap-3 sm:flex-col">
-        <div className="relative size-28 overflow-hidden rounded-item bg-elevated sm:size-36">
+        <ActionMenu
+          label={`Actions for photo ${n}`}
+          className="relative size-28 overflow-hidden rounded-item bg-elevated sm:size-36"
+          actions={[
+            photo.fileId ? imageExtras(fileSrc(photo.fileId)) : [],
+            [
+              {
+                id: "remove",
+                label: "Remove",
+                destructive: true,
+                disabled,
+                onSelect: onRemove,
+              },
+            ],
+          ]}
+        >
           {photo.fileId ? (
             <StoredImage
               src={fileSrc(photo.fileId)}
@@ -119,7 +139,7 @@ function PhotoCard({
           >
             {n}
           </span>
-        </div>
+        </ActionMenu>
         <IconButton
           label={`Remove photo ${n}`}
           icon={<X />}

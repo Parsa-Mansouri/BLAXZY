@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, StatusLine, cn, stagger } from "@/ui";
+import { ActionMenu, Button, StatusLine, cn, stagger } from "@/ui";
 import type { VersionView } from "./version-types";
 
 type Assumption = VersionView["assumptions"][number];
@@ -73,8 +73,20 @@ export function WriterNotes({
           </h3>
           <ul className="flex flex-col divide-y divide-outline-quiet border-y border-outline-quiet">
             {assumptions.map((a, i) => (
-              <li
+              <ActionMenu
                 key={`${a.sceneNumber}-${i}`}
+                render={<li />}
+                label={`Actions for the Scene ${a.sceneNumber} detail`}
+                actions={[
+                  [
+                    onRejectAssumption && {
+                      id: "not-this",
+                      label: "Not This",
+                      disabled,
+                      onSelect: () => onRejectAssumption(a),
+                    },
+                  ],
+                ]}
                 className="flex enter flex-wrap items-start gap-x-6 gap-y-2 py-4"
                 style={stagger(i)}
               >
@@ -95,7 +107,7 @@ export function WriterNotes({
                     Not This
                   </Button>
                 ) : null}
-              </li>
+              </ActionMenu>
             ))}
           </ul>
         </div>

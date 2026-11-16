@@ -84,7 +84,7 @@ export function MenuItem({
   const classes = cn(menuRow, destructive && "text-red", className);
   if (render) {
     return (
-      <BaseMenu.LinkItem render={render} className={classes}>
+      <BaseMenu.LinkItem render={render} closeOnClick className={classes}>
         {content}
       </BaseMenu.LinkItem>
     );

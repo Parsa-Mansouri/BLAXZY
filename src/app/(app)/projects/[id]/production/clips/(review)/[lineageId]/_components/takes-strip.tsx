@@ -2,7 +2,8 @@
 
 import type { TakeView } from "@/server/production";
 import { fileSrc } from "@/lib/file-src";
-import { cn, stagger, StoredImage } from "@/ui";
+import { ActionMenu, cn, stagger, StoredImage } from "@/ui";
+import { videoExtras } from "../../../../_lib/media-actions";
 import { TAKE_STATUS_LABELS, type Orientation } from "../../../_lib/clip-view";
 
 /** The empty frame's few words; never a fake picture. */
@@ -48,52 +49,67 @@ export function TakesStrip({
             const label = labels.get(take.id) ?? "Take";
             return (
               <li key={take.id} className="enter snap-start" style={stagger(Math.min(i, 8), 60)}>
-                <button
-                  type="button"
-                  aria-pressed={shown}
-                  aria-disabled={!playable || undefined}
-                  onClick={() => {
-                    if (!playable) return;
-                    onSelect(take.id === currentId ? null : take.id);
-                  }}
-                  className={cn(
-                    "group flex press flex-col gap-2 rounded-tile text-left focus-ring outline-offset-4",
-                    orientation === "portrait" ? "w-24" : "w-40",
-                    !playable && "cursor-default",
-                  )}
+                <ActionMenu
+                  label={`Actions for ${label}`}
+                  actions={[
+                    [
+                      {
+                        id: "view-take",
+                        label: "View This Take",
+                        disabled: !playable,
+                        onSelect: () => onSelect(take.id === currentId ? null : take.id),
+                      },
+                    ],
+                    take.fileId ? videoExtras(take.fileId) : [],
+                  ]}
                 >
-                  <span
+                  <button
+                    type="button"
+                    aria-pressed={shown}
+                    aria-disabled={!playable || undefined}
+                    onClick={() => {
+                      if (!playable) return;
+                      onSelect(take.id === currentId ? null : take.id);
+                    }}
                     className={cn(
-                      "relative flex w-full items-center justify-center overflow-hidden rounded-tile transition-[box-shadow] duration-(--dur-press) ease-out",
-                      orientation === "portrait" ? "aspect-[9/16]" : "aspect-video",
-                      take.posterFileId ? "bg-ground" : "bg-elevated",
-                      shown
-                        ? "ring-2 ring-brand ring-offset-2 ring-offset-ground"
-                        : playable && "group-hover:ring-1 group-hover:ring-outline",
+                      "group flex press flex-col gap-2 rounded-tile text-left focus-ring outline-offset-4",
+                      orientation === "portrait" ? "w-24" : "w-40",
+                      !playable && "cursor-default",
                     )}
                   >
-                    {take.posterFileId ? (
-                      <StoredImage
-                        src={fileSrc(take.posterFileId)}
-                        alt=""
-                        className={cn(
-                          "absolute inset-0 size-full object-contain",
-                          take.status === "superseded" && "opacity-45",
-                        )}
-                      />
-                    ) : (
-                      <span className="p-2 text-center text-meta text-label-3">
-                        {emptyWords(take.status)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="flex flex-col px-0.5">
-                    <span className="text-secondary font-medium text-label">{label}</span>
-                    <span className="text-meta text-label-2">
-                      {TAKE_STATUS_LABELS[take.status]}
+                    <span
+                      className={cn(
+                        "relative flex w-full items-center justify-center overflow-hidden rounded-tile transition-[box-shadow] duration-(--dur-press) ease-out",
+                        orientation === "portrait" ? "aspect-[9/16]" : "aspect-video",
+                        take.posterFileId ? "bg-ground" : "bg-elevated",
+                        shown
+                          ? "ring-2 ring-brand ring-offset-2 ring-offset-ground"
+                          : playable && "group-hover:ring-1 group-hover:ring-outline",
+                      )}
+                    >
+                      {take.posterFileId ? (
+                        <StoredImage
+                          src={fileSrc(take.posterFileId)}
+                          alt=""
+                          className={cn(
+                            "absolute inset-0 size-full object-contain",
+                            take.status === "superseded" && "opacity-45",
+                          )}
+                        />
+                      ) : (
+                        <span className="p-2 text-center text-meta text-label-3">
+                          {emptyWords(take.status)}
+                        </span>
+                      )}
                     </span>
-                  </span>
-                </button>
+                    <span className="flex flex-col px-0.5">
+                      <span className="text-secondary font-medium text-label">{label}</span>
+                      <span className="text-meta text-label-2">
+                        {TAKE_STATUS_LABELS[take.status]}
+                      </span>
+                    </span>
+                  </button>
+                </ActionMenu>
               </li>
             );
           })}

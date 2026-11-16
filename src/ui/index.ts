@@ -66,6 +66,29 @@ export { Select } from "./Select";
 export type { SelectOption, SelectProps } from "./Select";
 export { Menu, MenuItem, MenuLabel, MenuSeparator } from "./Menu";
 export type { MenuItemProps, MenuProps } from "./Menu";
+export {
+  ActionMenu,
+  ActionMenuButton,
+  ActionMenuItems,
+  ActionMenuProvider,
+  ActionMenuTarget,
+} from "./ActionMenu";
+export type {
+  ActionMenuButtonProps,
+  ActionMenuProps,
+  ActionMenuProviderProps,
+  ActionMenuTargetProps,
+} from "./ActionMenu";
+export { absoluteUrl, imageExtras, linkExtras, normalizeActions } from "./action-items";
+export type {
+  ActionEntry,
+  ActionGroups,
+  ActionItem,
+  CommandAction,
+  CopyAction,
+  LinkAction,
+} from "./action-items";
+export { LongPressGuard } from "./long-press";
 export { SegmentedControl } from "./SegmentedControl";
 export type { SegmentedControlProps, SegmentedOption } from "./SegmentedControl";
 export { ChoiceCards } from "./ChoiceCards";

@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
-import { Button, Skeleton, StatusLine, cn } from "@/ui";
+import { ActionMenu, Button, Skeleton, StatusLine, cn, imageExtras, linkExtras } from "@/ui";
+import { fileSrc } from "@/lib/file-src";
 import { Settle } from "../../_components/feedback";
 import { POSTER_SHAPES, PosterTile } from "../../_components/poster-tile";
 import {
@@ -88,32 +89,53 @@ export function ClipTile({
   const href = clipHref(projectId, tile.lineageId);
   return (
     <li className={cn("min-w-0", className)} style={style}>
-      <PosterTile
-        label={`Shot ${number}, ${title}: ${state}`}
-        shape={orientation}
-        posterFileId={tile.posterFileId}
-        dim={working}
-        placeholder={tile.posterFileId ? undefined : working ? "Rendering" : "No clip yet"}
-        progress={working ? `Rendering ${title}` : undefined}
-        actions={
-          review ? (
-            <Button variant="primary" render={<Link href={href} />}>
-              {tile.stage === "final_review" ? "Review Final" : "Review Draft"}
-            </Button>
-          ) : (
-            <Button variant="dark" render={<Link href={href} />}>
-              Open
-            </Button>
-          )
-        }
-        caption={
-          <>
-            <span className="mr-2 text-label-2 tabular-nums">{number}</span>
-            {title}
-          </>
-        }
-        status={line}
-      />
+      <ActionMenu
+        button="overlay"
+        label={`Actions for ${title}`}
+        buttonLabel={`More for ${title}`}
+        actions={[
+          [
+            {
+              id: "open",
+              label: review
+                ? tile.stage === "final_review"
+                  ? "Review Final"
+                  : "Review Draft"
+                : "Open",
+              href,
+            },
+          ],
+          linkExtras(href),
+          tile.posterFileId ? imageExtras(fileSrc(tile.posterFileId)) : [],
+        ]}
+      >
+        <PosterTile
+          label={`Shot ${number}, ${title}: ${state}`}
+          shape={orientation}
+          posterFileId={tile.posterFileId}
+          dim={working}
+          placeholder={tile.posterFileId ? undefined : working ? "Rendering" : "No clip yet"}
+          progress={working ? `Rendering ${title}` : undefined}
+          actions={
+            review ? (
+              <Button variant="primary" render={<Link href={href} />}>
+                {tile.stage === "final_review" ? "Review Final" : "Review Draft"}
+              </Button>
+            ) : (
+              <Button variant="dark" render={<Link href={href} />}>
+                Open
+              </Button>
+            )
+          }
+          caption={
+            <>
+              <span className="mr-2 text-label-2 tabular-nums">{number}</span>
+              {title}
+            </>
+          }
+          status={line}
+        />
+      </ActionMenu>
     </li>
   );
 }

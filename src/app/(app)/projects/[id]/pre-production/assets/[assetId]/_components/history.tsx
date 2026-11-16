@@ -2,7 +2,7 @@
 
 import { AudioLines, ImageOff } from "lucide-react";
 import { fileSrc } from "@/lib/file-src";
-import { Button, cn, StoredImage } from "@/ui";
+import { ActionMenu, Button, cn, imageExtras, StoredImage } from "@/ui";
 import type { LookView } from "@/server/assets";
 import {
   lookOrigin,
@@ -83,7 +83,10 @@ function itemTitle(item: HistoryItem, voice: boolean): string {
   return `${voice ? "Recording" : "Image"} ${item.version.versionNumber}`;
 }
 
-/** Earlier looks and sheets as a strip of small images; choosing one opens it read-only. */
+/**
+ * Earlier looks and sheets as a strip of small images; choosing one opens it read-only.
+ * Right-click or a long press offers View and Open Image in New Tab.
+ */
 export function HistoryStrip({
   items,
   voice,
@@ -114,7 +117,21 @@ export function HistoryStrip({
             const selected = item.key === selectedKey;
             const fileId = item.version.fileId;
             return (
-              <li key={item.key} className="snap-start">
+              <ActionMenu
+                key={item.key}
+                render={<li className="snap-start" />}
+                label={`Actions for ${itemTitle(item, voice)}`}
+                actions={[
+                  [
+                    {
+                      id: "view",
+                      label: selected ? "Back to Current" : "View",
+                      onSelect: () => onSelect(selected ? null : item.key),
+                    },
+                  ],
+                  fileId && !voice ? imageExtras(fileSrc(fileId)) : [],
+                ]}
+              >
                 <button
                   type="button"
                   aria-pressed={selected}
@@ -159,7 +176,7 @@ export function HistoryStrip({
                     </span>
                   </span>
                 </button>
-              </li>
+              </ActionMenu>
             );
           })}
         </ul>

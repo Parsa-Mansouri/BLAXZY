@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import type { BlockDetail } from "@/server/production";
 import {
+  ActionMenu,
   Button,
   cn,
   formatDurationLong,
@@ -23,6 +24,7 @@ import { useRefreshReviewList } from "../../_components/review-list-context";
 import { pollBlock } from "@/app/(app)/_lib/poll-client";
 import { FAST_POLL_MS, SETTLED_POLL_MS, usePolling } from "@/app/(app)/_lib/use-polling";
 import { blocksHref } from "../../../_lib/production-routes";
+import { assetHref } from "../../../_lib/asset-kinds";
 import { retryPreparationAction, reviewBlockAction, setAssetsAction } from "../actions";
 import { focusIsFree, markArrival, takeArrival } from "../_lib/arrival";
 import { blockKey } from "../_lib/block-key";
@@ -424,37 +426,65 @@ export function BlockScreen({
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))] gap-x-4 gap-y-6">
               {block.assets.map((asset, i) => (
                 <li key={asset.ref} className="min-w-0 enter" style={stagger(i, 60)}>
-                  <PictureTile
-                    label={asset.name}
-                    aspect="video"
-                    picture={
-                      asset.thumbnailFileId ? (
-                        <StoredImage
-                          src={fileSrc(asset.thumbnailFileId)}
-                          alt={`${asset.name}, sheet`}
-                        />
-                      ) : undefined
-                    }
-                    placeholder="No image yet"
-                    coverLine={
-                      <p className="text-secondary text-label-2 capitalize">{asset.kind}</p>
-                    }
-                    actions={
-                      <Button
-                        variant="dark"
-                        disabled={locked || pending}
-                        onClick={() =>
-                          setAssets(
-                            attachedIds.filter((id) => id !== asset.assetId),
-                            "tile",
-                          )
-                        }
-                      >
-                        Remove from Shot
-                      </Button>
-                    }
-                    caption={asset.name}
-                  />
+                  <ActionMenu
+                    button="overlay"
+                    label={`Actions for ${asset.name}`}
+                    buttonLabel={`More for ${asset.name}`}
+                    actions={[
+                      [
+                        {
+                          id: "open-asset",
+                          label: "Open Asset",
+                          href: assetHref(projectId, asset.assetId),
+                        },
+                      ],
+                      [
+                        {
+                          id: "remove",
+                          label: "Remove from Shot",
+                          destructive: true,
+                          disabled: locked || pending,
+                          onSelect: () =>
+                            setAssets(
+                              attachedIds.filter((id) => id !== asset.assetId),
+                              "tile",
+                            ),
+                        },
+                      ],
+                    ]}
+                  >
+                    <PictureTile
+                      label={asset.name}
+                      aspect="video"
+                      picture={
+                        asset.thumbnailFileId ? (
+                          <StoredImage
+                            src={fileSrc(asset.thumbnailFileId)}
+                            alt={`${asset.name}, sheet`}
+                          />
+                        ) : undefined
+                      }
+                      placeholder="No image yet"
+                      coverLine={
+                        <p className="text-secondary text-label-2 capitalize">{asset.kind}</p>
+                      }
+                      actions={
+                        <Button
+                          variant="dark"
+                          disabled={locked || pending}
+                          onClick={() =>
+                            setAssets(
+                              attachedIds.filter((id) => id !== asset.assetId),
+                              "tile",
+                            )
+                          }
+                        >
+                          Remove from Shot
+                        </Button>
+                      }
+                      caption={asset.name}
+                    />
+                  </ActionMenu>
                 </li>
               ))}
             </ul>

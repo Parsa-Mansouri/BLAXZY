@@ -1,5 +1,6 @@
 "use client";
 
+import { useSpend } from "@/app/(app)/_components/spend-confirm";
 import { useState, useTransition } from "react";
 import { Button } from "@/ui";
 import { isCreditsFailure, type ArtworkShape, type HeldImage } from "../../_lib/asset-view";
@@ -32,6 +33,7 @@ export function FailedStage({
   onAnotherWay: (() => void) | null;
 }) {
   const { moveOn } = useAssetScreen();
+  const spend = useSpend();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const credits = isCreditsFailure(failed.failure);
@@ -43,7 +45,14 @@ export function FailedStage({
   function retry() {
     setError(null);
     startTransition(async () => {
-      const result = await retryAction(projectId, { kind: failed.kind, id: failed.id }, assetId);
+      const result = await spend.run({
+        target: { kind: "asset", assetId, step: failed.kind },
+        title: failed.kind === "look" ? "Try the image again?" : "Try the sheet again?",
+        confirmLabel: "Try again",
+        submit: (expectedCredits) =>
+          retryAction(projectId, { kind: failed.kind, id: failed.id }, assetId, expectedCredits),
+      });
+      if (result === null) return;
       if (!result.ok) {
         setError(result.error);
         return;

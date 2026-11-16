@@ -1,3 +1,4 @@
+export { getSkipCreditConfirm, setSkipCreditConfirm } from "./preferences";
 export { BillingInputError, InsufficientCreditsError } from "./errors";
 export {
   getBalance,

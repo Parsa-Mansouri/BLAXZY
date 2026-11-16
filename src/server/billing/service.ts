@@ -6,7 +6,7 @@
  */
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { getDb, type DbTx } from "@/server/db/client";
+import { type DbExecutor, getDb, type DbTx } from "@/server/db/client";
 import { creditBalance, creditLedger, type CreditEntryType } from "@/server/db/schema";
 import { BillingInputError, InsufficientCreditsError } from "./errors";
 
@@ -112,8 +112,8 @@ async function setBalance(tx: DbTx, userId: string, balance: number): Promise<vo
 }
 
 /** The user's balance in credits (0 when they never had any). */
-export async function getBalance(userId: string): Promise<number> {
-  const [row] = await getDb()
+export async function getBalance(userId: string, db: DbExecutor = getDb()): Promise<number> {
+  const [row] = await db
     .select({ balance: creditBalance.balance })
     .from(creditBalance)
     .where(eq(creditBalance.userId, userId))

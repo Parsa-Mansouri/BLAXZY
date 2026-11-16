@@ -36,6 +36,16 @@ export const idSchema = z.string().max(100);
 
 export const assetRefInput = z.object({ assetId: idSchema, userId: userIdSchema });
 
+/**
+ * The price the user saw for a step that spends. Optional here so a step that does not spend (an
+ * acceptance, say) ignores it; the steps that do spend refuse a missing or stale one.
+ */
+export const expectedCreditsField = z
+  .number({ error: "Confirm the price first." })
+  .int("Confirm the price first.")
+  .min(0, "Confirm the price first.")
+  .optional();
+
 export const uploadInput = assetRefInput.extend({ fileId: idSchema });
 
 const promptSchema = z
@@ -44,7 +54,10 @@ const promptSchema = z
   .min(3, "Describe the image you want.")
   .max(MAX_LOOK_PROMPT_LENGTH, `Keep the description under ${MAX_LOOK_PROMPT_LENGTH} characters.`);
 
-export const promptInput = assetRefInput.extend({ prompt: promptSchema });
+export const promptInput = assetRefInput.extend({
+  prompt: promptSchema,
+  expectedCredits: expectedCreditsField,
+});
 
 export const answersSchema = z
   .record(
@@ -61,7 +74,10 @@ export const answersSchema = z
     error: "There are more answers than questions.",
   });
 
-export const guidedInput = assetRefInput.extend({ answers: answersSchema });
+export const guidedInput = assetRefInput.extend({
+  answers: answersSchema,
+  expectedCredits: expectedCreditsField,
+});
 
 const referencesSchema = z.array(referenceInputSchema).max(20);
 
@@ -73,6 +89,7 @@ export const designInput = assetRefInput.extend({
   prompt: promptSchema.optional(),
   answers: answersSchema.optional(),
   references: referencesSchema.optional(),
+  expectedCredits: expectedCreditsField,
 });
 
 const noteSchema = z
@@ -105,6 +122,7 @@ export const lookReviewInput = z.object({
   clarifyAnswers: answersSchema.optional(),
   /** Accepted: the critical inferred spec fields the user checked. */
   confirmedFields: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
+  expectedCredits: expectedCreditsField,
 });
 
 export const sheetReviewInput = z.object({
@@ -117,6 +135,7 @@ export const sheetReviewInput = z.object({
   regenerate: z.boolean().optional(),
   /** Rejected: the words are a change of the design, made by the designer (words required). */
   designChange: z.boolean().optional(),
+  expectedCredits: expectedCreditsField,
 });
 
 export const viewReviewInput = z.object({
@@ -128,6 +147,7 @@ export const viewReviewInput = z.object({
   designChange: z.boolean().optional(),
   /** Accepted: the reviewer approved the parts the view proposes (`new_hypotheses`). */
   hypothesesApproved: z.boolean().optional(),
+  expectedCredits: expectedCreditsField,
 });
 
 const nameSchema = z

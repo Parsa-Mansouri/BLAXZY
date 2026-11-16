@@ -270,3 +270,20 @@ describe("startDraftsAction", () => {
     });
   });
 });
+
+describe("a refused price", () => {
+  it("is shown as written and flagged, so the screen asks again with the new price", async () => {
+    const { failureFor } = await import("./action");
+    const { InsufficientCreditsError } = await import("@/server/billing");
+    const { PriceChangedError } = await import("@/server/generation");
+    const changed = new PriceChangedError();
+    expect(failureFor("test", changed)).toEqual({
+      ok: false,
+      error: changed.message,
+      priceChanged: true,
+    });
+    // Not enough credits is a plain message: the dialog already says how many are missing.
+    const short = new InsufficientCreditsError(2, 4);
+    expect(failureFor("test", short)).toEqual({ ok: false, error: short.message });
+  });
+});

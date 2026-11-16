@@ -30,7 +30,7 @@ import {
   type AspectRatio,
 } from "@/server/providers";
 import type { FilePurpose } from "@/server/storage";
-import { GenerationInputError } from "./errors";
+import { GenerationInputError, PriceChangedError } from "./errors";
 
 export type GenerationRow = typeof generation.$inferSelect;
 
@@ -84,6 +84,12 @@ export type RequestGenerationInput = {
    * image). Sent to the provider as the `variant` param.
    */
   variant?: string;
+  /**
+   * The most this generation may cost: the price the user confirmed (stored on the row that leads
+   * here). A price above it (or a missing confirmation, `null`) throws `PriceChangedError` and
+   * nothing is created, so the worker never spends more than the user agreed to.
+   */
+  maxCredits: number | null;
 };
 
 export const MAX_PROMPT_LENGTH = 8_000;
@@ -163,6 +169,7 @@ const requestSchema = z.object({
     .min(1)
     .max(MAX_VARIANT_LENGTH, `Keep the variant under ${MAX_VARIANT_LENGTH} characters.`)
     .optional(),
+  maxCredits: z.number().int().min(0).nullable(),
 });
 
 function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
@@ -340,6 +347,14 @@ export async function requestGeneration(
     params: choice.params,
     label: data.label,
   });
+  if (data.maxCredits === null) {
+    throw new PriceChangedError("This step was not confirmed. Try it again to see its price.");
+  }
+  if (priceCredits > data.maxCredits) {
+    throw new PriceChangedError(
+      "The price changed since you confirmed it. Try again to see the new price.",
+    );
+  }
 
   const create = async (db: DbTx): Promise<string> => {
     const [owned] = await db

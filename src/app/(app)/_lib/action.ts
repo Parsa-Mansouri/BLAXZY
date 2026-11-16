@@ -11,6 +11,7 @@ import { AssetInputError } from "@/server/assets";
 import { getSession, requireUser, type AuthUser } from "@/server/auth";
 import { BillingInputError, InsufficientCreditsError } from "@/server/billing";
 import { BlocksInputError } from "@/server/blocks";
+import { GenerationInputError, isPriceChanged } from "@/server/generation";
 import { errorMessage, logLine } from "@/server/jobs/log";
 import { ProductionInputError } from "@/server/production";
 import { ProjectInputError } from "@/server/projects";
@@ -20,7 +21,11 @@ import { StorageError } from "@/server/storage";
 import { SERVER_PROBLEM, SIGNED_OUT, TOO_MANY_REQUESTS } from "./messages";
 
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: string };
-export type ActionFailure = { ok: false; error: string };
+/**
+ * `priceChanged`: the price the user confirmed is not the current one (or was missing); the
+ * screen asks for the new price and submits again (`useSpend`).
+ */
+export type ActionFailure = { ok: false; error: string; priceChanged?: true };
 
 export { SERVER_PROBLEM, SIGNED_OUT, TOO_MANY_REQUESTS };
 export const TOO_MANY_UPLOADS =
@@ -38,6 +43,8 @@ export const USER_FACING_ERRORS: readonly UserErrorClass[] = [
   ProjectInputError,
   InsufficientCreditsError,
   BillingInputError,
+  /** Includes `PriceChangedError`: the confirmed price is not the current one. */
+  GenerationInputError,
 ];
 
 export interface ActionOptions {
@@ -73,7 +80,9 @@ export function failureFor(
   options: ActionOptions = {},
 ): ActionFailure {
   const message = userMessage(error, options);
-  if (message !== null) return { ok: false, error: message };
+  if (message !== null) {
+    return { ok: false, error: message, ...(isPriceChanged(error) ? { priceChanged: true } : {}) };
+  }
   logActionError(tag, error);
   return { ok: false, error: SERVER_PROBLEM };
 }

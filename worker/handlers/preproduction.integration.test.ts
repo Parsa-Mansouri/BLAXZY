@@ -22,7 +22,9 @@ describe.skipIf(!reachable)(
   "pre-production (integration, sample mode)",
   { timeout: 30_000 },
   async () => {
-    const assets = await import("../../src/server/assets");
+    const { autoConfirm, ASSET_SPEND_FUNCTIONS } =
+      await import("../../src/server/test-support/confirm-fixtures");
+    const assets = autoConfirm(await import("../../src/server/assets"), ASSET_SPEND_FUNCTIONS);
     const billing = await import("../../src/server/billing");
     const blocks = await import("../../src/server/blocks");
     const { onGenerationFinished } = await import("../../src/server/generation");
@@ -667,13 +669,30 @@ describe.skipIf(!reachable)(
     });
 
     it("insufficient credits → failed with the amount → grant → retry charges once", async () => {
-      const { userId, projectId } = await setup(0);
+      // The user can afford the look when they confirm it; by the time the worker asks for the
+      // credits, another generation has taken them.
+      const { userId, projectId } = await setup(4);
       const tomas = await add(projectId, userId);
       const look = await assets.startLookFromPrompt({
         assetId: tomas.id,
         userId,
         prompt: "A keeper in oilskins",
       });
+      const [owned] = await getDb().select().from(s.project).where(eq(s.project.id, projectId));
+      const { requestGeneration } = await import("../../src/server/generation");
+      await requestGeneration({
+        userId,
+        projectId,
+        purpose: "asset_look",
+        prompt: "Another image",
+        style:
+          owned?.style ??
+          (() => {
+            throw new Error("no style");
+          })(),
+        maxCredits: 4,
+      });
+      expect(await billing.getBalance(userId)).toBe(0);
       const failed = await produceLook(look?.id ?? "");
       expect(failed).toMatchObject({
         status: "failed",
@@ -699,7 +718,13 @@ describe.skipIf(!reachable)(
         .select({ type: s.creditLedger.type })
         .from(s.creditLedger)
         .where(eq(s.creditLedger.userId, userId));
-      expect(ledger.map((e) => e.type).sort()).toEqual(["grant", "reserve", "settle"]);
+      expect(ledger.map((e) => e.type).sort()).toEqual([
+        "grant",
+        "grant",
+        "reserve",
+        "reserve",
+        "settle",
+      ]);
     });
 
     it("a provider failure fails the look and refunds; the hook twice is harmless", async () => {
@@ -1671,6 +1696,259 @@ describe.skipIf(!reachable)(
       const all = await latestViewRows(getDb(), sheetId);
       expect(all.filter((v) => v.viewId.startsWith("legacy_"))).toHaveLength(22);
       expect(all.length).toBeGreaterThan(22);
+    });
+
+    /* ---------------------------------------------------------------------------------------- */
+    /* Credit confirmation: every paid step needs the price the user saw                        */
+    /* ---------------------------------------------------------------------------------------- */
+
+    async function drain(userId: string) {
+      await getDb()
+        .update(s.creditBalance)
+        .set({ balance: 0 })
+        .where(eq(s.creditBalance.userId, userId));
+    }
+
+    it("a design, a fix, a sheet and their retries refuse a missing, stale or unaffordable price", async () => {
+      const { PriceChangedError } = await import("../../src/server/generation");
+      const { InsufficientCreditsError } = await import("../../src/server/billing");
+      const { userId, projectId } = await setup(100);
+      const tomas = await add(projectId, userId);
+      const start = (expectedCredits: number | undefined, prompt = "A keeper in oilskins") =>
+        assets.startLookFromPrompt({ assetId: tomas.id, userId, prompt, expectedCredits });
+      const looks = async () =>
+        getDb().select().from(s.assetLook).where(eq(s.assetLook.assetId, tomas.id));
+
+      await expect(start(undefined)).rejects.toBeInstanceOf(PriceChangedError);
+      await expect(start(3)).rejects.toBeInstanceOf(PriceChangedError);
+      await expect(start(6)).rejects.toBeInstanceOf(PriceChangedError);
+      expect(await looks()).toHaveLength(0);
+      await drain(userId);
+      await expect(start(4)).rejects.toBeInstanceOf(InsufficientCreditsError);
+      expect(await looks()).toHaveLength(0);
+      await billing.grantCredits({ userId, amount: 100 });
+
+      // A design stores the price it was confirmed at.
+      const failing = await start(4, "A keeper [[fail]]");
+      expect((await lookRow(failing?.id ?? "")).confirmedCredits).toBe(4);
+      const failed = await produceLook(failing?.id ?? "");
+      expect(failed.status).toBe("failed");
+
+      // Trying again is a new spend.
+      const retry = (expectedCredits: number | undefined) =>
+        assets.retryLook({ lookId: failed.id, userId, expectedCredits });
+      await expect(retry(undefined)).rejects.toBeInstanceOf(PriceChangedError);
+      await expect(retry(5)).rejects.toBeInstanceOf(PriceChangedError);
+      expect((await lookRow(failed.id)).status).toBe("failed");
+      expect(await retry(4)).toBe("generating");
+      expect((await lookRow(failed.id)).confirmedCredits).toBe(4);
+
+      // Rejecting a look makes a new one (the look price); accepting builds the sheet (the sheet
+      // price).
+      const mira = await add(projectId, userId, "character", "Mira");
+      const second = await assets.startLookFromPrompt({
+        assetId: mira.id,
+        userId,
+        prompt: "A ferry captain",
+        expectedCredits: 4,
+      });
+      const produced = await produceLook(second?.id ?? "");
+      expect(produced.status).toBe("in_review");
+      const reject = (expectedCredits: number | undefined) =>
+        assets.submitLookReview({
+          lookId: produced.id,
+          userId,
+          decision: "rejected",
+          note: "Make her older",
+          expectedCredits,
+        });
+      await expect(reject(undefined)).rejects.toBeInstanceOf(PriceChangedError);
+      await expect(reject(6)).rejects.toBeInstanceOf(PriceChangedError);
+      expect((await lookRow(produced.id)).status).toBe("in_review");
+      const balance = await billing.getBalance(userId);
+      await drain(userId);
+      await expect(reject(4)).rejects.toBeInstanceOf(InsufficientCreditsError);
+      expect((await lookRow(produced.id)).status).toBe("in_review");
+      await billing.grantCredits({ userId, amount: balance });
+      expect(await reject(4)).toBe("generating");
+      const [fix] = await getDb()
+        .select()
+        .from(s.assetLook)
+        .where(eq(s.assetLook.parentId, produced.id));
+      expect(fix?.confirmedCredits).toBe(4);
+
+      const fixed = await produceLook(fix?.id ?? "");
+      const accept = (expectedCredits: number | undefined) =>
+        assets.submitLookReview({
+          lookId: fixed.id,
+          userId,
+          decision: "accepted",
+          confirmedFields: assets.fieldsToConfirm(fixed.spec),
+          expectedCredits,
+        });
+      await expect(accept(undefined)).rejects.toBeInstanceOf(PriceChangedError);
+      await expect(accept(4)).rejects.toBeInstanceOf(PriceChangedError);
+      expect((await lookRow(fixed.id)).status).toBe("in_review");
+      expect(await accept(6)).toBe("building_sheet");
+      const sheetId = (await detail(mira.id, userId)).sheets[0]?.id ?? "";
+      expect((await sheetRow(sheetId)).confirmedCredits).toBe(6);
+
+      // A rejected sheet is a new sheet; approving one costs nothing and needs no price.
+      const producedSheet = await produceSheet(sheetId);
+      const rejectSheet = (expectedCredits: number | undefined) =>
+        assets.submitSheetReview({
+          sheetId,
+          userId,
+          decision: "rejected",
+          note: "Show the boots",
+          expectedCredits,
+        });
+      await expect(rejectSheet(undefined)).rejects.toBeInstanceOf(PriceChangedError);
+      await expect(rejectSheet(4)).rejects.toBeInstanceOf(PriceChangedError);
+      expect((await sheetRow(sheetId)).status).toBe("in_review");
+      expect(await rejectSheet(6)).toBe("building_sheet");
+      const [nextSheet] = await getDb()
+        .select()
+        .from(s.assetSheet)
+        .where(eq(s.assetSheet.parentId, producedSheet.id));
+      expect(nextSheet?.confirmedCredits).toBe(6);
+      const rebuilt = await produceSheet(nextSheet?.id ?? "");
+      expect(
+        await assets.submitSheetReview({
+          sheetId: rebuilt.id,
+          userId,
+          decision: "accepted",
+          expectedCredits: undefined,
+        }),
+      ).toBe("ready");
+    });
+
+    it("the quotes say what each step costs, and nothing for an approval", async () => {
+      const { userId, projectId } = await setup(100);
+      const tomas = await add(projectId, userId);
+      const cabin = await add(projectId, userId, "location", "Ferry Cabin");
+      const quote = (assetId: string, step: "look" | "sheet") =>
+        assets.quoteAssetSpend({ assetId, userId, step });
+      expect(await quote(tomas.id, "look")).toMatchObject({
+        spends: true,
+        credits: 4,
+        balance: 100,
+        maxGenerations: 1,
+      });
+      expect(await quote(tomas.id, "sheet")).toMatchObject({ credits: 6, maxGenerations: 1 });
+      // The views of a pack are charged one by one: the price of one, and how many may be made.
+      expect(await quote(cabin.id, "sheet")).toMatchObject({ credits: 6, maxGenerations: 20 });
+      const review = (
+        subject: "look" | "sheet" | "view",
+        decision: "accepted" | "rejected",
+        designChange?: boolean,
+      ) => assets.quoteAssetReview({ assetId: tomas.id, userId, subject, decision, designChange });
+      expect(await review("look", "accepted")).toMatchObject({ spends: true, credits: 6 });
+      expect(await review("look", "rejected")).toMatchObject({ spends: true, credits: 4 });
+      expect(await review("sheet", "accepted")).toMatchObject({ spends: false, credits: 0 });
+      // A design change from the sheet step goes back to the designer: the look price.
+      expect(await review("sheet", "rejected", true)).toMatchObject({ spends: true, credits: 4 });
+      expect(await review("sheet", "rejected")).toMatchObject({
+        spends: true,
+        credits: 6,
+      });
+      const other = await fixtures.newUser();
+      expect(await assets.quoteAssetSpend({ assetId: tomas.id, userId: other, step: "look" })).toBe(
+        null,
+      );
+    });
+
+    it("the worker spends no more than was confirmed: a lower or missing price fails the look", async () => {
+      const { userId, projectId } = await setup(100);
+      const tomas = await add(projectId, userId);
+      const look = await assets.startLookFromPrompt({
+        assetId: tomas.id,
+        userId,
+        prompt: "A keeper",
+        expectedCredits: 4,
+      });
+      // The price went up after the confirmation (here: the confirmed amount is lowered).
+      await getDb()
+        .update(s.assetLook)
+        .set({ confirmedCredits: 3 })
+        .where(eq(s.assetLook.id, look?.id ?? ""));
+      const refused = await produceLook(look?.id ?? "");
+      expect(refused).toMatchObject({ status: "failed", generationId: null });
+      expect(refused.failure).toMatch(/price changed/);
+      expect(await billing.getBalance(userId)).toBe(100);
+
+      // A row without any confirmation is never spent either.
+      const mira = await add(projectId, userId, "character", "Mira");
+      const unconfirmed = await assets.startLookFromPrompt({
+        assetId: mira.id,
+        userId,
+        prompt: "A captain",
+        expectedCredits: 4,
+      });
+      await getDb()
+        .update(s.assetLook)
+        .set({ confirmedCredits: null })
+        .where(eq(s.assetLook.id, unconfirmed?.id ?? ""));
+      const none = await produceLook(unconfirmed?.id ?? "");
+      expect(none).toMatchObject({ status: "failed", generationId: null });
+      expect(none.failure).toMatch(/not confirmed/);
+      expect(await billing.getBalance(userId)).toBe(100);
+    });
+
+    it("pack view fixes, re-rolls and retries need the price; planned views spend what the sheet was confirmed at", async () => {
+      const { PriceChangedError } = await import("../../src/server/generation");
+      const { userId, projectId } = await setup(400);
+      const { asset: cabin } = await acceptLocation(userId, projectId, "Ferry Cabin");
+      const sheetId = (await detail(cabin.id, userId)).sheets[0]?.id ?? "";
+      expect((await sheetRow(sheetId)).confirmedCredits).toBe(6);
+      await assetSheetPlanHandler.run({ sheetId }, jobContext());
+      await advancePack(sheetId);
+      const reverse = (await detail(cabin.id, userId)).packViews.find(
+        (v) => v.viewId === "reverse_wide",
+      );
+      expect(reverse?.status).toBe("in_review");
+      // The plan's own views carry no price of their own: the sheet's confirmation covers them.
+      const reverseRow = await viewRow(reverse?.id ?? "");
+      expect(reverseRow.confirmedCredits).toBeNull();
+      expect((await generationRow(reverseRow.generationId ?? "")).priceCredits).toBe(6);
+
+      const reroll = (expectedCredits: number | undefined) =>
+        assets.submitSheetViewReview({
+          viewRowId: reverse?.id ?? "",
+          userId,
+          decision: "rejected",
+          regenerate: true,
+          expectedCredits,
+        });
+      await expect(reroll(undefined)).rejects.toBeInstanceOf(PriceChangedError);
+      await expect(reroll(4)).rejects.toBeInstanceOf(PriceChangedError);
+      expect((await viewRow(reverse?.id ?? "")).status).toBe("in_review");
+      expect(await reroll(6)).toBe("sheet_review");
+      const second = (await detail(cabin.id, userId)).packViews.find(
+        (v) => v.viewId === "reverse_wide",
+      );
+      expect(second).toMatchObject({ versionNumber: 2 });
+      expect((await viewRow(second?.id ?? "")).confirmedCredits).toBe(6);
+
+      // A view that failed is made again only with a confirmed price.
+      await assets.failSheetView(second?.id ?? "", "The view could not be made.");
+      const retry = (expectedCredits: number | undefined) =>
+        assets.retrySheetView({ viewRowId: second?.id ?? "", userId, expectedCredits });
+      await expect(retry(undefined)).rejects.toBeInstanceOf(PriceChangedError);
+      await expect(retry(20)).rejects.toBeInstanceOf(PriceChangedError);
+      expect(await retry(6)).toBe("sheet_review");
+
+      // A view whose confirmed price is no longer enough fails, uncharged.
+      await getDb()
+        .update(s.assetSheetView)
+        .set({ confirmedCredits: 3 })
+        .where(eq(s.assetSheetView.id, second?.id ?? ""));
+      const before = await billing.getBalance(userId);
+      await assetSheetViewsAdvanceHandler.run({ sheetId }, jobContext());
+      const after = (await detail(cabin.id, userId)).packViews.find((v) => v.id === second?.id);
+      expect(after?.status).toBe("failed");
+      expect(after?.failure).toMatch(/price changed/);
+      expect(await billing.getBalance(userId)).toBe(before);
     });
   },
 );

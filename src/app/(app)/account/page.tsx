@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, requireUser } from "@/server/auth";
-import { getBalance } from "@/server/billing";
+import { getBalance, getSkipCreditConfirm } from "@/server/billing";
 import { PageHeader, Toolbar, stagger } from "@/ui";
 import { formatNumber } from "../_lib/format";
 import { AccountForms } from "./_components/account-forms";
+import { CreditConfirmSwitch } from "./_components/credit-confirm-switch";
 import { SignOutButton } from "./_components/sign-out-button";
 
 export const metadata: Metadata = { title: "Account · BLAXZY" };
@@ -11,7 +12,10 @@ export const metadata: Metadata = { title: "Account · BLAXZY" };
 /** Account (Account.dc.html): profile, password, the credit balance and Sign Out. */
 export default async function AccountPage() {
   const user = await requireUser();
-  const credits = await getBalance(user.id);
+  const [credits, skipCreditConfirm] = await Promise.all([
+    getBalance(user.id),
+    getSkipCreditConfirm(user.id),
+  ]);
   return (
     <>
       <Toolbar />
@@ -43,6 +47,7 @@ export default async function AccountPage() {
                 The price of each step is shown before anything is generated.
               </p>
             </section>
+            <CreditConfirmSwitch initialSkip={skipCreditConfirm} />
             <div className="mt-auto">
               <SignOutButton />
             </div>

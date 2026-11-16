@@ -98,10 +98,12 @@ export async function startDesignAction(
   projectId: string,
   assetId: string,
   input: { prompt?: string; answers?: Record<string, string>; references?: ReferencePhoto[] },
+  /** The price the user confirmed (see `useSpend`). */
+  expectedCredits?: number,
 ): Promise<ActionResult<MoveOn | null>> {
   return userAction("expensive", "asset.startDesign", async (user) => {
     if (!isUuid(projectId)) return MISSING_RESULT;
-    const look = await startDesign({ assetId, userId: user.id, ...input });
+    const look = await startDesign({ assetId, userId: user.id, ...input, expectedCredits });
     return look ? await movedOn(projectId, user.id, assetId) : MISSING_RESULT;
   });
 }
@@ -127,10 +129,11 @@ export async function answerQuestionAction(
   lookId: string,
   answers: Record<string, string>,
   assetId?: string,
+  expectedCredits?: number,
 ): Promise<ActionResult<MoveOn | null>> {
   return userAction("expensive", "asset.answerQuestion", async (user) => {
     if (!isUuid(projectId)) return MISSING_RESULT;
-    const stage = await answerLookQuestion({ lookId, userId: user.id, answers });
+    const stage = await answerLookQuestion({ lookId, userId: user.id, answers, expectedCredits });
     return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
   });
 }
@@ -139,10 +142,11 @@ export async function startFromGuidedAction(
   projectId: string,
   assetId: string,
   answers: Record<string, string>,
+  expectedCredits?: number,
 ): Promise<ActionResult<MoveOn | null>> {
   return userAction("expensive", "asset.startFromGuided", async (user) => {
     if (!isUuid(projectId)) return MISSING_RESULT;
-    const look = await startLookFromGuided({ assetId, userId: user.id, answers });
+    const look = await startLookFromGuided({ assetId, userId: user.id, answers, expectedCredits });
     return look ? await movedOn(projectId, user.id, assetId) : MISSING_RESULT;
   });
 }
@@ -257,10 +261,12 @@ export async function reviewLookAction(
   review: LookReviewInput,
   /** The look's asset: when given, a decision that starts a job moves on (see `MoveOn`). */
   assetId?: string,
+  /** The price the user confirmed: needed by both decisions (see `useSpend`). */
+  expectedCredits?: number,
 ): Promise<ActionResult<MoveOn | null>> {
   return userAction("expensive", "asset.reviewLook", async (user) => {
     if (!isUuid(projectId)) return MISSING_RESULT;
-    const stage = await submitLookReview({ lookId, userId: user.id, ...review });
+    const stage = await submitLookReview({ lookId, userId: user.id, ...review, expectedCredits });
     return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
   });
 }
@@ -271,10 +277,12 @@ export async function reviewSheetAction(
   review: ReviewInput,
   /** The sheet's asset: when given, the decision moves on (see `MoveOn`). */
   assetId?: string,
+  /** The price the user confirmed: needed when the decision makes a new image. */
+  expectedCredits?: number,
 ): Promise<ActionResult<MoveOn | null>> {
   return userAction("expensive", "asset.reviewSheet", async (user) => {
     if (!isUuid(projectId)) return MISSING_RESULT;
-    const stage = await submitSheetReview({ sheetId, userId: user.id, ...review });
+    const stage = await submitSheetReview({ sheetId, userId: user.id, ...review, expectedCredits });
     return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
   });
 }
@@ -286,10 +294,17 @@ export async function reviewSheetViewAction(
   review: ViewReviewInput,
   /** The view's asset: when given, a design change moves on (see `MoveOn`). */
   assetId?: string,
+  /** The price the user confirmed: needed when the decision makes a new image. */
+  expectedCredits?: number,
 ): Promise<ActionResult<MoveOn | null>> {
   return userAction("expensive", "asset.reviewSheetView", async (user) => {
     if (!isUuid(projectId)) return MISSING_RESULT;
-    const stage = await submitSheetViewReview({ viewRowId, userId: user.id, ...review });
+    const stage = await submitSheetViewReview({
+      viewRowId,
+      userId: user.id,
+      ...review,
+      expectedCredits,
+    });
     return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
   });
 }
@@ -298,10 +313,11 @@ export async function reviewSheetViewAction(
 export async function retrySheetViewAction(
   projectId: string,
   viewRowId: string,
+  expectedCredits?: number,
 ): Promise<ActionResult> {
   return userAction("expensive", "asset.retrySheetView", async (user) => {
     if (!isUuid(projectId)) return MISSING_RESULT;
-    const stage = await retrySheetView({ viewRowId, userId: user.id });
+    const stage = await retrySheetView({ viewRowId, userId: user.id, expectedCredits });
     return stage ? done(projectId) : MISSING_RESULT;
   });
 }
@@ -324,13 +340,14 @@ export async function retryAction(
   target: { kind: "look" | "sheet"; id: string },
   /** The asset tried again: when given, the restarted job moves on (see `MoveOn`). */
   assetId?: string,
+  expectedCredits?: number,
 ): Promise<ActionResult<MoveOn | null>> {
   return userAction("expensive", "asset.retry", async (user) => {
     if (!isUuid(projectId)) return MISSING_RESULT;
     const stage =
       target.kind === "look"
-        ? await retryLook({ lookId: target.id, userId: user.id })
-        : await retrySheet({ sheetId: target.id, userId: user.id });
+        ? await retryLook({ lookId: target.id, userId: user.id, expectedCredits })
+        : await retrySheet({ sheetId: target.id, userId: user.id, expectedCredits });
     return stage ? await afterStage(projectId, user.id, stage, assetId) : MISSING_RESULT;
   });
 }

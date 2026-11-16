@@ -63,10 +63,12 @@ export async function reviewTakeAction(
   shot: { lineageId: string; orderIndex: number },
   takeId: string,
   review: ReviewInput,
+  /** The price the user confirmed: needed when the decision starts a clip (see `useSpend`). */
+  expectedCredits?: number,
 ): Promise<ActionResult<Decided>> {
   return userAction("expensive", "clips.reviewTake", async (user) => {
     if (!isUuid(projectId)) return MISSING_RESULT;
-    const stage = await submitTakeReview({ takeId, userId: user.id, ...review });
+    const stage = await submitTakeReview({ takeId, userId: user.id, ...review, expectedCredits });
     if (!stage) return MISSING_RESULT;
     refreshProduction(projectId);
     const next = await findNextToReview(projectId, user.id, shot.orderIndex, shot.lineageId).catch(
@@ -79,10 +81,14 @@ export async function reviewTakeAction(
   });
 }
 
-export async function retryTakeAction(projectId: string, takeId: string): Promise<ActionResult> {
+export async function retryTakeAction(
+  projectId: string,
+  takeId: string,
+  expectedCredits?: number,
+): Promise<ActionResult> {
   return userAction("expensive", "clips.retryTake", async (user) => {
     if (!isUuid(projectId)) return MISSING_RESULT;
-    const stage = await retryTake({ takeId, userId: user.id });
+    const stage = await retryTake({ takeId, userId: user.id, expectedCredits });
     if (!stage) return MISSING_RESULT;
     refreshProduction(projectId);
     return { ok: true, data: null };

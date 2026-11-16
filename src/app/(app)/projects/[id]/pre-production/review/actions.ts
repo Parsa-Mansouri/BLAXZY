@@ -53,6 +53,7 @@ export async function requestSheetChangesAction(
   projectId: string,
   sheetId: string,
   input: { note: string; regenerate?: boolean; designChange?: boolean },
+  expectedCredits?: number,
 ): Promise<ActionResult> {
   return userAction("expensive", "review.requestSheetChanges", async (user) => {
     if (!isUuid(projectId)) return GONE;
@@ -63,6 +64,7 @@ export async function requestSheetChangesAction(
       note: input.note || undefined,
       regenerate: input.regenerate,
       designChange: input.designChange,
+      expectedCredits,
     });
     if (!stage) return GONE;
     revalidatePath(`/projects/${projectId}/pre-production`, "layout");

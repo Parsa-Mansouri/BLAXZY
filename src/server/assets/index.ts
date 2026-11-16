@@ -84,6 +84,8 @@ export {
   NAVIGATOR_BUSY_LIMIT,
   navigatorCounts,
   nextAssetNeedingInput,
+  quoteAssetReview,
+  quoteAssetSpend,
   removeAsset,
   replaceLook,
   retryLook,

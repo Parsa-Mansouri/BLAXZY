@@ -9,21 +9,27 @@ import { AssetInputError, parse } from "../service";
 import type { AssetStage } from "../stage";
 import { assertActive, isUuid, lockAsset } from "./access";
 import { enqueueLookJob, enqueueSheetJob } from "./enqueue";
-import { assetRefInput, idSchema, userIdSchema } from "./inputs";
+import { assetRefInput, expectedCreditsField, idSchema, userIdSchema } from "./inputs";
 import { BUSY_MESSAGE } from "./messages";
+import { confirmAssetSpend } from "./spend";
 
 /**
  * Runs a failed look (the asset's latest) again: back to pending and its job re-enqueued (sent with
  * the change). The job re-runs the dami only when no prompt was stored; otherwise it requests a
  * new generation with the stored prompt (the failed generation's credits were refunded and are
  * never reused). The failed attempt's generation and failure are kept in the
- * `asset.look_retried` event (the audit trail) before the row is cleared.
+ * `asset.look_retried` event (the audit trail) before the row is cleared. It spends again:
+ * `expectedCredits` must be the price the user saw (see `startLookFromPrompt`).
  */
 export async function retryLook(input: {
   lookId: string;
   userId: string;
+  expectedCredits?: number;
 }): Promise<AssetStage | null> {
-  const { lookId, userId } = parse(z.object({ lookId: idSchema, userId: userIdSchema }), input);
+  const { lookId, userId, expectedCredits } = parse(
+    z.object({ lookId: idSchema, userId: userIdSchema, expectedCredits: expectedCreditsField }),
+    input,
+  );
   if (!isUuid(lookId)) return null;
   const look = await getDb().transaction(async (tx) => {
     const [target] = await tx
@@ -40,9 +46,15 @@ export async function retryLook(input: {
     if (!latest || latest.id !== lookId || latest.status !== "failed") {
       throw new AssetInputError("Only the latest image that failed can be tried again.");
     }
+    const confirmedCredits = await confirmAssetSpend(tx, {
+      owner: locked.project,
+      userId,
+      step: "look",
+      expectedCredits,
+    });
     const [updated] = await tx
       .update(assetLook)
-      .set({ status: "pending", failure: null, generationId: null })
+      .set({ status: "pending", failure: null, generationId: null, confirmedCredits })
       .where(eq(assetLook.id, lookId))
       .returning();
     if (!updated) return null;
@@ -67,8 +79,12 @@ export async function retryLook(input: {
 export async function retrySheet(input: {
   sheetId: string;
   userId: string;
+  expectedCredits?: number;
 }): Promise<AssetStage | null> {
-  const { sheetId, userId } = parse(z.object({ sheetId: idSchema, userId: userIdSchema }), input);
+  const { sheetId, userId, expectedCredits } = parse(
+    z.object({ sheetId: idSchema, userId: userIdSchema, expectedCredits: expectedCreditsField }),
+    input,
+  );
   if (!isUuid(sheetId)) return null;
   const sheet = await getDb().transaction(async (tx) => {
     const [target] = await tx
@@ -91,9 +107,15 @@ export async function retrySheet(input: {
     ) {
       throw new AssetInputError("Only the latest sheet that failed can be tried again.");
     }
+    const confirmedCredits = await confirmAssetSpend(tx, {
+      owner: locked.project,
+      userId,
+      step: "sheet",
+      expectedCredits,
+    });
     const [updated] = await tx
       .update(assetSheet)
-      .set({ status: "pending", failure: null, generationId: null })
+      .set({ status: "pending", failure: null, generationId: null, confirmedCredits })
       .where(eq(assetSheet.id, sheetId))
       .returning();
     if (!updated) return null;

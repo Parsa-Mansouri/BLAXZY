@@ -1,5 +1,6 @@
 "use client";
 
+import { useSpend } from "@/app/(app)/_components/spend-confirm";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import type { LookView } from "@/server/assets";
 import { Button, TextLink, Textarea, stagger } from "@/ui";
@@ -131,6 +132,7 @@ export function NeedsAnswerStage({
   maxAnswer: number;
 }) {
   const { moveOn } = useAssetScreen();
+  const spend = useSpend();
   const spec = look.spec;
   const all = spec?.questions ?? [];
   const blocking = all.filter((q) => q.blocking);
@@ -163,7 +165,15 @@ export function NeedsAnswerStage({
     }
     setError(null);
     startSending(async () => {
-      const result = await answerQuestionAction(projectId, look.id, answers, assetId);
+      const result = await spend.run({
+        target: { kind: "asset", assetId, step: "look" },
+        title: "Create this image?",
+        description: `The designer draws ${assetName} with your answer.`,
+        confirmLabel: "Create image",
+        submit: (expectedCredits) =>
+          answerQuestionAction(projectId, look.id, answers, assetId, expectedCredits),
+      });
+      if (result === null) return;
       if (!result.ok) {
         setError(result.error);
         return;

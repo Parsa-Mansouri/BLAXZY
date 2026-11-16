@@ -54,6 +54,7 @@ export {
 } from "./read";
 export { replaceLook, retryLook, retrySheet } from "./retries";
 export { fieldsToConfirm, SPEC_EDIT_CODE } from "./review-plans";
+export { quoteAssetReview, quoteAssetSpend, type SpendStep } from "./spend";
 export {
   lockSheet,
   retrySheetView,

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { requireUser } from "@/server/auth";
 import { AppShell } from "./_components/app-shell";
+import { SpendConfirmProvider } from "./_components/spend-confirm";
 import { SIDEBAR_COOKIE } from "./_lib/sidebar-cookie";
 
 /**
@@ -19,8 +20,10 @@ export default async function AppLayout({
   const [, cookieStore] = await Promise.all([requireUser(), cookies()]);
   const collapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "collapsed";
   return (
-    <AppShell sidebar={sidebar} defaultCollapsed={collapsed}>
-      {children}
-    </AppShell>
+    <SpendConfirmProvider>
+      <AppShell sidebar={sidebar} defaultCollapsed={collapsed}>
+        {children}
+      </AppShell>
+    </SpendConfirmProvider>
   );
 }

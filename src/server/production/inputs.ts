@@ -20,6 +20,16 @@ export const lineageInput = z.object({ lineageId: z.string(), userId: userIdSche
 
 export const takeInput = z.object({ takeId: z.string(), userId: userIdSchema });
 
+/**
+ * What the user saw for a step that spends: required (and checked) by the decisions that start a
+ * generation, ignored by the ones that do not.
+ */
+const expectedCredits = z
+  .number({ error: "Confirm the price first." })
+  .int("Confirm the price first.")
+  .min(0, "Confirm the price first.")
+  .optional();
+
 const noteSchema = z
   .string()
   .trim()
@@ -34,7 +44,10 @@ export const blockReviewInput = lineageInput.extend({
 export const takeReviewInput = takeInput.extend({
   decision: z.enum(["accepted", "rejected"], { error: "Accept the clip or ask for changes." }),
   note: noteSchema,
+  expectedCredits,
 });
+
+export const retryTakeInput = takeInput.extend({ expectedCredits });
 
 export const setAssetsInput = lineageInput.extend({
   assetIds: z

@@ -1,5 +1,6 @@
 "use client";
 
+import { useSpend } from "@/app/(app)/_components/spend-confirm";
 import { useId, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import {
@@ -308,6 +309,7 @@ function PromptWriter({
   onBack: () => void;
 }) {
   const { moveOn } = useAssetScreen();
+  const spend = useSpend();
   const id = useId();
   const area = useRef<HTMLTextAreaElement>(null);
   const [prompt, setPrompt] = useState("");
@@ -331,7 +333,15 @@ function PromptWriter({
     }
     setError(null);
     startSending(async () => {
-      const result = await startDesignAction(projectId, asset.id, { prompt: trimmed });
+      const result = await spend.run({
+        target: { kind: "asset", assetId: asset.id, step: "look" },
+        title: "Create this image?",
+        description: `The designer draws ${asset.name} from your description.`,
+        confirmLabel: "Create image",
+        submit: (expectedCredits) =>
+          startDesignAction(projectId, asset.id, { prompt: trimmed }, expectedCredits),
+      });
+      if (result === null) return;
       if (!result.ok) {
         setError(result.error);
         return;
@@ -451,6 +461,7 @@ function DesignForMe({
   back: ReactNode;
 }) {
   const { moveOn } = useAssetScreen();
+  const spend = useSpend();
   const id = useId();
   const [error, setError] = useState<string | null>(null);
   const [sending, startSending] = useTransition();
@@ -458,7 +469,14 @@ function DesignForMe({
   function generate() {
     setError(null);
     startSending(async () => {
-      const result = await startDesignAction(projectId, asset.id, {});
+      const result = await spend.run({
+        target: { kind: "asset", assetId: asset.id, step: "look" },
+        title: "Create this image?",
+        description: `The designer draws ${asset.name} from the script and the project.`,
+        confirmLabel: "Create image",
+        submit: (expectedCredits) => startDesignAction(projectId, asset.id, {}, expectedCredits),
+      });
+      if (result === null) return;
       if (!result.ok) {
         setError(result.error);
         return;

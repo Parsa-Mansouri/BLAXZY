@@ -18,7 +18,18 @@
 import "dotenv/config";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import sharp from "sharp";
-import {
+import * as assetsModule from "../src/server/assets";
+import type { AssetCard, AssetDetail } from "../src/server/assets";
+import { ASSET_SPEND_FUNCTIONS, autoConfirm } from "../src/server/test-support/confirm-fixtures";
+import { getBalance, grantCredits } from "../src/server/billing";
+import { AI_DECIDES, getDamiMode, type GuidedQuestion } from "../src/server/damis";
+import { getDb } from "../src/server/db/client";
+import { ASSET_KINDS, project, type AssetKind } from "../src/server/db/schema";
+import { putFileBytes } from "../src/server/storage";
+import { assertDevOnly, findOwnerId, pollUntil, runScript } from "./_lib";
+
+/** The paid steps confirm the current price on their own (a person would see it in the dialog). */
+const {
   addAsset,
   answerLookQuestion,
   getAssetDetail,
@@ -31,15 +42,7 @@ import {
   submitLookReview,
   submitSheetReview,
   submitSheetViewReview,
-  type AssetCard,
-  type AssetDetail,
-} from "../src/server/assets";
-import { getBalance, grantCredits } from "../src/server/billing";
-import { AI_DECIDES, getDamiMode, type GuidedQuestion } from "../src/server/damis";
-import { getDb } from "../src/server/db/client";
-import { ASSET_KINDS, project, type AssetKind } from "../src/server/db/schema";
-import { putFileBytes } from "../src/server/storage";
-import { assertDevOnly, findOwnerId, pollUntil, runScript } from "./_lib";
+} = autoConfirm(assetsModule, ASSET_SPEND_FUNCTIONS);
 
 const PROJECT_TITLE = "The Lighthouse Keeper";
 /** Looks and sheets for the character, the location pack's and prop sheet's views, plus room. */

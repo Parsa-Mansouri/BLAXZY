@@ -131,6 +131,7 @@ async function main(): Promise<void> {
     prompt: "An old fisherman with a grey beard and a yellow raincoat, harbour at dawn",
     label,
     style,
+    maxCredits: lookQuote.priceCredits,
   });
   const lookDone = await waitFinished(look.generationId, userId);
   await report("look", lookDone, userId);
@@ -147,6 +148,7 @@ async function main(): Promise<void> {
     label,
     referenceFileIds: [lookDone.resultFileId],
     style,
+    maxCredits: sheetQuote.priceCredits,
   });
   const sheetDone = await waitFinished(sheet.generationId, userId);
   await report("sheet", sheetDone, userId);
@@ -166,7 +168,11 @@ async function main(): Promise<void> {
   console.log(
     `Draft clip (quoted ${draftQuote.priceCredits}), ${CLIP_SECONDS} s, the sheet as reference:`,
   );
-  const draft = await requestGeneration({ ...shot, purpose: "block_draft" });
+  const draft = await requestGeneration({
+    ...shot,
+    purpose: "block_draft",
+    maxCredits: draftQuote.priceCredits,
+  });
   const draftDone = await waitFinished(draft.generationId, userId);
   await report("draft", draftDone, userId);
   if (draftDone.status !== "succeeded") throw new Error("The draft did not succeed");
@@ -177,6 +183,7 @@ async function main(): Promise<void> {
     purpose: "block_final",
     sound: true,
     draftGenerationId: draftDone.id,
+    maxCredits: finalQuote.priceCredits,
   });
   const finalDone = await waitFinished(final.generationId, userId);
   await report("final", finalDone, userId);

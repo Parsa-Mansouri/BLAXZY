@@ -172,7 +172,7 @@ The owner's 20-point checklist, as kit rules. The kit already follows them; scre
   `toolbar`, `line`), `Textarea`, `Select`, `Menu`, `SegmentedControl`, `ChoiceCards`,
   `DatePicker`, `DurationInput`.
 - Lists: `GroupedList`, `GroupedListRow`, `GroupedListField`, `GroupedListButton`.
-- Overlays: `Sheet` (also `Dialog`), `Alert`, `Popover`, `Tooltip`, toasts (`useToast`; with `media` a
+- Overlays: `Sheet` (also `Dialog`), `Alert`, `ConfirmCredits` (price, balance after, "Don't ask again"; hosted by the app's `SpendConfirmProvider`), `Popover`, `Tooltip`, toasts (`useToast`; with `media` a
   toast shows a large picture, with `href` all of it is a link, with `persistent` it stays).
 - Status: `StatusLine`, `StatusDot`, `Badge`, `Spinner`, `ProgressBar`.
 - Loading: `Skeleton`, `SkeletonRegion`, `SkeletonHeader`, `SkeletonText`, `SkeletonTile`,

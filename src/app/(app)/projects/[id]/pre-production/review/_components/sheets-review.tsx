@@ -1,5 +1,6 @@
 "use client";
 
+import { useSpend } from "@/app/(app)/_components/spend-confirm";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { fileSrc } from "@/lib/file-src";
@@ -148,6 +149,7 @@ export function SheetsReview({
     0,
     items.findIndex((i) => i.id === selected),
   );
+  const spend = useSpend();
   const current = items[index] ?? null;
   const sheet = current ? sheets[current.id] : undefined;
 
@@ -243,7 +245,20 @@ export function SheetsReview({
     if (!current || !sheet) return;
     setPanelError(null);
     startSending(async () => {
-      const result = await requestSheetChangesAction(projectId, sheet.sheetId, input);
+      const result = await spend.run({
+        target: {
+          kind: "asset_review",
+          assetId: current.id,
+          subject: "sheet",
+          decision: "rejected",
+          designChange: input.designChange,
+        },
+        title: "Make a new sheet?",
+        confirmLabel: "Make it",
+        submit: (expectedCredits) =>
+          requestSheetChangesAction(projectId, sheet.sheetId, input, expectedCredits),
+      });
+      if (result === null) return;
       if (!result.ok) {
         setPanelError(result.error);
         return;

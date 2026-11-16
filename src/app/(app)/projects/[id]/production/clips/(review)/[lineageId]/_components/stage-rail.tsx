@@ -1,5 +1,6 @@
 "use client";
 
+import { useSpend } from "@/app/(app)/_components/spend-confirm";
 import { useState, useTransition, type ReactNode, type RefObject } from "react";
 import Link from "next/link";
 import type { BlockProductionStage, TakeView } from "@/server/production";
@@ -189,6 +190,7 @@ export function FailedPanel({
   balance: number;
   onDone: () => void;
 }) {
+  const spend = useSpend();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const final = take.stage === "final";
@@ -197,7 +199,13 @@ export function FailedPanel({
   function retry() {
     setError(null);
     startTransition(async () => {
-      const result = await retryTakeAction(projectId, take.id);
+      const result = await spend.run({
+        target: { kind: "take", takeId: take.id, action: "retry" },
+        title: final ? "Try the final again?" : "Try the draft again?",
+        confirmLabel: "Try again",
+        submit: (expectedCredits) => retryTakeAction(projectId, take.id, expectedCredits),
+      });
+      if (result === null) return;
       if (!result.ok) {
         setError(result.error);
         return;

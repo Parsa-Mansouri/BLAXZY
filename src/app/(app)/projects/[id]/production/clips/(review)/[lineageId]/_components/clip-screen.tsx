@@ -1,5 +1,6 @@
 "use client";
 
+import { useSpend } from "@/app/(app)/_components/spend-confirm";
 import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
@@ -203,6 +204,7 @@ export function ClipScreen(props: ClipScreenProps) {
   const playingLabel = playing ? (labels.get(playing.id) ?? "Take") : null;
 
   // Decisions: accept or request changes, then move on to the next shot waiting for review.
+  const spend = useSpend();
   const [deciding, setDeciding] = useState<"accepted" | "rejected" | null>(null);
   const [, startDeciding] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -214,12 +216,24 @@ export function ClipScreen(props: ClipScreenProps) {
     setDeciding(review.decision);
     startDeciding(async () => {
       try {
-        const result = await reviewTakeAction(
-          projectId,
-          { lineageId: shot.lineageId, orderIndex: shot.orderIndex },
-          take.id,
-          review,
-        );
+        const accepted = review.decision === "accepted";
+        const result = await spend.run({
+          target: { kind: "take", takeId: take.id, action: accepted ? "accept" : "reject" },
+          title: accepted ? "Make the final clip?" : "Make a new draft?",
+          description: accepted
+            ? "Accepting this draft makes the full-quality clip from it."
+            : "A new draft is made with your changes.",
+          confirmLabel: accepted ? "Accept and make final" : "Make new draft",
+          submit: (expectedCredits) =>
+            reviewTakeAction(
+              projectId,
+              { lineageId: shot.lineageId, orderIndex: shot.orderIndex },
+              take.id,
+              review,
+              expectedCredits,
+            ),
+        });
+        if (result === null) return;
         if (!result.ok) {
           (fromAsk ? setAskError : setError)(result.error);
           return;

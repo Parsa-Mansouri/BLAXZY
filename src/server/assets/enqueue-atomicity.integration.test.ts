@@ -26,7 +26,10 @@ const jobSchema = pointQueueAtThrowawaySchema();
 const reachable = await databaseReachable();
 
 describe.skipIf(!reachable)("jobs are sent with their rows (integration)", async () => {
-  const assets = await import("@/server/assets");
+  const { autoConfirm, ASSET_SPEND_FUNCTIONS } =
+    await import("@/server/test-support/confirm-fixtures");
+  const assets = autoConfirm(await import("@/server/assets"), ASSET_SPEND_FUNCTIONS);
+  const { grantCredits } = await import("@/server/billing");
   const { closeJobQueue } = await import("@/server/jobs");
   const { closeDb, getDb } = await import("@/server/db/client");
   const s = await import("@/server/db/schema");
@@ -45,6 +48,7 @@ describe.skipIf(!reachable)("jobs are sent with their rows (integration)", async
   async function setup() {
     const userId = await fixtures.newUser();
     const projectId = await fixtures.newPreProductionProject(userId);
+    await grantCredits({ userId, amount: 100 });
     return { userId, projectId };
   }
 

@@ -24,7 +24,7 @@ import { mergeBlocksSnapshot } from "../_lib/merge-snapshot";
 import { attentionTone, attentionWords, needsReview } from "../_lib/block-state";
 import { BlockRow, PendingBlockRow } from "./block-row";
 import { useChangedKeys } from "../../_components/feedback";
-import { GenerateSheet } from "./generate-sheet";
+import { GenerateDrafts } from "./generate-sheet";
 import { FillPage } from "../../_components/fill-page";
 
 /**
@@ -184,7 +184,7 @@ export function BlocksScreen({
           className="flex-[2_1_320px]"
           title="Generate Drafts"
           description="A quick, lower-quality version of each shot, to check the action and framing before the full-quality clip."
-          cta="See the Price"
+          cta="Start the Drafts"
           onClick={() => setGenerateOpen(true)}
         />
       );
@@ -274,7 +274,7 @@ export function BlocksScreen({
         error={approveError}
       />
       {generateOpen ? (
-        <GenerateSheet open onOpenChange={setGenerateOpen} projectId={projectId} />
+        <GenerateDrafts projectId={projectId} onClose={() => setGenerateOpen(false)} />
       ) : null}
     </FillPage>
   );

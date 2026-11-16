@@ -86,6 +86,7 @@ describe.skipIf(!reachable)("generation durability (integration, sample provider
     purpose: "asset_look" as const,
     prompt,
     style: TEST_STYLE,
+    maxCredits: 1_000,
   });
 
   class Rollback extends Error {}

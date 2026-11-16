@@ -321,6 +321,8 @@ export async function requestLookGeneration(lookId: string): Promise<RequestOutc
           : {}),
         // A new version of a rejected look (a fix or a re-roll) gets its own seed.
         ...(row.look.parentId ? { variant: row.look.id } : {}),
+        // Never more than the user confirmed when this look was started.
+        maxCredits: row.look.confirmedCredits,
       },
       tx,
     );
@@ -364,6 +366,7 @@ export async function requestSheetGeneration(sheetId: string): Promise<RequestOu
         style: row.project.style,
         // A new version of a rejected sheet (a fix or a re-roll) gets its own seed.
         ...(row.sheet.parentId ? { variant: row.sheet.id } : {}),
+        maxCredits: row.sheet.confirmedCredits,
       },
       tx,
     );

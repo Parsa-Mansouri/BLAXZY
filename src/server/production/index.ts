@@ -58,6 +58,7 @@ export {
   type ProductionSectionStatus,
 } from "./read";
 export { retryTake, submitTakeReview } from "./take-review";
+export { quoteTakeSpend } from "./spend";
 export {
   DEFAULT_CLIP_PAGE_SIZE,
   getClipDownloadUrl,

@@ -7,6 +7,7 @@ import {
   type LookReviewInput,
   type ReviewInput,
 } from "../../actions";
+import { useSpend } from "@/app/(app)/_components/spend-confirm";
 import { useAssetScreen } from "../asset-context";
 
 /** What a decision started, for the line shown while moving on to the next asset. */
@@ -38,6 +39,7 @@ export function useReview(
   initialAsking: boolean,
 ) {
   const { moveOn } = useAssetScreen();
+  const spend = useSpend();
   const [accepting, startAccepting] = useTransition();
   const [sending, startSending] = useTransition();
   const [errors, setErrors] = useState<Partial<Record<ErrorPlace, string>>>({});
@@ -53,10 +55,32 @@ export function useReview(
     const start = review.decision === "accepted" ? startAccepting : startSending;
     setErrors({});
     start(async () => {
-      const result =
-        target.kind === "look"
-          ? await reviewLookAction(projectId, target.id, review, asset.id)
-          : await reviewSheetAction(projectId, target.id, review, asset.id);
+      const accepted = review.decision === "accepted";
+      const result = await spend.run({
+        target: {
+          kind: "asset_review",
+          assetId: asset.id,
+          subject: target.kind,
+          decision: review.decision,
+          designChange: "designChange" in review ? review.designChange : undefined,
+        },
+        title:
+          target.kind === "look"
+            ? accepted
+              ? "Build the sheet?"
+              : "Make a new image?"
+            : "Make a new sheet?",
+        description:
+          target.kind === "look" && accepted
+            ? `Accepting this image starts ${asset.name}’s sheet.`
+            : undefined,
+        confirmLabel: target.kind === "look" && accepted ? "Accept and build" : "Make it",
+        submit: (expectedCredits) =>
+          target.kind === "look"
+            ? reviewLookAction(projectId, target.id, review, asset.id, expectedCredits)
+            : reviewSheetAction(projectId, target.id, review, asset.id, expectedCredits),
+      });
+      if (result === null) return;
       if (!result.ok) {
         setErrors({ [place]: result.error });
         return;

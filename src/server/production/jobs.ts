@@ -474,6 +474,7 @@ export async function requestTakeGeneration(takeId: string): Promise<RequestOutc
         durationSeconds: block.durationSeconds ?? undefined,
         sound: true,
         draftGenerationId,
+        maxCredits: row.confirmedCredits,
       },
       tx,
     );

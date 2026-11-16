@@ -1,5 +1,6 @@
 "use client";
 
+import { useSpend } from "@/app/(app)/_components/spend-confirm";
 import { useEffect, useId, useRef, useState, useTransition, type KeyboardEvent } from "react";
 import { Button, SwapFade, TextLink, Textarea, isTypingTarget, stagger } from "@/ui";
 import type { GuidedDraft } from "../_lib/guided-draft";
@@ -116,6 +117,7 @@ export function GuidedFlow({
   onMethod: (method: "prompt" | "photos") => void;
 }) {
   const { moveOn, shown } = useAssetScreen();
+  const spend = useSpend();
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -292,7 +294,15 @@ export function GuidedFlow({
     }
     setError(null);
     startSending(async () => {
-      const result = await startFromGuidedAction(projectId, assetId, guided);
+      const result = await spend.run({
+        target: { kind: "asset", assetId, step: "look" },
+        title: "Create this image?",
+        description: `The designer draws ${assetName} from your answers.`,
+        confirmLabel: "Create image",
+        submit: (expectedCredits) =>
+          startFromGuidedAction(projectId, assetId, guided, expectedCredits),
+      });
+      if (result === null) return;
       if (!result.ok) {
         setError(result.error);
         return;

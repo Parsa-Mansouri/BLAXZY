@@ -411,6 +411,11 @@ export const user = pgTable("user", {
   image: text("image"),
   role: text("role").$type<UserRole>().notNull().default("user"),
   disabled: boolean("disabled").notNull().default(false),
+  /**
+   * The user's choice to skip the "this will cost N credits" dialog before a paid generation. Only
+   * the screens read it: the server checks the confirmed price whatever it says.
+   */
+  skipCreditConfirm: boolean("skip_credit_confirm").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -1147,6 +1152,12 @@ export const assetLook = pgTable(
     clarifyAnswers: jsonb("clarify_answers").$type<Record<string, string>>(),
     generationId: uuid("generation_id").references(() => generation.id),
     damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    /**
+     * The price per generation (credits) the user confirmed when the action that leads to this
+     * row's generation was taken. The worker never reserves more than this; null is never
+     * spent without a new confirmation.
+     */
+    confirmedCredits: integer("confirmed_credits"),
     failure: text("failure"),
     createdBy: text("created_by").references(() => user.id),
     createdAt: createdAt(),
@@ -1181,6 +1192,12 @@ export const assetSheet = pgTable(
     spec: jsonb("spec").$type<SheetSpec>(),
     generationId: uuid("generation_id").references(() => generation.id),
     damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    /**
+     * The price per generation (credits) the user confirmed when the action that leads to this
+     * row's generation was taken. The worker never reserves more than this; null is never
+     * spent without a new confirmation.
+     */
+    confirmedCredits: integer("confirmed_credits"),
     failure: text("failure"),
     createdAt: createdAt(),
     decidedAt: ts("decided_at"),
@@ -1264,6 +1281,12 @@ export const assetSheetView = pgTable(
     generationId: uuid("generation_id").references(() => generation.id),
     fileId: uuid("file_id").references(() => file.id),
     damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    /**
+     * The price per generation (credits) the user confirmed when the action that leads to this
+     * row's generation was taken (null on a planned view: the sheet's confirmation covers it). The worker never reserves more than this; null is never
+     * spent without a new confirmation.
+     */
+    confirmedCredits: integer("confirmed_credits"),
     failure: text("failure"),
     createdAt: createdAt(),
     decidedAt: ts("decided_at"),
@@ -1316,6 +1339,12 @@ export const blockTake = pgTable(
     fileId: uuid("file_id").references(() => file.id),
     posterFileId: uuid("poster_file_id").references(() => file.id),
     damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    /**
+     * The price per generation (credits) the user confirmed when the action that leads to this
+     * row's generation was taken. The worker never reserves more than this; null is never
+     * spent without a new confirmation.
+     */
+    confirmedCredits: integer("confirmed_credits"),
     failure: text("failure"),
     createdAt: createdAt(),
     decidedAt: ts("decided_at"),

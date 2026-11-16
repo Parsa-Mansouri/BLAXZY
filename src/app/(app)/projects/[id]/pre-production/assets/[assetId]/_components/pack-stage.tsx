@@ -1,5 +1,6 @@
 "use client";
 
+import { useSpend } from "@/app/(app)/_components/spend-confirm";
 import { useState, useTransition, type ReactNode } from "react";
 import type { DnaCard, LookView, PackLockGate, PackView, SheetView } from "@/server/assets";
 import { Button, ProgressBar, StatusDot, SwapFade, cn, type StatusTone } from "@/ui";
@@ -210,6 +211,7 @@ export function PackReviewStage({
   initialAsking?: boolean;
 }) {
   const { moveOn, refresh } = useAssetScreen();
+  const spend = useSpend();
   const { kind, views } = pack;
   const marking = useMarking();
   // The view on screen, by its stable view id (versions change ids); null follows the work.
@@ -266,7 +268,20 @@ export function PackReviewStage({
     const place = input.decision === "accepted" ? "decision" : "panel";
     setErrors({});
     start(async () => {
-      const result = await reviewSheetViewAction(projectId, target.id, input, assetId);
+      const result = await spend.run({
+        target: {
+          kind: "asset_review",
+          assetId,
+          subject: "view",
+          decision: input.decision,
+          designChange: input.designChange,
+        },
+        title: "Make a new version of this view?",
+        confirmLabel: "Make it",
+        submit: (expectedCredits) =>
+          reviewSheetViewAction(projectId, target.id, input, assetId, expectedCredits),
+      });
+      if (result === null) return;
       if (!result.ok) {
         setErrors({ [place]: result.error });
         return;
@@ -296,7 +311,13 @@ export function PackReviewStage({
   function retry(target: PackView) {
     setErrors({});
     startRetrying(async () => {
-      const result = await retrySheetViewAction(projectId, target.id);
+      const result = await spend.run({
+        target: { kind: "asset", assetId, step: "sheet" },
+        title: "Try this view again?",
+        confirmLabel: "Try again",
+        submit: (expectedCredits) => retrySheetViewAction(projectId, target.id, expectedCredits),
+      });
+      if (result === null) return;
       if (!result.ok) {
         setErrors({ decision: result.error });
         return;

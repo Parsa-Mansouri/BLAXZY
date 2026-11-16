@@ -94,6 +94,7 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
       label: "Harbour at dawn",
       durationSeconds: 3,
       style: TEST_STYLE,
+      maxCredits: 1_000,
       ...extra,
     });
     await run(draft.generationId);
@@ -119,6 +120,7 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
           label: "Harbour at dawn",
           durationSeconds: 4,
           style: TEST_STYLE,
+          maxCredits: 1_000,
         });
         expect(draft.priceCredits).toBe(20);
         expect(await billing.getBalance(userId)).toBe(80);
@@ -186,6 +188,7 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
         sound: true,
         draftGenerationId: draftId,
         style: TEST_STYLE,
+        maxCredits: 1_000,
       });
       expect(final.priceCredits).toBe(60);
       await run(final.generationId);
@@ -215,6 +218,7 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
         prompt: "a storm [[fail]]",
         durationSeconds: 2,
         style: TEST_STYLE,
+        maxCredits: 1_000,
       });
       expect(await billing.getBalance(userId)).toBe(30);
       await run(generationId);
@@ -238,6 +242,7 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
         prompt: "[[fail]]",
         durationSeconds: 1,
         style: TEST_STYLE,
+        maxCredits: 1_000,
       });
       await run(failedDraft.generationId);
       const look = await requestOnly({
@@ -246,6 +251,7 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
         purpose: "asset_look",
         prompt: "a look",
         style: TEST_STYLE,
+        maxCredits: 1_000,
       });
       await run(look.generationId);
       const balance = await billing.getBalance(userId);
@@ -257,6 +263,7 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
           purpose: "block_final",
           prompt: "final",
           style: TEST_STYLE,
+          maxCredits: 1_000,
           ...(draftGenerationId !== undefined ? { draftGenerationId } : {}),
         });
       await expect(final()).rejects.toThrow(/needs the accepted draft/);
@@ -278,6 +285,7 @@ describe.skipIf(!reachable)("video generations and the sweep (integration)", asy
           prompt: "a draft from a draft",
           draftGenerationId: draftElsewhere,
           style: TEST_STYLE,
+          maxCredits: 1_000,
         }),
       ).rejects.toThrow(/Only a final/);
       expect(await billing.getBalance(userId)).toBe(balance);

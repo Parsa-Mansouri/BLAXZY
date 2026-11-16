@@ -18,11 +18,13 @@ import { AssetInputError, parse } from "../service";
 import type { AssetStage } from "../stage";
 import { assertActive, isUuid, lockAsset } from "./access";
 import { enqueueLookJob } from "./enqueue";
+import { confirmAssetSpend } from "./spend";
 import {
   answersSchema,
   assetRefInput,
   designInput,
   guidedInput,
+  expectedCreditsField,
   idSchema,
   promptInput,
   uploadInput,
@@ -171,6 +173,7 @@ async function startGeneratedLook(
     userPrompt?: string;
     answers?: Record<string, string>;
     references?: ReferenceInput[];
+    expectedCredits?: number;
   },
 ): Promise<LookView | null> {
   if (!isUuid(assetId)) return null;
@@ -198,6 +201,12 @@ async function startGeneratedLook(
       ? validateGuidedAnswers(questionsFor(row, owner.style), values.answers)
       : null;
     await assertCanStartLook(tx, row);
+    const confirmedCredits = await confirmAssetSpend(tx, {
+      owner,
+      userId,
+      step: "look",
+      expectedCredits: values.expectedCredits,
+    });
     const waitingFor = await locationsInFlight(tx, row);
     const look = await insertLook(tx, {
       assetId: row.id,
@@ -207,6 +216,7 @@ async function startGeneratedLook(
       userPrompt: values.userPrompt ?? null,
       guidedAnswers,
       references,
+      confirmedCredits,
       createdBy: userId,
     });
     const source = guidedAnswers
@@ -235,14 +245,19 @@ async function startGeneratedLook(
   return loadLookView(getDb(), created.id);
 }
 
-/** Generates a look from the user's own description: look pending, `asset.look.generate`. */
+/**
+ * Generates a look from the user's own description: look pending, `asset.look.generate`. Every
+ * design that generates (this one, guided answers, `startDesign`) spends: `expectedCredits` must
+ * be the price the user saw (`PriceChangedError`, `InsufficientCreditsError`).
+ */
 export async function startLookFromPrompt(input: {
   assetId: string;
   userId: string;
   prompt: string;
+  expectedCredits?: number;
 }): Promise<LookView | null> {
-  const { assetId, userId, prompt } = parse(promptInput, input);
-  return startGeneratedLook(assetId, userId, { userPrompt: prompt });
+  const { assetId, userId, prompt, expectedCredits } = parse(promptInput, input);
+  return startGeneratedLook(assetId, userId, { userPrompt: prompt, expectedCredits });
 }
 
 /**
@@ -253,9 +268,10 @@ export async function startLookFromGuided(input: {
   assetId: string;
   userId: string;
   answers: Record<string, string>;
+  expectedCredits?: number;
 }): Promise<LookView | null> {
-  const { assetId, userId, answers } = parse(guidedInput, input);
-  return startGeneratedLook(assetId, userId, { answers });
+  const { assetId, userId, answers, expectedCredits } = parse(guidedInput, input);
+  return startGeneratedLook(assetId, userId, { answers, expectedCredits });
 }
 
 /**
@@ -269,9 +285,14 @@ export async function startDesign(input: {
   prompt?: string;
   answers?: Record<string, string>;
   references?: ReferenceInput[];
+  expectedCredits?: number;
 }): Promise<LookView | null> {
-  const { assetId, userId, prompt, answers, references } = parse(designInput, input);
+  const { assetId, userId, prompt, answers, references, expectedCredits } = parse(
+    designInput,
+    input,
+  );
   return startGeneratedLook(assetId, userId, {
+    expectedCredits,
     ...(prompt ? { userPrompt: prompt } : {}),
     ...(answers && Object.keys(answers).length > 0 ? { answers } : {}),
     ...(references ? { references } : {}),
@@ -321,9 +342,15 @@ export async function answerLookQuestion(input: {
   lookId: string;
   userId: string;
   answers: Record<string, string>;
+  expectedCredits?: number;
 }): Promise<AssetStage | null> {
-  const { lookId, userId, answers } = parse(
-    z.object({ lookId: idSchema, userId: userIdSchema, answers: answersSchema }),
+  const { lookId, userId, answers, expectedCredits } = parse(
+    z.object({
+      lookId: idSchema,
+      userId: userIdSchema,
+      answers: answersSchema,
+      expectedCredits: expectedCreditsField,
+    }),
     input,
   );
   if (!isUuid(lookId)) return null;
@@ -356,6 +383,12 @@ export async function answerLookQuestion(input: {
         throw new AssetInputError(`Answer “${q.question}”, or choose I’m not sure.`);
       }
     }
+    const confirmedCredits = await confirmAssetSpend(tx, {
+      owner: locked.project,
+      userId,
+      step: "look",
+      expectedCredits,
+    });
     const now = new Date();
     await tx
       .update(assetLook)
@@ -371,6 +404,7 @@ export async function answerLookQuestion(input: {
       guidedAnswers: latest.guidedAnswers,
       references: latest.references,
       clarifyAnswers: clarify,
+      confirmedCredits,
       createdBy: userId,
     });
     await logProjectEvent(tx, {

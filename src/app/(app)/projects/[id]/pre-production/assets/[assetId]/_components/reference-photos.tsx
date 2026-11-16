@@ -1,5 +1,6 @@
 "use client";
 
+import { useSpend } from "@/app/(app)/_components/spend-confirm";
 import {
   useEffect,
   useEffectEvent,
@@ -197,6 +198,7 @@ export function ReferencePhotos({
   back: ReactNode;
 }) {
   const { moveOn } = useAssetScreen();
+  const spend = useSpend();
   const id = useId();
   const signal = useAbortOnUnmount();
   const input = useRef<HTMLInputElement>(null);
@@ -296,10 +298,20 @@ export function ReferencePhotos({
     );
     setError(null);
     startSending(async () => {
-      const result = await startDesignAction(projectId, asset.id, {
-        references,
-        ...(words ? { prompt: words } : {}),
+      const result = await spend.run({
+        target: { kind: "asset", assetId: asset.id, step: "look" },
+        title: "Create this image?",
+        description: `The designer draws ${asset.name} from your photos.`,
+        confirmLabel: "Create image",
+        submit: (expectedCredits) =>
+          startDesignAction(
+            projectId,
+            asset.id,
+            { references, ...(words ? { prompt: words } : {}) },
+            expectedCredits,
+          ),
       });
+      if (result === null) return;
       if (!result.ok) {
         setError({ text: result.error });
         return;

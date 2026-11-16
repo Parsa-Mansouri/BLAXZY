@@ -115,6 +115,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
         prompt: "An old fisherman with a grey beard",
         label: "Tomas",
         style: TEST_STYLE,
+        maxCredits: 1_000,
       });
       expect(look.priceCredits).toBe(4);
       expect(await billing.getBalance(userId)).toBe(16);
@@ -148,6 +149,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
         label: "Tomas",
         referenceFileIds: [done?.resultFileId ?? ""],
         style: TEST_STYLE,
+        maxCredits: 1_000,
       });
       await run(sheet.generationId);
       const sheetDone = await gen.getGeneration(sheet.generationId, userId);
@@ -171,6 +173,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
         purpose: "asset_look",
         prompt: "x",
         style: TEST_STYLE,
+        maxCredits: 1_000,
       })
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(billing.InsufficientCreditsError);
@@ -182,6 +185,39 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
     expect(await billing.getBalance(userId)).toBe(3);
   });
 
+  it("never reserves more than the confirmed price, and nothing without one", async () => {
+    const { userId, projectId } = await funded(100);
+    const base = {
+      userId,
+      projectId,
+      purpose: "asset_look" as const,
+      prompt: "x",
+      style: TEST_STYLE,
+    };
+    const count = async () => {
+      const [{ n } = { n: -1 }] = await getDb()
+        .select({ n: sql<number>`count(*)::int` })
+        .from(generation)
+        .where(eq(generation.userId, userId));
+      return n;
+    };
+    // The sample price of a look is 4.
+    await expect(gen.requestGeneration({ ...base, maxCredits: null })).rejects.toBeInstanceOf(
+      gen.PriceChangedError,
+    );
+    await expect(gen.requestGeneration({ ...base, maxCredits: 3 })).rejects.toBeInstanceOf(
+      gen.PriceChangedError,
+    );
+    expect(await count()).toBe(0);
+    expect(await billing.getBalance(userId)).toBe(100);
+    // The confirmed price (or more) goes through, charged at the real price.
+    const exact = await gen.requestGeneration({ ...base, maxCredits: 4 });
+    const more = await gen.requestGeneration({ ...base, maxCredits: 50 });
+    expect(exact.priceCredits).toBe(4);
+    expect(more.priceCredits).toBe(4);
+    expect(await billing.getBalance(userId)).toBe(92);
+  });
+
   it("validates input: project ownership, prompt, a final without its draft", async () => {
     const { userId, projectId } = await funded();
     const other = await funded();
@@ -191,6 +227,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
       purpose: "asset_look" as const,
       prompt: "x",
       style: TEST_STYLE,
+      maxCredits: 1_000,
     };
     await expect(gen.requestGeneration({ ...base, projectId: other.projectId })).rejects.toThrow(
       gen.GenerationInputError,
@@ -215,6 +252,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
       purpose: "asset_look" as const,
       prompt: "A brass locket",
       style: TEST_STYLE,
+      maxCredits: 1_000,
       aspectRatio: "3:4" as const,
     };
     const first = await requestOnly(input);
@@ -239,6 +277,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
         purpose: "asset_look",
         prompt: "please [[fail]]",
         style: TEST_STYLE,
+        maxCredits: 1_000,
       });
       expect(await billing.getBalance(userId)).toBe(6);
       await run(generationId);
@@ -263,6 +302,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
       purpose: "asset_look",
       prompt: "a lighthouse [[flaky]]",
       style: TEST_STYLE,
+      maxCredits: 1_000,
     });
     // The job is ready the instant it is created (sample delay 0) and reports its transient
     // failure for FLAKY_WINDOW_MS after that: with the clock frozen, attempt 1 is always inside
@@ -290,6 +330,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
       purpose: "asset_look",
       prompt: "[[flaky]]",
       style: TEST_STYLE,
+      maxCredits: 1_000,
     });
     await run(generationId, 4); // retryLimit 3 → the 4th attempt is the last
     expect((await row(generationId)).status).toBe("failed");
@@ -305,6 +346,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
       purpose: "asset_look",
       prompt: "twice in turn",
       style: TEST_STYLE,
+      maxCredits: 1_000,
     });
     await run(first.generationId);
     await run(first.generationId);
@@ -316,6 +358,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
       purpose: "asset_look",
       prompt: "twice at once",
       style: TEST_STYLE,
+      maxCredits: 1_000,
     });
     await Promise.all([run(second.generationId), run(second.generationId)]);
     expect((await row(second.generationId)).status).toBe("succeeded");
@@ -346,6 +389,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
         prompt: "sheet",
         referenceFileIds: [theirs.id],
         style: TEST_STYLE,
+        maxCredits: 1_000,
       }),
     ).rejects.toThrow(gen.GenerationInputError);
     expect(await billing.getBalance(owner.userId)).toBe(10);
@@ -378,6 +422,7 @@ describe.skipIf(!reachable)("generation engine (integration, sample provider)", 
       purpose: "asset_look",
       prompt: "wait your turn",
       style: TEST_STYLE,
+      maxCredits: 1_000,
     });
     const create = vi.spyOn(provider, "create");
     // The job sent with the request is the one running now (the handler is called directly).

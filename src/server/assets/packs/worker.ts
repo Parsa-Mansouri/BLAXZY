@@ -255,6 +255,9 @@ export async function advanceSheetViews(
             aspectRatio: locked.aspectRatio,
             // Every version of a view is its own seed (a re-roll keeps the prompt).
             variant: locked.id,
+            // A fix, re-roll or retry carries its own confirmation; the views of the plan the
+            // sheet's (each costs one view, at most MAX_VIEWS of them).
+            maxCredits: locked.confirmedCredits ?? ctx.sheet.confirmedCredits,
           },
           tx,
         );

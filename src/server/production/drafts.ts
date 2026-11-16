@@ -100,6 +100,8 @@ export async function startDrafts(input: {
         status: "pending" as const,
         prompt: block.productionPrompt,
         damiRunId: block.productionDamiRunId,
+        // What the user confirmed for each draft: the worker spends no more on it.
+        confirmedCredits: quote.each,
       })),
     );
     await logProjectEvent(tx, {

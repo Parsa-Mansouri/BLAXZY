@@ -17,6 +17,11 @@ import { getBalance, grantCredits } from "../src/server/billing";
 import { getDamiMode } from "../src/server/damis";
 import { getDb } from "../src/server/db/client";
 import { project } from "../src/server/db/schema";
+import * as productionModule from "../src/server/production";
+import {
+  PRODUCTION_SPEND_FUNCTIONS,
+  autoConfirm,
+} from "../src/server/test-support/confirm-fixtures";
 import {
   approveAllBlocks,
   ensurePrepared,
@@ -25,12 +30,14 @@ import {
   listProductionBlocks,
   quoteProduction,
   startDrafts,
-  submitTakeReview,
   type BlockProductionStage,
   type ProductionBlock,
   type ProductionOverview,
 } from "../src/server/production";
 import { assertDevOnly, findOwnerId, pollUntil, runScript } from "./_lib";
+
+/** A take decision that spends confirms the current price on its own (the dialog's job). */
+const { submitTakeReview } = autoConfirm(productionModule, PRODUCTION_SPEND_FUNCTIONS);
 
 const PROJECT_TITLE = process.argv[3] ?? "QA Run 14:03";
 /** Seven drafts (20 each), one fixed draft, seven finals (60 each), plus room. */

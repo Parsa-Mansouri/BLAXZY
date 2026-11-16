@@ -14,6 +14,14 @@ Paid jobs at a generation provider (`@/server/generation`, contract in
   `draftGenerationId`: a succeeded `block_draft` of the same user and project (checked inside the
   transaction), stored as `params.draftGenerationId`; the run passes that draft's provider job id
   to the provider as `draftProviderJobId`. Other purposes refuse a `draftGenerationId`.
+- `maxCredits` (required): the price the user confirmed, stored on the look, sheet, view or take
+  the generation is made for (`confirmed_credits`). A price above it, or `null` (never
+  confirmed), throws `PriceChangedError` and creates nothing: a worker never spends more than the
+  user agreed to. The user-facing side is `spend.ts`: `quoteSpend` (the price, the balance) and
+  `confirmSpend` (re-quote, compare with `expectedCredits`, check the balance), used by every
+  action that leads to a paid generation (pre-production designs, fixes, re-rolls, sheets, pack
+  views and their retries; production drafts, finals, new drafts and retries). There is no cap on
+  how many generations a block or asset may have.
 - `getGeneration(id, userId)`: `GenerationView` or null (with `posterFileId` for a video).
 - `onGenerationFinished(handler)`: completion hooks, registered by the worker. At-least-once:
   hooks must be idempotent.

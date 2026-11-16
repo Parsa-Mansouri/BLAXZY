@@ -35,6 +35,19 @@ describe.skipIf(!reachable)("billing (integration)", async () => {
     return { userId, projectId };
   }
 
+  it("the skip-confirmation preference is off by default and belongs to its user", async () => {
+    const { userId } = await userWithProject();
+    const other = await fixtures.newUser();
+    expect(await billing.getSkipCreditConfirm(userId)).toBe(false);
+    expect(await billing.setSkipCreditConfirm(userId, true)).toBe(true);
+    expect(await billing.getSkipCreditConfirm(userId)).toBe(true);
+    expect(await billing.getSkipCreditConfirm(other)).toBe(false);
+    expect(await billing.setSkipCreditConfirm(userId, false)).toBe(false);
+    expect(await billing.getSkipCreditConfirm(userId)).toBe(false);
+    // An unknown user has nothing to change.
+    expect(await billing.setSkipCreditConfirm("no-such-user", true)).toBe(false);
+  });
+
   it("grants, reserves, settles and refunds; the balance is the ledger's sum", async () => {
     const { userId, projectId } = await userWithProject();
     expect(await billing.getBalance(userId)).toBe(0);

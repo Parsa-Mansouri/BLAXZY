@@ -6,8 +6,9 @@ import { enqueue, takeFix, takeGenerate } from "@/server/jobs";
 import { logProjectEvent } from "@/server/projects";
 import { assertWritable, isUuid, lockLineage, parse, reviewReason, STALE_MESSAGE } from "./access";
 import { ProductionInputError } from "./errors";
-import { takeInput, takeReviewInput } from "./inputs";
+import { retryTakeInput, takeReviewInput } from "./inputs";
 import { NOT_IN_REVIEW } from "./messages";
+import { confirmTakeSpend } from "./spend";
 import type { BlockProductionStage } from "./stage";
 import { getTake, insertTake, latestLiveTake, type TakeRow } from "./takes";
 
@@ -20,13 +21,16 @@ async function enqueueTakeJob(tx: DbTx, take: Pick<TakeRow, "id" | "prompt">): P
  * Accepts or rejects the lineage's latest take in review, recording the review with the dami run
  * that wrote its prompt. Draft accepted: a final take is made from exactly that draft
  * (`take.generate`). Final accepted: the block is done. Rejected (a note is needed):
- * a new draft with a fixed prompt (`take.fix`).
+ * a new draft with a fixed prompt (`take.fix`). Both of those spend credits: `expectedCredits`
+ * must be the price the user saw (`PriceChangedError` otherwise, `InsufficientCreditsError` when
+ * the balance is short), and it is stored on the new take as all the worker may spend on it.
  */
 export async function submitTakeReview(input: {
   takeId: string;
   userId: string;
   decision: "accepted" | "rejected";
   note?: string;
+  expectedCredits?: number;
 }): Promise<BlockProductionStage | null> {
   const parsed = parse(takeReviewInput, input);
   const { takeId, userId, decision } = parsed;
@@ -44,6 +48,16 @@ export async function submitTakeReview(input: {
       throw new ProductionInputError(NOT_IN_REVIEW);
     }
     if (block.stale) throw new ProductionInputError(STALE_MESSAGE);
+    const spends = !(decision === "accepted" && latest.stage === "final");
+    const confirmedCredits = spends
+      ? await confirmTakeSpend(
+          tx,
+          project,
+          userId,
+          decision === "accepted" ? "final" : "draft",
+          parsed.expectedCredits,
+        )
+      : null;
     const now = new Date();
     await tx.insert(review).values({
       projectId: project.id,
@@ -85,6 +99,7 @@ export async function submitTakeReview(input: {
         prompt: latest.prompt,
         referenceFileIds: latest.referenceFileIds,
         damiRunId: latest.damiRunId,
+        confirmedCredits,
       });
       await logProjectEvent(tx, {
         projectId: project.id,
@@ -105,6 +120,7 @@ export async function submitTakeReview(input: {
       stage: "draft",
       status: "pending",
       parentId: latest.id,
+      confirmedCredits,
     });
     await logProjectEvent(tx, {
       projectId: project.id,
@@ -125,13 +141,15 @@ export async function submitTakeReview(input: {
 /**
  * Runs the lineage's latest take again after it failed: back to pending and its job re-enqueued.
  * The job re-runs the take-fixer only when no prompt was stored; the failed generation's credits
- * were refunded and are never reused.
+ * were refunded and are never reused. Spends again, so `expectedCredits` must be the price the
+ * user saw (see `submitTakeReview`).
  */
 export async function retryTake(input: {
   takeId: string;
   userId: string;
+  expectedCredits?: number;
 }): Promise<BlockProductionStage | null> {
-  const { takeId, userId } = parse(takeInput, input);
+  const { takeId, userId, expectedCredits } = parse(retryTakeInput, input);
   if (!isUuid(takeId)) return null;
   const take = await getDb().transaction(async (tx) => {
     const target = await getTake(tx, takeId);
@@ -145,9 +163,16 @@ export async function retryTake(input: {
     if (!latest || latest.id !== takeId || latest.status !== "failed") {
       throw new ProductionInputError("Only the latest clip that failed can be tried again.");
     }
+    const confirmedCredits = await confirmTakeSpend(
+      tx,
+      project,
+      userId,
+      latest.stage,
+      expectedCredits,
+    );
     const [updated] = await tx
       .update(blockTake)
-      .set({ status: "pending", failure: null, generationId: null })
+      .set({ status: "pending", failure: null, generationId: null, confirmedCredits })
       .where(and(eq(blockTake.id, takeId), eq(blockTake.status, "failed")))
       .returning();
     // The row is reset for the new attempt; the event keeps the link to the failed one.

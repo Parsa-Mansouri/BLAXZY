@@ -24,7 +24,12 @@ describe.skipIf(!hasFfmpeg)(
   { timeout: 120_000 },
   async () => {
     const { unzipSync } = await import("fflate");
-    const production = await import("../../src/server/production");
+    const { autoConfirm, PRODUCTION_SPEND_FUNCTIONS } =
+      await import("../../src/server/test-support/confirm-fixtures");
+    const production = autoConfirm(
+      await import("../../src/server/production"),
+      PRODUCTION_SPEND_FUNCTIONS,
+    );
     const billing = await import("../../src/server/billing");
     const blocks = await import("../../src/server/blocks");
     const gen = await import("../../src/server/generation");
@@ -594,6 +599,129 @@ describe.skipIf(!hasFfmpeg)(
       await expect(production.retryTake({ takeId: t1.id, userId })).rejects.toThrow(
         /Only the latest clip that failed/,
       );
+    });
+
+    it("a final, a new draft and a retry need the price the user saw; the worker spends no more", async () => {
+      const { PriceChangedError } = await import("../../src/server/generation");
+      const { InsufficientCreditsError } = await import("../../src/server/billing");
+      const { userId, projectId } = await setup(400, [SHOTS[0] as (typeof SHOTS)[number]]);
+      const [l1] = await lineages(projectId);
+      if (!l1) throw new Error("blocks missing");
+      await prepareAndApprove(projectId, userId);
+
+      // The drafts: the batch total, stored per draft as what the worker may spend on it.
+      await expect(
+        production.startDrafts({ projectId, userId, expectedCredits: undefined as never }),
+      ).rejects.toThrow(/Confirm the price/);
+      await expect(
+        production.startDrafts({ projectId, userId, expectedCredits: 19 }),
+      ).rejects.toBeInstanceOf(production.PriceChangedError);
+      await production.startDrafts({ projectId, userId, expectedCredits: 20 });
+      const d1 = await takeRow(await latestTakeId(l1, userId));
+      expect(d1.confirmedCredits).toBe(20);
+      await drain(projectId);
+
+      // Accepting a draft makes a final: the final's price (60).
+      const draft = await takeRow(await latestTakeId(l1, userId));
+      expect(draft.status).toBe("in_review");
+      const accept = (expectedCredits: number | undefined) =>
+        production.submitTakeReview({
+          takeId: draft.id,
+          userId,
+          decision: "accepted",
+          expectedCredits,
+        });
+      await expect(accept(undefined)).rejects.toBeInstanceOf(PriceChangedError);
+      await expect(accept(20)).rejects.toBeInstanceOf(PriceChangedError);
+      expect((await takeRow(draft.id)).status).toBe("in_review");
+      const balance = await billing.getBalance(userId);
+      await getDb()
+        .update(s.creditBalance)
+        .set({ balance: 10 })
+        .where(eq(s.creditBalance.userId, userId));
+      await expect(accept(60)).rejects.toBeInstanceOf(InsufficientCreditsError);
+      expect((await takeRow(draft.id)).status).toBe("in_review");
+      await getDb()
+        .update(s.creditBalance)
+        .set({ balance })
+        .where(eq(s.creditBalance.userId, userId));
+      expect(await accept(60)).toBe("final_generating");
+      const final = await takeRow(await latestTakeId(l1, userId));
+      expect(final).toMatchObject({ stage: "final", confirmedCredits: 60 });
+
+      // The worker never spends above what was confirmed: a lower confirmed price fails the take
+      // with nothing reserved.
+      await getDb()
+        .update(s.blockTake)
+        .set({ confirmedCredits: 59 })
+        .where(eq(s.blockTake.id, final.id));
+      const before = await billing.getBalance(userId);
+      await drain(projectId);
+      const refused = await takeRow(final.id);
+      expect(refused).toMatchObject({ status: "failed", generationId: null });
+      expect(refused.failure).toMatch(/price changed/);
+      expect(await billing.getBalance(userId)).toBe(before);
+
+      // Trying it again is a new spend (the final's price).
+      const retryFinal = (expectedCredits: number | undefined) =>
+        production.retryTake({ takeId: final.id, userId, expectedCredits });
+      await expect(retryFinal(undefined)).rejects.toBeInstanceOf(PriceChangedError);
+      await expect(retryFinal(20)).rejects.toBeInstanceOf(PriceChangedError);
+      expect(await retryFinal(60)).toBe("final_generating");
+      expect((await takeRow(final.id)).confirmedCredits).toBe(60);
+      await drain(projectId);
+      const done = await takeRow(final.id);
+      expect(done.status).toBe("in_review");
+
+      // A final is accepted for nothing: no price needed.
+      expect(
+        await production.submitTakeReview({
+          takeId: final.id,
+          userId,
+          decision: "accepted",
+          expectedCredits: undefined,
+        }),
+      ).toBe("done");
+    });
+
+    it("rejecting a draft needs the draft's price and stores it on the new draft", async () => {
+      const { PriceChangedError } = await import("../../src/server/generation");
+      const { userId, projectId } = await setup(200, [SHOTS[0] as (typeof SHOTS)[number]]);
+      const [l1] = await lineages(projectId);
+      if (!l1) throw new Error("blocks missing");
+      await prepareAndApprove(projectId, userId);
+      await startAllDrafts(projectId, userId);
+      const draft = await takeRow(await latestTakeId(l1, userId));
+      const reject = (expectedCredits: number | undefined) =>
+        production.submitTakeReview({
+          takeId: draft.id,
+          userId,
+          decision: "rejected",
+          note: "More wind",
+          expectedCredits,
+        });
+      // "Don't ask again" only hides the dialog: the server checks the price all the same.
+      await billing.setSkipCreditConfirm(userId, true);
+      await expect(reject(undefined)).rejects.toBeInstanceOf(PriceChangedError);
+      await expect(reject(60)).rejects.toBeInstanceOf(PriceChangedError);
+      expect((await takeRow(draft.id)).status).toBe("in_review");
+      expect(await reject(20)).toBe("draft_generating");
+      const next = await takeRow(await latestTakeId(l1, userId));
+      expect(next).toMatchObject({ stage: "draft", confirmedCredits: 20 });
+
+      // The quotes: what each decision would cost.
+      await drain(projectId);
+      const again = await takeRow(next.id);
+      expect(
+        await production.quoteTakeSpend({ takeId: again.id, userId, action: "accept" }),
+      ).toMatchObject({ spends: true, credits: 60 });
+      expect(
+        await production.quoteTakeSpend({ takeId: again.id, userId, action: "reject" }),
+      ).toMatchObject({ spends: true, credits: 20 });
+      const stranger = await fixtures.newUser();
+      expect(
+        await production.quoteTakeSpend({ takeId: again.id, userId: stranger, action: "reject" }),
+      ).toBeNull();
     });
 
     it("isolates projects by owner", async () => {

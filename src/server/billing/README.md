@@ -18,5 +18,9 @@ Credits (`@/server/billing`, contract in `docs/M2_M3_CONTRACTS.md`). Owns `credi
 - Amounts are whole numbers: grants 1 to 1,000,000, prices 0 to 1,000,000, balances at most
   1,000,000,000. `listLedger` is keyset-paginated, newest first.
 
+- `getSkipCreditConfirm` / `setSkipCreditConfirm` (`user.skip_credit_confirm`): the user's choice to
+  skip the confirmation dialog. It only hides the dialog; every paid action still re-checks the
+  confirmed price and the balance (see `@/server/generation` `spend.ts`).
+
 Development: `pnpm dev:credits <email> <amount> [note]` (refuses `NODE_ENV=production` and a non-local
 database or object store unless `ALLOW_DEV_SCRIPTS=1`).

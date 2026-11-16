@@ -88,6 +88,8 @@ export type {
 // Overlays
 export { Sheet, Dialog } from "./Dialog";
 export type { DialogProps, SheetProps } from "./Dialog";
+export { ConfirmCredits } from "./ConfirmCredits";
+export type { ConfirmCreditsProps } from "./ConfirmCredits";
 export { Alert } from "./Alert";
 export type { AlertProps } from "./Alert";
 export { Popover } from "./Popover";

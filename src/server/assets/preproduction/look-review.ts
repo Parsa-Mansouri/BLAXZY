@@ -20,6 +20,7 @@ import { assertActive, isUuid, lockAsset } from "./access";
 import { enqueueLookJob, enqueueSheetJob, wakeOnTx } from "./enqueue";
 import { lookReviewInput } from "./inputs";
 import { CHECK_FIELDS, NEEDS_REASON, NOT_IN_REVIEW } from "./messages";
+import { confirmAssetSpend } from "./spend";
 import { fieldsToConfirm, planLookReview, sameReferences } from "./review-plans";
 import { insertLook, insertSheet } from "./versions";
 
@@ -35,6 +36,10 @@ import { insertLook, insertSheet } from "./versions";
  * to the designer's questions and changed photos go with them. A re-roll (`regenerate`) alone makes a new
  * version with the same prompt and a new seed (no dami call); anything else is a fix round
  * (`asset.look.fix`). An uploaded look (older projects) sends the asset back to needs_image.
+ *
+ * A rejection (a new image) and an acceptance (the sheet it starts) spend credits:
+ * `expectedCredits` must be the price the user saw, which is stored on the new look or sheet as
+ * all the worker may spend on it.
  */
 export async function submitLookReview(input: {
   lookId: string;
@@ -47,6 +52,7 @@ export async function submitLookReview(input: {
   specEdits?: { field: string; value: string }[];
   clarifyAnswers?: Record<string, string>;
   confirmedFields?: string[];
+  expectedCredits?: number;
 }): Promise<AssetStage | null> {
   const parsed = parse(lookReviewInput, input);
   const { lookId, userId, decision } = parsed;
@@ -128,6 +134,12 @@ export async function submitLookReview(input: {
         },
       });
       if (latest.source === "uploaded") return "needs_image" as const;
+      const confirmedCredits = await confirmAssetSpend(tx, {
+        owner: locked.project,
+        userId,
+        step: "look",
+        expectedCredits: parsed.expectedCredits,
+      });
       const reroll =
         parsed.regenerate === true &&
         plan.fixRequests.length === 0 &&
@@ -152,12 +164,19 @@ export async function submitLookReview(input: {
         ...(reroll
           ? { prompt: latest.prompt, spec: latest.spec, damiRunId: latest.damiRunId }
           : {}),
+        confirmedCredits,
         createdBy: userId,
       });
       await enqueueLookJob(tx, next);
       return "generating" as const;
     }
 
+    const sheetCredits = await confirmAssetSpend(tx, {
+      owner: locked.project,
+      userId,
+      step: "sheet",
+      expectedCredits: parsed.expectedCredits,
+    });
     await tx
       .update(assetLook)
       .set({ status: "superseded" })
@@ -186,6 +205,7 @@ export async function submitLookReview(input: {
       projectId: row.projectId,
       lookId,
       status: "pending",
+      confirmedCredits: sheetCredits,
     });
     await logProjectEvent(tx, {
       projectId: row.projectId,
@@ -225,6 +245,8 @@ export async function sendBackToDesigner(
     text: string | null;
     note: string | null;
     viewLabel?: string;
+    /** The price of the new look the user confirmed (see `confirmAssetSpend`). */
+    confirmedCredits: number;
   },
 ): Promise<LookRow> {
   const { row, look, sheet, userId, code } = input;
@@ -293,6 +315,7 @@ export async function sendBackToDesigner(
     guidedAnswers: look.guidedAnswers,
     references: look.references,
     clarifyAnswers: look.clarifyAnswers,
+    confirmedCredits: input.confirmedCredits,
     createdBy: userId,
   });
   await logProjectEvent(tx, {

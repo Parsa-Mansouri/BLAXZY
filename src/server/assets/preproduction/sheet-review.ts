@@ -2,7 +2,7 @@
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { type DbTx, getDb } from "@/server/db/client";
-import { assetSheet, assetSheetView, review } from "@/server/db/schema";
+import { assetSheet, assetSheetView, type project, review } from "@/server/db/schema";
 import { assetSheetAssemble, assetSheetPlan, assetSheetViewsAdvance } from "@/server/jobs";
 import { logProjectEvent } from "@/server/projects";
 import { type AssetRow, loadAssetState, type LookRow, type SheetRow } from "../looks";
@@ -11,10 +11,17 @@ import { AssetInputError, parse } from "../service";
 import type { AssetStage } from "../stage";
 import { assertActive, isUuid, lockAsset } from "./access";
 import { enqueueOnTx, enqueueSheetJob } from "./enqueue";
-import { idSchema, sheetReviewInput, userIdSchema, viewReviewInput } from "./inputs";
+import {
+  expectedCreditsField,
+  idSchema,
+  sheetReviewInput,
+  userIdSchema,
+  viewReviewInput,
+} from "./inputs";
 import { sendBackToDesigner } from "./look-review";
 import { HYPOTHESES_FIRST, NEEDS_REASON, NOT_IN_REVIEW } from "./messages";
 import { planSheetReview } from "./review-plans";
+import { confirmAssetSpend } from "./spend";
 import { insertSheet, insertViewVersion } from "./versions";
 
 /**
@@ -27,6 +34,9 @@ import { insertSheet, insertViewVersion } from "./versions";
  * Generator with the note (the sheet is rebuilt once the new board is accepted). Location packs and
  * prop sheets are reviewed view by view (`submitSheetViewReview`, `lockSheet`); only the design
  * change applies to them here.
+ *
+ * A rejection makes a new image (a design change goes back to the designer): `expectedCredits`
+ * must be the price the user saw, stored on the new sheet or look as all the worker may spend.
  */
 export async function submitSheetReview(input: {
   sheetId: string;
@@ -35,6 +45,7 @@ export async function submitSheetReview(input: {
   note?: string;
   regenerate?: boolean;
   designChange?: boolean;
+  expectedCredits?: number;
 }): Promise<AssetStage | null> {
   const parsed = parse(sheetReviewInput, input);
   const { sheetId, userId, decision } = parsed;
@@ -82,6 +93,12 @@ export async function submitSheetReview(input: {
       );
     }
     if (plan.route) {
+      const confirmedCredits = await confirmAssetSpend(tx, {
+        owner: locked.project,
+        userId,
+        step: "look",
+        expectedCredits: parsed.expectedCredits,
+      });
       await sendBackToDesigner(tx, {
         row,
         look,
@@ -90,6 +107,7 @@ export async function submitSheetReview(input: {
         code: plan.route.code,
         text: plan.route.text,
         note,
+        confirmedCredits,
       });
       return "generating" as const;
     }
@@ -106,6 +124,12 @@ export async function submitSheetReview(input: {
       damiRunId: latest.damiRunId,
     });
     if (decision === "rejected") {
+      const confirmedCredits = await confirmAssetSpend(tx, {
+        owner: locked.project,
+        userId,
+        step: "sheet",
+        expectedCredits: parsed.expectedCredits,
+      });
       await tx
         .update(assetSheet)
         .set({ status: "rejected", decidedAt: now })
@@ -117,6 +141,7 @@ export async function submitSheetReview(input: {
         lookId: latest.lookId,
         parentId: sheetId,
         status: "pending",
+        confirmedCredits,
         // A re-roll keeps the prompt, the spec and the dami run: only the seed changes.
         ...(reroll
           ? { prompt: latest.prompt, spec: latest.spec, damiRunId: latest.damiRunId }
@@ -169,7 +194,13 @@ async function lockView(
   tx: DbTx,
   viewRowId: string,
   userId: string,
-): Promise<{ view: PackViewRow; asset: AssetRow; look: LookRow; sheet: SheetRow } | null> {
+): Promise<{
+  view: PackViewRow;
+  asset: AssetRow;
+  look: LookRow;
+  sheet: SheetRow;
+  project: ProjectRow;
+} | null> {
   if (!isUuid(viewRowId)) return null;
   const [target] = await tx
     .select({ assetId: assetSheetView.assetId })
@@ -187,7 +218,7 @@ async function lockView(
   if (!look || !sheet || !view || look.status !== "accepted" || sheet.lookId !== look.id) {
     throw new AssetInputError(NOT_IN_REVIEW);
   }
-  return { view, asset: row, look, sheet };
+  return { view, asset: row, look, sheet, project: locked.project };
 }
 
 /**
@@ -207,6 +238,7 @@ export async function submitSheetViewReview(input: {
   regenerate?: boolean;
   designChange?: boolean;
   hypothesesApproved?: boolean;
+  expectedCredits?: number;
 }): Promise<AssetStage | null> {
   const parsed = parse(viewReviewInput, input);
   const { viewRowId, userId, decision } = parsed;
@@ -218,7 +250,7 @@ export async function submitSheetViewReview(input: {
   const outcome = await getDb().transaction(async (tx) => {
     const found = await lockView(tx, viewRowId, userId);
     if (!found) return null;
-    const { view, asset: row, look, sheet } = found;
+    const { view, asset: row, look, sheet, project: owner } = found;
     if (sheet.status !== "in_review" || view.status !== "in_review") {
       throw new AssetInputError(NOT_IN_REVIEW);
     }
@@ -259,6 +291,12 @@ export async function submitSheetViewReview(input: {
     // The request is about this view of the pack.
     const fixRequests = plan.fixRequests.map((r) => ({ ...r, viewId: view.viewId }));
     if (plan.route) {
+      const confirmedCredits = await confirmAssetSpend(tx, {
+        owner,
+        userId,
+        step: "look",
+        expectedCredits: parsed.expectedCredits,
+      });
       await sendBackToDesigner(tx, {
         row,
         look,
@@ -268,9 +306,16 @@ export async function submitSheetViewReview(input: {
         text: plan.route.text,
         note,
         viewLabel: view.label,
+        confirmedCredits,
       });
       return "generating" as const;
     }
+    const confirmedCredits = await confirmAssetSpend(tx, {
+      owner,
+      userId,
+      step: "sheet",
+      expectedCredits: parsed.expectedCredits,
+    });
     await tx.insert(review).values({
       projectId: row.projectId,
       userId,
@@ -291,8 +336,14 @@ export async function submitSheetViewReview(input: {
       tx,
       view,
       reroll
-        ? { prompt: view.prompt, editMode: view.editMode, warnings: [], damiRunId: view.damiRunId }
-        : {},
+        ? {
+            prompt: view.prompt,
+            editMode: view.editMode,
+            warnings: [],
+            damiRunId: view.damiRunId,
+            confirmedCredits,
+          }
+        : { confirmedCredits },
     );
     await logProjectEvent(tx, {
       projectId: row.projectId,
@@ -322,23 +373,30 @@ export async function submitSheetViewReview(input: {
 export async function retrySheetView(input: {
   viewRowId: string;
   userId: string;
+  expectedCredits?: number;
 }): Promise<AssetStage | null> {
-  const { viewRowId, userId } = parse(
-    z.object({ viewRowId: idSchema, userId: userIdSchema }),
+  const { viewRowId, userId, expectedCredits } = parse(
+    z.object({ viewRowId: idSchema, userId: userIdSchema, expectedCredits: expectedCreditsField }),
     input,
   );
   const outcome = await getDb().transaction(async (tx) => {
     const found = await lockView(tx, viewRowId, userId);
     if (!found) return null;
-    const { view, asset: row, sheet } = found;
+    const { view, asset: row, sheet, project: owner } = found;
     if (sheet.status !== "in_review" || view.status !== "failed") {
       throw new AssetInputError("Only a view that could not be made can be tried again.");
     }
+    const confirmedCredits = await confirmAssetSpend(tx, {
+      owner,
+      userId,
+      step: "sheet",
+      expectedCredits,
+    });
     // A fix round that failed before its prompt was written runs the sheet maker again.
     const needsPrompt = view.prompt === null;
     await tx
       .update(assetSheetView)
-      .set({ status: "planned", failure: null, generationId: null })
+      .set({ status: "planned", failure: null, generationId: null, confirmedCredits })
       .where(eq(assetSheetView.id, view.id));
     await logProjectEvent(tx, {
       projectId: row.projectId,
@@ -455,3 +513,5 @@ export async function lockSheet(input: {
   });
   return locked;
 }
+
+type ProjectRow = typeof project.$inferSelect;

@@ -1,4 +1,10 @@
-export { GenerationInputError } from "./errors";
+export {
+  GenerationInputError,
+  isPriceChanged,
+  PRICE_CHANGED_MESSAGE,
+  PriceChangedError,
+} from "./errors";
+export { confirmSpend, expectedCreditsSchema, quoteSpend, type SpendQuote } from "./spend";
 export {
   onGenerationFinished,
   type FinishedGeneration,

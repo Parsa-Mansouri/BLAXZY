@@ -12,7 +12,7 @@ calls the Claude API.
 
 ## Flow
 
-1. Entering Production prepares every current block (`text-blocks` dami): the block's prompt is
+1. Entering Production prepares every current block (code, no dami: the Director already wrote the prompt): the block's prompt is
    rewritten with each asset mention bound to a reference token, and the block's assets are listed
    in token order.
 2. The user reviews the prepared blocks: approve, correct the assets, or request changes.
@@ -71,7 +71,6 @@ type BlockProductionStage =
 
 | Dami | Input | Output |
 |---|---|---|
-| `text-blocks` | `{ style, block: { title, scriptExcerpt, prompt, durationSeconds, assetRefs }, assets: { ref: "kind:Name", kind, name, description }[], previous?: { title, promptTail } }` | `{ prompt, assetRefs: string[], notes: string[] }` |
 | `block-reviser` | `{ style, block: { title, scriptExcerpt, prompt, assetRefs }, assets, review: { issueCodes[], note? } }` | `{ prompt, assetRefs, changeSummary[] }` |
 | `take-fixer` | `{ style, block, previousPrompt, assetRefs, stage: "draft" | "final", review }` | `{ prompt, changeSummary[] }` |
 
@@ -167,7 +166,7 @@ Jobs (handlers in `worker/handlers/`):
 | Job | Payload, dedupe | Does |
 |---|---|---|
 | `production.dispatch` | `{ projectId, kind: "prepare" \| "takes" }`, `<projectId>:<kind>` (with a follow-up: one may wait beside a running one) | fan-out: `prepare` queues `block.revise` (block answers its predecessor's rejected review) or `production.prepare` for every pending, non-stale block; `takes` queues `take.generate` (prompt stored) or `take.fix` for every pending take without a generation. Idempotent (each per-row job is keyed by its row); sent on the transaction that created the rows |
-| `production.prepare` | `{ blockId }`, block id | runDami(text-blocks) with the project's ready assets and the previous block's tail → production fields, state ready |
+| `production.prepare` | `{ blockId }`, block id | binds the block's `[kind:Name]` tags to `<<<image_N>>>` tokens for the project's ready assets (code, `production/binding.ts`) → production fields, state ready |
 | `block.revise` | `{ blockId }`, block id | runDami(block-reviser) on the parent version + its review → production fields |
 | `take.generate` | `{ takeId }`, take id | requestGeneration (draft or final; references = each `productionAssetRefs` asset's file, in order: a character's accepted sheet, a location's or prop's approved Hero; `ReferenceAsset.views` lists a locked pack's approved views for later use) |
 | `take.fix` | `{ takeId }`, take id | runDami(take-fixer) on the parent take's prompt + review → prompt → requestGeneration |

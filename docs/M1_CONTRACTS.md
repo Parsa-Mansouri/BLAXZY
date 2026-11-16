@@ -136,15 +136,16 @@ Sectioning state lives in `project.stageState.sectioning`
 | `script.write` | `{ scriptVersionId }` | version id | runDami(scriptWriter) → content, title/logline/notes → `in_review` |
 | `script.check` | `{ scriptVersionId }` | version id | extract text from the file → content; runDami(scriptChecker) → findings → `in_review` |
 | `script.revise` | `{ scriptVersionId }` | version id | runDami(scriptReviser) on the parent's content + its review → content, notes → `in_review` |
-| `script.detect-assets` | `{ scriptVersionId }` | version id (one paid detection per version at a time; the handler also skips a version that is no longer the accepted one) | runDami(assetDetector, knownAssets) → `applyDetection`; mark blocks stale; enqueue `script.section` |
-| `script.section` | `{ scriptVersionId, resection? }` | `<version id>:section`, or `<version id>:resection` when `resection` is set (a re-cut although blocks exist, after a correction round changed the detected assets); one cut per key at a time | `sectionScript` → `replaceBlocks`; sectioning state done. The handler also skips a version that is no longer the accepted one |
+| `script.detect-assets` | `{ scriptVersionId }` | version id (one paid detection per version at a time; the handler also skips a version that is no longer the accepted one) | runDami(assetDetector, knownAssets) → `applyDetection`; mark blocks stale; enqueue `script.direct` |
+| `script.direct` | `{ scriptVersionId, resection?, bibleWaits? }` | `<version id>:direct`, or `:resection` when `resection` is set (a re-direction although blocks exist, after a correction round changed the detected assets); one run per key at a time | Director: `full` (about 8 blocks or fewer) stored with `replaceBlocks`, else `director-plan`, a `direction` row and one `direction.write` job per batch; sectioning state done when the blocks are stored. Skips a version that is no longer the accepted one; defers while the Creative Bible compiles |
+| `direction.write` | `{ directionId, batchIndex }` | `<direction id>:<batch index>` | `write_blocks` for the batch's block range over the saved plan; the last batch to finish assembles all blocks in one transaction (idempotent) |
 | `asset.detect.fix` | `{ reviewId }` | review id | one correction round of the detected asset list ("Something wrong with this list?"): the Asset Detector in fix mode or a re-scan → `applyDetection`; may send `script.section` with `resection` |
 
 Every handler first loads the row and returns if the work is already done (idempotent), stores
 `damiRunId` on what it produced, and on a non-retryable failure (or the last attempt) records a
 user-readable `failure` and status `failed`. A handler for a version that is no longer the latest
-does nothing. The queues of `script.detect-assets` and `script.section` predate their dedupe keys;
-`ensureQueue` upgrades them in place (`standard` to `exclusive`).
+does nothing. The queue of `script.detect-assets` predates its dedupe key;
+`ensureQueue` upgrades it in place (`standard` to `exclusive`).
 
 ## Dami mode
 

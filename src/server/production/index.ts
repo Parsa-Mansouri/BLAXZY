@@ -87,9 +87,9 @@ export {
   storeTakePrompt,
   takeFixerInput,
   TAKE_FAILED,
-  textBlocksInput,
   tooManyAssetsMessage,
   type PreparationJob,
   type TakeJob,
 } from "./jobs";
+export { prepareBlockPrompt, type PreparedPrompt } from "./binding";
 export { buildExport, EXPORT_CHANGED, EXPORT_TOO_LARGE, failExport } from "./exports";

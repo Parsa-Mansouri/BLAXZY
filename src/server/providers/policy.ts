@@ -68,7 +68,7 @@ export function aspectRatioFor(orientation: Orientation): VideoAspectRatio {
 }
 
 /** Shortest and longest clip a video generation may ask for, in seconds. */
-export const VIDEO_DURATION_LIMITS = { min: 1, max: 15, default: 5 } as const;
+export const VIDEO_DURATION_LIMITS = { min: 1, max: 30, default: 5 } as const;
 
 /** Whole seconds within `VIDEO_DURATION_LIMITS` (the default for a missing or invalid value). */
 export function clampDurationSeconds(value: number | undefined): number {
@@ -90,7 +90,7 @@ export type GenerationOverrides = {
 
 /**
  * The model and parameters the platform uses for a purpose in a project of this style. Video
- * params also carry `durationSeconds` (clamped to 1..15 s, default 5) and `sound` (default
+ * params also carry `durationSeconds` (clamped to 1..30 s, default 5) and `sound` (default
  * false) next to the policy's `resolution`. `overrides.aspectRatio` replaces the policy's ratio
  * (throws for a video ratio other than 16:9 or 9:16).
  */

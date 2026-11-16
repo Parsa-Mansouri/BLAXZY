@@ -30,7 +30,7 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
   const { scriptCheckHandler } = await import("./script-check");
   const { scriptReviseHandler } = await import("./script-revise");
   const { scriptDetectAssetsHandler } = await import("./script-detect-assets");
-  const { scriptSectionHandler } = await import("./script-section");
+  const { scriptDirectHandler } = await import("./script-direct");
   const fixtures = createFixtures();
 
   afterAll(async () => {
@@ -115,7 +115,7 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
       },
     });
 
-    // Accept; detect assets; section.
+    // Accept; detect assets; direct.
     await script.submitScriptReview({
       projectId,
       userId,
@@ -129,9 +129,8 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     expect(counts?.location).toBeGreaterThanOrEqual(2);
     expect(counts?.prop).toBeGreaterThanOrEqual(1);
 
-    await twice(scriptSectionHandler, v2?.id ?? "");
-    const sectionerRuns = await runCount(projectId, "prompt-sectioner");
-    expect(sectionerRuns).toBeGreaterThanOrEqual(1);
+    await twice(scriptDirectHandler, v2?.id ?? "");
+    expect(await runCount(projectId, "director")).toBe(1);
     const status = await blocks.getSectioningStatus(projectId, userId);
     expect(status?.state).toBe("done");
     expect(status?.blockCount).toBeGreaterThan(3);
@@ -140,14 +139,14 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     expect(page?.items.some((b) => b.assetRefs.length > 0)).toBe(true);
 
     // Edit the accepted script: the old version's jobs do nothing; the new one re-detects as a
-    // diff, marks old blocks stale, and resections keeping lineage where excerpts are unchanged.
+    // diff, marks old blocks stale, and directs again keeping lineage where excerpts are unchanged.
     const edited = await script.editAcceptedScript({
       projectId,
       userId,
       content: `${(revised?.content ?? "").trimEnd()}\n\nA gull lands on the rail and stays.`,
     });
     await scriptDetectAssetsHandler.run({ scriptVersionId: v2?.id ?? "" }, jobContext());
-    await scriptSectionHandler.run({ scriptVersionId: v2?.id ?? "" }, jobContext());
+    await scriptDirectHandler.run({ scriptVersionId: v2?.id ?? "" }, jobContext());
     expect(await runCount(projectId, "asset-detector")).toBe(1);
 
     await scriptDetectAssetsHandler.run({ scriptVersionId: edited?.id ?? "" }, jobContext());
@@ -155,7 +154,7 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     const staleBlocks = await blocks.listBlocks(projectId, userId, { limit: 200 });
     expect(staleBlocks?.items.every((b) => b.stale)).toBe(true);
 
-    await scriptSectionHandler.run({ scriptVersionId: edited?.id ?? "" }, jobContext());
+    await scriptDirectHandler.run({ scriptVersionId: edited?.id ?? "" }, jobContext());
     const after = await blocks.listBlocks(projectId, userId, { limit: 200 });
     expect(after?.items.every((b) => b.scriptVersionId === edited?.id && !b.stale)).toBe(true);
     expect(after?.items.some((b) => b.versionNumber === 2)).toBe(true); // carried lineage
@@ -340,7 +339,7 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
       mode: "fix",
       fix_requests: [{ type: "preference", code: "ADP99", custom_text: note }],
     });
-    // The corrected list is applied and sectioning runs again.
+    // The corrected list is applied and the Director runs again.
     const { project: projectTable } = await import("../../src/server/db/schema");
     const [sectioning] = await db()
       .select({ stageState: projectTable.stageState })

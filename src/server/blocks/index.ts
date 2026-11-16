@@ -10,9 +10,16 @@ export {
   hasCurrentBlocksFor,
   markBlocksStale,
   replaceBlocks,
+  type DirectedBlock,
   type ReplaceBlocksResult,
 } from "./replace";
 export { rewriteAssetRefs } from "./rewrite";
+export {
+  parseBlockDirection,
+  type BlockDirectionView,
+  type ShotView,
+  type StagingView,
+} from "./direction-view";
 export {
   getSectioningStatus,
   readSectioningRecord,

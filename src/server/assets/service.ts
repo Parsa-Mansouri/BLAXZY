@@ -1,6 +1,5 @@
 import { and, asc, count, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { SectionerAsset } from "@/server/damis";
 import { getDb } from "@/server/db/client";
 import { ASSET_KINDS, asset, type AssetKind } from "@/server/db/schema";
 import { makeParser, UserInputError } from "@/server/errors";
@@ -11,8 +10,6 @@ export type Asset = typeof asset.$inferSelect;
 
 export const DEFAULT_ASSET_PAGE_SIZE = 50;
 export const MAX_ASSET_PAGE_SIZE = 200;
-/** The dami input limit for known and sectioner assets. */
-const MAX_DAMI_ASSETS = 500;
 
 /** Thrown for input the caller can fix; `message` is safe to show. */
 export class AssetInputError extends UserInputError {
@@ -40,23 +37,6 @@ const listAssetsSchema = z.object({
   limit: z.number().int().min(1).max(MAX_ASSET_PAGE_SIZE).default(DEFAULT_ASSET_PAGE_SIZE),
   cursor: z.string().max(200).nullish(),
 });
-
-/** The active assets, as the prompt-sectioner's asset list. */
-export async function getSectionerAssets(projectId: string): Promise<SectionerAsset[]> {
-  return (
-    getDb()
-      .select({
-        kind: asset.kind,
-        name: asset.name,
-        description: asset.description,
-      })
-      .from(asset)
-      // A voice-only character has no image to attach to a block, so the sectioner never sees it.
-      .where(and(eq(asset.projectId, projectId), eq(asset.status, "active"), needsVisualAsset))
-      .orderBy(asc(asset.displayOrder), asc(asset.id))
-      .limit(MAX_DAMI_ASSETS)
-  );
-}
 
 async function ownsProject(projectId: string, userId: string): Promise<boolean> {
   return (await findOwnedProject(getDb(), projectId, userId)) !== null;

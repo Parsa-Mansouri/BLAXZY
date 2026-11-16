@@ -244,6 +244,7 @@ export async function createNextBlockVersion(
       orderIndex: currentRow.orderIndex,
       title: currentRow.title,
       scriptExcerpt: currentRow.scriptExcerpt,
+      direction: currentRow.direction,
       prompt: currentRow.prompt,
       durationSeconds: currentRow.durationSeconds,
       assetRefs: changes.assetRefs ?? currentRow.assetRefs,
@@ -265,7 +266,7 @@ export async function storeBlockPreparation(
     prompt: string;
     assetRefs: string[];
     notes: string[];
-    damiRunId: string;
+    damiRunId: string | null;
   },
   db: DbExecutor = getDb(),
 ): Promise<PromptBlock | null> {

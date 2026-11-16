@@ -5,7 +5,7 @@ import {
   loadDetectorState,
 } from "../../src/server/assets";
 import { hasCurrentBlocksFor, markBlocksStale, setSectioningState } from "../../src/server/blocks";
-import { defineHandler, enqueue, scriptDetectAssets, scriptSection } from "../../src/server/jobs";
+import { defineHandler, enqueue, scriptDetectAssets, scriptDirect } from "../../src/server/jobs";
 import { loadScriptJob, ScriptInputError } from "../../src/server/script";
 import {
   detectorBible,
@@ -19,7 +19,7 @@ import { classifyFailure } from "./script-failure";
 
 /**
  * Detects the assets of the accepted script with Asset Detector v2, applies the result, marks the
- * old blocks stale, then queues sectioning. The first detection is full; later ones (an edited
+ * old blocks stale, then queues the Director. The first detection is full; later ones (an edited
  * script) are incremental with every stored asset as `known_assets` (approved ones keep their
  * names). The Creative Bible's slice goes in when one is ready; a bible still compiling is not
  * waited for (the detection runs on its own prompt). Skips a version that is no longer the accepted one.
@@ -32,9 +32,9 @@ export const scriptDetectAssetsHandler = defineHandler(
     if (!job || job.version.status !== "accepted") return;
     const { project, version } = job;
     if (await hasDetectionFor(project.id, versionId)) {
-      // Done before (a retry after a crash): make sure sectioning was queued.
+      // Done before (a retry after a crash): make sure the Director was queued.
       if (!(await hasCurrentBlocksFor(project.id, versionId))) {
-        await enqueue(scriptSection, { scriptVersionId: versionId });
+        await enqueue(scriptDirect, { scriptVersionId: versionId });
       }
       return;
     }
@@ -74,7 +74,7 @@ export const scriptDetectAssetsHandler = defineHandler(
         output: run.output,
         byTemp: view.byTemp,
       });
-      await enqueue(scriptSection, { scriptVersionId: versionId });
+      await enqueue(scriptDirect, { scriptVersionId: versionId });
     } catch (error) {
       await handleFailure(
         error,

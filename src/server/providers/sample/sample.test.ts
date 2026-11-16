@@ -228,7 +228,7 @@ describe("SampleProvider video jobs", () => {
       k: "video",
       p: "block_draft",
       a: "9:16",
-      s: 15,
+      s: 30,
       q: "480p",
       n: true,
     });

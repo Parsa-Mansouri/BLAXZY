@@ -5,8 +5,8 @@
  * order (see `shared/block.ts`). Nothing here touches the database or Claude.
  */
 import type { AssetKind } from "@/server/db/schema";
-import { formatAssetRef } from "../shared/asset-ref";
-import { imageToken, MAX_REFERENCE_IMAGES } from "../shared/block";
+import { assetTag, formatAssetRef } from "../shared/asset-ref";
+import { IMAGE_TOKEN_PATTERN, imageToken, MAX_REFERENCE_IMAGES } from "../shared/block";
 
 /** `@char_1`, `@loc_2`, `@prop_3`, and the provisional `@new_char_1` (voices never bind). */
 const ID_TOKEN = /@((?:new_)?(?:char|loc|prop)_\d+)(?![A-Za-z0-9_])/g;
@@ -133,4 +133,24 @@ export function bindingMap(
       },
     ]),
   );
+}
+
+/**
+ * The Director's prompt in the tag form blocks store (`Nora [character:Nora]`): the same pass as
+ * `bindAssetTokens` (same numbering, same limit, same merge of an echoed name), with each token
+ * written as the asset's `[kind:Name]` tag. Tags survive asset renames and merges (they are
+ * rewritten with the refs), and Production turns them into `<<<image_N>>>` tokens for the assets
+ * that are ready (`bindTagsToTokens` in `production/binding.ts`). `assetRefs` lists the tagged
+ * assets in order of first appearance.
+ */
+export function tagAssetIds(
+  promptText: string,
+  assets: ReadonlyMap<string, AssetBinding>,
+): BoundPrompt {
+  const bound = bindAssetTokens(promptText, assets);
+  const prompt = bound.prompt.replace(new RegExp(IMAGE_TOKEN_PATTERN.source, "g"), (_all, n) => {
+    const ref = bound.assetRefs[Number(n) - 1];
+    return ref ? assetTag(ref) : "";
+  });
+  return { ...bound, prompt };
 }

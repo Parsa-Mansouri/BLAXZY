@@ -78,6 +78,17 @@ export function createFixtures() {
       .where(inArray(s.project.ownerId, userIds));
     const ids = owned.map((p) => p.id);
     if (ids.length > 0) {
+      const directions = await db
+        .select({ id: s.direction.id })
+        .from(s.direction)
+        .where(inArray(s.direction.projectId, ids));
+      if (directions.length > 0) {
+        const directionIds = directions.map((d) => d.id);
+        await db
+          .delete(s.directionBatch)
+          .where(inArray(s.directionBatch.directionId, directionIds));
+        await db.delete(s.direction).where(inArray(s.direction.id, directionIds));
+      }
       await db.delete(s.creativeBible).where(inArray(s.creativeBible.projectId, ids));
       await db.delete(s.promptBlock).where(inArray(s.promptBlock.projectId, ids));
       await db.delete(s.assetSheetView).where(inArray(s.assetSheetView.projectId, ids));

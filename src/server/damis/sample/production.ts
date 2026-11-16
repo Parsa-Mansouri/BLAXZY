@@ -1,107 +1,12 @@
 /**
- * Sample-mode generators for the three production damis. Each derives its output from the input
+ * Sample-mode generators for the production damis (block-reviser and take-fixer). Each derives its output from the input
  * alone (deterministic, no randomness) and validates the input with the dami's own schema.
  */
 import { BLOCK_ISSUES, type BlockIssueCode } from "../block-reviser/issues";
 import { blockReviserInputSchema } from "../block-reviser/schema";
-import { assetTagPattern, taggedRefs } from "../shared/asset-ref";
-import {
-  IMAGE_TOKEN_PATTERN,
-  imageToken,
-  MAX_PRODUCTION_PROMPT,
-  MAX_REFERENCE_IMAGES,
-  type BlockAsset,
-} from "../shared/block";
 import { TAKE_ISSUES, type TakeIssueCode } from "../take-fixer/issues";
 import { takeFixerInputSchema } from "../take-fixer/schema";
-import { textBlocksInputSchema } from "../text-blocks/schema";
-import { collapseWhitespace, truncate } from "./util";
-
-/** Lower is kept first when the block names more assets than the reference limit. */
-const PRIORITY: Readonly<Record<string, number>> = {
-  character: 0,
-  creature: 0,
-  location: 1,
-  prop: 2,
-  costume: 3,
-  other: 4,
-  voice: 5,
-};
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** A previous block's tail without tokens or tags: those belong to another block's numbering. */
-function cleanTail(tail: string): string {
-  return collapseWhitespace(
-    tail.replace(new RegExp(IMAGE_TOKEN_PATTERN.source, "g"), "").replace(assetTagPattern(), ""),
-  );
-}
-
-export function sampleTextBlocks(raw: unknown): {
-  prompt: string;
-  assetRefs: string[];
-  notes: string[];
-} {
-  const input = textBlocksInputSchema.parse(raw);
-  const byRef = new Map<string, BlockAsset>(input.assets.map((a) => [a.ref, a]));
-  const notes: string[] = [];
-
-  // Tags in order of first appearance.
-  const appearance: string[] = [];
-  for (const ref of taggedRefs(input.block.prompt)) {
-    if (!appearance.includes(ref)) appearance.push(ref);
-  }
-
-  const candidates = appearance.filter((ref) => {
-    const asset = byRef.get(ref);
-    return asset !== undefined && asset.kind !== "voice";
-  });
-  for (const ref of appearance) {
-    const asset = byRef.get(ref);
-    if (asset === undefined) {
-      notes.push(`"${ref}" has no reference sheet yet; it is named in words only.`);
-    }
-  }
-  const ranked = candidates
-    .map((ref, order) => ({ ref, order, rank: PRIORITY[byRef.get(ref)?.kind ?? "other"] ?? 4 }))
-    .sort((a, b) => a.rank - b.rank || a.order - b.order);
-  const keptSet = new Set(ranked.slice(0, MAX_REFERENCE_IMAGES).map((c) => c.ref));
-  for (const { ref } of ranked.slice(MAX_REFERENCE_IMAGES)) {
-    const name = byRef.get(ref)?.name ?? ref;
-    notes.push(
-      `The video model takes at most ${MAX_REFERENCE_IMAGES} references; "${name}" is named in words only.`,
-    );
-  }
-  const assetRefs = candidates.filter((ref) => keptSet.has(ref));
-
-  let prompt = input.block.prompt;
-  for (const ref of appearance) {
-    const position = assetRefs.indexOf(ref) + 1;
-    let first = true;
-    prompt = prompt.replace(
-      new RegExp(`( ?)\\[${escapeRegExp(ref)}\\]`, "g"),
-      (_all, space: string) => {
-        if (position > 0 && first) {
-          first = false;
-          return `${space}${imageToken(position)}`;
-        }
-        first = false;
-        return "";
-      },
-    );
-  }
-
-  if (input.previous) {
-    const tail = cleanTail(input.previous.promptTail);
-    if (tail) {
-      prompt = `${prompt}\nCONTINUITY: picks up from "${truncate(input.previous.title, 80)}"; keep wardrobe, light and positions as they were. Before: ${truncate(tail, 300)}`;
-    }
-  }
-  if (prompt.length > MAX_PRODUCTION_PROMPT) prompt = prompt.slice(0, MAX_PRODUCTION_PROMPT);
-  return { prompt, assetRefs, notes };
-}
+import { truncate } from "./util";
 
 const BLOCK_FIX_TEXT: Record<BlockIssueCode, string> = {
   wrong_assets: "only the assets that belong in this shot are attached and named",

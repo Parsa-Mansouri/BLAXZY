@@ -157,17 +157,20 @@ async function main(): Promise<void> {
 
   const before = await getBalance(userId);
   console.log(`Credits before: ${before}`);
-  if (before < CREDITS_NEEDED) {
+  // A directed script has many blocks: a draft and a final each (60 credits a final).
+  const blockCount = (await overview(projectId, userId))?.blockCount ?? 0;
+  const needed = Math.max(CREDITS_NEEDED, blockCount * 100);
+  if (before < needed) {
     const balance = await grantCredits({
       userId,
-      amount: CREDITS_NEEDED - before,
+      amount: needed - before,
       note: "dev:production-flow",
     });
-    console.log(`   granted ${CREDITS_NEEDED - before}; balance ${balance}`);
+    console.log(`   granted ${needed - before}; balance ${balance}`);
   }
   console.log(`0. At the start: ${describeOverview(await overview(projectId, userId))}`);
 
-  console.log(`1. Prepare every block (text-blocks) [${elapsed()}]`);
+  console.log(`1. Prepare every block (code: Director prompt to reference tokens) [${elapsed()}]`);
   await ensurePrepared(projectId, userId);
   await settle("blocks prepared", projectId, userId);
   await printBlocks(projectId, userId);

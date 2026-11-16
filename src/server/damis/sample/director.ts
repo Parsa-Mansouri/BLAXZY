@@ -417,9 +417,11 @@ function frameOf(input: AnyDirectorInput): Frame {
   const frame = bible.project_frame;
   const duration = input.block_mode === "fixed_30" ? 30 : input.block_mode === "fixed_15" ? 15 : 15;
   const language = frame.script_language ?? "en";
+  // As the validator reads it: a bible without a script language (the stub) uses the default rate.
+  const rateLanguage = frame.script_language ?? "";
   const rate =
-    input.platform_config.speech_rate_wps[language.toLowerCase().split(/[-_]/)[0] ?? ""] ??
-    speechRateWps(language);
+    input.platform_config.speech_rate_wps[rateLanguage.toLowerCase().split(/[-_]/)[0] ?? ""] ??
+    speechRateWps(frame.script_language);
   let spokenMax = Math.floor(rate * duration * 0.7);
   if (frame.max_spoken_words_per_block !== null) {
     spokenMax = Math.min(

@@ -85,7 +85,8 @@ describe.skipIf(!hasFfmpeg)(
       },
     ];
 
-    async function setup(credits: number, shots = SHOTS) {
+    type ShotSpec = (typeof SHOTS)[number] & { durationSeconds?: number };
+    async function setup(credits: number, shots: ShotSpec[] = SHOTS) {
       const userId = await fixtures.newUser();
       const { projectId, scriptVersionId } = await fixtures.newProductionProject(userId);
       if (credits > 0) await billing.grantCredits({ userId, amount: credits });
@@ -214,7 +215,7 @@ describe.skipIf(!hasFfmpeg)(
       let overview = await production.getProductionOverview(projectId, userId);
       expect(overview).toMatchObject({ phase: "preparing", blockCount: 3, canStartDrafts: false });
 
-      // Preparation: one text-blocks run per block; a second call starts nothing new.
+      // Preparation is code: no dami runs; a second call starts nothing new.
       await production.ensurePrepared(projectId, userId);
       await production.ensurePrepared(projectId, userId);
       expect(
@@ -231,12 +232,14 @@ describe.skipIf(!hasFfmpeg)(
       // A location is attached with its approved Hero; a character with its sheet.
       expect(d1.assets[0]?.thumbnailFileId).toBe(lighthouse.lookFileId);
       const d2 = await detail(l2, userId);
-      expect(d2.prompt).toContain("CONTINUITY"); // the previous block's tail
+      expect(d2.prompt).toBe(
+        "Tomas <<<image_1>>> lights the Lamp <<<image_2>>> at the top of the tower.",
+      );
       const prepareRuns = await getDb()
         .select({ key: s.damiRun.damiKey })
         .from(s.damiRun)
         .where(eq(s.damiRun.projectId, projectId));
-      expect(prepareRuns.filter((r) => r.key === "text-blocks")).toHaveLength(3);
+      expect(prepareRuns.filter((r) => r.key === "text-blocks")).toHaveLength(0);
 
       // Block review: reject the first with a note → a revised version.
       await expect(
@@ -939,6 +942,34 @@ describe.skipIf(!hasFfmpeg)(
       expect(await production.dispatchProductionJobs(projectId, "prepare")).toBe(1);
       expect(await queuedForBlocks("block.revise", projectId)).toBe(1);
     });
+
+    it("a 30 second block is prepared by code and generated at 30 seconds", async () => {
+      const { userId, projectId } = await setup(1000, [
+        { ...SHOTS[0]!, durationSeconds: 30 },
+        { ...SHOTS[1]!, durationSeconds: 15 },
+      ]);
+      const [l1, l2] = await lineages(projectId);
+      if (!l1 || !l2) throw new Error("blocks missing");
+      await prepareAndApprove(projectId, userId);
+      await startAllDrafts(projectId, userId);
+      const takes = await getDb()
+        .select()
+        .from(s.blockTake)
+        .where(eq(s.blockTake.projectId, projectId));
+      const byLineage = new Map(takes.map((t) => [t.lineageId, t]));
+      const long = byLineage.get(l1);
+      const short = byLineage.get(l2);
+      if (!long?.generationId || !short?.generationId) throw new Error("takes not generated");
+      expect((await generationRow(long.generationId)).params).toMatchObject({
+        durationSeconds: 30,
+      });
+      expect((await generationRow(short.generationId)).params).toMatchObject({
+        durationSeconds: 15,
+      });
+      expect(long.failure).toBeNull();
+      expect(long.status).toBe("in_review");
+      expect(long.fileId).not.toBeNull();
+    }, 120_000);
 
     it("starts drafts in one batch with one fan-out job, numbering after earlier takes", async () => {
       const { userId, projectId } = await setup(1000);

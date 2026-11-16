@@ -4,7 +4,7 @@
  */
 import { z } from "zod";
 import { GENERATION_KINDS, GENERATION_PURPOSES } from "@/server/db/schema";
-import { ASPECT_RATIOS } from "../policy";
+import { ASPECT_RATIOS, VIDEO_DURATION_LIMITS } from "../policy";
 
 const PREFIX = "sample_";
 export const MAX_LABEL_LENGTH = 120;
@@ -27,7 +27,7 @@ const sampleJobSchema = z.object({
   /** Request digest (hex), the seed of the image's tints (a final's is its draft's). */
   d: z.string().regex(/^[0-9a-f]{16}$/),
   /** Video only: duration in whole seconds, resolution and sound. */
-  s: z.number().int().min(1).max(15).optional(),
+  s: z.number().int().min(1).max(VIDEO_DURATION_LIMITS.max).optional(),
   q: z.enum(["480p", "1080p"]).optional(),
   n: z.boolean().optional(),
 });

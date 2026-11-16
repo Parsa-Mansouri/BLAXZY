@@ -4,7 +4,8 @@
  *   pnpm dami:run <key> <input.json> [--project <projectId>] [--live]
  *
  * Example: pnpm dami:run script-writer src/server/damis/script-writer/fixtures/input.json
- * `prompt-sectioner` without a `range` in the input sections the whole script (sectionScript).
+ * `director` (modes full and write_blocks) and `director-plan` read the fixtures in
+ * `src/server/damis/director/fixtures` (set `mode` to `plan` for director-plan).
  * Needs ANTHROPIC_API_KEY and a reachable DATABASE_URL (the run is recorded in dami_run).
  * In live mode it makes PAID Claude calls and requires the explicit --live flag. Refuses to run
  * in production or against a non-local database (see assertDevOnly in scripts/_lib.ts).
@@ -19,8 +20,6 @@ import {
   DamiError,
   getDamiMode,
   runDami,
-  sectionScript,
-  sectionScriptInputSchema,
   type DamiRunContext,
   type TokenUsage,
 } from "@/server/damis";
@@ -94,23 +93,6 @@ async function main() {
   }
   const input: unknown = JSON.parse(await readFile(file, "utf8"));
   const ctx = await contextFor(projectId);
-
-  const wholeScript =
-    key === "prompt-sectioner" &&
-    typeof input === "object" &&
-    input !== null &&
-    !("range" in input);
-  if (wholeScript) {
-    const result = await sectionScript(sectionScriptInputSchema.parse(input), ctx);
-    console.log(JSON.stringify({ blocks: result.blocks }, null, 2));
-    printSummary({
-      runIds: result.runIds,
-      model: result.model,
-      usage: result.usage,
-      costUsd: result.costUsd,
-    });
-    return;
-  }
 
   const result = await runDami(dami, input, ctx);
   console.log(JSON.stringify(result.output, null, 2));

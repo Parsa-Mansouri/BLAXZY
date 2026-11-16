@@ -10,7 +10,6 @@ import { locationGenerator } from "./location-generator/dami";
 import { projectNamer } from "./project-namer/dami";
 import { propGenerator } from "./prop-generator/dami";
 import type { AnyDami } from "./framework/define";
-import { promptSectioner } from "./prompt-sectioner/dami";
 import { scriptChecker } from "./script-checker/dami";
 import { scriptReviser } from "./script-reviser/dami";
 import { enhancer } from "./enhancer/dami";
@@ -19,7 +18,6 @@ import { sheetGeneratorCharacter } from "./sheet-generator-character/dami";
 import { sheetGeneratorLocation } from "./sheet-generator-location/dami";
 import { sheetGeneratorProp } from "./sheet-generator-prop/dami";
 import { takeFixer } from "./take-fixer/dami";
-import { textBlocks } from "./text-blocks/dami";
 import { director, directorPlan } from "./director/dami";
 import { blockRevision } from "./block-revision/dami";
 import { videoReview } from "./video-review/dami";
@@ -85,15 +83,7 @@ export type { DamiTask, PromptModule } from "./modules/types";
 export { projectStyleSchema, planDuration, type DurationPlan } from "./shared/style";
 
 // The damis
-export {
-  scriptWriter,
-  scriptOutliner,
-  enhancer,
-  assetDetector,
-  promptSectioner,
-  scriptChecker,
-  scriptReviser,
-};
+export { scriptWriter, scriptOutliner, enhancer, assetDetector, scriptChecker, scriptReviser };
 export {
   scriptWriterInputSchema,
   scriptWriterOutputSchema,
@@ -232,22 +222,6 @@ export {
 export { checkDetection, detectorScriptText } from "./asset-detector/dami";
 export { containsQuote, normalizeQuoteText } from "./shared/quotes";
 export { isSceneHeading } from "./shared/script-lines";
-export {
-  promptSectionerInputSchema,
-  MAX_BLOCK_SECONDS,
-  type PromptSectionerInput,
-  type PromptSectionerOutput,
-  type PromptBlockDraft,
-  type SectionerAsset,
-} from "./prompt-sectioner/schema";
-export {
-  sectionScript,
-  sectionScriptInputSchema,
-  stitchSegments,
-  type SectionScriptInput,
-  type SectionScriptResult,
-  type SectionedBlock,
-} from "./prompt-sectioner/section-script";
 
 // Designers (pre-production): character, location and prop generators
 export { characterGenerator, locationGenerator, propGenerator };
@@ -349,14 +323,8 @@ export {
   type ReferenceAsset,
 } from "./shared/reference";
 
-// Production (text-blocks, block and take review)
-export { textBlocks, blockReviser, takeFixer };
-export {
-  textBlocksInputSchema,
-  textBlocksOutputSchema,
-  type TextBlocksInput,
-  type TextBlocksOutput,
-} from "./text-blocks/schema";
+// Production (block and take review)
+export { blockReviser, takeFixer };
 export {
   blockReviserInputSchema,
   blockReviserOutputSchema,
@@ -407,14 +375,12 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [scriptChecker.key]: scriptChecker,
   [scriptReviser.key]: scriptReviser,
   [assetDetector.key]: assetDetector,
-  [promptSectioner.key]: promptSectioner,
   [characterGenerator.key]: characterGenerator,
   [locationGenerator.key]: locationGenerator,
   [propGenerator.key]: propGenerator,
   [sheetGeneratorCharacter.key]: sheetGeneratorCharacter,
   [sheetGeneratorLocation.key]: sheetGeneratorLocation,
   [sheetGeneratorProp.key]: sheetGeneratorProp,
-  [textBlocks.key]: textBlocks,
   [blockReviser.key]: blockReviser,
   [takeFixer.key]: takeFixer,
   [director.key]: director,
@@ -492,11 +458,13 @@ export {
   type ProjectNamerOutput,
 } from "./project-namer/schema";
 
-// Director (owner v1.3) and Block Revision (owner v1.4): not wired into the pipeline yet
+// Director (owner v1.3, wired: `script.direct`) and Block Revision (owner v1.4, not wired yet)
 export { director, directorPlan, DIRECTOR_VERSION, DIRECTOR_OWNER_VERSION } from "./director/dami";
 export {
   assetRegistrySchema,
   blockSchema,
+  platformConfigSchema,
+  defaultPlatformConfig,
   continuityBibleSchema,
   directorInputSchema,
   directorOutputSchema,
@@ -512,6 +480,7 @@ export {
   DIRECTOR_MODES,
   type AssetRegistry,
   type Block as DirectorBlock,
+  type PlatformConfigInput,
   type BlockMode,
   type ContinuityBible,
   type DirectorInput,
@@ -524,10 +493,16 @@ export {
   type Staging,
 } from "./director/schema";
 export { checkDirector, checkDirectorPlan } from "./director/validate";
+export { stubCreativeBible } from "./director/stub";
+export { blockExcerpts } from "./director/excerpts";
+export { creativeBibleShape } from "./creative-dna/schema";
+export { MAX_BLOCK_SECONDS } from "./shared/block";
+export { WORDS_PER_MINUTE } from "./shared/style";
 export {
   bindAssetTokens,
   bindingMap,
   buildAssetIds,
+  tagAssetIds,
   idPrefixForKind,
   type AssetBinding,
   type AssetIdEntry,

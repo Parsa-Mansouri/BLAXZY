@@ -1,5 +1,5 @@
 /**
- * Pieces shared by the three production damis (text-blocks, block-reviser, take-fixer): the asset
+ * Pieces shared by the production damis (block-reviser, take-fixer) and the Director's binding: the asset
  * and review schemas, the `<<<image_N>>>` token rules and their code check, and the renderers for
  * the user message. Prompt text here is part of each dami's stable base prompt: changing it means
  * bumping their versions.
@@ -12,6 +12,9 @@ export { assetRefSchema };
 
 /** The most reference images the video model accepts for one block. */
 export const MAX_REFERENCE_IMAGES = 9;
+
+/** The longest block (clip) in seconds: the Director writes 15 or 30 second blocks. */
+export const MAX_BLOCK_SECONDS = 30;
 
 /** The longest prompt the production damis return (their input prompts stay under 6000). */
 export const MAX_PRODUCTION_PROMPT = 8000;

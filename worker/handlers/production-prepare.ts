@@ -1,4 +1,4 @@
-import { blockReviser, runDami, textBlocks } from "../../src/server/damis";
+import { blockReviser, runDami } from "../../src/server/damis";
 import {
   blockRevise,
   defineHandler,
@@ -11,18 +11,21 @@ import {
   failPreparation,
   loadPreparationJob,
   MAX_BLOCK_ASSETS,
+  prepareBlockPrompt,
   ProductionInputError,
   storePreparation,
-  textBlocksInput,
   tooManyAssetsMessage,
 } from "../../src/server/production";
 import { classifyProductionFailure } from "./production-failure";
 import { handleFailure } from "./failure";
 
 /**
- * Prepares a pending block version: `prepare` binds its asset mentions to reference tokens with
- * text-blocks; `revise` answers the rejected review of its predecessor with block-reviser. Each
- * job only handles its own kind of version (a revision answers a rejected predecessor).
+ * Prepares a pending block version. `prepare` is code only: the blocks arrive already directed
+ * (the Director wrote the prompt), so this binds the prompt's asset tags to reference tokens for
+ * the assets that are ready (`prepareBlockPrompt`) and marks the block ready; the preparation's
+ * run id is the Director run that wrote the block. `revise` answers the rejected review of the
+ * block's predecessor with block-reviser (the draft reviser, until Block Revision replaces it).
+ * Each job only handles its own kind of version (a revision answers a rejected predecessor).
  */
 async function prepareBlock(
   blockId: string,
@@ -38,15 +41,17 @@ async function prepareBlock(
     if (block.stale) {
       throw new ProductionInputError("The script changed under this shot. Wait for the new shots.");
     }
-    if (!project.style) throw new ProductionInputError("Choose the project's style first.");
-    const runContext = { userId: project.ownerId, projectId: project.id, signal: context.signal };
     let output: { prompt: string; assetRefs: string[]; notes: string[] };
-    let runId: string;
+    let runId: string | null;
     if (mode === "prepare") {
-      const run = await runDami(textBlocks, textBlocksInput(ctx, project.style), runContext);
-      output = run.output;
-      runId = run.runId;
+      const ready = new Map(
+        ctx.readyAssets.filter((a) => a.kind !== "voice").map((a) => [a.ref, a.name] as const),
+      );
+      output = prepareBlockPrompt(block, ready);
+      runId = block.damiRunId;
     } else {
+      if (!project.style) throw new ProductionInputError("Choose the project's style first.");
+      const runContext = { userId: project.ownerId, projectId: project.id, signal: context.signal };
       const run = await runDami(blockReviser, blockReviserInput(ctx, project.style), runContext);
       output = {
         prompt: run.output.prompt,
@@ -73,7 +78,7 @@ async function prepareBlock(
   }
 }
 
-/** text-blocks on the block's section prompt → prepared prompt and references. */
+/** Binds the block's directed prompt to its reference tokens (code only). */
 export const productionPrepareHandler = defineHandler(productionPrepare, (payload, context) =>
   prepareBlock(payload.blockId, "prepare", productionPrepare, context),
 );

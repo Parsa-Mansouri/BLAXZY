@@ -1,13 +1,12 @@
 /**
  * Assets (Output_021) and pre-production (Output_030). `applyDetection`, `hasDetectionFor`,
- * `getKnownAssets`, `getSectionerAssets` and the job surface (`loadLookJob` ... `applyGenerationResult`)
+ * `getKnownAssets` and the job surface (`loadLookJob` ... `applyGenerationResult`)
  * are for job handlers and the worker; the rest take the acting user and check ownership.
  */
 export {
   AssetInputError,
   countAssetsByKind,
   DEFAULT_ASSET_PAGE_SIZE,
-  getSectionerAssets,
   listAssets,
   MAX_ASSET_PAGE_SIZE,
   type Asset,

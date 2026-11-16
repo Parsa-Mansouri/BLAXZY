@@ -181,7 +181,7 @@ const openQuestionSchema = z.object({
   affects: z.array(z.string()),
 });
 
-const bibleShape = z.object({
+export const creativeBibleShape = z.object({
   dami: z.literal("creative_dna"),
   dami_version: z.string(),
   registry_version: z.string(),
@@ -214,7 +214,7 @@ const bibleShape = z.object({
   validation_status: z.enum(VALIDATION_STATUSES),
 });
 
-type BibleShape = z.output<typeof bibleShape>;
+type BibleShape = z.output<typeof creativeBibleShape>;
 
 /** Slice keys whose `rules` must hold at least three rules in a bible that is not rejected. */
 const SLICE_KEYS = [
@@ -274,7 +274,7 @@ function refineBible(bible: BibleShape, ctx: z.RefinementCtx): void {
 }
 
 /** The Creative Bible: the structured-output schema and the validation of the model's answer. */
-export const creativeBibleSchema = bibleShape.superRefine(refineBible);
+export const creativeBibleSchema = creativeBibleShape.superRefine(refineBible);
 
 export type CreativeBible = z.output<typeof creativeBibleSchema>;
 export type CreativeRule = z.output<typeof ruleSchema>;

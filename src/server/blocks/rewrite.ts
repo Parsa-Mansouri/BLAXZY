@@ -69,6 +69,7 @@ export async function rewriteAssetRefs(
         orderIndex: block.orderIndex,
         title: block.title,
         scriptExcerpt: block.scriptExcerpt,
+        direction: block.direction,
         prompt: replaceAssetTag(block.prompt, from, to),
         durationSeconds: block.durationSeconds,
         assetRefs: swap(block.assetRefs),

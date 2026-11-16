@@ -3,8 +3,9 @@
  */
 import "dotenv/config";
 import { afterAll, describe, expect, it } from "vitest";
-import type { SectionedBlock } from "@/server/damis";
 import { createFixtures, databaseReachable } from "@/server/test-support/script-fixtures";
+
+import type { DirectedBlock } from "@/server/blocks";
 
 const reachable = await databaseReachable();
 
@@ -33,17 +34,13 @@ describe.skipIf(!reachable)("blocks service (integration)", async () => {
     orderIndex: number,
     excerpt: string,
     prompt = `Prompt ${excerpt}`,
-  ): SectionedBlock => ({
+  ): DirectedBlock => ({
     title: `Block ${orderIndex}`,
     scriptExcerpt: excerpt,
     prompt,
     durationSeconds: 5,
     assetRefs: ["character:mara"],
-    startLine: orderIndex + 1,
-    endLine: orderIndex + 1,
     orderIndex,
-    start: 0,
-    end: excerpt.length,
   });
 
   it("replaces blocks keeping lineage for unchanged excerpts, and marks stale", async () => {
@@ -161,7 +158,7 @@ describe.skipIf(!reachable)("blocks service (integration)", async () => {
         blocks: [block(0, "One."), block(0, "Two.")],
         damiRunIds: [],
       }),
-    ).rejects.toThrow("Sectioning returned two blocks in the same place.");
+    ).rejects.toThrow("The Director returned two blocks in the same place.");
   });
 
   it("paginates, reports sectioning state and hides other users' blocks", async () => {

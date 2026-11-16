@@ -62,7 +62,7 @@ describe("pickModel", () => {
     ).toMatchObject({ aspectRatio: "9:16", resolution: "1080p", durationSeconds: 7, sound: true });
     expect(
       pickModel("block_draft", landscape, { durationSeconds: 40 }).params.durationSeconds,
-    ).toBe(15);
+    ).toBe(30);
     expect(pickModel("block_draft", landscape, { durationSeconds: 0 }).params.durationSeconds).toBe(
       1,
     );

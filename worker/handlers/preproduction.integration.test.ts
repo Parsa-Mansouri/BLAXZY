@@ -1082,8 +1082,6 @@ describe.skipIf(!reachable)(
       await expect(
         assets.startLookFromPrompt({ assetId: narrator.id, userId, prompt: "A deep voice" }),
       ).rejects.toThrow(/only a voice/);
-      // The sectioner does not see it either (it has no image to attach).
-      expect((await assets.getSectionerAssets(projectId)).map((a) => a.name)).toEqual(["Tomas"]);
 
       const look = await produceLook(
         (await assets.startLookFromPrompt({ assetId: tomas.id, userId, prompt: "A man" }))?.id ??

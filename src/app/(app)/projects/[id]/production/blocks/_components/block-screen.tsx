@@ -1,7 +1,7 @@
 "use client";
 
 import { useAbortOnUnmount } from "@/app/(app)/_lib/use-abort-on-unmount";
-import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -9,7 +9,6 @@ import type { BlockDetail } from "@/server/production";
 import {
   ActionMenu,
   Button,
-  cn,
   formatDurationLong,
   PaperSheet,
   PictureTile,
@@ -30,7 +29,9 @@ import { focusIsFree, markArrival, takeArrival } from "../_lib/arrival";
 import { blockKey } from "../_lib/block-key";
 import { BLOCK_STATE_TONES, blockStateLabel, scriptChangeNotice } from "../_lib/block-state";
 import { AssetPickerSheet } from "./asset-picker-sheet";
+import { DirectionPanel } from "./direction-panel";
 import { PromptView } from "./prompt-view";
+import { ClosedSection, Section } from "./section";
 import { Mono } from "@/app/(app)/_components/values";
 
 export type BlockView = Omit<BlockDetail, "takes">;
@@ -100,39 +101,6 @@ const ANNOUNCEMENTS: Partial<Record<BlockView["stage"], string>> = {
   approved: "The shot is approved.",
   prepare_failed: "The shot could not be prepared. The details are on the page.",
 };
-
-function Section({
-  title,
-  children,
-  action,
-  headingRef,
-  className,
-}: {
-  title: string;
-  className?: string;
-  children: ReactNode;
-  action?: ReactNode;
-  /** Makes the heading a focus target (it then takes focus after a change in its section). */
-  headingRef?: React.Ref<HTMLHeadingElement>;
-}) {
-  const heading = `block-${title.toLowerCase().replaceAll(" ", "-")}`;
-  return (
-    <section aria-labelledby={heading} className={cn("flex min-w-0 flex-col gap-4", className)}>
-      <div className="flex min-h-(--btn-sm) items-center justify-between gap-4">
-        <h3
-          ref={headingRef}
-          id={heading}
-          tabIndex={headingRef ? -1 : undefined}
-          className="scroll-mt-[calc(var(--toolbar-h)+1rem)] text-section text-balance outline-none"
-        >
-          {title}
-        </h3>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 /**
  * One shot in the focus area of the shot review: its title, state and decision first, then the
@@ -499,7 +467,15 @@ export function BlockScreen({
         </Section>
       </div>
 
-      {block.prompt ? (
+      {block.direction ? (
+        <DirectionPanel direction={block.direction} durationSeconds={block.durationSeconds} />
+      ) : null}
+
+      {block.prompt && block.direction ? (
+        <ClosedSection title="Prompt">
+          <PromptView prompt={block.prompt} assets={block.assets} />
+        </ClosedSection>
+      ) : block.prompt ? (
         <Section title="Prompt">
           <PromptView prompt={block.prompt} assets={block.assets} />
         </Section>

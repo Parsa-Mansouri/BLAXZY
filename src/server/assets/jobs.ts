@@ -25,7 +25,7 @@ import {
 import { enqueueGeneration, requestGeneration, type FinishedGeneration } from "@/server/generation";
 import { logProjectEvent } from "@/server/projects";
 import { setSectioningState } from "@/server/blocks";
-import { assetSheetViewsAdvance, enqueue, scriptSection } from "@/server/jobs";
+import { assetSheetViewsAdvance, enqueue, scriptDirect } from "@/server/jobs";
 import { wakeWaitingLooks } from "./designs";
 import type { AssetRow, LookRow, SheetRow } from "./looks";
 import { applyViewGenerationResult } from "./packs";
@@ -542,7 +542,7 @@ export async function applyGenerationResult(g: FinishedGeneration): Promise<void
 export async function queueResection(projectId: string, scriptVersionId: string): Promise<void> {
   await getDb().transaction(async (tx) => {
     await setSectioningState({ projectId, state: "running", scriptVersionId, failure: null }, tx);
-    await enqueue(scriptSection, { scriptVersionId, resection: true }, { tx });
+    await enqueue(scriptDirect, { scriptVersionId, resection: true }, { tx });
   });
 }
 

@@ -880,12 +880,19 @@ export const promptBlock = pgTable(
       .$type<string[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    /**
+     * The Director's data for this block (output_22, see `damis/director/schema.ts`): shots,
+     * staging, rationales, continuity, budgets and the prompt as written (with `@char_1` ids).
+     * Null for blocks cut before the Director existed.
+     */
+    direction: jsonb("direction").$type<unknown>(),
     /** True when the script changed under this block and it must be regenerated. */
     stale: boolean("stale").notNull().default(false),
     staleReason: text("stale_reason"),
     /**
-     * Production preparation (text-blocks dami), filled once per block version: the prompt with
-     * its asset mentions bound to reference tokens, and the assets in token order (`kind:Name`).
+     * Production preparation (code, `production/binding.ts`), filled once per block version: the
+     * prompt with its asset tags bound to reference tokens, and the assets in token order
+     * (`kind:Name`).
      * A user change to the prompt or the assets creates the next version of the block.
      */
     productionState: text("production_state").$type<ProductionState>().notNull().default("none"),
@@ -909,6 +916,104 @@ export const promptBlock = pgTable(
       .on(t.projectId, t.orderIndex, t.id)
       .where(sql`${t.supersededAt} is null`),
   ],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Direction (the Director's run set for one script version)                   */
+/* -------------------------------------------------------------------------- */
+
+export const DIRECTION_MODES = ["full", "plan"] as const;
+export type DirectionMode = (typeof DIRECTION_MODES)[number];
+
+/** `pending` (the Director runs) → `writing` (plan stored, batches queued) → `ready`. */
+export const DIRECTION_STATUSES = [
+  "pending",
+  "planned",
+  "writing",
+  "ready",
+  "failed",
+  "superseded",
+] as const;
+export type DirectionStatus = (typeof DIRECTION_STATUSES)[number];
+
+export const DIRECTION_BATCH_STATUSES = ["pending", "done", "failed"] as const;
+export type DirectionBatchStatus = (typeof DIRECTION_BATCH_STATUSES)[number];
+
+/**
+ * One run set of the Director for an accepted script version: a single `full` call, or a `plan`
+ * call followed by `write_blocks` batches (`direction_batch`). Append-only: a new run (a script
+ * edit, a corrected asset list, a retry) adds a row and marks the older ones `superseded`.
+ * `header` is the output's project-level part (dramatic analysis, director's notes, continuity
+ * bible, totals); `plan` is the plan output of a long script (blocks without prompts); `context`
+ * is the frozen input of the batches (platform config, block mode, bible, asset registry and the
+ * id to asset bindings) so every batch of a run sees exactly what the plan saw.
+ */
+export const direction = pgTable(
+  "direction",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id),
+    scriptVersionId: uuid("script_version_id")
+      .notNull()
+      .references(() => scriptVersion.id),
+    /** The ready Creative Bible the run used; null when it ran on the no-bible stub. */
+    creativeBibleId: uuid("creative_bible_id").references(() => creativeBible.id),
+    blockMode: text("block_mode").notNull(),
+    mode: text("mode").$type<DirectionMode>().notNull(),
+    status: text("status").$type<DirectionStatus>().notNull().default("pending"),
+    header: jsonb("header").$type<unknown>(),
+    plan: jsonb("plan").$type<unknown>(),
+    context: jsonb("context").$type<unknown>(),
+    warnings: jsonb("warnings")
+      .$type<{ type: string; ref: string; message: string }[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** Number of `write_blocks` batches (0 for a `full` run). */
+    batchCount: integer("batch_count").notNull().default(0),
+    damiRunIds: jsonb("dami_run_ids")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    failure: text("failure"),
+    createdAt: createdAt(),
+    finishedAt: ts("finished_at"),
+  },
+  (t) => [
+    index("direction_project_created_idx").on(t.projectId, t.createdAt.desc()),
+    index("direction_script_version_idx").on(t.scriptVersionId, t.createdAt.desc()),
+    // At most one run in flight per script version.
+    uniqueIndex("direction_active_unique")
+      .on(t.scriptVersionId)
+      .where(sql`${t.status} in ('pending', 'planned', 'writing')`),
+  ],
+);
+
+/**
+ * One `write_blocks` batch of a planned direction (blocks `blockFrom` to `blockTo`, inclusive).
+ * A child table, not a counter on the direction: batches run in parallel on any worker and each
+ * writes only its own row, so no update is lost; the run is complete when no batch is `pending`.
+ */
+export const directionBatch = pgTable(
+  "direction_batch",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    directionId: uuid("direction_id")
+      .notNull()
+      .references(() => direction.id),
+    batchIndex: integer("batch_index").notNull(),
+    blockFrom: integer("block_from").notNull(),
+    blockTo: integer("block_to").notNull(),
+    status: text("status").$type<DirectionBatchStatus>().notNull().default("pending"),
+    /** The written blocks (output_22 `blocks`) once done. */
+    blocks: jsonb("blocks").$type<unknown>(),
+    damiRunId: uuid("dami_run_id").references(() => damiRun.id),
+    failure: text("failure"),
+    createdAt: createdAt(),
+    finishedAt: ts("finished_at"),
+  },
+  (t) => [uniqueIndex("direction_batch_unique").on(t.directionId, t.batchIndex)],
 );
 
 /* -------------------------------------------------------------------------- */

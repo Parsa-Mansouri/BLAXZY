@@ -30,11 +30,11 @@ Wizard question bank).
 | 10 | Sheet Generator: character (output_30) | Pre-production | `sheet-generator-character/source/sheet_generator_character_v4.md` | live (owner) | `sheet-generator-character/` | |
 | 11 | Sheet Generator: location | Pre-production | `sheet-generator-location/source/sheet_generator_location_v1.md` | live (owner) | `sheet-generator-location/` | |
 | 12 | Sheet Generator: prop | Pre-production | `sheet-generator-prop/source/sheet_generator_prop_v1.md` | live (owner) | `sheet-generator-prop/` | |
-| 13 | Director (output_22) | After script approval (background) | `inbox/2026-11-16/dami_director.system.md` v1.3 | delivered, not wired | none | Replaces the parked `pending/blaxzy_director_dami.md` (v1, marked wrong). Modes `full`, `plan`, `write_blocks`. Ships a code-side validator spec. |
-| 14 | Text Blocks / reference binding | Production | none | agent draft | `text-blocks/` | Role unclear now that the Director writes final prompts; Video Review still expects reference bindings "from the Text Blocks stage". Ask the owner. |
+| 13 | Director (output_22) | After script approval (background) | `inbox/2026-11-16/dami_director.system.md` v1.3 | live | `director/` | Wired (Phase 4): `script.direct` runs `full` for up to ~8 blocks, else `plan` plus `direction.write` batches of ~8 (`write_blocks`). Replaces the parked `pending/blaxzy_director_dami.md` (v1, marked wrong). Blocks arrive directed (15 or 30 s); a project without a Creative Bible gets a stub bible. Code-side validator is `director/validate.ts`. |
+| 14 | Text Blocks / reference binding | Production | none | retired | none | Retired (Phase 4). The Director writes the final prompts; reference binding is code (`bindAssetTokens`/`tagAssetIds` at store time, `production/binding.ts` at preparation). Folder, sample and tests deleted. |
 | 15 | Block Revision | Production | `inbox/2026-11-16/dami_block_revision.system.md` v1.4 | delivered, not wired | `block-reviser/` (agent draft, to be replaced) | Minimal-diff fixes, sliders, keep list, escalation levels 1 to 4, attempt history. |
 | 16 | Video Review (+ Router, code) | Production | `inbox/2026-11-16/dami_video_review.system.md` v1.0 | delivered, not wired | none | Vision review of keyframes; needs ffmpeg cut detection and frame extraction. The Router (rebind, revise, reroll; 6-generation cap) is backend code, not a dami. |
-| 17 | Prompt Sectioner | Production | none | retire | `prompt-sectioner/` | Replaced by the Director. |
+| 17 | Prompt Sectioner | Production | none | retired | none | Retired (Phase 4), replaced by the Director. Folder, sample generator, tests and `script.section` job deleted. |
 | 18 | Take Fixer | Production | none | retire | `take-fixer/` | Replaced by Video Review + Block Revision. |
 
 ## Logical damis named by the question bank (no owner file yet)

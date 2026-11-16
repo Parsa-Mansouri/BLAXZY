@@ -6,7 +6,17 @@
  * the wrapper leaves alone.
  */
 import { isPriceChanged, quoteGeneration } from "../generation";
-import { TEST_STYLE } from "./script-fixtures";
+import type { ProjectStyle } from "../db/schema";
+
+/** Any style quotes the same (prices depend on the purpose). Not imported from the script fixtures:
+ * those pull in vitest, and the dev scripts use this module too. */
+const TEST_STYLE: ProjectStyle = {
+  visualStyle: "Cinematic live-action",
+  genre: "Drama",
+  format: "movie",
+  orientation: "landscape",
+  totalDurationSeconds: 90,
+};
 
 let cached: Promise<number[]> | undefined;
 

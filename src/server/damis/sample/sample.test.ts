@@ -7,7 +7,6 @@ import {
   type AssetDetectorOutput,
 } from "../asset-detector/schema";
 import { runDami } from "../framework/runner";
-import { sectionScript } from "../prompt-sectioner/section-script";
 import { scriptChecker } from "../script-checker/dami";
 import { scriptCheckerOutputSchema } from "../script-checker/schema";
 import { scriptReviser } from "../script-reviser/dami";
@@ -102,7 +101,7 @@ function detectorInput(style: ProjectStyle, content: string): AssetDetectorInput
   };
 }
 
-/** The detector's entries as the prompt-sectioner's assets (voices are no longer assets). */
+/** The detector's entries as plain kind/name assets (voices are no longer assets). */
 function sectionerAssets(output: AssetDetectorOutput) {
   return [
     ...output.characters
@@ -183,10 +182,6 @@ describe("sample generators", () => {
       expect(characters.length).toBeGreaterThanOrEqual(style.totalDurationSeconds < 30 ? 1 : 2);
       expect(characters.length).toBeLessThanOrEqual(3);
       expect(detected.output.scene_index.length).toBe(scenes);
-
-      const sectioned = await sectionScript({ style, content, assets }, {}, deps);
-      expect(sectioned.blocks.length).toBeGreaterThan(0);
-      expect(sectioned.blocks.some((b) => b.assetRefs.length > 0)).toBe(true);
     });
   }
 
@@ -207,7 +202,7 @@ describe("sample generators", () => {
     expect(assetDetectorOutputSchema.safeParse(detected).success).toBe(true);
     expect(detected.characters.map((c) => c.name)).toEqual(["مریم", "رضا"]);
     expect(detected.locations).toHaveLength(2);
-    const run = await runDami(assetDetector, detectorInput(style, content), {}, deps);
+    await runDami(assetDetector, detectorInput(style, content), {}, deps);
 
     const review = {
       issueCodes: [],
@@ -217,13 +212,6 @@ describe("sample generators", () => {
     const revised = sampleScriptReviser({ style, content, review });
     expect(scriptReviserModelOutputSchema.safeParse(revised).success).toBe(true);
     await runDami(scriptReviser, { style, content, review }, {}, deps);
-
-    const sectioned = await sectionScript(
-      { style, content, assets: sectionerAssets(run.output) },
-      {},
-      deps,
-    );
-    expect(sectioned.blocks.length).toBeGreaterThan(0);
   });
 
   it("keeps the ids of known assets (matching names ignoring case)", async () => {

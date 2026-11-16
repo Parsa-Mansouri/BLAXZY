@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { creativeBibleSchema } from "../creative-dna/schema";
+import { creativeBibleShape } from "../creative-dna/schema";
 import { PLATFORM_CONFIG } from "../shared/platform";
 
 /* -------------------------------------------------------------------------- */
@@ -373,7 +373,11 @@ export function isBlocked(output: { status: string }): boolean {
 const inputShape = {
   platform_config: platformConfigSchema.default(defaultPlatformConfig),
   block_mode: z.enum(BLOCK_MODES),
-  creative_bible: creativeBibleSchema,
+  /**
+   * The bible as a plain shape (no minimum counts): a compiled bible passed them when it was
+   * made, and the stub of a project without one (`stub.ts`) has empty lists by design.
+   */
+  creative_bible: creativeBibleShape,
   asset_registry: assetRegistrySchema,
   script: z.string().trim().min(1).max(200_000),
   /** write_blocks only: the saved `plan` output, used verbatim. */

@@ -1,6 +1,11 @@
 /** What the Production screens read: the overview, a page of blocks and one block's detail. */
 import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
-import { pageCurrentBlocks, type PromptBlock } from "@/server/blocks";
+import {
+  pageCurrentBlocks,
+  parseBlockDirection,
+  type BlockDirectionView,
+  type PromptBlock,
+} from "@/server/blocks";
 import { type DbExecutor, getDb } from "@/server/db/client";
 import { blockTake, promptBlock } from "@/server/db/schema";
 import { decodeOrderCursor, encodeOrderCursor } from "@/server/projects/cursor";
@@ -32,6 +37,8 @@ export type BlockDetail = ProductionBlock & {
   takes: TakeView[];
   /** A dami or a generation is working on the block; nothing new can be started. */
   busy: boolean;
+  /** The Director's shot plan, staging and reasons; null for a block cut before the Director. */
+  direction: BlockDirectionView | null;
 };
 
 function decodeCursor(cursor: string): { orderIndex: number; id: string } {
@@ -176,6 +183,7 @@ export async function getBlockDetail(
     ...view,
     takes: await listTakeViews(db, lineageId),
     busy: isBusy(opened.block, take),
+    direction: parseBlockDirection(opened.block.direction),
   };
 }
 

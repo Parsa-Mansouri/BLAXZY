@@ -99,7 +99,7 @@ export const scriptRevise = defineJob({
 });
 
 /**
- * Detect the assets of an accepted script, then queue sectioning. One run per version at a time
+ * Detect the assets of an accepted script, then queue the Director. One run per version at a time
  * (the detector is paid). The queue predates the dedupe key; `ensureQueue` upgrades it in place.
  */
 export const scriptDetectAssets = defineJob({
@@ -121,16 +121,32 @@ export const assetDetectFix = defineJob({
 });
 
 /**
- * Cut an accepted script into prompt blocks. `resection`: cut it again although it has blocks (the
- * detected assets changed in a correction round, so the blocks must name the new list).
+ * Direct an accepted script (the Director dami): its blocks, with staging, shots and prompts.
+ * `resection`: direct it again although it has blocks (the detected assets changed in a
+ * correction round, so the blocks must name the new list). A script of up to ~8 blocks is one
+ * `full` call; a longer one is a `plan` call and then one `direction.write` job per batch.
+ * Waits for a Creative Bible that is still compiling, like the other bible consumers.
  */
-export const scriptSection = defineJob({
-  name: "script.section",
-  payload: scriptPayload.extend({ resection: z.boolean().optional() }),
+export const scriptDirect = defineJob({
+  name: "script.direct",
+  payload: scriptBiblePayload.extend({ resection: z.boolean().optional() }),
   options: { ...damiJob, expireInSeconds: 90 * 60 },
-  // One cut per version (and kind of cut) at a time: the sectioner is paid. The queue predates
-  // the dedupe key; `ensureQueue` upgrades it in place.
-  dedupeKey: (p) => `${p.scriptVersionId}:${p.resection ? "resection" : "section"}`,
+  // One run per version (and kind) at a time: the Director is paid.
+  dedupeKey: (p) => waitKey(`${p.scriptVersionId}:${p.resection ? "resection" : "direct"}`, p),
+});
+
+/**
+ * One `write_blocks` batch of a planned direction. Keyed by the batch: a duplicate send is
+ * dropped, and the handler stores a batch once (the last one to finish assembles the blocks).
+ */
+export const directionWrite = defineJob({
+  name: "direction.write",
+  payload: z.object({
+    directionId: z.string().uuid(),
+    batchIndex: z.number().int().min(0).max(1000),
+  }),
+  options: { ...damiJob, expireInSeconds: 60 * 60 },
+  dedupeKey: (p) => `${p.directionId}:${p.batchIndex}`,
 });
 
 /*
@@ -347,7 +363,8 @@ export const ALL_JOBS = [
   scriptRevise,
   scriptDetectAssets,
   assetDetectFix,
-  scriptSection,
+  scriptDirect,
+  directionWrite,
   generationRun,
   generationSweep,
   damiSweep,

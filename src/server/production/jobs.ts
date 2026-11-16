@@ -11,7 +11,6 @@ import {
   failBlockPreparation,
   getBlockVersion,
   getCurrentBlock,
-  getPreviousCurrentBlock,
   getPreviousVersion,
   MAX_PRODUCTION_BLOCKS,
   storeBlockPreparation,
@@ -22,11 +21,11 @@ import {
   assetTag,
   BLOCK_ISSUE_CODES,
   isVoiceRef,
+  MAX_BLOCK_SECONDS,
   TAKE_ISSUE_CODES,
   type BlockIssueCode,
   type BlockReviserInput,
   type TakeFixerInput,
-  type TextBlocksInput,
 } from "@/server/damis";
 import { getDb } from "@/server/db/client";
 import {
@@ -52,8 +51,6 @@ export type ProductionJobReview = { issueCodes: string[]; note: string | null };
 export type PreparationJob = {
   block: PromptBlock;
   project: ProductionJobProject;
-  /** The block before this one in the film (continuity). */
-  previous: PromptBlock | null;
   /** Set when this version answers the rejected review of its predecessor (`block.revise`). */
   revision: { parent: PromptBlock; review: ProductionJobReview } | null;
   /** The project's ready image assets: what the block may reference. */
@@ -153,7 +150,6 @@ export async function loadPreparationJob(blockId: string): Promise<PreparationJo
   return {
     block,
     project: owner,
-    previous: await getPreviousCurrentBlock(block),
     revision: parent && rejection ? { parent, review: rejection } : null,
     readyAssets: await listReadyReferenceAssets(block.projectId),
   };
@@ -189,36 +185,6 @@ function asBlockAsset(asset: ReferenceAsset) {
     kind: asset.kind,
     name: clip(asset.name, 200),
     description: clip(asset.description, 4000),
-  };
-}
-
-/**
- * The text-blocks input for a block: its section prompt, the project's ready image assets as the
- * available references (only the user's choice when they set the block's assets), and the tail
- * of the previous block's prompt for continuity (the section prompt, so blocks prepare in any
- * order).
- */
-export function textBlocksInput(job: PreparationJob, style: ProjectStyle): TextBlocksInput {
-  const { block, previous } = job;
-  const chosen = block.productionAssetRefs;
-  const available = chosen
-    ? job.readyAssets.filter((a) => chosen.includes(a.ref))
-    : job.readyAssets;
-  const names = new Map(job.readyAssets.map((a) => [a.ref, a.name]));
-  const prompt = chosen ? promptForChosenAssets(block.prompt, chosen, names) : block.prompt;
-  return {
-    style,
-    block: {
-      title: blockTitle(block),
-      scriptExcerpt: clip(block.scriptExcerpt, 20_000),
-      prompt: clip(prompt, 6000),
-      durationSeconds: Math.min(15, Math.max(1, block.durationSeconds ?? 5)),
-      assetRefs: (chosen ?? block.assetRefs).slice(0, 100),
-    },
-    assets: available.map(asBlockAsset),
-    previous: previous
-      ? { title: blockTitle(previous), promptTail: promptTail(previous.prompt) }
-      : undefined,
   };
 }
 
@@ -260,7 +226,7 @@ export async function storePreparation(input: {
   prompt: string;
   assetRefs: string[];
   notes: string[];
-  damiRunId: string;
+  damiRunId: string | null;
 }): Promise<boolean> {
   return getDb().transaction(async (tx) => {
     const row = await storeBlockPreparation(input, tx);
@@ -353,7 +319,7 @@ export function takeFixerInput(job: TakeJob, style: ProjectStyle): TakeFixerInpu
       title: blockTitle(block),
       scriptExcerpt: clip(block.scriptExcerpt, 20_000),
       durationSeconds: block.durationSeconds
-        ? Math.min(15, Math.max(1, block.durationSeconds))
+        ? Math.min(MAX_BLOCK_SECONDS, Math.max(1, block.durationSeconds))
         : undefined,
     },
     previousPrompt: parent.prompt,

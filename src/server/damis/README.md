@@ -77,7 +77,7 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
 - Later damis call `renderCreativeDna(consumer, bible)` (`shared/creative-context.ts`) and put the
   returned `PromptText` (already `cache: true`) in their system prompt after their own
   instructions. Consumers: `script_writer`, `script_checker`, `asset_detector`,
-  `asset_generation`, `sheet_generator`, `director`, `text_blocks_video`. `getReviewOptions`
+  `asset_generation`, `sheet_generator`, `director`, `text_blocks_video` (the Director reads both slices). `getReviewOptions`
   gives the review screens their options. `shared/platform.ts` holds the platform numbers
   (block lengths, speech rates).
 - Who consumes which slice (input field `creativeDna`, the rendered block as a string, optional;
@@ -122,7 +122,7 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   `placeholder`, so a rename by the user (`user`) always wins and a name is only ever made once.
   A failed name is only logged; the project keeps "Untitled project".
 
-## Director and Block Revision (not wired yet)
+## Director (wired) and Block Revision (not wired yet)
 
 - `director/` is the owner's DIRECTOR v1.3 (output_22): the approved script becomes 15 or 30 second
   Seedance blocks with staging, a shot plan, rationales and a self-contained `prompt_text`. Two
@@ -145,7 +145,39 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   line may say "still"), and `script_coverage` is checked by quotes found in order within a small
   gap tolerance (two quotes cannot prove "no gaps").
 - `director/binding.ts` (pure): `@char_1` tokens to `Name <<<image_N>>>` with the ordered
-  `kind:Name` refs, and stable output_21-style ids for BLAXZY assets by first appearance.
+  `kind:Name` refs (`bindAssetTokens`), the same pass written as `[kind:Name]` tags
+  (`tagAssetIds`, what blocks store), and stable output_21-style ids for BLAXZY assets.
+- `director/stub.ts`: the Creative Bible stub a project without a bible sends (a typed "Other"
+  genre or style, or a failed compile). The owner's prompt and validator read `creative_bible`
+  everywhere, so the stub keeps the whole shape: `genre.other` / `style.other`, the frame from
+  the project style (orientation, format, runtime, the platform's default 15 s block), the user's
+  own words (genre, style, look line, descriptor, art direction) in the contracts, empty slices,
+  guards, locks and QC, and `validation_status: "ok_with_assumptions"` with one assumption saying
+  there is no bible. The input schema takes `creativeBibleShape` (the bible without its minimum
+  counts, which a compiled bible already passed) so the stub validates.
+- `director/excerpts.ts` (pure): the script text of each block from its `script_coverage` quotes.
+
+### The pipeline (Phase 4)
+
+- `script.direct` (replaces `script.section`) is queued after detection, by a correction round
+  (`resection`) and by the retry path. The handler (`worker/handlers/script-direct.ts`) reads the
+  accepted version's text, the latest detection as the registry (`detectorView` ids, voice-only
+  characters as characters with no reference), the ready Creative Bible or the stub (a bible still
+  compiling defers the job like every bible consumer) and `fixed_<n>` / `auto` for the block mode.
+  Up to ~8 estimated blocks (the longer of the target runtime and the script's spoken length, over
+  the block length) it is one `full` call; otherwise `director-plan`, then one
+  `direction.write` job per batch of 8 (`write_blocks`, parallel, the plan carries the staging).
+- Data: `direction` (one row per run set, append-only; `header`, `plan`, frozen `context`) and
+  `direction_batch` (a child table, so parallel batches each write only their own row).
+  `src/server/direction/service.ts`: storing a batch locks the direction row; the batch that finds
+  none pending assembles the blocks in the same transaction (`replaceBlocks`, sectioning state,
+  direction `ready`), so completion is idempotent and a late duplicate changes nothing.
+- A block stores the Director's data in `prompt_block.direction` (with `asset_names`), its prompt
+  with `[kind:Name]` tags, its ordered refs, 15 or 30 s. Preparation (`production.prepare`) is
+  code only: `production/binding.ts` turns the tags into `<<<image_N>>>` for ready assets.
+  `block.revise` still uses the draft block-reviser until Block Revision is wired.
+- Failures go through `handleFailure`; a blocked or invalid Director fails the direction and the
+  sectioning state, and the user retries through the existing retry path.
 - `block-revision/` is BLOCK_REVISION v1.4 (`block-revision`): the next version of one block from
   free-text requests only (asset correction, regenerate, director notes, confirmed review issues,
   timed notes, keep list, attempt history). The owner's review options and sliders are not part
@@ -204,8 +236,8 @@ base64 image block (injectable as `DamiRunnerDeps.resolveImage`); sample mode ne
 ## Prompt layout (for prompt caching)
 
 - system: the dami's base prompt (cache breakpoint), then the composed modules (cache breakpoint);
-- user message: project parameters and per-request content. The prompt-sectioner also caches the
-  numbered script, so all its segment calls share it.
+- user message: project parameters and per-request content. The Director caches the script and
+  bible block, so the plan call and every batch share it.
 
 ## Adding or changing a dami
 

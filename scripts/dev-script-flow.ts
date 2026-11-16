@@ -96,10 +96,10 @@ async function main(): Promise<void> {
     versionId: v2.id,
     decision: "accepted",
   });
-  console.log(`3. Accepted v${accepted?.versionNumber}; detecting assets and sectioning`);
-  const status = await waitFor("sectioning finished", async () => {
+  console.log(`3. Accepted v${accepted?.versionNumber}; detecting assets and directing`);
+  const status = await waitFor("direction finished", async () => {
     const s = await getSectioningStatus(project.id, userId);
-    if (s?.state === "failed") throw new Error(`Sectioning failed: ${s.failure}`);
+    if (s?.state === "failed") throw new Error(`Direction failed: ${s.failure}`);
     return s?.state === "done" ? s : null;
   });
 

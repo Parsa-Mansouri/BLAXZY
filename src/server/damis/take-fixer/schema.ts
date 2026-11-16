@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_BLOCK_SECONDS } from "../prompt-sectioner/schema";
+import { MAX_BLOCK_SECONDS } from "../shared/block";
 import { assetRefSchema, productionPromptSchema } from "../shared/block";
 import { changeSummaryItemSchema, reviewSchemaFor } from "../shared/reference";
 import { projectStyleSchema } from "../shared/style";

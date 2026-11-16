@@ -132,13 +132,13 @@ describe.skipIf(!reachable)("continuations (integration)", async () => {
     expect(await assetJobs.sectioningOwedAfterDetection(projectId, versionId)).toBe(true);
 
     await assetJobs.queueResection(projectId, versionId);
-    expect(await jobs("script.section", versionId)).toEqual([
+    expect(await jobs("script.direct", versionId)).toEqual([
       { scriptVersionId: versionId, resection: true },
     ]);
     expect((await blocks.getSectioningStatus(projectId, userId))?.state).toBe("running");
     // Queued twice: one job (deduplicated per version and kind of cut).
     await assetJobs.queueResection(projectId, versionId);
-    expect(await jobs("script.section", versionId)).toHaveLength(1);
+    expect(await jobs("script.direct", versionId)).toHaveLength(1);
 
     // A failed re-cut is the user's to retry: not re-issued behind their back.
     await blocks.setSectioningState({

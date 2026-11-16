@@ -1,7 +1,7 @@
 /**
  * The Script Writer's structured screenplay as text. `renderScreenplay` writes the canonical
  * plain-text screenplay that `script_version.content` stores (the Script screen's parser, the
- * prompt-sectioner, review comments and the sheets all read text); `flattenForDetector` gives the
+ * Director, review comments and the sheets all read text); `flattenForDetector` gives the
  * Asset Detector its `script.scenes[]`.
  */
 import { z } from "zod";

@@ -9,6 +9,7 @@ import {
   assetSheetPlanHandler,
   assetSheetViewsAdvanceHandler,
 } from "./asset-sheet-pack";
+import { directionWriteHandler } from "./direction-write";
 import { generationRunHandler } from "./generation-run";
 import { generationSweepHandler, generationSweepSchedule } from "./generation-sweep";
 import {
@@ -29,7 +30,7 @@ import { scriptCheckHandler } from "./script-check";
 import { scriptDetectAssetsHandler } from "./script-detect-assets";
 import { scriptEnhanceHandler } from "./script-enhance";
 import { scriptReviseHandler } from "./script-revise";
-import { scriptSectionHandler } from "./script-section";
+import { scriptDirectHandler } from "./script-direct";
 import { scriptWriteHandler } from "./script-write";
 import { scriptWriteSegmentHandler } from "./script-write-segment";
 import { systemPingHandler } from "./system-ping";
@@ -61,7 +62,8 @@ export const handlers: JobHandler[] = [
   scriptCheckHandler,
   scriptReviseHandler,
   scriptDetectAssetsHandler,
-  scriptSectionHandler,
+  scriptDirectHandler,
+  directionWriteHandler,
   assetDetectFixHandler,
   generationRunHandler,
   generationSweepHandler,

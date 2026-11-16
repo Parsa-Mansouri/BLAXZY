@@ -112,17 +112,30 @@ export function createProductionFixtures() {
     return { assetId: created.id, lookFileId, sheetFileId, ref: `${kind}:${name}` };
   }
 
-  /** Replaces the project's blocks (as sectioning does). */
+  /** Replaces the project's blocks (as a finished direction does, with a Director run each call). */
   async function setBlocks(
     projectId: string,
     scriptVersionId: string,
     specs: BlockSpec[],
   ): Promise<void> {
     const { replaceBlocks } = await import("@/server/blocks");
+    const { getDb } = await import("@/server/db/client");
+    const { damiRun } = await import("@/server/db/schema");
+    const [run] = await getDb()
+      .insert(damiRun)
+      .values({
+        damiKey: "director",
+        damiVersion: "test",
+        model: "sample",
+        status: "succeeded",
+        projectId,
+        input: {},
+      })
+      .returning({ id: damiRun.id });
     await replaceBlocks({
       projectId,
       scriptVersionId,
-      damiRunIds: [],
+      damiRunIds: run ? [run.id] : [],
       blocks: specs.map((spec, i) => ({
         title: spec.title ?? `Shot ${i + 1}`,
         scriptExcerpt: spec.excerpt,
@@ -130,10 +143,6 @@ export function createProductionFixtures() {
         durationSeconds: spec.durationSeconds ?? 1,
         assetRefs: spec.assetRefs,
         orderIndex: i,
-        startLine: i + 1,
-        endLine: i + 1,
-        start: i * 10,
-        end: i * 10 + 9,
       })),
     });
   }

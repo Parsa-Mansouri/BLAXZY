@@ -18,7 +18,6 @@ describe("dami registry", () => {
         "enhancer",
         "location-generator",
         "project-namer",
-        "prompt-sectioner",
         "prop-generator",
         "script-checker",
         "script-reviser",
@@ -28,7 +27,6 @@ describe("dami registry", () => {
         "sheet-generator-location",
         "sheet-generator-prop",
         "take-fixer",
-        "text-blocks",
         "video-review",
       ].sort(),
     );

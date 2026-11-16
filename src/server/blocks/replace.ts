@@ -1,7 +1,7 @@
-/** Replacing a project's current blocks with a new sectioning, and marking them stale. */
+/** Replacing a project's current blocks with a new direction, and marking them stale. */
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { isVoiceRef, type SectionedBlock } from "@/server/damis";
+import { isVoiceRef } from "@/server/damis";
 import { type DbTx, getDb } from "@/server/db/client";
 import { project, projectEvent, promptBlock, scriptVersion } from "@/server/db/schema";
 import { current, parse, type PromptBlock, uuid } from "./common";
@@ -17,26 +17,31 @@ export type ReplaceBlocksResult = {
   skipped?: "not_latest";
 };
 
-const sectionedBlockSchema = z.object({
+const directedBlockSchema = z.object({
   title: z.string(),
   scriptExcerpt: z.string().min(1),
   prompt: z.string().min(1),
   durationSeconds: z.number().int().positive(),
   assetRefs: z.array(z.string()),
   orderIndex: z.number().int().min(0),
-  /** The dami run that produced this block, when known (one run per segment). */
+  /** The dami run that produced this block, when known (one run per batch). */
   damiRunId: uuid.optional(),
+  /** The Director's data for the block (output_22), stored as it is. */
+  direction: z.unknown().optional(),
 });
+
+/** A block as the Director pipeline hands it over (see `direction/blocks.ts`). */
+export type DirectedBlock = z.input<typeof directedBlockSchema>;
 
 const replaceBlocksSchema = z.object({
   projectId: uuid,
   scriptVersionId: uuid,
   blocks: z
-    .array(sectionedBlockSchema)
-    .min(1, "Sectioning returned no blocks.")
+    .array(directedBlockSchema)
+    .min(1, "The Director returned no blocks.")
     // The order is the film's: two blocks in one place would also share a clip's file name.
     .refine((blocks) => new Set(blocks.map((b) => b.orderIndex)).size === blocks.length, {
-      message: "Sectioning returned two blocks in the same place.",
+      message: "The Director returned two blocks in the same place.",
     }),
   damiRunIds: z.array(uuid),
 });
@@ -106,14 +111,17 @@ async function sectionedAssetRefs(
  * project lock, so a slow run for an older version can never supersede blocks cut from a newer
  * one. Otherwise nothing changes and the result has `skipped: "not_latest"`.
  */
-export async function replaceBlocks(input: {
-  projectId: string;
-  scriptVersionId: string;
-  blocks: Array<SectionedBlock & { damiRunId?: string }>;
-  damiRunIds: string[];
-}): Promise<ReplaceBlocksResult> {
+export async function replaceBlocks(
+  input: {
+    projectId: string;
+    scriptVersionId: string;
+    blocks: DirectedBlock[];
+    damiRunIds: string[];
+  },
+  executor?: DbTx,
+): Promise<ReplaceBlocksResult> {
   const { projectId, scriptVersionId, blocks, damiRunIds } = parse(replaceBlocksSchema, input);
-  return getDb().transaction(async (tx): Promise<ReplaceBlocksResult> => {
+  const run = async (tx: DbTx): Promise<ReplaceBlocksResult> => {
     // Serialise replacements per project.
     await tx
       .select({ id: project.id })
@@ -169,6 +177,8 @@ export async function replaceBlocks(input: {
         title: block.title || null,
         scriptExcerpt: block.scriptExcerpt,
         damiRunId: block.damiRunId ?? damiRunIds[0] ?? null,
+        // The Director's notes always describe the newest run, even for a carried block.
+        direction: block.direction ?? null,
       };
       if (!match) {
         if (inProduction) reset++;
@@ -220,7 +230,9 @@ export async function replaceBlocks(input: {
     });
     await tx.insert(promptBlock).values(rows);
     return { created: rows.length - carried, carried, superseded: previous.length, reset };
-  });
+  };
+  // Inside the caller's transaction when given (the direction's own store), else its own.
+  return executor ? run(executor) : getDb().transaction(run);
 }
 
 /** Flags the project's current blocks as stale (the script changed under them). */

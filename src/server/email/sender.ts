@@ -1,6 +1,8 @@
 import { createTransport, type Transporter } from "nodemailer";
 import type SMTPPool from "nodemailer/lib/smtp-pool";
 import { getEnv } from "@/server/env";
+import { maybeFault } from "@/server/faults";
+import { emailFaultError } from "@/server/faults/errors";
 
 export type EmailMessage = {
   to: string;
@@ -31,6 +33,7 @@ export class ConsoleEmailSender implements EmailSender {
   constructor(private readonly from: string) {}
 
   async send(message: EmailMessage): Promise<void> {
+    if (maybeFault("email")) throw emailFaultError();
     const rule = "=".repeat(72);
     const lines = [
       "",
@@ -125,6 +128,7 @@ export class SmtpEmailSender implements EmailSender {
 
   async send(message: EmailMessage): Promise<void> {
     assertSafeHeaders(this.settings.from, message);
+    if (maybeFault("email")) throw emailFaultError();
     this.transport ??= createTransport(buildSmtpOptions(this.settings));
     await this.transport.sendMail({
       from: this.settings.from,

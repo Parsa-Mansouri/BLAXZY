@@ -3,7 +3,9 @@
  * else asks `getProvider()` and `pickModel()` and stores what they returned.
  */
 import { getEnv } from "@/server/env";
+import { faultsEnabled } from "@/server/faults";
 import { HiggsfieldProvider } from "./higgsfield";
+import { withProviderFaults } from "./faults";
 import { SAMPLE_PROVIDER_ID, SampleProvider } from "./sample/provider";
 import type { GenerationProvider } from "./types";
 
@@ -78,7 +80,7 @@ export function getProvider(id?: string): GenerationProvider {
   let provider = providers.get(key);
   if (!provider) {
     if (!isProviderId(key)) throw new Error(`Unknown generation provider "${key}"`);
-    provider = create(key);
+    provider = withProviderFaults(create(key), faultsEnabled("provider"));
     providers.set(key, provider);
   }
   return provider;

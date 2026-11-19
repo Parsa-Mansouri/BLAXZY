@@ -31,6 +31,7 @@
     "dev:generation": "tsx scripts/dev-generation.ts",
     "dev:preprod-flow": "tsx scripts/dev-preprod-flow.ts",
     "dev:sweep": "tsx scripts/dev-sweep.ts",
+    "qa:crash": "tsx scripts/qa-crash.ts",
     "dev:production-flow": "tsx scripts/dev-production-flow.ts",
     "hf:seedance": "tsx --env-file=.env.local scripts/higgsfield-seedance.ts"
   },

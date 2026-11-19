@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 import { z } from "zod";
+import { parseFaultInject } from "./faults/parse";
 
 const booleanString = z
   .enum(["true", "false", "1", "0"])
@@ -19,6 +20,19 @@ const concurrencyMap = z.string().transform((value, ctx) => {
     result[match[1]] = Number(match[2]);
   }
   return result;
+});
+
+/**
+ * `FAULT_INJECT`: comma-separated `target:kind[:probability]` rules (see `faults/parse.ts`);
+ * empty = none.
+ */
+const faultRules = z.string().transform((value, ctx) => {
+  const parsed = parseFaultInject(value);
+  if (!parsed.ok) {
+    ctx.addIssue({ code: "custom", message: parsed.error });
+    return z.NEVER;
+  }
+  return parsed.rules;
 });
 
 /** The `.env.example` development secret: fine locally, refused in production. */
@@ -103,6 +117,12 @@ const baseSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1),
   S3_SECRET_ACCESS_KEY: z.string().min(1),
   S3_FORCE_PATH_STYLE: booleanString.default(true),
+  /** Time allowed to open a connection to the object store. */
+  S3_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(5_000),
+  /** Idle time of a store socket before the request fails (not a limit on the whole transfer). */
+  S3_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).default(60_000),
+  /** Attempts per store call, the first included (the SDK retries 5xx, throttling, timeouts). */
+  S3_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
   /**
    * Endpoint the browser uses for presigned URLs, when it differs from `S3_ENDPOINT` (for example
    * the server reaches the store over a container network). Used only for presigning.
@@ -163,6 +183,10 @@ const baseSchema = z.object({
    * `x-real-ip`), read by the auth rate limiter. Lower-cased; unset = none.
    */
   AUTH_IP_HEADER: headerName,
+  /** Development and QA only: failures to inject, e.g. `claude:429:0.3,s3:error:0.1`. Refused in production. */
+  FAULT_INJECT: faultRules.default([]),
+  /** Seed for `FAULT_INJECT` dice, so a run is repeatable (unset = random). */
+  FAULT_SEED: z.coerce.number().int().optional(),
 });
 
 export const envSchema = baseSchema.superRefine((env, ctx) => {
@@ -178,6 +202,9 @@ export const envSchema = baseSchema.superRefine((env, ctx) => {
   }
 
   if (env.NODE_ENV === "production") {
+    if (env.FAULT_INJECT.length > 0) {
+      fail("FAULT_INJECT", "fault injection is for development and QA; unset it in production");
+    }
     if (env.BETTER_AUTH_SECRET === DEV_AUTH_SECRET) {
       fail("BETTER_AUTH_SECRET", "is the development secret from .env.example; generate your own");
     }

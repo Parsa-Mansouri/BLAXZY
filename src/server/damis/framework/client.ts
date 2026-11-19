@@ -3,6 +3,8 @@ import type {
   Message,
   MessageCreateParamsNonStreaming,
 } from "@anthropic-ai/sdk/resources/messages";
+import { faultsEnabled, maybeFault } from "@/server/faults";
+import { claudeFaultError } from "@/server/faults/errors";
 
 export type ClaudeRequest = MessageCreateParamsNonStreaming;
 export type ClaudeResponse = Message;
@@ -62,4 +64,31 @@ export function getDefaultClaudeClient(
     };
   }
   return defaultClient.client;
+}
+
+/** Output that fails JSON parsing, so the runner takes its corrective-retry path. */
+const MALFORMED_TEXT = "Injected fault: this is not valid JSON {";
+
+/**
+ * Fault injection (FAULT_INJECT=claude:..., development and QA only): throws the SDK's own
+ * errors before the call, or replaces a real answer with malformed output. Returns `client`
+ * untouched when no claude rule is configured.
+ */
+export function withClaudeFaults(client: ClaudeClient): ClaudeClient {
+  if (!faultsEnabled("claude")) return client;
+  const run = async (call: () => Promise<ClaudeResponse>): Promise<ClaudeResponse> => {
+    const fault = maybeFault("claude");
+    if (fault === null) return call();
+    if (fault !== "malformed") throw claudeFaultError(fault);
+    const response = await call();
+    return {
+      ...response,
+      stop_reason: "end_turn",
+      content: [{ type: "text", text: MALFORMED_TEXT, citations: null }],
+    } as ClaudeResponse;
+  };
+  return {
+    createMessage: (request, options) => run(() => client.createMessage(request, options)),
+    streamMessage: (request, options) => run(() => client.streamMessage(request, options)),
+  };
 }

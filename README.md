@@ -82,21 +82,21 @@ The S3 store is RustFS (the official MinIO images are no longer published); cons
 
 ### Commands
 
-| Command                                                                                                                     | What it does                                                                             |
-| --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `docker compose up -d`                                                                                                      | Start Postgres + S3 store (bucket `blaxzy`); `cp .env.example .env` first                |
-| `pnpm dev`                                                                                                                  | Web on :3000                                                                             |
-| `pnpm worker` / `pnpm worker:dev`                                                                                           | Background worker                                                                        |
-| `pnpm build` / `pnpm start`                                                                                                 | Build and start the web app                                                              |
-| `pnpm worker:build`                                                                                                         | Bundle the worker to `dist/worker.cjs`                                                   |
-| `pnpm migrate:build`                                                                                                        | Bundle the migrator to `dist/migrate.cjs`                                                |
-| `pnpm typecheck`, `pnpm lint`, `pnpm format` / `format:check`, `pnpm test`                                                  | Individual checks                                                                        |
-| `pnpm check`                                                                                                                | Typecheck, lint, format:check and test                                                   |
-| `pnpm db:generate` / `db:migrate` / `db:studio`                                                                             | drizzle-kit (reads `.env`)                                                               |
-| `pnpm db:migrate:prod`                                                                                                      | Apply the migrations with drizzle-orm's migrator (what the Docker `migrate` target runs) |
-| `pnpm dev:user`, `dev:credits`, `dev:script-flow`, `dev:preprod-flow`, `dev:generation`, `dev:production-flow`, `dev:sweep` | Dev scripts in `scripts/` (see [Development scripts](#development-scripts))              |
-| `pnpm dami:run <key> <input.json> [--live]`                                                                                 | Run one dami by hand; paid calls need `--live`                                           |
-| `pnpm hf:seedance`                                                                                                          | One billable Higgsfield Seedance 2.5 test; reads `HF_CREDENTIALS` from `.env.local`      |
+| Command                                                                                                                                 | What it does                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `docker compose up -d`                                                                                                                  | Start Postgres + S3 store (bucket `blaxzy`); `cp .env.example .env` first                |
+| `pnpm dev`                                                                                                                              | Web on :3000                                                                             |
+| `pnpm worker` / `pnpm worker:dev`                                                                                                       | Background worker                                                                        |
+| `pnpm build` / `pnpm start`                                                                                                             | Build and start the web app                                                              |
+| `pnpm worker:build`                                                                                                                     | Bundle the worker to `dist/worker.cjs`                                                   |
+| `pnpm migrate:build`                                                                                                                    | Bundle the migrator to `dist/migrate.cjs`                                                |
+| `pnpm typecheck`, `pnpm lint`, `pnpm format` / `format:check`, `pnpm test`                                                              | Individual checks                                                                        |
+| `pnpm check`                                                                                                                            | Typecheck, lint, format:check and test                                                   |
+| `pnpm db:generate` / `db:migrate` / `db:studio`                                                                                         | drizzle-kit (reads `.env`)                                                               |
+| `pnpm db:migrate:prod`                                                                                                                  | Apply the migrations with drizzle-orm's migrator (what the Docker `migrate` target runs) |
+| `pnpm dev:user`, `dev:credits`, `dev:script-flow`, `dev:preprod-flow`, `dev:generation`, `dev:production-flow`, `dev:sweep`, `qa:crash` | Dev scripts in `scripts/` (see [Development scripts](#development-scripts))              |
+| `pnpm dami:run <key> <input.json> [--live]`                                                                                             | Run one dami by hand; paid calls need `--live`                                           |
+| `pnpm hf:seedance`                                                                                                                      | One billable Higgsfield Seedance 2.5 test; reads `HF_CREDENTIALS` from `.env.local`      |
 
 ---
 
@@ -195,6 +195,11 @@ All configuration is read from the environment (see `.env.example` and `src/serv
 | `S3_ACCESS_KEY_ID`                | (required)                       | Object storage access key                                                                                                                                                                                                |
 | `S3_SECRET_ACCESS_KEY`            | (required)                       | Object storage secret key                                                                                                                                                                                                |
 | `S3_FORCE_PATH_STYLE`             | `true`                           | Path-style addressing (needed by most self-hosted S3 stores)                                                                                                                                                             |
+| `S3_CONNECTION_TIMEOUT_MS`        | `5000`                           | Time allowed to open a connection to the object store                                                                                                                                                                    |
+| `S3_REQUEST_TIMEOUT_MS`           | `60000`                          | Idle time of a store socket before the request fails (not a limit on the whole transfer)                                                                                                                                 |
+| `S3_MAX_ATTEMPTS`                 | `3`                              | Attempts per store call, the first included (the SDK retries 5xx, throttling and timeouts)                                                                                                                               |
+| `FAULT_INJECT`                    | (unset)                          | Dev/QA only: failures to inject (see [Testing failure paths](#testing-failure-paths)). Refused when `NODE_ENV=production`                                                                                                |
+| `FAULT_SEED`                      | (unset)                          | Integer seed that makes the `FAULT_INJECT` dice repeatable                                                                                                                                                               |
 | `S3_PUBLIC_ENDPOINT`              | `S3_ENDPOINT`                    | Origin browsers use in presigned upload/download URLs (only for presigning). It is also baked into the Content-Security-Policy at `next build` time: set it when building (Docker: `--build-arg S3_PUBLIC_ENDPOINT=...`) |
 | `S3_CORS_ORIGINS`                 | `http://localhost:3000`          | Compose only: origins `minio-init` allows to PUT/GET the bucket (comma-separated)                                                                                                                                        |
 | `POSTGRES_PORT`                   | `5432`                           | Compose only: host port of Postgres (bound to 127.0.0.1)                                                                                                                                                                 |
@@ -502,6 +507,31 @@ ffmpeg (for the video tests). A global setup probes them once:
 
 Damis and generations use their sample modes in tests (`DAMI_MODE=sample`, `GENERATION_PROVIDER=sample`,
 no delays), so no Claude key is needed.
+
+### Testing failure paths
+
+Fault injection makes dependencies fail on purpose so the retry, refund and failure code runs. Set
+`FAULT_INJECT` (in `.env`, development and QA only: it is rejected when `NODE_ENV=production`) to
+comma-separated `target:kind[:probability]` rules; the probability is 0 to 1 and defaults to 1.
+`FAULT_SEED=<integer>` makes the dice repeatable.
+
+```bash
+FAULT_INJECT=claude:429:0.3,claude:malformed:0.2,provider:5xx:1,provider:timeout:0.5,s3:error:0.1,email:fail:1
+```
+
+| Target     | Kinds                                                                                               | Throws                                                                                              |
+| ---------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `claude`   | `429` (with `retry-after`), `5xx`, `529`, `connection`, `malformed` (output that is not valid JSON) | The Anthropic SDK error classes, in sample mode too; `malformed` takes the corrective-retry path    |
+| `provider` | `5xx`, `429`, `timeout` (retryable), `fatal` (not retryable), `lost` (the job is gone)              | `ProviderError`; `getStatus` answers `429` as `running` with `retryAfterMs` and `lost` as a failure |
+| `s3`       | `error`                                                                                             | An `S3ServiceException` (HTTP 500) inside the SDK retries, on server-side calls (not presigning)    |
+| `email`    | `fail`                                                                                              | A send error from the console and SMTP senders                                                      |
+
+`pnpm qa:crash` checks crash recovery (local database only, no paid calls: sample modes, and any
+`FAULT_INJECT` is not passed on). It starts a worker process, queues a script generation and two look
+generations, SIGKILLs the worker mid-job (marking the active queue jobs as on their last attempt),
+restarts it, runs the generation and dami sweeps, and prints a PASS/FAIL table: every touched row in
+a final state (generations, script versions, dami runs) and a balanced credit ledger (reserved =
+settled + refunded, balance = ledger sum). It exits non-zero on any FAIL.
 
 ### Development scripts
 

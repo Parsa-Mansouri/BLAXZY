@@ -7,6 +7,7 @@ import {
   type ClaudeClient,
   type ClaudeRequest,
   type ClaudeResponse,
+  withClaudeFaults,
 } from "./client";
 import { getProcessClaudeLimiter, Semaphore } from "./concurrency";
 import { STREAMING_THRESHOLD_TOKENS, type DamiDefinition, type DamiEffort } from "./define";
@@ -233,11 +234,13 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
     ? SAMPLE_MODEL
     : resolveModel(dami.model ?? "", config.defaultModel, ctx.model);
   if (!model) throw new DamiConfigError(dami.key, `Dami "${dami.key}" has no model configured`);
-  const client =
+  const baseClient =
     deps.client ??
     (sample
       ? createSampleClaudeClient({ delayMs: config.sampleDelayMs })
       : getDefaultClaudeClient(config.apiKey, config.workspaceId));
+  // Fault injection (dev/QA only); the client itself when FAULT_INJECT has no claude rule.
+  const client = baseClient && withClaudeFaults(baseClient);
   if (!client) {
     throw new DamiConfigError(
       dami.key,

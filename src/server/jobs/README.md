@@ -79,17 +79,28 @@ dedupe key so a slow run and the next occurrence never overlap (`generation.swee
 
 Schedules registered by every worker (`worker/handlers`, all UTC):
 
-| Job                | Cron           | Does                                                                        |
-| ------------------ | -------------- | --------------------------------------------------------------------------- |
-| `generation.sweep` | `*/5 * * * *`  | fails and refunds stuck generations, re-queues lost runs, re-notifies hooks |
-| `dami.sweep`       | `*/15 * * * *` | marks dami runs still `running` after 90 minutes as `aborted`               |
-| `file.sweep`       | `*/15 * * * *` | abandons uploads still `pending` after 6 hours and deletes their objects    |
-| `ratelimit.prune`  | `*/5 * * * *`  | deletes expired server-action rate-limit windows                            |
+| Job                | Cron           | Does                                                                            |
+| ------------------ | -------------- | ------------------------------------------------------------------------------- |
+| `generation.sweep` | `*/5 * * * *`  | fails and refunds stuck generations, re-queues lost runs, re-notifies hooks     |
+| `dami.sweep`       | `*/15 * * * *` | marks dami runs still `running` after 90 minutes as `aborted`; fails stuck rows |
+| `file.sweep`       | `*/15 * * * *` | abandons uploads still `pending` after 6 hours and deletes their objects        |
+| `ratelimit.prune`  | `*/5 * * * *`  | deletes expired server-action rate-limit windows                                |
 
 `production.dispatch` (`{ projectId, kind: "prepare" | "takes" }`) is not scheduled: a service sends
 it on the transaction that claimed the blocks or created the drafts, and the handler fans out one
 per-row job (`production.prepare` / `block.revise`, `take.generate`) for each pending row. It has
 `allowFollowUp`, so one may wait beside a running one and rows claimed meanwhile are not missed.
+
+## Lost jobs (the stuck-row sweep)
+
+A worker killed hard (OOM, SIGKILL) during a job's last attempt never runs its failure path: pg-boss
+expires the attempt and fails the job without calling anyone. `dami.sweep` therefore also runs
+`sweepStuckRows` (`worker/handlers/stuck-rows.ts`): a row still in the state its job moves it out of
+(a pending script version, look, sheet, block, take, Video Review, export, Creative Bible, Director run or
+sectioning) is failed through its area's own failure path, with the "took too long" copy, only when it
+is older than `STUCK_ROW_GRACE_MINUTES` and no job of its types with its id in the payload is queued,
+retrying, running or finished within that window (`jobRefsInFlight`). Each recovered row raises an
+alert. A new job type that moves a row out of a pending state must be added to that sweep's kinds.
 
 ## Idempotency (required)
 

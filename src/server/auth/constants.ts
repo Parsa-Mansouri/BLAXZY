@@ -14,6 +14,8 @@ export const PATHNAME_HEADER = "x-blaxzy-pathname";
 
 /** The readiness endpoint (`src/app/api/health/route.ts`). */
 export const HEALTH_PATH = "/api/health";
+/** The liveness endpoint (`src/app/api/health/live/route.ts`). */
+export const HEALTH_LIVE_PATH = "/api/health/live";
 
 export const LOGIN_PATH = "/login";
 export const VERIFY_EMAIL_PATH = "/verify-email";
@@ -45,7 +47,7 @@ export function isPublicPath(pathname: string, isDevelopment: boolean): boolean 
   if (PUBLIC_PAGES.has(normalized)) return true;
   if (isUnder(normalized, AUTH_BASE_PATH)) return true;
   // Probed by load balancers and the container health check, which carry no session.
-  if (normalized === HEALTH_PATH) return true;
+  if (normalized === HEALTH_PATH || normalized === HEALTH_LIVE_PATH) return true;
   if (isDevelopment && isUnder(normalized, "/dev")) return true;
   return false;
 }

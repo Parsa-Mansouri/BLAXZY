@@ -12,3 +12,4 @@ export {
   type CreateUploadInput,
   type UploadTicket,
 } from "./uploads";
+export { pingBucket } from "./ping";

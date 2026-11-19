@@ -2,6 +2,7 @@ import "dotenv/config";
 import { closeDb, setDbApplicationName } from "../src/server/db/client";
 import { getEnv } from "../src/server/env";
 import { onGenerationFinished } from "../src/server/generation";
+import { startHeartbeat } from "../src/server/health";
 import { startWorker, stopWorker } from "../src/server/jobs";
 import { errorMessage, logLine } from "../src/server/jobs/log";
 import { generationHooks, handlers, schedules } from "./handlers";
@@ -10,6 +11,8 @@ async function main(): Promise<void> {
   const env = getEnv(); // fail fast on invalid configuration
   setDbApplicationName("blaxzy-worker");
 
+  // Worker liveness for the readiness check (set once the worker runs; stopped before the db).
+  const liveness: { heartbeat?: ReturnType<typeof startHeartbeat> } = {};
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return;
@@ -19,6 +22,7 @@ async function main(): Promise<void> {
       // Resolves once no handler runs any more (finished, or interrupted and given back to the
       // queue): only then is the database closed under them.
       await stopWorker(env.WORKER_SHUTDOWN_TIMEOUT_SECONDS * 1000);
+      await liveness.heartbeat?.stop();
       await closeDb();
     } catch (err) {
       logLine("error", "worker shutdown failed", { error: errorMessage(err) });
@@ -45,7 +49,8 @@ async function main(): Promise<void> {
     concurrency: { default: env.WORKER_CONCURRENCY_DEFAULT, perJob: env.WORKER_CONCURRENCY },
     pollingIntervalSeconds: env.WORKER_POLL_INTERVAL_SECONDS,
   });
-  logLine("info", "worker started");
+  liveness.heartbeat = startHeartbeat();
+  logLine("info", "worker started", { instance: liveness.heartbeat.instance.id });
 }
 
 main().catch((err: unknown) => {

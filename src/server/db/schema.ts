@@ -542,7 +542,13 @@ export const project = pgTable(
     /** Soft delete: archived projects leave the dashboard but keep their data. */
     archivedAt: ts("archived_at"),
   },
-  (t) => [index("project_owner_updated_idx").on(t.ownerId, t.updatedAt.desc())],
+  (t) => [
+    index("project_owner_updated_idx").on(t.ownerId, t.updatedAt.desc()),
+    // The stuck-row sweep: projects whose sectioning says "running" (few at any time).
+    index("project_sectioning_running_idx")
+      .on(t.id)
+      .where(sql`(${t.stageState}->'sectioning'->>'state') = 'running'`),
+  ],
 );
 
 /** A movie has exactly one episode; a series has many. */
@@ -692,6 +698,10 @@ export const scriptVersion = pgTable(
       .on(t.projectId, t.episodeId, t.versionNumber)
       .nullsNotDistinct(),
     index("script_version_project_status_idx").on(t.projectId, t.status),
+    // The stuck-row sweep pages through pending versions by id.
+    index("script_version_pending_idx")
+      .on(t.id)
+      .where(sql`${t.status} = 'pending'`),
   ],
 );
 
@@ -735,6 +745,9 @@ export const creativeBible = pgTable(
     unique("creative_bible_project_version_unique").on(t.projectId, t.versionNumber),
     index("creative_bible_project_created_idx").on(t.projectId, t.createdAt.desc()),
     index("creative_bible_project_status_idx").on(t.projectId, t.status),
+    index("creative_bible_pending_idx")
+      .on(t.id)
+      .where(sql`${t.status} = 'pending'`),
   ],
 );
 
@@ -928,6 +941,10 @@ export const promptBlock = pgTable(
     index("prompt_block_project_current_order_idx")
       .on(t.projectId, t.orderIndex, t.id)
       .where(sql`${t.supersededAt} is null`),
+    // The stuck-row sweep: current blocks waiting for their preparation job.
+    index("prompt_block_preparing_idx")
+      .on(t.id)
+      .where(sql`${t.productionState} = 'pending' and ${t.supersededAt} is null`),
   ],
 );
 
@@ -1291,6 +1308,10 @@ export const assetLook = pgTable(
   (t) => [
     uniqueIndex("asset_look_asset_version_unique").on(t.assetId, t.versionNumber),
     index("asset_look_project_status_idx").on(t.projectId, t.status),
+    // The stuck-row sweep: pending looks still with their job (no generation yet).
+    index("asset_look_pending_job_idx")
+      .on(t.id)
+      .where(sql`${t.status} = 'pending' and ${t.generationId} is null`),
   ],
 );
 
@@ -1330,6 +1351,9 @@ export const assetSheet = pgTable(
   (t) => [
     uniqueIndex("asset_sheet_asset_version_unique").on(t.assetId, t.versionNumber),
     index("asset_sheet_project_status_idx").on(t.projectId, t.status),
+    index("asset_sheet_pending_job_idx")
+      .on(t.id)
+      .where(sql`${t.status} = 'pending' and ${t.generationId} is null`),
   ],
 );
 
@@ -1420,6 +1444,10 @@ export const assetSheetView = pgTable(
     uniqueIndex("asset_sheet_view_version_unique").on(t.sheetId, t.viewId, t.versionNumber),
     index("asset_sheet_view_sheet_idx").on(t.sheetId),
     index("asset_sheet_view_project_status_idx").on(t.projectId, t.status),
+    // The stuck-row sweep: views a fix round is re-writing (planned, prompt cleared).
+    index("asset_sheet_view_rewriting_idx")
+      .on(t.id)
+      .where(sql`${t.status} = 'planned' and ${t.prompt} is null`),
   ],
 );
 
@@ -1504,6 +1532,13 @@ export const blockTake = pgTable(
       t.lineageId,
       t.takeNumber.desc(),
     ),
+    // The stuck-row sweep: pending takes still with their job, and pending Video Reviews.
+    index("block_take_pending_job_idx")
+      .on(t.id)
+      .where(sql`${t.status} = 'pending' and ${t.generationId} is null`),
+    index("block_take_review_pending_idx")
+      .on(t.id)
+      .where(sql`${t.autoReview} = 'pending'`),
   ],
 );
 
@@ -1530,5 +1565,41 @@ export const exportBundle = pgTable(
     createdAt: createdAt(),
     finishedAt: ts("finished_at"),
   },
-  (t) => [index("export_bundle_project_created_idx").on(t.projectId, t.createdAt.desc())],
+  (t) => [
+    index("export_bundle_project_created_idx").on(t.projectId, t.createdAt.desc()),
+    index("export_bundle_pending_idx")
+      .on(t.id)
+      .where(sql`${t.status} = 'pending'`),
+  ],
 );
+
+/* -------------------------------------------------------------------------- */
+/* Operations                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One row per running worker process (its instance id), upserted every
+ * `WORKER_HEARTBEAT_SECONDS`; the readiness check reports the worker down when no row is fresher
+ * than `WORKER_DOWN_AFTER_SECONDS`. Operational state, not domain data: rows of instances that
+ * stopped beating are deleted by the live workers.
+ */
+export const workerHeartbeat = pgTable(
+  "worker_heartbeat",
+  {
+    instanceId: text("instance_id").primaryKey(),
+    hostname: text("hostname").notNull(),
+    pid: integer("pid").notNull(),
+    startedAt: ts("started_at").notNull(),
+    seenAt: ts("seen_at").notNull(),
+  },
+  (t) => [index("worker_heartbeat_seen_idx").on(t.seenAt.desc())],
+);
+
+/**
+ * When an operational alert was last raised, per key (`worker.down`, ...): a conditional upsert
+ * on this row rate-limits an alert across every replica without in-memory state.
+ */
+export const opsAlert = pgTable("ops_alert", {
+  key: text("key").primaryKey(),
+  raisedAt: ts("raised_at").notNull(),
+});

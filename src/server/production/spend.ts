@@ -11,6 +11,7 @@ import { type DbExecutor, getDb } from "@/server/db/client";
 import type { TakeRoute, TakeStage } from "@/server/db/schema";
 import { confirmSpend, PriceChangedError, quoteSpend, type SpendQuote } from "@/server/generation";
 import { isUuid, openLineage, parse, requireStyle, userIdSchema, type ProjectRow } from "./access";
+import { ProductionInputError } from "./errors";
 import { timedNoteSchema } from "./revision-request";
 import { planTakeRoute } from "./take-routing";
 import { getTake, latestLiveTake } from "./takes";
@@ -115,6 +116,11 @@ export async function quoteTakeSpend(input: {
       timedNotes: review.timedNotes ?? [],
       note: review.note ? review.note : null,
     },
-  }).catch(() => null);
+  }).catch((err: unknown) => {
+    // A choice the router cannot plan yet (no reason given) is quoted without a route; any other
+    // error is a real failure and propagates.
+    if (err instanceof ProductionInputError) return null;
+    throw err;
+  });
   return planned ? { ...quote, route: planned.route } : quote;
 }

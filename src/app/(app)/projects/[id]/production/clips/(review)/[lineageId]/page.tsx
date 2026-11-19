@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 import { cache } from "react";
 import { requireUser } from "@/server/auth";
 import { getBalance } from "@/server/billing";
 import { quoteGeneration } from "@/server/generation";
-import { getBlockDetail, MAX_REVIEW_NOTE_LENGTH, quoteProduction } from "@/server/production";
+import {
+  getBlockDetail,
+  MAX_REVIEW_NOTE_LENGTH,
+  ProductionInputError,
+  quoteProduction,
+} from "@/server/production";
 import { loadProject } from "../../../../_lib/load-project";
 import { loadProduction } from "../../../../_lib/load-production";
 import { clipHref } from "../../../../_lib/production-routes";
@@ -13,6 +18,16 @@ import { shotTitle } from "../../_lib/clip-view";
 import { ClipScreen } from "./_components/clip-screen";
 
 type Params = Promise<{ id: string; lineageId: string }>;
+
+/**
+ * Null for an error the user can fix (`ProductionInputError`: the stage is closed, the project
+ * has no style); framework errors (redirect, notFound) and anything unexpected propagate.
+ */
+function nullOnInputError(err: unknown): null {
+  unstable_rethrow(err);
+  if (err instanceof ProductionInputError) return null;
+  throw err;
+}
 
 /** The shot and its neighbours, when it is one of this project's shots; shared by metadata and page. */
 const loadShot = cache(async (projectId: string, lineageId: string) => {
@@ -27,7 +42,7 @@ const loadShot = cache(async (projectId: string, lineageId: string) => {
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { id, lineageId } = await params;
   const project = await loadProject(id);
-  const shot = await loadShot(project.id, lineageId).catch(() => null);
+  const shot = await loadShot(project.id, lineageId).catch(nullOnInputError);
   return {
     title: shot ? `${shotTitle(shot.detail)} · ${project.title} · BLAXZY` : undefined,
   };
@@ -44,7 +59,7 @@ export default async function ClipPage({ params }: { params: Params }) {
   const { detail, neighbours } = shot;
   const style = project.style;
   const [quote, draftPrice, balance] = await Promise.all([
-    quoteProduction(project.id, user.id).catch(() => null),
+    quoteProduction(project.id, user.id).catch(nullOnInputError),
     style ? quoteGeneration({ purpose: "block_draft", style }).then((q) => q.priceCredits) : null,
     getBalance(user.id),
   ]);

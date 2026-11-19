@@ -13,6 +13,7 @@ describe("isPublicPath", () => {
     "/api/auth",
     "/api/auth/sign-in/email",
     "/api/health",
+    "/api/health/live",
   ])("treats %j as public", (path) => {
     expect(isPublicPath(path, false)).toBe(true);
   });

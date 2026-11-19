@@ -2,7 +2,7 @@ import { defineHandler, exportBuild, isShutdownAbort } from "../../src/server/jo
 import { buildExport, failExport } from "../../src/server/production";
 import { isLastAttempt, logGaveUp } from "./failure";
 
-const EXPORT_FAILED = "The ZIP could not be prepared. Try again.";
+export const EXPORT_FAILED = "The ZIP could not be prepared. Try again.";
 
 /**
  * Builds a pending export's ZIP (streamed from and to the object store). An aborted or failed

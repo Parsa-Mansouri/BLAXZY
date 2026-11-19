@@ -31,7 +31,7 @@ describe("proxy", () => {
     expect(forwardedHeader(response, PATHNAME_HEADER)).toBe("/dashboard?page=2");
   });
 
-  it.each(["/api/health", "/login", "/signup", "/api/auth/sign-in/email", "/"])(
+  it.each(["/api/health", "/api/health/live", "/login", "/signup", "/api/auth/sign-in/email", "/"])(
     "lets %s through without a cookie",
     (path) => {
       const response = proxy(request(path));

@@ -187,6 +187,21 @@ const baseSchema = z.object({
   FAULT_INJECT: faultRules.default([]),
   /** Seed for `FAULT_INJECT` dice, so a run is repeatable (unset = random). */
   FAULT_SEED: z.coerce.number().int().optional(),
+
+  /* Recovery and health (stuck-row sweep, worker heartbeat, readiness). */
+  /**
+   * A pending row whose job is gone (failed for good, never sent) is failed by `dami.sweep` only
+   * when the row is older than this and no job of it finished within this window either.
+   */
+  STUCK_ROW_GRACE_MINUTES: z.coerce.number().int().min(5).max(1440).default(15),
+  /** How often each worker process writes its heartbeat row. */
+  WORKER_HEARTBEAT_SECONDS: z.coerce.number().int().min(5).max(600).default(30),
+  /** Readiness reports the worker down when no heartbeat is fresher than this. */
+  WORKER_DOWN_AFTER_SECONDS: z.coerce.number().int().min(15).max(86_400).default(120),
+  /** The "worker down" alert is raised at most once per this many minutes (fleet-wide). */
+  WORKER_DOWN_ALERT_MINUTES: z.coerce.number().int().min(1).max(10_080).default(30),
+  /** Timeout of each readiness check (database, bucket, queue, worker heartbeat). */
+  HEALTH_CHECK_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(2000),
 });
 
 export const envSchema = baseSchema.superRefine((env, ctx) => {
@@ -199,6 +214,10 @@ export const envSchema = baseSchema.superRefine((env, ctx) => {
     if (!isValidFromAddress(env.EMAIL_FROM)) {
       fail("EMAIL_FROM", "must be one address (`a@b.c` or `Name <a@b.c>`) without line breaks");
     }
+  }
+
+  if (env.WORKER_DOWN_AFTER_SECONDS <= env.WORKER_HEARTBEAT_SECONDS * 2) {
+    fail("WORKER_DOWN_AFTER_SECONDS", "must be more than twice WORKER_HEARTBEAT_SECONDS");
   }
 
   if (env.NODE_ENV === "production") {

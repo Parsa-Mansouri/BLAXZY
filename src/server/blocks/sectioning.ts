@@ -71,10 +71,11 @@ export async function getSectioningStatus(
 /**
  * Writes `project.stageState.sectioning`. With `onlyFor`, writes only while the record still
  * belongs to that script version (a handler for an older version never overwrites a newer state).
- * Returns whether it was written.
+ * With `onlyIfRunning`, writes only while the record says `running` (the stuck-row sweep never
+ * overwrites a run that finished meanwhile). Returns whether it was written.
  */
 export async function setSectioningState(
-  input: SectioningRecord & { projectId: string; onlyFor?: string },
+  input: SectioningRecord & { projectId: string; onlyFor?: string; onlyIfRunning?: boolean },
   executor: DbExecutor = getDb(),
 ): Promise<boolean> {
   const record: SectioningRecord = {
@@ -93,6 +94,9 @@ export async function setSectioningState(
         eq(project.id, input.projectId),
         input.onlyFor
           ? sql`${project.stageState}->'sectioning'->>'scriptVersionId' = ${input.onlyFor}`
+          : undefined,
+        input.onlyIfRunning
+          ? sql`${project.stageState}->'sectioning'->>'state' = 'running'`
           : undefined,
       ),
     )

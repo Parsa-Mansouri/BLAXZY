@@ -225,6 +225,11 @@ All configuration is read from the environment (see `.env.example` and `src/serv
 | `GENERATION_MAX_PER_USER`         | `3`                              | Generations one user may have running at once; extra jobs are rescheduled, not failed                                                                                                                                    |
 | `GENERATION_STUCK_AFTER_MINUTES`  | `120`                            | `generation.sweep` (every 5 min) fails and refunds generations queued or running longer than this                                                                                                                        |
 | `FFMPEG_PATH`                     | unset                            | ffmpeg used for sample video; unset = the `ffmpeg-static` package (dev dependency), else `ffmpeg` on the PATH                                                                                                            |
+| `STUCK_ROW_GRACE_MINUTES`         | `15`                             | `dami.sweep` fails a pending row whose job is gone only when the row is older than this and no job of it finished within this window                                                                                     |
+| `WORKER_HEARTBEAT_SECONDS`        | `30`                             | How often each worker process writes its heartbeat row (`worker_heartbeat`)                                                                                                                                              |
+| `WORKER_DOWN_AFTER_SECONDS`       | `120`                            | Readiness reports the worker `down` when no heartbeat is fresher than this (must exceed twice the heartbeat interval)                                                                                                    |
+| `WORKER_DOWN_ALERT_MINUTES`       | `30`                             | The "worker down" alert is raised at most once per this many minutes, fleet-wide                                                                                                                                         |
+| `HEALTH_CHECK_TIMEOUT_MS`         | `2000`                           | Timeout of each readiness check (database, bucket, queue, worker heartbeat)                                                                                                                                              |
 
 </details>
 
@@ -321,10 +326,21 @@ twice. From a checkout: `pnpm db:migrate:prod`.
 
 <br />
 
-`GET /api/health` needs no session and is never cached. It answers `200 {"status":"ok"}` when `select 1`
-succeeds within 2 seconds and `503 {"status":"unavailable"}` otherwise, with no version or error details.
-The web image has a Docker `HEALTHCHECK` on it; use it as the readiness probe of your orchestrator. The worker
-serves no port and has no heartbeat, so its image has no health check; rely on a restart policy.
+Both endpoints need no session and are never cached; neither returns versions or error details.
+
+- `GET /api/health/live` (liveness) answers `200 {"status":"ok"}` whenever the process serves requests. It
+  checks no dependency, so a database outage never restarts web pods. Use it as the liveness probe.
+- `GET /api/health` (readiness) runs four checks in parallel, each bounded by `HEALTH_CHECK_TIMEOUT_MS`:
+  the database (`select 1`), the bucket (`HeadBucket`), the job queue (pg-boss's tables) and the worker
+  heartbeat. It answers `{"status": "ok" | "degraded" | "unavailable", "checks": {"database", "storage",
+"queue": "ok" | "fail", "worker": "ok" | "down" | "unknown"}}`: `503` when the database, the bucket or the
+  queue fails; `200 degraded` when only the worker is down (restarting web pods would not bring it back),
+  which also raises an alert at most once per `WORKER_DOWN_ALERT_MINUTES` across replicas.
+
+Each worker process upserts a `worker_heartbeat` row every `WORKER_HEARTBEAT_SECONDS`, removes it on a
+clean shutdown and prunes rows of instances silent for ten `WORKER_DOWN_AFTER_SECONDS` periods. The web
+image has a Docker `HEALTHCHECK` on the readiness endpoint. The worker serves no port, so its image has no
+health check; rely on a restart policy, and on the readiness `worker` check to notice a dead fleet.
 
 </details>
 
@@ -369,7 +385,7 @@ occurrence once, however many workers run):
 | Job                | Schedule         | What it does                                                                                                                                                                                                                               |
 | ------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `generation.sweep` | every 5 minutes  | Fails and refunds generations running longer than `GENERATION_STUCK_AFTER_MINUTES` or queued and never started for 12 hours; re-sends lost run jobs; re-runs completion hooks that did not finish. `pnpm dev:sweep` runs one sweep by hand |
-| `dami.sweep`       | every 15 minutes | Marks dami runs still `running` after 90 minutes (their process died) as `aborted`                                                                                                                                                         |
+| `dami.sweep`       | every 15 minutes | Marks dami runs still `running` after 90 minutes (their process died) as `aborted`; fails domain rows left pending by a job that is gone (a worker killed during the last attempt), see `worker/handlers/stuck-rows.ts`                    |
 | `file.sweep`       | every 15 minutes | Marks uploads still `pending` after 6 hours as `abandoned` and deletes their objects                                                                                                                                                       |
 | `ratelimit.prune`  | every 5 minutes  | Deletes rate-limit windows older than 10 minutes                                                                                                                                                                                           |
 

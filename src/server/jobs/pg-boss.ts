@@ -249,6 +249,39 @@ export async function releaseAttempt(
     );
 }
 
+/**
+ * The values of `data->>field` (a payload field, such as `scriptVersionId`) among the jobs of
+ * these queues that may still act on them: queued (also delayed), waiting for a retry or running,
+ * or finished (completed, failed or cancelled) after `finishedSince`. Reads pg-boss's job table:
+ * the queue filter and the state use its live-job index, and finished jobs its completion index.
+ */
+export async function findJobRefs(
+  backend: QueueBackend,
+  input: {
+    names: readonly string[];
+    field: string;
+    values: readonly string[];
+    finishedSince: Date;
+  },
+): Promise<Set<string>> {
+  if (input.names.length === 0 || input.values.length === 0) return new Set();
+  const result = await backend.boss
+    .getDb()
+    .executeSql(
+      `SELECT DISTINCT data->>$2 AS ref FROM ${backend.schema}.job ` +
+        `WHERE name = ANY($1::text[]) AND data->>$2 = ANY($3::text[]) ` +
+        `AND (state < 'completed' OR coalesce(completed_on, created_on) > $4::timestamptz)`,
+      [[...input.names], input.field, [...input.values], input.finishedSince.toISOString()],
+    );
+  const rows = result.rows as { ref: string | null }[];
+  return new Set(rows.flatMap((r) => (r.ref === null ? [] : [r.ref])));
+}
+
+/** True when the queue's tables answer (a cheap read of pg-boss's version row). */
+export async function pingQueue(backend: QueueBackend): Promise<void> {
+  await backend.boss.getDb().executeSql(`SELECT version FROM ${backend.schema}.version LIMIT 1`);
+}
+
 export type ReceivedJob = {
   id: string;
   data: unknown;

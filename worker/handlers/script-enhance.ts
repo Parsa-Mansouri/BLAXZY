@@ -98,10 +98,22 @@ export const scriptEnhanceHandler = defineHandler(scriptEnhance, async (payload,
     });
     return;
   }
-  await completeScriptVersion({
+  await keepUserIdea(versionId, idea, runId);
+});
+
+/**
+ * The Enhancer gave up (or its job was lost): the user's own idea becomes the version's content
+ * and the review screen says so. Only a pending version changes; true when this call did it.
+ */
+export function keepUserIdea(
+  versionId: string,
+  idea: string,
+  damiRunId: string | null,
+): Promise<boolean> {
+  return completeScriptVersion({
     versionId,
     content: idea,
-    damiRunId: runId,
+    damiRunId,
     notes: { enhance: { lookLine: null, overrides: [], fellBack: true } },
   });
-});
+}

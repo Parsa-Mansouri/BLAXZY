@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 import { cache } from "react";
 import {
+  AssetInputError,
   fieldsToConfirm,
   getAssetDetail,
   MAX_ASSET_DESCRIPTION_LENGTH,
@@ -64,7 +65,13 @@ const loadDetail = cache(async (assetId: string) => {
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { id, assetId } = await params;
   const project = await loadProject(id);
-  const found = await loadDetail(assetId).catch(() => null);
+  // Only "stage closed" becomes an untitled page (the page itself gates it; a missing or foreign
+  // asset is already null); framework errors and anything unexpected propagate.
+  const found = await loadDetail(assetId).catch((err: unknown) => {
+    unstable_rethrow(err);
+    if (err instanceof AssetInputError) return null;
+    throw err;
+  });
   const detail = found?.asset.projectId === project.id ? found : null;
   return { title: detail ? `${detail.asset.name} · ${project.title} · BLAXZY` : undefined };
 }

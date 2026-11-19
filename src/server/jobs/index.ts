@@ -50,3 +50,4 @@ export {
   type JobSchedule,
   type WorkerOptions,
 } from "./worker";
+export { checkQueue, jobRefsInFlight } from "./in-flight";

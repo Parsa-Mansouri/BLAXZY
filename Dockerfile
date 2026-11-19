@@ -32,6 +32,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG S3_PUBLIC_ENDPOINT=""
 ARG S3_ENDPOINT=""
 ENV S3_PUBLIC_ENDPOINT=$S3_PUBLIC_ENDPOINT     S3_ENDPOINT=$S3_ENDPOINT
+# Browser error tracking (optional): the DSN the browser reports with is inlined at build time.
+ARG NEXT_PUBLIC_SENTRY_DSN=""
+ARG NEXT_PUBLIC_SENTRY_ENVIRONMENT=""
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN     NEXT_PUBLIC_SENTRY_ENVIRONMENT=$NEXT_PUBLIC_SENTRY_ENVIRONMENT
 RUN pnpm build && pnpm worker:build && pnpm migrate:build
 
 # The worker's native dependencies (sharp + its prebuilt libvips for this platform), at the exact

@@ -99,9 +99,11 @@ export async function sweepStuckGenerations(
       seen.add(id);
       if (!(await failGeneration(id, STUCK_FAILURE))) continue; // finished meanwhile
       failed.push(id);
+      // An alert: the normal path never leaves a generation stuck, so each one is worth a look.
       logLine("warn", "stuck generation failed and refunded", {
         generationId: id,
         stuckAfterMinutes: minutes,
+        alert: true,
       });
       // Its hooks: right away; if one throws, the re-notify pass of a later sweep retries.
       await notifyLogged(id);

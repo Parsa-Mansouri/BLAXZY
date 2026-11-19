@@ -41,6 +41,8 @@
     "@aws-sdk/s3-request-presigner": "^3.1165.0",
     "@base-ui/react": "^1.9.0",
     "@higgsfield/client": "^0.2.6",
+    "@sentry/nextjs": "11.11.0",
+    "@sentry/node": "11.11.0",
     "better-auth": "^1.7.19",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.4",

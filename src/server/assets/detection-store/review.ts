@@ -8,6 +8,7 @@ import { freeTextFixRequest, getReviewCatalog, parseAssetRef } from "@/server/da
 import { getDb } from "@/server/db/client";
 import { asset, projectEvent, review } from "@/server/db/schema";
 import { assetDetectFix, enqueue } from "@/server/jobs";
+import { logLine } from "@/server/log";
 import { findOwnedProject, logProjectEvent } from "@/server/projects";
 import { visibleWarnings } from "../detection";
 import { assertPreProductionOpen } from "../preproduction/access";
@@ -165,7 +166,7 @@ export async function submitDetectionReview(input: {
     try {
       await enqueue(assetDetectFix, { reviewId: row.id }, { tx });
     } catch (error) {
-      console.error("[assets] could not enqueue asset.detect.fix:", error);
+      logLine("error", "could not enqueue", { job: assetDetectFix.name, exception: error });
       throw new AssetInputError(ENQUEUE_FAILURE);
     }
     return { reviewId: row.id };

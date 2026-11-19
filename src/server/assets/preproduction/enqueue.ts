@@ -4,6 +4,7 @@
  */
 import type { DbTx } from "@/server/db/client";
 import type { AssetKind } from "@/server/db/schema";
+import { logLine } from "@/server/log";
 import {
   assetLookFix,
   assetLookGenerate,
@@ -35,7 +36,7 @@ export async function enqueueOnTx<J extends JobDefinition>(
   try {
     await enqueue(job, payload, { tx });
   } catch (error) {
-    console.error(`[assets] could not enqueue ${job.name}:`, error);
+    logLine("error", "could not enqueue", { job: job.name, exception: error });
     throw new AssetInputError(ENQUEUE_FAILURE);
   }
 }
@@ -49,7 +50,7 @@ export async function wakeOnTx(tx: DbTx, projectId: string): Promise<void> {
     await wakeWaitingLooks(projectId, tx);
   } catch (error) {
     if (error instanceof AssetInputError) throw error;
-    console.error(`[assets] could not wake the waiting props of ${projectId}:`, error);
+    logLine("error", "could not wake the waiting props", { projectId, exception: error });
     throw new AssetInputError(ENQUEUE_FAILURE);
   }
 }

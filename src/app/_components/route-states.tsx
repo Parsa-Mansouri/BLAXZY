@@ -11,6 +11,7 @@ import {
   SkeletonTile,
   stagger,
 } from "@/ui";
+import { errorDigest, reportClientError } from "@/lib/browser-tracking";
 
 /**
  * The quiet stand-in while a library page loads (Home, Projects, Account): the page header,
@@ -52,7 +53,9 @@ export function StageSkeleton() {
 
 /**
  * What a route shows when it fails unexpectedly: what could not be shown, Try Again, and a way
- * out. The error is logged to the console; its details are never shown.
+ * out. The error is logged to the console and reported to the error tracker (when it is on); its
+ * details are never shown. A server error's digest is shown as a reference the user can quote:
+ * the server's log line and report carry the same digest.
  */
 export function RouteError({
   error,
@@ -72,8 +75,10 @@ export function RouteError({
   /** The way out besides Try Again, e.g. a link to Projects. */
   way?: ReactNode;
 }) {
+  const digest = errorDigest(error);
   useEffect(() => {
     console.error(error);
+    reportClientError(error, errorDigest(error));
   }, [error]);
   return (
     <section className="flex flex-col">
@@ -84,6 +89,9 @@ export function RouteError({
         </Button>
         {way}
       </div>
+      {digest ? (
+        <p className="mt-8 in-3 mono-value text-meta text-secondary">Reference: {digest}</p>
+      ) : null}
     </section>
   );
 }

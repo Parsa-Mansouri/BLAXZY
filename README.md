@@ -230,6 +230,13 @@ All configuration is read from the environment (see `.env.example` and `src/serv
 | `WORKER_DOWN_AFTER_SECONDS`       | `120`                            | Readiness reports the worker `down` when no heartbeat is fresher than this (must exceed twice the heartbeat interval)                                                                                                    |
 | `WORKER_DOWN_ALERT_MINUTES`       | `30`                             | The "worker down" alert is raised at most once per this many minutes, fleet-wide                                                                                                                                         |
 | `HEALTH_CHECK_TIMEOUT_MS`         | `2000`                           | Timeout of each readiness check (database, bucket, queue, worker heartbeat)                                                                                                                                              |
+| `SENTRY_DSN`                      | unset                            | Error tracking: DSN of the GlitchTip (or Sentry) project the web server and the worker report to. Unset = tracking off (no SDK loaded, no network); see Error tracking                                                   |
+| `NEXT_PUBLIC_SENTRY_DSN`          | unset                            | DSN the browser reports with, through the same-origin tunnel `/api/monitoring`. Inlined at `next build` time (Docker: `--build-arg NEXT_PUBLIC_SENTRY_DSN=...`); usually the same as `SENTRY_DSN`                        |
+| `NEXT_PUBLIC_SENTRY_ENVIRONMENT`  | `NODE_ENV`                       | Environment name on browser events (build time, like the browser DSN)                                                                                                                                                    |
+| `SENTRY_ENVIRONMENT`              | `NODE_ENV`                       | Environment name on server and worker events (`production`, `staging`, ...)                                                                                                                                              |
+| `SENTRY_TRACES_SAMPLE_RATE`       | `0`                              | Share of server requests traced for performance (0 to 1); `0` = errors only                                                                                                                                              |
+| `GLITCHTIP_PORT`                  | `8000`                           | Compose only (profile `observability`): host port of GlitchTip (bound to 127.0.0.1)                                                                                                                                      |
+| `GLITCHTIP_SECRET_KEY`            | dev value                        | Compose only (profile `observability`): GlitchTip's Django secret key                                                                                                                                                    |
 
 </details>
 
@@ -359,6 +366,57 @@ That origin is fixed **at `next build` time** from `S3_PUBLIC_ENDPOINT` (else `S
 `--build-arg S3_PUBLIC_ENDPOINT=https://s3.example.com`. If neither is set in a production build the
 policy falls back to any `https:` origin for images, media and connections, which works but is
 looser. Changing the S3 origin later means rebuilding the web image.
+
+</details>
+
+### Error tracking
+
+Errors go to a self-hosted [GlitchTip](https://glitchtip.com) through the Sentry SDK
+(`@sentry/nextjs` in the web app, `@sentry/node` in the worker). With `SENTRY_DSN` unset
+(tests, local development) tracking is fully off.
+
+**What is reported.** Everything goes through one seam, `src/server/observability`:
+`logLine("error", ...)` lines are reported as errors, and any line with `alert: true`
+(`logLine("warn", msg, { alert: true, ... })`) raises an alert at warning level. That covers unexpected
+errors in server actions and polls, errors Next catches while rendering (`onRequestError`), jobs that give
+up on their last attempt, generations the sweep failed and refunded, dami results that could not be
+recorded, and the worker's unhandled rejections and uncaught exceptions (logged, reported, flushed, then a
+graceful shutdown and exit 1). Error boundaries report browser errors through `/api/monitoring`, a
+same-origin tunnel, so the Content-Security-Policy needs no extra origin.
+
+**Request ids.** The proxy gives every request an `x-request-id` (a well-formed incoming one is kept) and
+answers with it. Log lines inside a server action or poll carry it as `requestId`, events are tagged with
+it (and with the user id), and the "server had a problem" message ends with `Reference: <first 8
+characters>` so a user can quote it. Job events are tagged with the job name, id and attempt; error pages
+show the server error's digest, which the server's log line and event carry too.
+
+**No PII.** Events carry the user id only: no email, name or IP address, no cookies, bodies or query
+strings, only the `x-request-id`, `user-agent` and `content-type` headers, and fields whose names look
+sensitive are dropped (`src/lib/error-tracking.ts`).
+
+<details>
+<summary><b>Run GlitchTip locally</b></summary>
+
+<br />
+
+GlitchTip is in `docker-compose.yml` under the `observability` profile, with its own Postgres and Valkey
+(a plain `docker compose up -d` does not start it):
+
+```bash
+docker compose --profile observability up -d     # GlitchTip on http://localhost:8000
+```
+
+1. Open http://localhost:8000, register (the first account), create an organization and a project
+   (platform: Next.js).
+2. Copy the project's DSN (Settings, Projects, the project, Client Keys / DSN), e.g.
+   `http://<key>@localhost:8000/1`.
+3. Put it in `.env` as `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN`, then restart `pnpm dev` and the worker.
+   The browser DSN is read when the app is built or the dev server starts.
+
+In production run GlitchTip as its own service (see its docs), set `SENTRY_DSN` and
+`SENTRY_ENVIRONMENT` on the web and worker containers, and build the web image with
+`--build-arg NEXT_PUBLIC_SENTRY_DSN=...`. The web server must reach the DSN's host, since it forwards
+the browser's reports.
 
 </details>
 

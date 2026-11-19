@@ -8,7 +8,10 @@ const mocks = vi.hoisted(() => ({
   completeProduction: vi.fn(),
   createUpload: vi.fn(),
   startDrafts: vi.fn(),
+  headers: vi.fn(),
 }));
+
+vi.mock("next/headers", () => ({ headers: () => mocks.headers() }));
 
 vi.mock("@/server/auth", () => ({
   requireUser: () => mocks.requireUser(),
@@ -54,6 +57,8 @@ beforeEach(() => {
   mocks.requireUser.mockResolvedValue(user);
   mocks.getSession.mockResolvedValue({ user });
   mocks.checkRateLimit.mockResolvedValue({ ok: true });
+  // Outside a request by default: a new request id each time.
+  mocks.headers.mockRejectedValue(new Error("outside a request"));
 });
 
 describe("userAction", () => {
@@ -106,10 +111,52 @@ describe("userAction", () => {
     const result = await userAction("mutate", "dashboard.rename", async () => {
       throw new Error("connection reset");
     });
-    expect(result).toEqual({ ok: false, error: SERVER_PROBLEM });
-    const line = String(logged.mock.calls[0]?.[0]);
-    expect(line).toContain("dashboard.rename");
-    expect(line).toContain("connection reset");
+    // The message carries the request's short reference; the log line has the full id.
+    const { error } = result as { error: string };
+    const match = /^(.*) Reference: ([0-9a-f]{8})$/.exec(error);
+    expect(match?.[1]).toBe(SERVER_PROBLEM);
+    const line = JSON.parse(String(logged.mock.calls[0]?.[0])) as Record<string, unknown>;
+    expect(line).toMatchObject({ action: "dashboard.rename", error: "connection reset" });
+    expect(String(line.requestId).startsWith(match?.[2] ?? "-")).toBe(true);
+    expect(String(line.stack)).toContain("connection reset");
+  });
+
+  it("reuses the request id the proxy set, in the log line and the reference", async () => {
+    mocks.headers.mockResolvedValue(new Headers({ "x-request-id": "req-abcdef123456" }));
+    const result = await userAction("mutate", "t", async () => {
+      throw new Error("boom");
+    });
+    expect(result).toEqual({ ok: false, error: `${SERVER_PROBLEM} Reference: req-abcd` });
+    expect(String(logged.mock.calls[0]?.[0])).toContain('"requestId":"req-abcdef123456"');
+  });
+
+  it("shows the message of any error whose class is marked userFacing, and only those", async () => {
+    const { BillingInputError, InsufficientCreditsError } = await import("@/server/billing");
+    const { GenerationInputError, PriceChangedError } = await import("@/server/generation");
+    const { ScriptInputError } = await import("@/server/script");
+    for (const error of [
+      new BillingInputError("No such pack."),
+      new InsufficientCreditsError(1, 4),
+      new GenerationInputError("Bad reference."),
+      new ScriptInputError("This file is empty."),
+    ]) {
+      await expect(
+        userAction("mutate", "t", async () => {
+          throw error;
+        }),
+      ).resolves.toEqual({ ok: false, error: error.message });
+    }
+    await expect(
+      userAction("mutate", "t", async () => {
+        throw new PriceChangedError();
+      }),
+    ).resolves.toMatchObject({ ok: false, priceChanged: true });
+    expect(logged).not.toHaveBeenCalled();
+    // A plain error with the same text, or a storage error, is not shown.
+    const failed = await userAction("mutate", "t", async () => {
+      throw new StorageError("not_found", "internal wording");
+    });
+    expect((failed as { error: string }).error).toMatch(/^The server had a problem/);
   });
 
   it("maps too many pending uploads, and lets mapError go first", async () => {

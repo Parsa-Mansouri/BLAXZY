@@ -65,6 +65,85 @@ services:
           "{\"CORSRules\":[{\"AllowedOrigins\":[$$origins],\"AllowedMethods\":[\"GET\",\"PUT\",\"HEAD\"],\"AllowedHeaders\":[\"*\"],\"ExposeHeaders\":[\"ETag\"],\"MaxAgeSeconds\":3600}]}"
         echo "bucket blaxzy ready; CORS origins: $$S3_CORS_ORIGINS"
 
+  # --- Error tracking (profile "observability"): GlitchTip, a self-hosted, Sentry-compatible ----
+  # tracker. Not started by a plain `docker compose up -d`; start it with
+  # `docker compose --profile observability up -d`, then open http://localhost:8000 (README,
+  # "Error tracking"). It has its own Postgres and Valkey, separate from the app's.
+  glitchtip-postgres:
+    profiles: ["observability"]
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: glitchtip
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: glitchtip
+    volumes:
+      - glitchtip_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glitchtip -d glitchtip"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  glitchtip-valkey:
+    profiles: ["observability"]
+    image: valkey/valkey:9.0.8-alpine
+    restart: unless-stopped
+
+  glitchtip-migrate:
+    profiles: ["observability"]
+    image: glitchtip/glitchtip:6.2.6
+    depends_on:
+      glitchtip-postgres:
+        condition: service_healthy
+    restart: "no"
+    environment: &glitchtip-environment
+      DATABASE_URL: postgres://glitchtip:glitchtip@glitchtip-postgres:5432/glitchtip
+      VALKEY_URL: redis://glitchtip-valkey:6379/0
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-local-dev-only-glitchtip-secret-change-me}
+      GLITCHTIP_DOMAIN: http://localhost:${GLITCHTIP_PORT:-8000}
+      DEFAULT_FROM_EMAIL: glitchtip@blaxzy.local
+      EMAIL_URL: consolemail://
+      PORT: "8000"
+      ENABLE_USER_REGISTRATION: "true"
+      ENABLE_ORGANIZATION_CREATION: "true"
+    command: ./bin/run-migrate.sh
+
+  glitchtip-web:
+    profiles: ["observability"]
+    image: glitchtip/glitchtip:6.2.6
+    depends_on:
+      glitchtip-migrate:
+        condition: service_completed_successfully
+      glitchtip-valkey:
+        condition: service_started
+    restart: unless-stopped
+    environment:
+      <<: *glitchtip-environment
+      SERVER_ROLE: web
+    ports:
+      - "127.0.0.1:${GLITCHTIP_PORT:-8000}:8000"
+    volumes:
+      - glitchtip_uploads:/code/uploads
+
+  glitchtip-worker:
+    profiles: ["observability"]
+    image: glitchtip/glitchtip:6.2.6
+    depends_on:
+      glitchtip-migrate:
+        condition: service_completed_successfully
+      glitchtip-valkey:
+        condition: service_started
+    restart: unless-stopped
+    environment:
+      <<: *glitchtip-environment
+      SERVER_ROLE: worker
+    volumes:
+      - glitchtip_uploads:/code/uploads
+  # --- end error tracking ----------------------------------------------------------------------
+
 volumes:
   postgres_data:
   minio_data:
+  glitchtip_postgres_data:
+  glitchtip_uploads:

@@ -85,6 +85,47 @@ const headerName = z.preprocess(
     .optional(),
 );
 
+// --- Error tracking (Sentry SDK, sending to a self-hosted GlitchTip) -----------------------------
+/** Empty counts as unset (`.env.example` lists the variables with empty values). */
+const emptyAsUnset = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+
+/**
+ * Error tracking. Unset `SENTRY_DSN`: tracking is off (no SDK loaded, no network). Read on its
+ * own by `getTrackingEnv()`, so starting the tracker never depends on the rest of the config.
+ */
+export const trackingFields = {
+  /** DSN of the GlitchTip project the web server and the worker report to. */
+  SENTRY_DSN: z.preprocess(emptyAsUnset, z.string().url().optional()),
+  /**
+   * DSN the browser reports with (through the `/api/monitoring` tunnel). Inlined into the
+   * browser bundle at `next build` time (Docker: `--build-arg NEXT_PUBLIC_SENTRY_DSN=...`).
+   * Usually the same as SENTRY_DSN; the tunnel accepts either.
+   */
+  NEXT_PUBLIC_SENTRY_DSN: z.preprocess(emptyAsUnset, z.string().url().optional()),
+  /** Environment name on browser events (build time, like the browser DSN). Default: NODE_ENV. */
+  NEXT_PUBLIC_SENTRY_ENVIRONMENT: z.preprocess(emptyAsUnset, z.string().min(1).max(64).optional()),
+  /** Environment name on events (production, staging, ...). Default: NODE_ENV. */
+  SENTRY_ENVIRONMENT: z.preprocess(emptyAsUnset, z.string().min(1).max(64).optional()),
+  /** Share of requests traced for performance (0 to 1). Default 0: errors only. */
+  SENTRY_TRACES_SAMPLE_RATE: z.preprocess(emptyAsUnset, z.coerce.number().min(0).max(1).default(0)),
+};
+const trackingSchema = z.object(trackingFields);
+export type TrackingEnv = z.infer<typeof trackingSchema>;
+
+/**
+ * The error-tracking variables alone, parsed on each call (cheap; called at startup and by the
+ * browser-report tunnel). Throws a readable error when they are invalid.
+ */
+export function getTrackingEnv(): TrackingEnv {
+  const result = trackingSchema.safeParse(process.env);
+  if (!result.success) {
+    const issues = result.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`);
+    throw new Error(`Invalid environment variables:\n${issues.join("\n")}`);
+  }
+  return result.data;
+}
+// --- end error tracking ----------------------------------------------------------------------------
+
 const baseSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1),
@@ -202,6 +243,8 @@ const baseSchema = z.object({
   WORKER_DOWN_ALERT_MINUTES: z.coerce.number().int().min(1).max(10_080).default(30),
   /** Timeout of each readiness check (database, bucket, queue, worker heartbeat). */
   HEALTH_CHECK_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(2000),
+
+  ...trackingFields,
 });
 
 export const envSchema = baseSchema.superRefine((env, ctx) => {

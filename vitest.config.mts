@@ -28,6 +28,9 @@ export default defineConfig({
       // Auth tests read verification and reset links from the console transport; a local .env
       // that sends over SMTP must not send real mail or hide those links.
       EMAIL_TRANSPORT: "console",
+      // Error tracking stays off in tests, whatever a local .env sets (no SDK, no network).
+      SENTRY_DSN: "",
+      NEXT_PUBLIC_SENTRY_DSN: "",
       // Every integration file has its own pg pool and pg-boss pools and files run in
       // parallel: small pools keep the total far below Postgres' default 100 connections.
       DATABASE_POOL_MAX: process.env.DATABASE_POOL_MAX ?? "3",

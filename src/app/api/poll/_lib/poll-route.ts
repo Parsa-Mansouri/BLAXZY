@@ -18,6 +18,7 @@
 import { NextResponse } from "next/server";
 import { clampCount, isUuid, logActionError, userMessage } from "@/app/(app)/_lib/action";
 import { getSession, type AuthUser } from "@/server/auth";
+import { inRequestScope, setScopeUser } from "@/server/observability";
 import { checkRateLimit } from "@/server/ratelimit";
 
 const HEADERS = {
@@ -83,10 +84,7 @@ export function pollRoute<P extends RouteParams = RouteParams>(
   tag: string,
   handler: (context: PollContext<P>) => Promise<unknown>,
 ) {
-  return async function GET(
-    request: Request,
-    context: { params: Promise<P> },
-  ): Promise<NextResponse> {
+  async function answer(request: Request, context: { params: Promise<P> }): Promise<NextResponse> {
     let user: AuthUser;
     try {
       const session = await getSession();
@@ -96,6 +94,7 @@ export function pollRoute<P extends RouteParams = RouteParams>(
       logActionError(tag, error);
       return json(500, {});
     }
+    setScopeUser(user.id);
     try {
       const limit = await checkRateLimit({ userId: user.id, bucket: "poll" });
       if (!limit.ok) {
@@ -116,5 +115,13 @@ export function pollRoute<P extends RouteParams = RouteParams>(
       logActionError(tag, error);
       return json(500, {});
     }
+  }
+
+  return async function GET(
+    request: Request,
+    context: { params: Promise<P> },
+  ): Promise<NextResponse> {
+    // The request id the proxy set: on every log line and error report of this poll.
+    return await inRequestScope(() => answer(request, context), request.headers);
   };
 }

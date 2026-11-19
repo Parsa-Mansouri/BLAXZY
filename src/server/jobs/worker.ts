@@ -1,3 +1,4 @@
+import { withJobScope } from "@/server/observability/scope";
 import type { JobDefinition, JobPayload } from "./define";
 import { InvalidJobPayloadError, parsePayload } from "./enqueue";
 import { errorMessage, logLine } from "./log";
@@ -120,7 +121,15 @@ type Received = {
   data: unknown;
 };
 
-async function runLogged(handler: JobHandler, received: Received): Promise<HandleOutcome> {
+/** Runs one attempt in its job scope: its error reports carry the job name, id and attempt. */
+function runLogged(handler: JobHandler, received: Received): Promise<HandleOutcome> {
+  return withJobScope(
+    { job: handler.job.name, jobId: received.jobId, attempt: received.attempt },
+    () => runAttempt(handler, received),
+  );
+}
+
+async function runAttempt(handler: JobHandler, received: Received): Promise<HandleOutcome> {
   const { job } = handler;
   const started = Date.now();
   const base = { job: job.name, id: received.jobId, attempt: received.attempt };
@@ -155,7 +164,19 @@ async function runLogged(handler: JobHandler, received: Received): Promise<Handl
       throw err;
     }
     const retrying = received.attempt <= received.retryLimit;
-    logLine("error", "job", { ...base, ms, outcome: "failed", retrying, error: errorMessage(err) });
+    if (retrying) {
+      // Another attempt follows: a warning, not an alert (the last attempt alerts).
+      logLine("warn", "job", {
+        ...base,
+        ms,
+        outcome: "failed",
+        retrying,
+        error: errorMessage(err),
+      });
+    } else {
+      // The queue gives up on this job: reported to the error tracker with the error's stack.
+      logLine("error", "job", { ...base, ms, outcome: "failed", retrying, exception: err });
+    }
     throw err;
   }
 }

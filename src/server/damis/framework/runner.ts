@@ -2,6 +2,7 @@ import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { APIUserAbortError } from "@anthropic-ai/sdk";
 import type { z } from "zod";
 import { getEnv } from "@/server/env";
+import { logLine } from "@/server/log";
 import {
   getDefaultClaudeClient,
   type ClaudeClient,
@@ -377,7 +378,13 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
         try {
           await store.finish(runId, { status: "succeeded", output, attempts, usage, costUsd });
         } catch (storeError) {
-          console.error(`[damis] could not record success of run ${runId}:`, storeError);
+          logLine("error", "could not record a dami run's result", {
+            dami: dami.key,
+            runId,
+            outcome: "succeeded",
+            exception: storeError,
+            alert: true,
+          });
         }
         return { runId, output, model, attempts, usage: finalUsage, costUsd };
       }
@@ -408,7 +415,13 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
         costUsd: finalUsage ? computeCostUsd(model, finalUsage) : null,
       });
     } catch (storeError) {
-      console.error(`[damis] could not record failure of run ${runId}:`, storeError);
+      logLine("error", "could not record a dami run's result", {
+        dami: dami.key,
+        runId,
+        outcome: typed instanceof DamiAbortedError ? "aborted" : "failed",
+        exception: storeError,
+        alert: true,
+      });
     }
     throw typed;
   }

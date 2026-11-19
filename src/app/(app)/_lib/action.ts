@@ -7,18 +7,19 @@
  * - `pollAction` (background polls): never redirects. Signed out, rate limited or failing, it
  *   returns the poll's quiet value, so a background tab is not sent to the sign-in page.
  */
-import { AssetInputError } from "@/server/assets";
 import { getSession, requireUser, type AuthUser } from "@/server/auth";
-import { BillingInputError, InsufficientCreditsError } from "@/server/billing";
-import { BlocksInputError } from "@/server/blocks";
-import { GenerationInputError, isPriceChanged } from "@/server/generation";
-import { errorMessage, logLine } from "@/server/jobs/log";
-import { ProductionInputError } from "@/server/production";
-import { ProjectInputError } from "@/server/projects";
+import { isUserFacing } from "@/server/errors";
+import { isPriceChanged } from "@/server/generation";
+import { logLine } from "@/server/log";
+import {
+  currentRequestId,
+  inRequestScope,
+  setScopeUser,
+  shortReference,
+} from "@/server/observability";
 import { checkRateLimit, type RateLimitBucket } from "@/server/ratelimit";
-import { ScriptInputError } from "@/server/script";
 import { StorageError } from "@/server/storage";
-import { SERVER_PROBLEM, SIGNED_OUT, TOO_MANY_REQUESTS } from "./messages";
+import { SERVER_PROBLEM, SIGNED_OUT, TOO_MANY_REQUESTS, withReference } from "./messages";
 
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: string };
 /**
@@ -31,25 +32,7 @@ export { SERVER_PROBLEM, SIGNED_OUT, TOO_MANY_REQUESTS };
 export const TOO_MANY_UPLOADS =
   "Too many uploads are still finishing. Wait a few minutes, then try again.";
 
-/** An error class whose instances carry a message that is safe to show the user. */
-export type UserErrorClass = abstract new (...args: never[]) => Error;
-
-/** The services' input errors: their messages are written for the user. */
-export const USER_FACING_ERRORS: readonly UserErrorClass[] = [
-  AssetInputError,
-  ScriptInputError,
-  BlocksInputError,
-  ProductionInputError,
-  ProjectInputError,
-  InsufficientCreditsError,
-  BillingInputError,
-  /** Includes `PriceChangedError`: the confirmed price is not the current one. */
-  GenerationInputError,
-];
-
 export interface ActionOptions {
-  /** Error classes whose message is shown as is (default `USER_FACING_ERRORS`). */
-  userErrors?: readonly UserErrorClass[];
   /** Checked first: a user-readable message for this error, or null to fall through. */
   mapError?: (error: unknown) => string | null;
 }
@@ -59,21 +42,29 @@ export function userMessage(error: unknown, options: ActionOptions = {}): string
   const mapped = options.mapError?.(error);
   if (mapped) return mapped;
   if (error instanceof StorageError && error.code === "too_many_uploads") return TOO_MANY_UPLOADS;
-  const classes = options.userErrors ?? USER_FACING_ERRORS;
-  if (error instanceof Error && classes.some((c) => error instanceof c)) return error.message;
+  // The services' input errors (`userFacing`), `PriceChangedError` included.
+  if (isUserFacing(error)) return error.message;
   return null;
 }
 
-/** Logs an unexpected error of the action `tag` (with its stack, never the arguments). */
+/**
+ * Logs an unexpected error of the action `tag` (with its stack and the request id, never the
+ * arguments); it is reported to the error tracker as well.
+ */
 export function logActionError(tag: string, error: unknown): void {
-  logLine("error", "server action failed", {
-    action: tag,
-    error: errorMessage(error),
-    stack: error instanceof Error ? error.stack : undefined,
-  });
+  logLine("error", "server action failed", { action: tag, exception: error });
 }
 
-/** The failure for a caught error: its user-readable message, or SERVER_PROBLEM (logged). */
+/** SERVER_PROBLEM with the short reference of the current request, for the user to quote. */
+function serverProblem(): string {
+  const requestId = currentRequestId();
+  return withReference(SERVER_PROBLEM, requestId ? shortReference(requestId) : undefined);
+}
+
+/**
+ * The failure for a caught error: its user-readable message, or SERVER_PROBLEM with the
+ * request's reference (logged and reported).
+ */
 export function failureFor(
   tag: string,
   error: unknown,
@@ -84,7 +75,7 @@ export function failureFor(
     return { ok: false, error: message, ...(isPriceChanged(error) ? { priceChanged: true } : {}) };
   }
   logActionError(tag, error);
-  return { ok: false, error: SERVER_PROBLEM };
+  return { ok: false, error: serverProblem() };
 }
 
 /** Buckets for user-initiated actions (`poll` belongs to `pollAction`). */
@@ -100,17 +91,20 @@ export async function userAction<R>(
   fn: (user: AuthUser) => Promise<R>,
   options: ActionOptions = {},
 ): Promise<R | ActionFailure> {
-  // Outside the try: requireUser() redirects by throwing, which must reach Next.
-  const user = await requireUser();
-  const limit = await checkRateLimit({ userId: user.id, bucket });
-  if (!limit.ok) {
-    return { ok: false, error: limit.reason === "limited" ? TOO_MANY_REQUESTS : SERVER_PROBLEM };
-  }
-  try {
-    return await fn(user);
-  } catch (error) {
-    return failureFor(tag, error, options);
-  }
+  return await inRequestScope(async () => {
+    // Outside the try: requireUser() redirects by throwing, which must reach Next.
+    const user = await requireUser();
+    setScopeUser(user.id);
+    const limit = await checkRateLimit({ userId: user.id, bucket });
+    if (!limit.ok) {
+      return { ok: false, error: limit.reason === "limited" ? TOO_MANY_REQUESTS : SERVER_PROBLEM };
+    }
+    try {
+      return await fn(user);
+    } catch (error) {
+      return failureFor(tag, error, options);
+    }
+  });
 }
 
 export type QuietReason = "signed_out" | "limited" | "failed";
@@ -134,24 +128,27 @@ export async function pollAction<R, Q>(
   fn: (user: AuthUser) => Promise<R>,
   options: ActionOptions = {},
 ): Promise<R | Q> {
-  let user: AuthUser;
-  try {
-    const session = await getSession();
-    if (!session?.user.emailVerified) return quiet("signed_out", SIGNED_OUT);
-    user = session.user;
-  } catch (error) {
-    logActionError(tag, error);
-    return quiet("failed", SERVER_PROBLEM);
-  }
-  const limit = await checkRateLimit({ userId: user.id, bucket: "poll" });
-  if (!limit.ok) {
-    return quiet("limited", limit.reason === "limited" ? TOO_MANY_REQUESTS : SERVER_PROBLEM);
-  }
-  try {
-    return await fn(user);
-  } catch (error) {
-    return quiet("failed", failureFor(tag, error, options).error);
-  }
+  return await inRequestScope(async () => {
+    let user: AuthUser;
+    try {
+      const session = await getSession();
+      if (!session?.user.emailVerified) return quiet("signed_out", SIGNED_OUT);
+      user = session.user;
+    } catch (error) {
+      logActionError(tag, error);
+      return quiet("failed", serverProblem());
+    }
+    setScopeUser(user.id);
+    const limit = await checkRateLimit({ userId: user.id, bucket: "poll" });
+    if (!limit.ok) {
+      return quiet("limited", limit.reason === "limited" ? TOO_MANY_REQUESTS : SERVER_PROBLEM);
+    }
+    try {
+      return await fn(user);
+    } catch (error) {
+      return quiet("failed", failureFor(tag, error, options).error);
+    }
+  });
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

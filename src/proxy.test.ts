@@ -40,6 +40,32 @@ describe("proxy", () => {
     },
   );
 
+  it("gives every request an id, keeping a well-formed incoming one, and answers with it", () => {
+    const fresh = proxy(request("/dashboard", SESSION_COOKIE));
+    const id = forwardedHeader(fresh, "x-request-id");
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(fresh.headers.get("x-request-id")).toBe(id);
+
+    const kept = proxy(
+      new NextRequest(`${ORIGIN}/dashboard`, {
+        headers: { cookie: SESSION_COOKIE, "x-request-id": "lb-0123456789" },
+      }),
+    );
+    expect(forwardedHeader(kept, "x-request-id")).toBe("lb-0123456789");
+
+    const bad = proxy(
+      new NextRequest(`${ORIGIN}/dashboard`, {
+        headers: { cookie: SESSION_COOKIE, "x-request-id": "no spaces allowed" },
+      }),
+    );
+    expect(forwardedHeader(bad, "x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
+    expect(proxy(request("/dashboard")).headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("lets browser error reports through without a cookie", () => {
+    expect(getRedirectUrl(proxy(request("/api/monitoring")))).toBeNull();
+  });
+
   it("protects API routes that are not public", () => {
     expect(getRedirectUrl(proxy(request("/api/files/abc")))).not.toBeNull();
   });

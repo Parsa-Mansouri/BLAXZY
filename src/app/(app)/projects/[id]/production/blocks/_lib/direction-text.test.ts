@@ -3,6 +3,7 @@ import {
   continuityLabel,
   framing,
   functionLabel,
+  heardAsLabel,
   parseWindow,
   plain,
   stagingLine,
@@ -27,6 +28,12 @@ const shot = (over: Record<string, unknown>) => ({
 });
 
 describe("direction text", () => {
+  it("names how an off-screen line is heard, and nothing for a speaker on screen", () => {
+    expect(heardAsLabel("on_screen")).toBe("");
+    expect(heardAsLabel("phone_or_device")).toBe("on the phone");
+    expect(heardAsLabel("voice_over")).toBe("voice-over");
+  });
+
   it("replaces the Director's ids with names, leaving unknown ids as they are", () => {
     expect(plain("@char_1 turns to char_2 near @loc_1 and @char_9", names)).toBe(
       "Nora turns to Lina near Kitchen and @char_9",

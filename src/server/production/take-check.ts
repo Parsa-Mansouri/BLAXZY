@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { getBlockVersion, getPreviousCurrentBlock, type PromptBlock } from "@/server/blocks";
 import {
-  blockSchema,
+  storedBlockSchema,
   runDami,
   videoReview,
   type DirectorBlock,
@@ -50,7 +50,7 @@ export type TakeReviewJob = {
 /** The Director's block when the stored direction is complete enough to review against. */
 export function usableDirection(raw: unknown): DirectorBlock | null {
   if (!raw || typeof raw !== "object") return null;
-  const parsed = blockSchema.safeParse(raw);
+  const parsed = storedBlockSchema.safeParse(raw);
   return parsed.success && parsed.data.shots.length > 0 ? parsed.data : null;
 }
 

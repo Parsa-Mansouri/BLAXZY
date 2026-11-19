@@ -8,9 +8,9 @@ import {
 } from "./schema";
 import { checkBlockRevision } from "./validate";
 
-/** Ours; the owner's Block Revision is v1.4 (`BLOCK_REVISION_OWNER_VERSION`). */
-export const BLOCK_REVISION_VERSION = "1.0.0";
-export const BLOCK_REVISION_OWNER_VERSION = "1.4";
+/** Ours; the owner's Block Revision is v1.5 (`BLOCK_REVISION_OWNER_VERSION`). */
+export const BLOCK_REVISION_VERSION = "1.1.0";
+export const BLOCK_REVISION_OWNER_VERSION = "1.5";
 
 /**
  * One revised block is ~2.5k tokens of JSON (staging lists, shots, prompt, change log, fix map)
@@ -19,7 +19,7 @@ export const BLOCK_REVISION_OWNER_VERSION = "1.4";
 export const BLOCK_REVISION_MAX_OUTPUT_TOKENS = 16_000;
 
 /**
- * BLOCK_REVISION (owner v1.4): the next version of one Seedance block from free-text change
+ * BLOCK_REVISION (owner v1.5): the next version of one Seedance block from free-text change
  * requests, confirmed video-review issues, timed notes and asset corrections.
  * Default model is Sonnet; use `blockRevisionRunContext(input)` for the run context, which picks
  * Opus when `regenerate` is requested (the owner's rule).

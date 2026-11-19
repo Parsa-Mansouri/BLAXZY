@@ -6,6 +6,7 @@ import {
   continuityLabel,
   framing,
   functionLabel,
+  heardAsLabel,
   plain,
   stagingLine,
   windowLabel,
@@ -64,6 +65,11 @@ function Shots({ shots, names }: { shots: readonly ShotView[]; names: Names }) {
             {shot.dialogue.map((line, j) => (
               <p key={j} className="max-w-(--measure) text-secondary text-pretty text-label-2">
                 <span className="text-label">{names[line.speaker_id] ?? line.speaker_id}</span>
+                {heardAsLabel(line.heard_as) ? (
+                  <span className="ml-1.5 caps-label text-label-3">
+                    {heardAsLabel(line.heard_as)}
+                  </span>
+                ) : null}
                 {line.delivery.trim() ? ` (${plain(line.delivery, names)})` : ""}
                 {": "}“{line.line}”
               </p>

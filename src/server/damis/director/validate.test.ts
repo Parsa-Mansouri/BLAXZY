@@ -19,6 +19,8 @@ import {
   checkDirector,
   checkDuration,
   checkForbiddenWords,
+  checkHeardOnly,
+  checkNoVoiceAssets,
   checkOnScreenStaging,
   checkPreflight,
   checkPromptLayout,
@@ -28,6 +30,7 @@ import {
   checkShotWindows,
   checkStagingContinuity,
   checkTotals,
+  checkVoiceNotes,
   checkWordCount,
   countWords,
   descriptorFor,
@@ -174,6 +177,70 @@ describe("checkBudgets", () => {
   });
 });
 
+describe("heard-only speakers and voice notes (v1.4)", () => {
+  it("the fixture passes", () => {
+    for (const b of output.blocks) expect(checkHeardOnly(b)).toEqual([]);
+    expect(checkVoiceNotes(output.continuity_bible, input.asset_registry)).toEqual([]);
+  });
+
+  it("every speaker is in the block's characters or heard_only", () => {
+    const b = block(0);
+    const line = b.shots.flatMap((s) => s.dialogue)[0];
+    if (!line) throw new Error("fixture block 1 has dialogue");
+    line.speaker_id = "char_7";
+    line.heard_as = "off_screen";
+    expect(checkHeardOnly(b).join("\n")).toContain('speaker "char_7" is in neither');
+    line.speaker_id = "new_char_1";
+    expect(checkHeardOnly(b)).toEqual([]);
+  });
+
+  it("a heard-only speaker has no @token, no Staging entry and is not on screen", () => {
+    const b = block(0);
+    const line = b.shots.flatMap((s) => s.dialogue)[0];
+    if (!line) throw new Error("fixture block 1 has dialogue");
+    // char_1 speaks in block 1; move them to heard_only but leave the rest as it is.
+    b.assets.characters = b.assets.characters.filter((id) => id !== "char_1");
+    b.assets.heard_only = ["char_1"];
+    const errors = checkHeardOnly(b).join("\n");
+    expect(errors).toContain('no "@char_1" token');
+    expect(errors).toContain("no Staging entry");
+    expect(errors).toContain('heard_as cannot be "on_screen"');
+    b.assets.characters.push("char_1");
+    expect(checkHeardOnly(b).join("\n")).toContain(
+      "in both assets.characters and assets.heard_only",
+    );
+  });
+
+  it("a heard-only speaker that is written as heard passes", () => {
+    const b = block(0);
+    b.assets.characters = b.assets.characters.filter((id) => id !== "char_1");
+    b.assets.heard_only = ["char_1"];
+    b.prompt_text = b.prompt_text.replace(/@char_1(?![0-9])/g, "Nora");
+    b.start_staging = b.start_staging.filter((s) => s.character_id !== "char_1");
+    b.end_staging = b.end_staging.filter((s) => s.character_id !== "char_1");
+    for (const shot of b.shots) for (const d of shot.dialogue) d.heard_as = "phone_or_device";
+    expect(checkHeardOnly(b)).toEqual([]);
+  });
+
+  it("@char_1 is not found inside @char_10", () => {
+    const b = block(0);
+    b.assets.characters = b.assets.characters.filter((id) => id !== "char_1");
+    b.assets.heard_only = ["char_1"];
+    b.prompt_text = b.prompt_text.replace(/@char_1(?![0-9])/g, "@char_10");
+    expect(checkHeardOnly(b).join("\n")).not.toContain("token");
+  });
+
+  it("a silent character's voice note is empty", () => {
+    const bible = structuredClone(output.continuity_bible);
+    const silent = bible.characters.find((c) => c.asset_id === "char_3");
+    if (!silent) throw new Error("fixture has char_3");
+    silent.voice = "a high, quick voice";
+    expect(checkVoiceNotes(bible, input.asset_registry)).toEqual([
+      'continuity_bible: "char_3" does not speak (output_21 speaks false); its voice note must be empty',
+    ]);
+  });
+});
+
 describe("asset ids and descriptors", () => {
   it("every id is in output_21 or starts with new_", () => {
     expect(checkAssetIds(block(), known)).toEqual([]);
@@ -181,9 +248,18 @@ describe("asset ids and descriptors", () => {
     b.assets.characters = ["char_1", "char_9", "new_char_2"];
     expect(checkAssetIds(b, known)).toHaveLength(1);
     expect(checkAssetIds(b, known)[0]).toContain("char_9");
-    const voices = block();
-    voices.assets.voices = ["voice_1"];
-    expect(checkAssetIds(voices, known)[0]).toContain("voice_1");
+    const heard = block();
+    heard.assets.heard_only = ["char_8"];
+    expect(checkAssetIds(heard, known)[0]).toContain("char_8");
+  });
+
+  it("no voices list and no voice_ id anywhere (v1.4)", () => {
+    expect(checkNoVoiceAssets(outputJson)).toEqual([]);
+    expect(checkNoVoiceAssets({ continuity_bible: { voices: [] } })[0]).toContain("voices");
+    expect(checkNoVoiceAssets({ assets: { characters: ["voice_1"] } })[0]).toContain("voice_");
+    expect(checkNoVoiceAssets({ prompt_text: "Audio: @voice_2 hums." })).toHaveLength(1);
+    // The heard_as value is not an id.
+    expect(checkNoVoiceAssets({ heard_as: "voice_over" })).toEqual([]);
   });
 
   it("the bible's ids are checked too", () => {

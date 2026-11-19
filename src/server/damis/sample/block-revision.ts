@@ -207,6 +207,7 @@ export function sampleBlockRevision(raw: unknown): BlockRevisionOutput {
     flags: {
       split_required: false,
       next_block_needs_update: false,
+      voice_rebind_required: false,
       structural_suggestion: structural,
       not_applied: notApplied,
       input_integrity: [],

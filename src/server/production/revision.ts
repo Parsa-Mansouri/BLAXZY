@@ -14,7 +14,7 @@ import {
   parseBlockDirection,
   type PromptBlock,
 } from "@/server/blocks";
-import { blockSchema, formatAssetRef, isVoiceRef, type DirectorBlock } from "@/server/damis";
+import { formatAssetRef, isVoiceRef, storedBlockSchema, type DirectorBlock } from "@/server/damis";
 import { type DbTx, getDb } from "@/server/db/client";
 import { review } from "@/server/db/schema";
 import {
@@ -34,7 +34,8 @@ export const NOT_DIRECTED_MESSAGE =
 /** The block's Director data in the shape Block Revision reads, or null for an older block. */
 export function directedBlockOf(block: Pick<PromptBlock, "direction">): DirectorBlock | null {
   if (!parseBlockDirection(block.direction)) return null;
-  const parsed = blockSchema.safeParse(block.direction);
+  // A block directed by an older Director (v1.3) is upgraded to the current shape.
+  const parsed = storedBlockSchema.safeParse(block.direction);
   return parsed.success ? parsed.data : null;
 }
 

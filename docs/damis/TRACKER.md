@@ -3,13 +3,15 @@
 Every dami BLAXZY runs or plans to run, the latest owner (Hamed) file for it, and where it stands in
 the code. Update this file whenever an owner file arrives or a dami is wired, upgraded or retired.
 
-Last updated: 2026-11-16 (owner drop of 2026-11-16 fully wired; the Wizard question bank is
-the only file left in `inbox/2026-11-16/`).
+Last updated: 2026-11-19 (owner drop of 2026-11-19: Director v1.4 and Block Revision v1.5 wired;
+the new Storyboard and Voice Box damis are received and wait in `inbox/2026-11-19/`. The Wizard
+question bank is still the only file left in `inbox/2026-11-16/`).
 
 ## Status key
 
 - **live (owner)**: the owner's file is implemented and wired into the worker.
 - **agent draft**: running on an agent-written prompt; no owner file exists.
+- **received (not wired)**: the owner's file is in `inbox/<date>/`; no code yet.
 - **retired**: removed from the code; an owner dami replaced it.
 
 ## Damis
@@ -28,12 +30,14 @@ the only file left in `inbox/2026-11-16/`).
 | 10 | Sheet Generator: character (output_30) | Pre-production | `sheet-generator-character/source/sheet_generator_character_v4.md` | live (owner) | `sheet-generator-character/` | |
 | 11 | Sheet Generator: location | Pre-production | `sheet-generator-location/source/sheet_generator_location_v1.md` | live (owner) | `sheet-generator-location/` | |
 | 12 | Sheet Generator: prop | Pre-production | `sheet-generator-prop/source/sheet_generator_prop_v1.md` | live (owner) | `sheet-generator-prop/` | |
-| 13 | Director (output_22) | After script approval (background) | `director/source/dami_director.system.md` v1.3 | live (owner) | `director/` | Wired (Phase 4): `script.direct` runs `full` for up to ~8 blocks, else `plan` plus `direction.write` batches of ~8 (`write_blocks`). Replaced the earlier Director v1, which the owner marked wrong. Blocks arrive directed (15 or 30 s); a project without a Creative Bible gets a stub bible. Code-side validator is `director/validate.ts`. |
+| 13 | Director (output_22) | After script approval (background) | `director/source/dami_director.system.md` v1.4 | live (owner) | `director/` | v1.4 (2026-11-19): voices are not assets (`assets.heard_only` for speakers heard but not seen, no bible `voices`, no `voice_` ids), dialogue `heard_as`, voice notes only from detector facts; v1.3 blocks already stored still parse. Wired (Phase 4): `script.direct` runs `full` for up to ~8 blocks, else `plan` plus `direction.write` batches of ~8 (`write_blocks`). Replaced the earlier Director v1, which the owner marked wrong. Blocks arrive directed (15 or 30 s); a project without a Creative Bible gets a stub bible. Code-side validator is `director/validate.ts`. |
 | 14 | Text Blocks / reference binding | Production | none | retired | none | Retired (Phase 4). The Director writes the final prompts; reference binding is code (`bindAssetTokens`/`tagAssetIds` at store time, `production/binding.ts` at preparation). Folder, sample and tests deleted. |
-| 15 | Block Revision | Production | `block-revision/source/dami_block_revision.system.md` v1.4 | live (owner) | `block-revision/` (the draft block-reviser is retired) | Minimal-diff fixes, sliders, keep list, escalation levels 1 to 4, attempt history. |
+| 15 | Block Revision | Production | `block-revision/source/dami_block_revision.system.md` v1.5 | live (owner) | `block-revision/` (the draft block-reviser is retired) | v1.5 (2026-11-19): follows Director v1.4 assets, keeps `<<<audio_N>>>` tokens, adds `flags.voice_rebind_required`. Minimal-diff fixes, sliders, keep list, escalation levels 1 to 4, attempt history. |
 | 16 | Video Review (+ Router, code) | Production | `video-review/source/dami_video_review.system.md` v1.0 | live (owner) | `video-review/` | Run by the `take.review` job on every generated clip of a directed block (ffmpeg cut detection and keyframes, the report on the take). The Router (rebind, revise, reroll) is backend code (`production/router.ts`, `take-routing.ts`), not a dami; there is no 6-generation cap (generations are unlimited, each confirmed by the user). |
 | 17 | Prompt Sectioner | Production | none | retired | none | Retired (Phase 4), replaced by the Director. Folder, sample generator, tests and `script.section` job deleted. |
 | 18 | Take Fixer | Production | none | retired | none | Retired (Phase 6), replaced by Video Review + the router + Block Revision. Folder, sample generator, tests and the `take.fix` job deleted. |
+| 19 | Storyboard (output_31) | New STORYBOARD stage, between Pre-production and Production | `inbox/2026-11-19/dami_storyboard.system.md` v1.0 | received (not wired) | none yet | One storyboard sheet per block: turns a Director block plus the approved asset sheets (attached as images) into one Nano Banana prompt for a pencil storyboard, one numbered panel per shot, red movement marks; modes `first` / `fix` (free-text change request, optional panel numbers). Re-runs a block only when its block version or a sheet it uses changes. Opus, low effort. Needs: a new wizard stage, a storyboard version table (like `asset_sheet`), a `storyboard_image` generation purpose, and the live Higgsfield provider (stub today). |
+| 20 | Voice Box (output_23 + voice_cast) | Production, between the text-block preview and generation | `inbox/2026-11-19/dami_voice_box.system.md` v1.0 + `voice_box_review_catalog_v1.json` | received (not wired) | none yet | Modes `detect` (per block: lines, delivery type, timing fit, recommended source upload / tts / native), `cast` (once per speaking character, picks from the TTS voice catalog or writes a voice-design prompt; consent rules for cloning) and `bind` (TTS requests, upload checks, line placement, `<<<audio_N>>>` reference audio, rewritten Audio line, mix plan). Sonnet. Needs Director v1.4 / Block Revision v1.5 (done), ElevenLabs TTS through Higgsfield, an `audio` generation kind, voice uploads with consent, and an ffmpeg mix step; `take.generate` hard-codes `sound: true` today (native only). |
 
 ## Logical damis named by the question bank (no owner file yet)
 
@@ -77,6 +81,11 @@ module + project brief instead).
 - `inbox/2026-11-16/BLAXZY_Wizard_Question_Bank_FA.docx` (+ `.extracted.txt`): the Wizard question
   bank, kept for the next plan. Every other file of the 2026-11-16 drop is copied into its dami's
   `source/` folder; the superseded Asset Detector v1 files are in git history only.
+- `inbox/2026-11-19/`: `dami_storyboard.system.md`, `dami_voice_box.system.md` and
+  `voice_box_review_catalog_v1.json`, waiting for their build phases (rows 19 and 20). The rest of
+  that drop: Director v1.4 and Block Revision v1.5 replaced the files in their `source/` folders
+  (the earlier versions are in git history); its Director v1.3, Block Revision v1.4 and Video
+  Review v1.0 copies were identical to the wired files and were not kept.
 
 ## Decisions and open questions
 
@@ -98,8 +107,8 @@ Still open for the owner (Hamed):
 
 1. **Script Checker:** is an owner file coming? (Creative DNA has a `for_script_checker` slice.)
 2. **Script Reviser:** redundant with the Script Writer's revise mode?
-3. **Voices in the Director and Block Revision:** both files still carry `voices[]` / `voice_1`;
-   BLAXZY expects them empty. Confirm, or send versions without them.
+3. ~~**Voices in the Director and Block Revision.**~~ Answered by the 2026-11-19 drop: Director
+   v1.4 and Block Revision v1.5 have no `voices[]` and no `voice_` ids.
 4. **Asset tokens:** the Director uses `@char_1` tokens; BLAXZY uses real names ("Mara (2)") inside
    the app. Confirm the mapping is ours to do.
 5. **Registry language:** all module fields except `specialization_en` and `shared_core_en` are
@@ -121,3 +130,13 @@ Still open for the owner (Hamed):
 12. **Logical damis (question bank):** are owner files coming for extraction, gap detection,
     question selection, consistency check and brief building, or should we build the selector as
     code?
+13. **Storyboard stage:** the Storyboard file adds a wizard stage between Pre-production and
+    Production (style, script, pre-production, **storyboard**, production). Confirm it is a full
+    stage with its own approval gate, and whether a project can skip it.
+14. **Voice Box review catalog:** `voice_box_review_catalog_v1.json` is a reason-code menu with a
+    technical/preference step (RV01). BLAXZY decided on free-text change requests everywhere;
+    Voice Box would follow that too (catalog kept for its rules: cast-change confirmation, consent,
+    G07 mapping). Confirm.
+15. **Voice catalog and cloning:** Voice Box `cast` picks from the TTS engine's voice catalog and
+    can clone a consented sample. Which Higgsfield (ElevenLabs) endpoints and voice list do we
+    use, and is cloning allowed on our plan?

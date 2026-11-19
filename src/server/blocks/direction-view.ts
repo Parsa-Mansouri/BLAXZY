@@ -6,6 +6,7 @@
  * page. Pure.
  */
 import { z } from "zod";
+import { HEARD_AS } from "@/server/damis";
 
 const text = z.string().catch("");
 const num = z.number().catch(0);
@@ -31,7 +32,17 @@ const shotView = z.object({
   action: text,
   staging_change: text,
   cut_reason: text,
-  dialogue: z.array(z.object({ speaker_id: text, line: text, delivery: text })).catch([]),
+  dialogue: z
+    .array(
+      z.object({
+        speaker_id: text,
+        line: text,
+        delivery: text,
+        /** How the line is heard (Director v1.4); a line stored before it reads as on screen. */
+        heard_as: z.enum(HEARD_AS).catch("on_screen"),
+      }),
+    )
+    .catch([]),
 });
 
 /** What the last Block Revision of the block reported (stored under `direction.revision`). */
@@ -42,12 +53,15 @@ const revisionView = z.object({
     .object({
       split_required: z.boolean().catch(false),
       next_block_needs_update: z.boolean().catch(false),
+      /** Block Revision v1.5: the change moved a spoken line, so its voices need binding again. */
+      voice_rebind_required: z.boolean().catch(false),
       structural_suggestion: text.catch("none"),
       not_applied: z.array(text).catch([]),
     })
     .catch({
       split_required: false,
       next_block_needs_update: false,
+      voice_rebind_required: false,
       structural_suggestion: "none",
       not_applied: [],
     }),

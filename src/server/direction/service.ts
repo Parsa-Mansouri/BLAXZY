@@ -14,7 +14,7 @@ import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { replaceBlocks, setSectioningState, type ReplaceBlocksResult } from "@/server/blocks";
 import {
-  blockSchema,
+  storedBlockSchema,
   type DirectorBlock,
   type DirectorOutput,
   type DirectorPlanOutput,
@@ -336,7 +336,8 @@ export async function saveFull(input: {
   });
 }
 
-const writtenBlocks = z.array(blockSchema);
+/** Batch blocks read back from their rows; a batch written by Director v1.3 is upgraded. */
+const writtenBlocks = z.array(storedBlockSchema);
 
 /**
  * A batch's answer. Idempotent: a batch already done, or a direction no longer open, changes

@@ -1,5 +1,5 @@
 /**
- * The owner's `<verify>` list for Block Revision (v1.4), as pure functions over the model's answer
+ * The owner's `<verify>` list for Block Revision (v1.5), as pure functions over the model's answer
  * and the input. The layout, descriptor, word and budget checks are the Director's (`director/validate.ts`).
  *
  * Checked: duration, windows (2 to 6 s, continuous), budgets, dialogue unchanged, descriptors,
@@ -18,6 +18,8 @@ import {
   checkBudgets,
   checkDescriptors,
   checkForbiddenWords,
+  checkHeardOnly,
+  checkNoVoiceAssets,
   checkOnScreenStaging,
   checkPromptLayout,
   checkRationales,
@@ -42,7 +44,6 @@ export function bibleAssetIds(bible: ContinuityBible): Set<string> {
     ...bible.characters.map((c) => c.asset_id),
     ...bible.locations.map((l) => l.asset_id),
     ...bible.props.map((p) => p.asset_id),
-    ...bible.voices.map((v) => v.asset_id),
   ]);
 }
 
@@ -73,7 +74,7 @@ export function checkAssetChanges(
     ...(correction?.remove ?? []),
     ...(correction?.swap ?? []).map((s) => s.from),
   ]);
-  for (const kind of ["characters", "locations", "props", "voices"] as const) {
+  for (const kind of ["characters", "locations", "props", "heard_only"] as const) {
     const before = new Set(current.assets[kind]);
     const after = new Set(output.assets[kind]);
     for (const id of after) {
@@ -251,6 +252,33 @@ export function checkAttemptHistory(
   return errors;
 }
 
+/** The `<<<audio_N>>>` tokens of a prompt, in order. */
+export function audioTokens(text: string): string[] {
+  return [...text.matchAll(/<<<audio_[0-9]+>>>/g)].map((m) => m[0]);
+}
+
+/**
+ * v1.5: a block VOICE_BOX has bound keeps every `<<<audio_N>>>` token of the current prompt (as
+ * many times as it was there).
+ */
+export function checkAudioTokensKept(
+  output: Pick<BlockRevisionOutput, "block_id" | "prompt_text">,
+  current: { prompt_text: string },
+): string[] {
+  const count = (tokens: string[]) => {
+    const map = new Map<string, number>();
+    for (const t of tokens) map.set(t, (map.get(t) ?? 0) + 1);
+    return map;
+  };
+  const after = count(audioTokens(output.prompt_text));
+  return [...count(audioTokens(current.prompt_text))]
+    .filter(([token, n]) => (after.get(token) ?? 0) < n)
+    .map(
+      ([token]) =>
+        `${label(output)}: the voice token ${token} of the bound prompt is missing; keep every audio token word for word`,
+    );
+}
+
 export function checkSliderState(
   output: Pick<BlockRevisionOutput, "block_id" | "slider_state">,
 ): string[] {
@@ -292,6 +320,9 @@ export function checkBlockRevision(
   errors.push(...checkAssetChanges(output, current, input.requests.asset_correction));
   errors.push(...checkDescriptors(output, input.continuity_bible));
   errors.push(...checkOnScreenStaging(output));
+  errors.push(...checkHeardOnly(output));
+  errors.push(...checkNoVoiceAssets(output));
+  errors.push(...checkAudioTokensKept(output, current));
   errors.push(...checkPromptLayout(output));
   errors.push(...checkForbiddenWords(output));
   errors.push(...checkWordCount(output));

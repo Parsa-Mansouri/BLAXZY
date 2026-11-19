@@ -56,21 +56,21 @@
         "asset_id": "char_1",
         "name": "Nora",
         "descriptor": "A woman in her forties with short dark hair, wearing a grey wool cardigan",
-        "voice": "natural speaking voice",
+        "voice": "speaks English",
         "costume_versions": []
       },
       {
         "asset_id": "char_2",
         "name": "Lina",
         "descriptor": "A girl of fifteen with a long dark braid, wearing a green parka",
-        "voice": "natural speaking voice",
+        "voice": "speaks English",
         "costume_versions": []
       },
       {
         "asset_id": "char_3",
         "name": "Sam",
         "descriptor": "A boy of nine with curly brown hair, wearing a yellow sweater",
-        "voice": "natural speaking voice",
+        "voice": "",
         "costume_versions": []
       }
     ],
@@ -96,7 +96,6 @@
         "descriptor": "A long red wool scarf with fringed ends"
       }
     ],
-    "voices": [],
     "style_line": "Interpret realism as a coherent photographic and physical presentation of the approved world, not as a ban on speculative content."
   },
   "totals": {
@@ -264,7 +263,7 @@
         "characters": ["char_1", "char_2", "char_3"],
         "locations": ["loc_1"],
         "props": [],
-        "voices": []
+        "heard_only": []
       },
       "budgets": {
         "spoken_words": 4,
@@ -309,7 +308,8 @@
               "speaker_id": "char_1",
               "line": "Dinner is almost ready.",
               "delivery": "natural, quiet",
-              "language": "en"
+              "language": "en",
+              "heard_as": "on_screen"
             }
           ]
         },
@@ -487,7 +487,7 @@
         "characters": ["char_1", "char_2", "char_3"],
         "locations": ["loc_1"],
         "props": ["prop_1"],
-        "voices": []
+        "heard_only": []
       },
       "budgets": {
         "spoken_words": 4,
@@ -517,7 +517,8 @@
               "speaker_id": "char_2",
               "line": "I am not hungry.",
               "delivery": "natural, quiet",
-              "language": "en"
+              "language": "en",
+              "heard_as": "on_screen"
             }
           ]
         },
@@ -710,7 +711,7 @@
         "characters": ["char_1", "char_2", "char_3"],
         "locations": ["loc_2"],
         "props": [],
-        "voices": []
+        "heard_only": []
       },
       "budgets": {
         "spoken_words": 5,
@@ -755,7 +756,8 @@
               "speaker_id": "char_1",
               "line": "I was wrong to shout.",
               "delivery": "natural, quiet",
-              "language": "en"
+              "language": "en",
+              "heard_as": "on_screen"
             }
           ]
         },
@@ -933,7 +935,7 @@
         "characters": ["char_1", "char_2", "char_3"],
         "locations": ["loc_2"],
         "props": ["prop_2"],
-        "voices": []
+        "heard_only": []
       },
       "budgets": {
         "spoken_words": 5,
@@ -963,7 +965,8 @@
               "speaker_id": "char_2",
               "line": "I was wrong to leave.",
               "delivery": "natural, quiet",
-              "language": "en"
+              "language": "en",
+              "heard_as": "on_screen"
             }
           ]
         },

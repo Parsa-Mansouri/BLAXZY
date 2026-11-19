@@ -1,5 +1,5 @@
 /**
- * The owner's `<code_side_validator>` for the Director (v1.3), as pure functions: each takes the
+ * The owner's `<code_side_validator>` for the Director (v1.4), as pure functions: each takes the
  * data it needs and returns the error messages (empty = passes). `checkDirector` and
  * `checkDirectorPlan` compose them for `dami.check()`; Block Revision reuses the block-level ones.
  *
@@ -15,6 +15,7 @@ import {
   parseBlockRange,
   registryAssetIds,
   type AnyDirectorInput,
+  type AssetRegistry,
   type Block,
   type BlockMode,
   type ContinuityBible,
@@ -265,7 +266,7 @@ export function checkAssetIds(
     ...block.assets.characters,
     ...block.assets.locations,
     ...block.assets.props,
-    ...block.assets.voices,
+    ...block.assets.heard_only,
   ]) {
     if (!known.has(id) && !id.startsWith("new_")) {
       errors.push(
@@ -281,7 +282,6 @@ export function checkBibleAssetIds(bible: ContinuityBible, known: ReadonlySet<st
     ...bible.characters.map((c) => c.asset_id),
     ...bible.locations.map((l) => l.asset_id),
     ...bible.props.map((p) => p.asset_id),
-    ...bible.voices.map((v) => v.asset_id),
   ];
   return ids
     .filter((id) => !known.has(id) && !id.startsWith("new_"))
@@ -405,6 +405,104 @@ export function checkOnScreenStaging(
   return block.assets.characters
     .filter((id) => !have.has(id))
     .map((id) => `${label(block)}: "${id}" is on screen but has no entry in start_staging`);
+}
+
+/**
+ * v1.4: voices are not assets. No `voices` key anywhere and no `voice_` id (an exact id, or an
+ * `@voice_` token in a prompt). `check()` gets the parsed answer, whose unknown keys (a `voices`
+ * list) are already stripped and which structured output forbids anyway, so in practice this
+ * catches `voice_` ids; the key check covers any raw value passed in.
+ */
+export function checkNoVoiceAssets(value: unknown): string[] {
+  const errors = new Set<string>();
+  const walk = (node: unknown, path: string): void => {
+    if (typeof node === "string") {
+      // `voice_1`, `@voice_2`; not the heard_as value "voice_over".
+      if (/^@?voice_[0-9]+$/.test(node.trim()) || /@voice_[0-9]/.test(node)) {
+        errors.add(`${path}: voices are not assets; no "voice_" ids`);
+      }
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach((item, i) => walk(item, `${path}[${i}]`));
+      return;
+    }
+    if (typeof node !== "object" || node === null) return;
+    for (const [key, child] of Object.entries(node)) {
+      const at = path ? `${path}.${key}` : key;
+      if (key === "voices") errors.add(`${at}: voices are not assets; remove the voices list`);
+      else walk(child, at);
+    }
+  };
+  walk(value, "");
+  return [...errors];
+}
+
+/** `@char_1` in the text, not as the start of `@char_10`. */
+export function hasAssetToken(text: string, id: string): boolean {
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`@${escaped}(?![A-Za-z0-9_])`).test(text);
+}
+
+/**
+ * v1.4 heard-only speakers: a character in `assets.heard_only` is not also in
+ * `assets.characters`, has no `@id` token in prompt_text and no Staging entry; every dialogue
+ * speaker is in the block's characters or heard_only (or is `new_char_`); `heard_as: on_screen`
+ * only for a speaker in characters. A plan block (no shots, no prompt) gets the asset and Staging
+ * parts.
+ */
+export function checkHeardOnly(
+  block: Pick<PlanBlock, "block_id" | "assets" | "start_staging" | "end_staging"> & {
+    shots?: readonly Shot[];
+    prompt_text?: string;
+  },
+): string[] {
+  const errors: string[] = [];
+  const where = label(block);
+  const onScreen = new Set(block.assets.characters);
+  const heard = new Set(block.assets.heard_only);
+  const staged = new Set([...block.start_staging, ...block.end_staging].map((s) => s.character_id));
+  for (const id of heard) {
+    if (onScreen.has(id)) {
+      errors.push(`${where}: "${id}" is in both assets.characters and assets.heard_only`);
+    }
+    if (block.prompt_text !== undefined && hasAssetToken(block.prompt_text, id)) {
+      errors.push(`${where}: "${id}" is heard only and must have no "@${id}" token in prompt_text`);
+    }
+    if (staged.has(id)) {
+      errors.push(`${where}: "${id}" is heard only and must have no Staging entry`);
+    }
+  }
+  const reported = new Set<string>();
+  for (const shot of block.shots ?? []) {
+    for (const d of shot.dialogue) {
+      const id = d.speaker_id;
+      const known = onScreen.has(id) || heard.has(id) || id.startsWith("new_char_");
+      if (!known && !reported.has(id)) {
+        reported.add(id);
+        errors.push(
+          `${where}: dialogue speaker "${id}" is in neither assets.characters nor assets.heard_only`,
+        );
+      }
+      if (d.heard_as === "on_screen" && !onScreen.has(id)) {
+        errors.push(
+          `${where} window ${shot.window}: "${id}" is not in assets.characters, so heard_as cannot be "on_screen"`,
+        );
+      }
+    }
+  }
+  return errors;
+}
+
+/** v1.4: a character's voice note is empty when output_21 says the character does not speak. */
+export function checkVoiceNotes(bible: ContinuityBible, registry: AssetRegistry): string[] {
+  const silent = new Set(registry.characters.filter((c) => !c.speaks).map((c) => c.char_id));
+  return bible.characters
+    .filter((c) => silent.has(c.asset_id) && c.voice.trim() !== "")
+    .map(
+      (c) =>
+        `continuity_bible: "${c.asset_id}" does not speak (output_21 speaks false); its voice note must be empty`,
+    );
 }
 
 /** applied_rules ids exist in the Creative Bible. */
@@ -621,6 +719,7 @@ function blockChecks(
     ...checkForbiddenWords(block),
     ...checkWordCount(block),
     ...checkOnScreenStaging(block),
+    ...checkHeardOnly(block),
     ...checkRationales(block),
     ...checkAppliedRules(block, ctx.ruleIds),
     ...checkDialogueInScript(block, ctx.script),
@@ -654,6 +753,8 @@ export function checkDirector(output: DirectorOutput, input: AnyDirectorInput): 
     allowedDurations: input.platform_config.block_length_options_sec,
   };
   errors.push(...checkBibleAssetIds(output.continuity_bible, known));
+  errors.push(...checkVoiceNotes(output.continuity_bible, input.asset_registry));
+  errors.push(...checkNoVoiceAssets(output));
   for (const id of output.directors_notes.rules_used) {
     if (!ctx.ruleIds.has(id))
       errors.push(`directors_notes.rules_used "${id}" is not a rule of the Creative Bible`);
@@ -720,6 +821,8 @@ export function checkDirectorPlan(output: DirectorPlanOutput, input: AnyDirector
   const known = registryAssetIds(input.asset_registry);
   const ruleIds = bibleRuleIds(bible);
   errors.push(...checkBibleAssetIds(output.continuity_bible, known));
+  errors.push(...checkVoiceNotes(output.continuity_bible, input.asset_registry));
+  errors.push(...checkNoVoiceAssets(output));
   for (const id of output.directors_notes.rules_used) {
     if (!ruleIds.has(id))
       errors.push(`directors_notes.rules_used "${id}" is not a rule of the Creative Bible`);
@@ -743,6 +846,7 @@ export function checkDirectorPlan(output: DirectorPlanOutput, input: AnyDirector
       }
     }
     errors.push(...checkOnScreenStaging(block));
+    errors.push(...checkHeardOnly(block));
     errors.push(...checkAppliedRules(block, ruleIds));
     errors.push(...checkStagingContinuity(block, i > 0 ? (output.blocks[i - 1] ?? null) : null));
     if (block.camera_rationale.trim() === "")

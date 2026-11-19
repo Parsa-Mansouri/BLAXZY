@@ -1,0 +1,127 @@
+{
+  "schema_version": "1.1",
+  "dami": "voice_box",
+  "output": "output_23 / voice_cast",
+  "meta": {
+    "where": "Two review points in Production: (1) the cast voice preview of a character (mode 'cast'), (2) the voice plan of a block before generation (mode 'bind'). Clip-level sound problems after generation are reported through VIDEO_REVIEW / G07 and routed here only when the cause is the voice itself.",
+    "flow": "UI asks technical or preference (RV01), shows the reasons below, collects targets (tap a line or the character card) and optional text, then sends fix_requests with previous_output. Several requests can be sent in one round.",
+    "max_rounds_before_suggestion": 4,
+    "suggestion_after_max_rounds": "Offer: pick another voice from the full catalog list by ear, upload a recording instead, or let the video make this voice.",
+    "g07_map": { "identity": ["VCP01", "VCP02", "VCP03", "VCT02"], "performance": ["VBP01", "VBP02", "VBT02"], "content": ["VBT01"], "sync": ["VBT03", "VBT04"] }
+  },
+  "rules": {
+    "dialogue_text": "No code changes the words of a line. Requests about wording are sent to the script stage.",
+    "cast_change": "A change to an approved cast voice affects every block where the character speaks. The UI asks for confirmation and lists those blocks; already accepted clips are kept as versions and marked 'voice changed'.",
+    "real_people": "Requests to sound like a named real person are not applied; the dami offers an audible description instead.",
+    "consent": "Uploading another person's voice requires the VO06 confirmation before any dami round."
+  },
+  "technical": [
+    {
+      "code": "VCT01", "type": "technical", "mode": "cast",
+      "label": "Wrong language or accent", "label_fa": "زبان یا لهجه اشتباه است",
+      "handler": "dami", "target_count": 1, "needs_custom_text": false,
+      "instruction": "Re-pick from the catalog with dialogue_language and the stated accent as hard filters; update voice_design_prompt.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": "Tap the character."
+    },
+    {
+      "code": "VCT02", "type": "technical", "mode": "cast",
+      "label": "Wrong age or gender for this character", "label_fa": "سن یا جنسیت صدا با شخصیت نمی‌خواند",
+      "handler": "dami", "target_count": 1, "needs_custom_text": true,
+      "instruction": "Re-check age and gender facts in output_21, re-filter age_band, re-pick. custom_text may state the intended age.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": "Text box optional: 'How old should they sound?'"
+    },
+    {
+      "code": "VCT03", "type": "technical", "mode": "cast",
+      "label": "The voice has noise, echo or glitches", "label_fa": "صدا نویز، اکو یا خرابی دارد",
+      "handler": "backend_then_dami", "target_count": 1, "needs_custom_text": false,
+      "instruction": "Backend regenerates the preview once. If it repeats, the dami drops that voice_id from picks and adds clean-recording terms to voice_design_prompt.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": ""
+    },
+    {
+      "code": "VBT01", "type": "technical", "mode": "bind",
+      "label": "A line is missing or said wrong", "label_fa": "یک دیالوگ جا افتاده یا اشتباه گفته شده",
+      "handler": "backend_then_dami", "target_count": 1, "needs_custom_text": false,
+      "instruction": "Backend regenerates the TTS request for the line once. If the text in tts_requests differs from the line, the dami restores the exact line.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": "Tap the line."
+    },
+    {
+      "code": "VBT02", "type": "technical", "mode": "bind",
+      "label": "Mispronounced word or name", "label_fa": "کلمه یا اسمی اشتباه تلفظ شده",
+      "handler": "dami", "target_count": 1, "needs_custom_text": true,
+      "instruction": "Add a pronunciation hint for the word in delivery (and a phonetic respelling only in a separate pronunciation field if the engine supports it). Never change the line's text.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": "Text box: 'Which word, and how is it said?'"
+    },
+    {
+      "code": "VBT03", "type": "technical", "mode": "bind",
+      "label": "The line is too long for its moment", "label_fa": "دیالوگ برای این لحظه طولانی است",
+      "handler": "dami", "target_count": 1, "needs_custom_text": false,
+      "instruction": "Set retime_request 'faster' once. If the line still overruns, return a timing warning so the block goes to BLOCK_REVISION to widen the window.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": ""
+    },
+    {
+      "code": "VBT04", "type": "technical", "mode": "bind",
+      "label": "The voice starts at the wrong moment", "label_fa": "صدا در لحظهٔ اشتباه شروع می‌شود",
+      "handler": "dami", "target_count": 1, "needs_custom_text": true,
+      "instruction": "Move start_ms inside the line's window as described (earlier, later, after a named action). Keep the gap rules.",
+      "wizard_visible": false, "pro_visible": true, "ui_note": "Time picker on the preview."
+    },
+    {
+      "code": "VBT05", "type": "technical", "mode": "bind",
+      "label": "The wrong person is speaking", "label_fa": "شخص اشتباهی حرف می‌زند",
+      "handler": "dami", "target_count": 1, "needs_custom_text": false,
+      "instruction": "Check speaker_id against the block's dialogue and the scene's speakers; fix the voice_id and the speaker name next to the audio token.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": "Tap the line."
+    }
+  ],
+  "preference": [
+    {
+      "code": "VCP01", "type": "preference", "mode": "cast",
+      "label": "Deeper / higher", "label_fa": "بم‌تر / زیرتر",
+      "handler": "dami", "target_count": 1, "needs_custom_text": false, "options": ["deeper", "higher"],
+      "instruction": "Re-pick with the pitch moved one step in the chosen direction; keep age, accent and language.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": "Two buttons."
+    },
+    {
+      "code": "VCP02", "type": "preference", "mode": "cast",
+      "label": "Softer / rougher", "label_fa": "نرم‌تر / خش‌دارتر",
+      "handler": "dami", "target_count": 1, "needs_custom_text": false, "options": ["softer", "rougher"],
+      "instruction": "Re-pick with texture moved in the chosen direction; keep everything else.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": "Two buttons."
+    },
+    {
+      "code": "VCP03", "type": "preference", "mode": "cast",
+      "label": "Doesn't feel like this character", "label_fa": "به این شخصیت نمی‌خورد",
+      "handler": "dami", "target_count": 1, "needs_custom_text": true,
+      "instruction": "Rewrite the voice brief from custom_text plus stated facts; never contradict voice_hints from the script. Re-pick.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": "Text box: 'How should they sound?'"
+    },
+    {
+      "code": "VBP01", "type": "preference", "mode": "bind",
+      "label": "More emotion / calmer", "label_fa": "احساسی‌تر / آرام‌تر",
+      "handler": "dami", "target_count": 1, "needs_custom_text": false, "options": ["more", "calmer"],
+      "instruction": "Adjust delivery, tags (if supported) and stability for the targeted line only.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": "Tap the line, then a button."
+    },
+    {
+      "code": "VBP02", "type": "preference", "mode": "bind",
+      "label": "Faster / slower", "label_fa": "تندتر / آرام‌تر گفته شود",
+      "handler": "dami", "target_count": 1, "needs_custom_text": false, "options": ["faster", "slower"],
+      "instruction": "Set retime_request; slower only while the line still fits max_ms, otherwise return a timing warning.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": ""
+    },
+    {
+      "code": "VBP03", "type": "preference", "mode": "bind",
+      "label": "Change how this shot's voices are made", "label_fa": "روش ساخت صدای این نما را عوض کن",
+      "handler": "ui", "target_count": 0, "needs_custom_text": false,
+      "instruction": "Return to the three-option question for the block; bind runs again with the new choice.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": "Reopens the voice box."
+    },
+    {
+      "code": "VBP04", "type": "preference", "mode": "bind",
+      "label": "Something else", "label_fa": "مورد دیگر",
+      "handler": "dami", "target_count": 0, "needs_custom_text": true,
+      "instruction": "Apply custom_text within the rules (no wording changes, no real-person voices); explain anything not applied.",
+      "wizard_visible": true, "pro_visible": true, "ui_note": "Text box."
+    }
+  ]
+}

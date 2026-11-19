@@ -2,12 +2,13 @@
 
 The status of every dami (live, agent draft, retired) is in [TRACKER.md](TRACKER.md). New owner
 drops are unpacked into `inbox/<date>/` and removed from there once their files are copied into the
-dami's `source/` folder and wired in (the question bank stays until its plan starts).
+dami's `source/` folder and wired in (the question bank stays until its plan starts; the
+Storyboard and Voice Box files of 2026-11-19 stay until those damis are built).
 `reference/` holds owner files that are not code we run: `creativeDna.ts`, the owner's sample
 runner for Creative DNA (it reads files at module load, uses `any` and calls the SDK directly).
 
-Hamed's dami instructions (drops of 2026-11-12 and 2026-11-16) live next to the code that
-implements them. Each dami folder under `src/server/damis/` keeps the original files in `source/`
+Hamed's dami instructions (drops of 2026-11-12, 2026-11-16 and 2026-11-19) live next to the code
+that implements them. Each dami folder under `src/server/damis/` keeps the original files in `source/`
 and, for the older designers and detector, the owner's review catalog as `review-catalog.json`
 (the screens no longer show its options, see below; code still reads its rules and edit-eligible codes).
 
@@ -43,8 +44,8 @@ copied block still matches the source. To take a new version from Hamed:
 | `sheet_review_catalog_location_v1.json` | `sheet-generator-location/review-catalog.json` | Complaint menu (rules only) |
 | `sheet_generator_prop_v1.md` | `sheet-generator-prop/source/` | Job description |
 | `sheet_review_catalog_prop_v1.json` | `sheet-generator-prop/review-catalog.json` | Complaint menu (rules only) |
-| `dami_director.system.md` (v1.3) | `director/source/` | Job description (Director, output_22) |
-| `dami_block_revision.system.md` (v1.4) | `block-revision/source/` | Job description (Block Revision) |
+| `dami_director.system.md` (v1.4) | `director/source/` | Job description (Director, output_22) |
+| `dami_block_revision.system.md` (v1.5) | `block-revision/source/` | Job description (Block Revision) |
 | `dami_video_review.system.md` (v1.0) | `video-review/source/` | Job description (Video Review; its router is our code) |
 
 Retired owner files: Text Blocks, Prompt Sectioner and Take Fixer (replaced by the Director, by
@@ -67,8 +68,10 @@ history only.
 - **No generation cap, credits confirmed.** The owner's 6-generation limit per block is not
   applied. Every paid generation (looks, sheets, drafts, finals, fixes, retries, regenerations)
   asks the user to confirm the credits first; the Account page can turn the prompt off.
-- **Voices.** Asset Detector v2 does not treat voices as assets. Voices are chosen in Production,
-  per block; the `voices` arrays in the Director's and Block Revision's data are expected empty.
+- **Voices.** Asset Detector v2, Director v1.4 and Block Revision v1.5 do not treat voices as
+  assets: no `voices` arrays, and a speaker heard but not seen is in a block's
+  `assets.heard_only`. Voices are chosen in Production, per block (the owner's Voice Box, whose
+  file is in `inbox/2026-11-19/` and not wired yet).
 - **Project names.** `project-namer/` has no owner file; it is ours. Script Checker and Script
   Reviser also run on agent-written prompts until the owner sends files.
 - **Video Review.** The file's `<frame_extraction_spec>` and `<router>` are server code, not part

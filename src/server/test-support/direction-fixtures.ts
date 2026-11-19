@@ -48,7 +48,7 @@ export function testDirection(options: DirectionOptions = {}): DirectorBlock & {
     opening_frame: "Tomas at the foot of the stairs.",
     in_progress_at_end: options.inProgressAtEnd ?? "",
     continuity: { type: "first", note: "", use_last_frame_as_start: false },
-    assets: { characters: ["char_1"], locations: ["loc_1"], props: [], voices: [] },
+    assets: { characters: ["char_1"], locations: ["loc_1"], props: [], heard_only: [] },
     budgets: { spoken_words: 0, spoken_words_max: 0, events: 2, shot_budget: "standard" },
     camera_rationale: "A steady low angle.",
     editing_rationale: "One take.",

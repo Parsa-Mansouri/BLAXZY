@@ -1,9 +1,4 @@
-import {
-  director,
-  runDami,
-  type DirectorOutput,
-  type DirectorPlanOutput,
-} from "../../src/server/damis";
+import { director, runDami, type DirectorOutput } from "../../src/server/damis";
 import {
   failDirection,
   isDirectionOpen,
@@ -42,7 +37,8 @@ export const directionWriteHandler = defineHandler(directionWrite, async (payloa
     }
   };
   try {
-    const plan = direction.plan as DirectorPlanOutput | null;
+    // The stored plan as it is: the input schema upgrades a plan written by Director v1.3.
+    const plan: unknown = direction.plan;
     if (!plan) throw new ScriptInputError("The plan of this run is missing. Try again.");
     const { context: directorContext } = job;
     const run = await runDami(

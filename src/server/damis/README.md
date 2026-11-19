@@ -124,7 +124,7 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
 
 ## Director and Block Revision
 
-- `director/` is the owner's DIRECTOR v1.3 (output_22): the approved script becomes 15 or 30 second
+- `director/` is the owner's DIRECTOR v1.4 (output_22): the approved script becomes 15 or 30 second
   Seedance blocks with staging, a shot plan, rationales and a self-contained `prompt_text`. Two
   damis share one prompt, one `check()` and one input schema: `director` (modes `full` and
   `write_blocks`) and `director-plan` (mode `plan`: blocks without shots, `prompt_text` and
@@ -138,8 +138,13 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   QC items of stages text_block/video/all, open questions, validation status), not
   `renderCreativeDna`, which renders one consumer per call and drops the two preflight fields.
 - `<asset_registry>` is the subset of the Asset Detector's output_21 v2 the Director reads; its
-  zod lives in `director/schema.ts` (no import from the detector). Voices are not assets: the
-  continuity bible and blocks keep the owner's `voices` arrays, expected empty.
+  zod lives in `director/schema.ts` (no import from the detector). Voices are not assets (v1.4):
+  no `voices` arrays and no `voice_` ids; a character's `voice` note comes only from the
+  detector's voice facts (empty when the character never speaks); a speaker heard but not seen in
+  a block is in `assets.heard_only` (no `@token`, no Characters line, no Staging entry); every
+  dialogue line has `heard_as` (on_screen, off_screen, voice_over, phone_or_device, singing).
+  Blocks stored by v1.3 (with `voices`, without `heard_only` / `heard_as`) still parse through
+  the tolerant stored-row schemas.
 - `director/validate.ts` is the owner's `<code_side_validator>` as pure functions. Two
   deliberate differences: dialogue lines are removed before the forbidden-word regex (a script
   line may say "still"), and `script_coverage` is checked by quotes found in order within a small
@@ -178,7 +183,7 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   `block.revise` runs Block Revision (below); the draft block-reviser is retired.
 - Failures go through `handleFailure`; a blocked or invalid Director fails the direction and the
   sectioning state, and the user retries through the existing retry path.
-- `block-revision/` is BLOCK_REVISION v1.4 (`block-revision`): the next version of one block from
+- `block-revision/` is BLOCK_REVISION v1.5 (`block-revision`): the next version of one block from
   free-text requests only (asset correction, regenerate, director notes, confirmed review issues,
   timed notes, keep list, attempt history). The owner's review options and sliders are not part
   of the input by decision; the output keeps `slider_state` (always zeros). Sonnet by default;
@@ -188,7 +193,10 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   `revisionRequest`, asset correction, attempt history) and stores the revised block as the new
   version (`direction.revision` holds change log, fix map, flags). The input takes the Director's
   lenient bible shape so a project with the stub bible can be revised. Older blocks without
-  Director data cannot be revised.
+  Director data cannot be revised. v1.5 follows the Director's v1.4 assets (`heard_only`, no
+  voices), keeps any `<<<audio_N>>>` token in the prompt (checked in `validate.ts`; Voice Box,
+  not yet wired, will write them) and sets `flags.voice_rebind_required` when a change moves a
+  spoken line, changes its speaker or hides the speaker's face.
 - Sample mode (`sample/director.ts`, `sample/block-revision.ts`) is deterministic, passes the
   dami's own `check()`, and covers all three Director modes.
 
@@ -249,7 +257,7 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
 - Still on agent-written prompts (no owner file yet): `script-checker/` (reads the `script_checker`
   slice) and `script-reviser/`.
 - Retired and deleted: `prompt-sectioner` and `text-blocks` (the Director writes the final prompts;
-  binding is code), `block-reviser` (Block Revision v1.4), `take-fixer` (Video Review + the router
+  binding is code), `block-reviser` (Block Revision), `take-fixer` (Video Review + the router
   - Block Revision), `asset-prompt-writer` and `asset-fixer`, `sheet-generator` and `sheet-fixer`
     (the owner's designers and sheet makers). The Asset Detector v1 is replaced by v2.
 

@@ -24,6 +24,7 @@ import {
 import {
   checkAssetChanges,
   checkAttemptHistory,
+  checkAudioTokensKept,
   checkBlockRevision,
   checkDialogueUnchanged,
   checkFixMap,
@@ -315,6 +316,53 @@ describe("check(): dialogue, assets, hand-offs", () => {
         swap: [{ from: "prop_1", to: "prop_2" }],
       }),
     ).toEqual([]);
+  });
+
+  it("heard_only changes only through asset_correction; no voices, no voice_ ids (v1.5)", () => {
+    const r = out();
+    r.assets.heard_only = ["char_2"];
+    expect(checkBlockRevision(r, input).join("\n")).toContain('"char_2" was added without');
+    expect(checkBlockRevision(r, input).join("\n")).toContain(
+      "in both assets.characters and assets.heard_only",
+    );
+    const v = out();
+    v.assets.props = [...v.assets.props, "voice_1"];
+    expect(checkBlockRevision(v, input).join("\n")).toContain('no "voice_" ids');
+  });
+
+  it("every <<<audio_N>>> token of a bound block is kept (v1.5)", () => {
+    const bound = structuredClone(inputJson);
+    const block = bound.current_block as { prompt_text: string };
+    block.prompt_text = block.prompt_text.replace(
+      "END PROMPT",
+      "<<<audio_1>>> <<<audio_2>>>\nEND PROMPT",
+    );
+    const parsed = blockRevisionInputSchema.parse(bound);
+    const kept = sampleBlockRevision(bound);
+    expect(kept.prompt_text).toContain("<<<audio_2>>>");
+    expect(checkAudioTokensKept(kept, parsed.current_block)).toEqual([]);
+    expect(checkBlockRevision(kept, parsed)).toEqual([]);
+    const dropped = structuredClone(kept);
+    dropped.prompt_text = dropped.prompt_text.replace("<<<audio_2>>>", "");
+    expect(checkAudioTokensKept(dropped, parsed.current_block)).toEqual([
+      `block ${parsed.current_block.block_id}: the voice token <<<audio_2>>> of the bound prompt is missing; keep every audio token word for word`,
+    ]);
+    expect(checkAudioTokensKept(dropped, { prompt_text: "no tokens" })).toEqual([]);
+  });
+
+  it("a current block stored by Director v1.3 is upgraded on input", () => {
+    const legacy = structuredClone(inputJson) as unknown as {
+      current_block: {
+        assets: Record<string, unknown>;
+        shots: { dialogue: Record<string, unknown>[] }[];
+      };
+    };
+    delete legacy.current_block.assets.heard_only;
+    legacy.current_block.assets.voices = [];
+    for (const s of legacy.current_block.shots) for (const d of s.dialogue) delete d.heard_as;
+    const parsed = blockRevisionInputSchema.parse(legacy);
+    expect(parsed.current_block.assets.heard_only).toEqual([]);
+    expect(parsed.current_block).toEqual(input.current_block);
   });
 
   it("start_staging equals the previous end_staging for a continuous block", () => {

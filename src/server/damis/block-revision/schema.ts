@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { creativeBibleShape } from "../creative-dna/schema";
 import {
-  blockSchema,
   continuityBibleSchema,
   defaultPlatformConfig,
   platformConfigSchema,
   shotSchema,
   stagingSchema,
+  storedBlockSchema,
   CONTINUITY_TYPES,
   SHOT_BUDGETS,
 } from "../director/schema";
@@ -113,7 +113,8 @@ export const blockRevisionInputSchema = z
       previous: previousNeighbourSchema.nullable(),
       next: nextNeighbourSchema.nullable(),
     }),
-    current_block: blockSchema,
+    /** A stored block, so one written by Director v1.3 is upgraded to the current shape. */
+    current_block: storedBlockSchema,
     video_review: videoReviewSchema.optional(),
     timed_notes: z.array(timedNoteSchema).optional(),
     keep: z.array(keepItemSchema).optional(),
@@ -198,7 +199,7 @@ export const blockRevisionOutputSchema = z.object({
     characters: z.array(text),
     locations: z.array(text),
     props: z.array(text),
-    voices: z.array(text),
+    heard_only: z.array(text),
   }),
   budgets: z.object({
     spoken_words: z.number().int(),
@@ -234,6 +235,8 @@ export const blockRevisionOutputSchema = z.object({
   flags: z.object({
     split_required: z.boolean(),
     next_block_needs_update: z.boolean(),
+    /** v1.5: a spoken line moved, changed speaker or lost its visible face: bind voices again. */
+    voice_rebind_required: z.boolean(),
     structural_suggestion: z.enum(STRUCTURAL_SUGGESTIONS),
     not_applied: z.array(text),
     input_integrity: z.array(text),

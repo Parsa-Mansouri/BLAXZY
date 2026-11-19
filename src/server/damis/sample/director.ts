@@ -210,9 +210,14 @@ function newWorld(registry: AssetRegistry, scenes: Scene[]): World {
             id: c.char_id,
             name: (c.name_latin || c.name).trim(),
             descriptor: characterDescriptor(c),
-            voice:
-              clean((c.voice_hints ?? []).map((h) => h.value).join(", ")) ||
-              "natural speaking voice",
+            // v1.4: only output_21's audible facts, and only for a character who speaks.
+            voice: c.speaks
+              ? clean(
+                  [...(c.voice_delivery ?? []), ...(c.voice_hints ?? []).map((h) => h.value)].join(
+                    ", ",
+                  ),
+                )
+              : "",
           });
         }
       }
@@ -233,7 +238,8 @@ function newWorld(registry: AssetRegistry, scenes: Scene[]): World {
         id,
         name: titleCase(speaker),
         descriptor: `${titleCase(speaker)}, a person whose look the script does not describe`,
-        voice: "natural speaking voice",
+        // Not in output_21, so no audible facts to build a voice note from.
+        voice: "",
       });
       inScene.push(id);
       world.warnings.push({
@@ -571,7 +577,7 @@ function planBlocks(
           characters: sceneCast.map((c) => c.id),
           locations: place ? [place.id] : [],
           props: props.map((p) => p.id),
-          voices: [],
+          heard_only: [],
         },
         budgets: {
           spoken_words: words,
@@ -733,6 +739,7 @@ function composeBlock(
             line: run.text,
             delivery: run.delivery,
             language: lang,
+            heard_as: who && plan.assets.characters.includes(who.id) ? "on_screen" : "off_screen",
           });
           action.push(
             `${(who?.name ?? unit.speaker ?? "").toUpperCase()}${spoken}, ${run.delivery}: "${run.text}"`,
@@ -829,7 +836,6 @@ function blocked(input: AnyDirectorInput): DirectorOutput {
     characters: [],
     locations: [],
     props: [],
-    voices: [],
     style_line: "",
   };
   return {
@@ -990,7 +996,6 @@ function headerOf(
       props: [...world.props.values()]
         .filter((p) => planned.some((b) => b.plan.assets.props.includes(p.id)))
         .map((p) => ({ asset_id: p.id, descriptor: p.descriptor })),
-      voices: [],
       style_line: truncate(style, 140),
     },
     totals: {

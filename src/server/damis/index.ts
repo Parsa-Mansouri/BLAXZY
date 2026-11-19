@@ -408,7 +408,7 @@ export {
   type ProjectNamerOutput,
 } from "./project-namer/schema";
 
-// Director (owner v1.3, wired: `script.direct`) and Block Revision (owner v1.4, wired: `block.revise`)
+// Director (owner v1.4, wired: `script.direct`) and Block Revision (owner v1.5, wired: `block.revise`)
 export { director, directorPlan, DIRECTOR_VERSION, DIRECTOR_OWNER_VERSION } from "./director/dami";
 export {
   assetRegistrySchema,
@@ -426,6 +426,12 @@ export {
   registryAssetIds,
   shotSchema,
   stagingSchema,
+  storedBlockSchema,
+  storedContinuityBibleSchema,
+  storedDirectorPlanOutputSchema,
+  storedPlanBlockSchema,
+  upgradeStoredBlock,
+  HEARD_AS,
   BLOCK_MODES,
   DIRECTOR_MODES,
   type AssetRegistry,
@@ -438,6 +444,7 @@ export {
   type DirectorOutput,
   type DirectorPlanInput,
   type DirectorPlanOutput,
+  type HeardAs,
   type PlanBlock,
   type Shot,
   type Staging,

@@ -154,6 +154,25 @@ export const stagingSchema = z.object({
 });
 export type Staging = z.output<typeof stagingSchema>;
 
+/** How a dialogue line is heard (v1.4); only a speaker in frame is `on_screen`. */
+export const HEARD_AS = [
+  "on_screen",
+  "off_screen",
+  "voice_over",
+  "phone_or_device",
+  "singing",
+] as const;
+export type HeardAs = (typeof HEARD_AS)[number];
+
+export const dialogueSchema = z.object({
+  speaker_id: text,
+  line: text,
+  delivery: text,
+  language: text,
+  heard_as: z.enum(HEARD_AS),
+});
+export type Dialogue = z.output<typeof dialogueSchema>;
+
 export const shotSchema = z.object({
   window: text,
   shot_number: z.number().int(),
@@ -167,7 +186,7 @@ export const shotSchema = z.object({
   default_avoided: text,
   default_kept_reason: text,
   cut_reason: text,
-  dialogue: z.array(z.object({ speaker_id: text, line: text, delivery: text, language: text })),
+  dialogue: z.array(dialogueSchema),
 });
 export type Shot = z.output<typeof shotSchema>;
 
@@ -199,7 +218,8 @@ const planBlockFields = {
     characters: z.array(text),
     locations: z.array(text),
     props: z.array(text),
-    voices: z.array(text),
+    /** v1.4: characters heard but not seen in this block (no @token, no Staging entry). */
+    heard_only: z.array(text),
   }),
   budgets: z.object({
     spoken_words: z.number().int(),
@@ -251,8 +271,6 @@ export const continuityBibleSchema = z.object({
   ),
   locations: z.array(z.object({ asset_id: text, descriptor: text, landmarks: z.array(text) })),
   props: z.array(z.object({ asset_id: text, descriptor: text })),
-  // v1.3 still carries voices; Asset Detector v2 has no voice assets, so expect an empty list.
-  voices: z.array(z.object({ asset_id: text, character_id: text, note: text })),
   style_line: text,
 });
 export type ContinuityBible = z.output<typeof continuityBibleSchema>;
@@ -367,6 +385,68 @@ export function isBlocked(output: { status: string }): boolean {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Stored rows (read back from jsonb)                                          */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * The schemas above are what the model must answer (strict, every key required). Rows written by
+ * an older Director (owner v1.3) are read back with the `stored*` schemas below: they upgrade the
+ * raw JSON to the current shape first, then parse it with the strict schema, so every reader gets
+ * the current type. v1.3 differences: block `assets.voices` (voice_ ids, dropped) instead of
+ * `assets.heard_only` (becomes []), no `heard_as` on dialogue (on_screen for a speaker listed in
+ * the block's characters, off_screen otherwise), and a bible `voices[]` (dropped: z.object strips
+ * unknown keys).
+ */
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** A stored block (written or planned) in the current shape; anything else is left as it is. */
+export function upgradeStoredBlock(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+  const block: Record<string, unknown> = { ...raw };
+  const characters: unknown[] = [];
+  if (isRecord(raw.assets)) {
+    const assets: Record<string, unknown> = { ...raw.assets };
+    delete assets.voices;
+    if (Array.isArray(assets.characters)) characters.push(...assets.characters);
+    block.assets = { ...assets, heard_only: assets.heard_only ?? [] };
+  }
+  if (Array.isArray(raw.shots)) {
+    block.shots = raw.shots.map((shot) => {
+      if (!isRecord(shot) || !Array.isArray(shot.dialogue)) return shot;
+      return {
+        ...shot,
+        dialogue: shot.dialogue.map((d) =>
+          isRecord(d) && d.heard_as === undefined
+            ? { ...d, heard_as: characters.includes(d.speaker_id) ? "on_screen" : "off_screen" }
+            : d,
+        ),
+      };
+    });
+  }
+  return block;
+}
+
+/** A stored answer (header + blocks), with every block upgraded. */
+function upgradeStoredOutput(raw: unknown): unknown {
+  if (!isRecord(raw) || !Array.isArray(raw.blocks)) return raw;
+  return { ...raw, blocks: raw.blocks.map(upgradeStoredBlock) };
+}
+
+/** A written block read from a stored row (`prompt_block.direction`, `direction_batch.blocks`). */
+export const storedBlockSchema = z.preprocess(upgradeStoredBlock, blockSchema);
+/** A plan block read from a stored row. */
+export const storedPlanBlockSchema = z.preprocess(upgradeStoredBlock, planBlockSchema);
+/** A stored continuity bible: the strict schema already drops the legacy `voices[]`. */
+export const storedContinuityBibleSchema = continuityBibleSchema;
+/** A stored plan (`direction.plan`), fed back to `write_blocks`. */
+export const storedDirectorPlanOutputSchema = z.preprocess(
+  upgradeStoredOutput,
+  directorPlanOutputSchema,
+);
+
+/* -------------------------------------------------------------------------- */
 /* Input schemas                                                               */
 /* -------------------------------------------------------------------------- */
 
@@ -380,8 +460,8 @@ const inputShape = {
   creative_bible: creativeBibleShape,
   asset_registry: assetRegistrySchema,
   script: z.string().trim().min(1).max(200_000),
-  /** write_blocks only: the saved `plan` output, used verbatim. */
-  plan: directorPlanOutputSchema.optional(),
+  /** write_blocks only: the saved `plan` output, used verbatim (a v1.3 plan is upgraded). */
+  plan: storedDirectorPlanOutputSchema.optional(),
   /** write_blocks only, `"9-16"`: inclusive block numbers. */
   block_range: z.string().trim().optional(),
 };

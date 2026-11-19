@@ -18,8 +18,12 @@ import {
   directorOutputSchema,
   directorPlanInputSchema,
   directorPlanOutputSchema,
+  blockSchema,
   isBlocked,
   parseBlockRange,
+  storedBlockSchema,
+  storedContinuityBibleSchema,
+  storedDirectorPlanOutputSchema,
   type DirectorOutput,
   type DirectorPlanOutput,
 } from "./schema";
@@ -100,7 +104,48 @@ describe("director schema", () => {
     expect(input.platform_config.block_length_options_sec).toEqual([15, 30]);
     expect(input.platform_config.max_events_per_block).toEqual({ "15": 2, "30": 4 });
     expect(output.blocks).toHaveLength(4);
-    expect(output.continuity_bible.voices).toEqual([]);
+    expect(output.continuity_bible).not.toHaveProperty("voices");
+  });
+
+  it("reads a block and a plan stored by Director v1.3 (voices, no heard_only or heard_as)", () => {
+    const legacy = structuredClone(outputJson) as unknown as {
+      continuity_bible: Record<string, unknown>;
+      blocks: {
+        assets: Record<string, unknown>;
+        shots: { dialogue: Record<string, unknown>[] }[];
+      }[];
+    };
+    legacy.continuity_bible.voices = [{ asset_id: "voice_1", character_id: "char_1", note: "" }];
+    for (const b of legacy.blocks) {
+      delete b.assets.heard_only;
+      b.assets.voices = ["voice_1"];
+      for (const s of b.shots) for (const d of s.dialogue) delete d.heard_as;
+    }
+    const first = legacy.blocks[0];
+    expect(blockSchema.safeParse(first).success).toBe(false);
+    const block = storedBlockSchema.parse(first);
+    expect(block.assets.heard_only).toEqual([]);
+    expect(block.assets).not.toHaveProperty("voices");
+    expect(block.shots.flatMap((s) => s.dialogue).map((d) => d.heard_as)).toContain("on_screen");
+    // A speaker not in the block's characters was heard, not seen.
+    const offFrame = structuredClone(first);
+    offFrame.assets.characters = [];
+    const heard = storedBlockSchema.parse(offFrame).shots.flatMap((s) => s.dialogue);
+    expect(heard.every((d) => d.heard_as === "off_screen")).toBe(true);
+    const bible = storedContinuityBibleSchema.parse(legacy.continuity_bible);
+    expect(bible).not.toHaveProperty("voices");
+    const plan = storedDirectorPlanOutputSchema.parse(legacy);
+    expect(plan.blocks.every((b) => b.assets.heard_only.length === 0)).toBe(true);
+    // A stored v1.3 plan is accepted as write_blocks input.
+    const write = directorInputSchema.safeParse({
+      ...inputJson,
+      mode: "write_blocks",
+      plan: legacy,
+      block_range: "1-2",
+    });
+    expect(write.success).toBe(true);
+    // A current block passes through unchanged.
+    expect(storedBlockSchema.parse(outputJson.blocks[0])).toEqual(output.blocks[0]);
   });
 
   it("write_blocks needs a plan and a block_range; plan mode has its own input", () => {
@@ -316,7 +361,7 @@ describe("director run", () => {
     expect(result.output).toEqual(output);
     expect(client.requests[0]?.model).toBe(CLAUDE_MODELS.opus);
     expect(client.methods[0]).toBe("stream");
-    expect(director.version).toBe("1.0.0");
+    expect(director.version).toBe("1.1.0");
   });
 
   it("sends the failed checks back once, then accepts the corrected answer", async () => {

@@ -64,7 +64,7 @@ describe("directedBlocks", () => {
         characters: ["char_1", "char_2", "char_3"],
         locations: ["loc_1"],
         props: [],
-        voices: [],
+        heard_only: [],
       },
     };
     const [stored] = directedBlocks({

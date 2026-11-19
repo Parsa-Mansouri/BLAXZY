@@ -72,6 +72,19 @@ export function framing(shot: ShotView): string {
     .join(" · ");
 }
 
+const HEARD_AS: Readonly<Record<ShotView["dialogue"][number]["heard_as"], string>> = {
+  on_screen: "",
+  off_screen: "off screen",
+  voice_over: "voice-over",
+  phone_or_device: "on the phone",
+  singing: "singing",
+};
+
+/** How a line is heard, in plain words; "" for a speaker on screen (the usual case). */
+export function heardAsLabel(heardAs: ShotView["dialogue"][number]["heard_as"]): string {
+  return HEARD_AS[heardAs];
+}
+
 const CONTINUITY: Readonly<Record<string, string>> = {
   first: "Opens the film",
   continuous: "Carries on from the shot before",

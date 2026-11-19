@@ -15,7 +15,7 @@ import { and, asc, desc, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { z } from "zod";
 import { getNextCurrentBlock, getPreviousCurrentBlock, type PromptBlock } from "@/server/blocks";
 import {
-  continuityBibleSchema,
+  storedContinuityBibleSchema,
   formatAssetRef,
   tagAssetIds,
   type BlockRevisionInput,
@@ -160,7 +160,7 @@ export async function buildBlockRevisionInput(job: PreparationJob): Promise<Revi
   const run = await getFinishedDirection(block.projectId, block.scriptVersionId);
   const context = run ? directionContextSchema.safeParse(run.context) : null;
   const header = run
-    ? z.object({ continuity_bible: continuityBibleSchema }).safeParse(run.header)
+    ? z.object({ continuity_bible: storedContinuityBibleSchema }).safeParse(run.header)
     : null;
   if (!context?.success || !header?.success) {
     throw new ProductionInputError(

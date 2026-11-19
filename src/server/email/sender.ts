@@ -5,11 +5,16 @@ import { getEnv } from "@/server/env";
 export type EmailMessage = {
   to: string;
   subject: string;
-  /** Plain-text body. */
+  /** Plain-text body; always sent, and the fallback for clients that do not show HTML. */
   text: string;
   /**
+   * Optional HTML version of the same mail. The SMTP transport sends it next to `text` as a
+   * multipart/alternative message; it must hold no unescaped user-supplied text.
+   */
+  html?: string;
+  /**
    * The one link the recipient has to follow (verification, password reset). Only the console
-   * transport (development) prints it; the SMTP transport sends it inside `text` and never logs it.
+   * transport (development) prints it; the SMTP transport sends it inside `text` (and `html`) and never logs it.
    */
   actionUrl?: string;
 };
@@ -126,6 +131,7 @@ export class SmtpEmailSender implements EmailSender {
       to: message.to,
       subject: message.subject,
       text: message.text,
+      ...(message.html ? { html: message.html } : {}),
     });
   }
 

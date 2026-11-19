@@ -1,10 +1,11 @@
+import { renderEmail } from "./layout";
 import type { EmailMessage } from "./sender";
 
 /**
  * `name` is accepted but deliberately never used: anyone can sign up with someone else's address
- * and any display name, and the mail goes to that address, so a name in the text would let a
- * stranger put words in our mouth ("Your account is locked, go to ..."). Mail is plain text with
- * a neutral greeting.
+ * and any display name, and the mail goes to that address, so a name in the mail would let a
+ * stranger put words in our mouth ("Your account is locked, go to ..."). No user-supplied text goes
+ * into either part (plain text with a neutral greeting, and the HTML version).
  */
 type Recipient = { email: string; name?: string | null };
 
@@ -29,6 +30,16 @@ export function verificationEmail(to: Recipient, url: string): EmailMessage {
       "",
       "BLAXZY",
     ].join("\n"),
+    html: renderEmail({
+      preheader: "Confirm your email to finish signing up for BLAXZY.",
+      heading: "Confirm your email",
+      paragraphs: [
+        "Someone used this email address to sign up for BLAXZY. Confirm that it is yours to finish setting up the account.",
+      ],
+      action: { label: "Confirm email", url },
+      footnote:
+        "The link works once and expires in 1 hour. If this was not you, you can ignore this email.",
+    }),
   };
 }
 
@@ -52,6 +63,17 @@ export function passwordResetEmail(to: Recipient, url: string): EmailMessage {
       "",
       "BLAXZY",
     ].join("\n"),
+    html: renderEmail({
+      preheader: "Choose a new password for your BLAXZY account.",
+      heading: "Reset your password",
+      paragraphs: [
+        "We received a request to reset the password for the BLAXZY account with this email address.",
+        "Choosing a new password signs you out of BLAXZY on every device.",
+      ],
+      action: { label: "Choose a new password", url },
+      footnote:
+        "The link works once and expires in 1 hour. If you did not ask for this, you can ignore this email; your password stays the same.",
+    }),
   };
 }
 
@@ -83,5 +105,20 @@ export function existingAccountEmail(
       "",
       "BLAXZY",
     ].join("\n"),
+    html: renderEmail({
+      preheader: "This email address already has a BLAXZY account.",
+      heading: "You already have an account",
+      paragraphs: [
+        "Someone tried to sign up for BLAXZY with this email address, but it already has an account. To use it, sign in.",
+      ],
+      action: { label: "Sign in", url: links.signInUrl },
+      secondary: {
+        lead: "Forgot your password?",
+        label: "Choose a new one",
+        url: links.resetPasswordUrl,
+      },
+      footnote:
+        "If this was not you, you can ignore this email; nothing has changed on your account.",
+    }),
   };
 }

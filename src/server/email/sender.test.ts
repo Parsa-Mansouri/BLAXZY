@@ -74,6 +74,19 @@ describe("SmtpEmailSender", () => {
     });
   });
 
+  it("sends the HTML part next to the plain text when the message has one", async () => {
+    const { sender, sendMail } = jsonSender();
+    const html = "<!DOCTYPE html><p>body</p>";
+    await sender.send({ ...message, html });
+    expect(sendMail).toHaveBeenCalledWith({
+      from: settings.from,
+      to: message.to,
+      subject: message.subject,
+      text: message.text,
+      html,
+    });
+  });
+
   it("rejects CR/LF in the recipient, subject and sender before sending", async () => {
     const { sender, sendMail } = jsonSender();
     await expect(

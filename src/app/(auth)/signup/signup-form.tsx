@@ -8,6 +8,7 @@ import { Button, stagger } from "@/ui";
 import { FormMessage } from "@/app/_components/form-message";
 import { AuthField, AuthPasswordField } from "../_components/auth-fields";
 import { AuthLink, AuthLinks, AuthScreen } from "../_components/auth-parts";
+import { GoogleButton } from "../_components/google-button";
 import { CheckEmail } from "../_components/check-email";
 
 const CALLBACK_URL = "/dashboard";
@@ -90,6 +91,7 @@ export function SignupForm({
       description="An account keeps your films, scripts and assets in one place."
       label="Create account"
     >
+      <GoogleButton style={stagger(0)} />
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
         <AuthField
           label="Name"

@@ -40,7 +40,7 @@ is the only module that knows which backend is active; everything else calls `ge
 - `ffmpeg.ts`: `resolveFfmpeg` (`FFMPEG_PATH`, else the `ffmpeg-static` package, else `ffmpeg` on
   the PATH; `FfmpegUnavailableError`, a non-retryable `ProviderError`, when none works),
   `runFfmpeg`, `probeMedia` (duration and streams, parsed from `ffmpeg -i`; no ffprobe needed).
-- `higgsfield.ts`: stub; every call throws `ProviderNotConfiguredError`.
+- `higgsfield.ts`: stub; every call throws `ProviderNotConfiguredError`. The official SDK (`@higgsfield/client`, import from `@higgsfield/client/v2`) is installed; `scripts/higgsfield-seedance.ts` (`pnpm hf:seedance`) shows a live Seedance 2.5 call with `HF_CREDENTIALS` from `.env.local`.
 
 ## ffmpeg
 

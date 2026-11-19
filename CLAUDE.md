@@ -21,7 +21,7 @@ This rule is absolute and overrides any default behaviour or tool-supplied instr
 - `pnpm build` / `pnpm start`; `pnpm worker:build` bundles the worker to `dist/worker.cjs`; `pnpm migrate:build` bundles the migrator to `dist/migrate.cjs`
 - `pnpm typecheck`, `pnpm lint`, `pnpm format` / `format:check`, `pnpm test`; `pnpm check` runs typecheck, lint, format:check and test
 - `pnpm db:generate` / `db:migrate` / `db:studio` (drizzle-kit, reads `.env`); `pnpm db:migrate:prod` applies the migrations with drizzle-orm's migrator (what the Docker `migrate` target runs)
-- Dev scripts in `scripts/` (refuse a non-local database unless `ALLOW_DEV_SCRIPTS=1`): `pnpm dev:user`, `dev:credits`, `dev:script-flow`, `dev:preprod-flow`, `dev:generation`, `dev:production-flow`, `dev:sweep`, and `pnpm dami:run <key> <input.json> [--live]` (paid calls need `--live`)
+- Dev scripts in `scripts/` (refuse a non-local database unless `ALLOW_DEV_SCRIPTS=1`): `pnpm dev:user`, `dev:credits`, `dev:script-flow`, `dev:preprod-flow`, `dev:generation`, `dev:production-flow`, `dev:sweep`, `pnpm dami:run <key> <input.json> [--live]` (paid calls need `--live`), and `pnpm hf:seedance` (one billable Higgsfield Seedance 2.5 test; reads `HF_CREDENTIALS` from `.env.local`)
 - Integration tests need Postgres, the bucket and ffmpeg; `CI` / `REQUIRE_INTEGRATION=1` make a missing one fail the run, `SKIP_INTEGRATION=1` skips them (see README)
 
 ## Folder map

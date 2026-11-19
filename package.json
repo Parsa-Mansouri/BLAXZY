@@ -31,13 +31,15 @@
     "dev:generation": "tsx scripts/dev-generation.ts",
     "dev:preprod-flow": "tsx scripts/dev-preprod-flow.ts",
     "dev:sweep": "tsx scripts/dev-sweep.ts",
-    "dev:production-flow": "tsx scripts/dev-production-flow.ts"
+    "dev:production-flow": "tsx scripts/dev-production-flow.ts",
+    "hf:seedance": "tsx --env-file=.env.local scripts/higgsfield-seedance.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.7.0",
     "@aws-sdk/client-s3": "^3.1165.0",
     "@aws-sdk/s3-request-presigner": "^3.1165.0",
     "@base-ui/react": "^1.9.0",
+    "@higgsfield/client": "^0.2.6",
     "better-auth": "^1.7.19",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.4",

@@ -126,6 +126,11 @@ const baseSchema = z.object({
   WORKER_SHUTDOWN_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(25),
   /** Image and video generation provider. `sample` renders placeholder images locally (no cost). */
   GENERATION_PROVIDER: z.enum(["sample", "higgsfield"]).default("sample"),
+  /** Higgsfield API key as `KEY_ID:KEY_SECRET`; server-side only (keep it in `.env.local`). */
+  HF_CREDENTIALS: z
+    .string()
+    .regex(/^[^:\s]+:\S+$/, "must be KEY_ID:KEY_SECRET")
+    .optional(),
   /** How long a sample-provider job takes to finish, so the flow feels real (`0` in tests). */
   GENERATION_SAMPLE_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(3000),
   /** Generations one user may have running at once; extra jobs wait (rescheduled, not failed). */

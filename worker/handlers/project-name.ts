@@ -6,7 +6,7 @@ import { classifyDamiFailure, handleFailure, type FailureCopy } from "./failure"
 
 /** A name that could not be made is not shown to anyone: the project keeps "Untitled project". */
 const NAME_FAILURE_COPY: FailureCopy = {
-  userErrors: [],
+  userErrors: false,
   credits: false,
   refusal: "Claude declined to name the project.",
   truncated: "The project name came out too long to finish.",

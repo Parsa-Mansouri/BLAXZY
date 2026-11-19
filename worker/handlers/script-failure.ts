@@ -1,9 +1,8 @@
-import { ScriptInputError } from "../../src/server/script";
 import { classifyDamiFailure, type FailureCopy, type FailureDecision } from "./failure";
 
 /** The script area's wording. */
 export const SCRIPT_FAILURE_COPY: FailureCopy = {
-  userErrors: [ScriptInputError],
+  userErrors: true,
   credits: false,
   refusal:
     "Claude declined this request. Rephrase the brief or the script so it stays clear of sensitive content, then try again.",

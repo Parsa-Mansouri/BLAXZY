@@ -2,7 +2,7 @@ import { classifyDamiFailure, type FailureCopy, type FailureDecision } from "./f
 
 /** The Creative Bible's wording. */
 export const CREATIVE_FAILURE_COPY: FailureCopy = {
-  userErrors: [],
+  userErrors: false,
   credits: false,
   refusal:
     "Claude declined to prepare the creative rules for this project. Change the genre or style and try again.",

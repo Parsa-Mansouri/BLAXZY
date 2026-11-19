@@ -1,5 +1,8 @@
+import type { UserFacing } from "@/server/errors";
+
 /** The user's balance does not cover the price. `message` is safe to show. */
-export class InsufficientCreditsError extends Error {
+export class InsufficientCreditsError extends Error implements UserFacing {
+  readonly userFacing = true as const;
   constructor(
     readonly balance: number,
     readonly needed: number,
@@ -13,7 +16,8 @@ export class InsufficientCreditsError extends Error {
 }
 
 /** Invalid billing input or an impossible ledger operation. `message` is safe to show. */
-export class BillingInputError extends Error {
+export class BillingInputError extends Error implements UserFacing {
+  readonly userFacing = true as const;
   constructor(message: string) {
     super(message);
     this.name = "BillingInputError";

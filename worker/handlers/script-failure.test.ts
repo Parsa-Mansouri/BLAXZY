@@ -15,7 +15,8 @@ import { JobShutdownError, scriptWrite } from "../../src/server/jobs";
 import { ProductionInputError } from "../../src/server/production";
 import { ScriptInputError } from "../../src/server/script";
 import { classifyAssetFailure } from "./asset-failure";
-import { creditsMessage, handleFailure, TOOK_TOO_LONG } from "./failure";
+import { CREATIVE_FAILURE_COPY } from "./creative-failure";
+import { classifyDamiFailure, creditsMessage, handleFailure, TOOK_TOO_LONG } from "./failure";
 import { classifyProductionFailure } from "./production-failure";
 import { classifyFailure } from "./script-failure";
 
@@ -118,6 +119,31 @@ describe("classifyFailure", () => {
     expect(classifyProductionFailure(new ProductionInputError("No style.")).message).toBe(
       "No style.",
     );
+  });
+});
+
+describe("user-facing errors", () => {
+  /** Any class marked `userFacing` counts: there is no list of classes to keep in step. */
+  class SomeNewInputError extends Error {
+    readonly userFacing = true as const;
+  }
+
+  it("shows any error marked userFacing in the areas that show input errors", () => {
+    for (const classify of [classifyFailure, classifyAssetFailure, classifyProductionFailure]) {
+      expect(classify(new SomeNewInputError("Fix this."))).toMatchObject({
+        message: "Fix this.",
+        retryable: false,
+      });
+    }
+  });
+
+  it("falls back (and retries) in an area that shows none", () => {
+    expect(
+      classifyDamiFailure(new SomeNewInputError("Fix this."), CREATIVE_FAILURE_COPY),
+    ).toMatchObject({
+      message: CREATIVE_FAILURE_COPY.fallback,
+      retryable: true,
+    });
   });
 });
 

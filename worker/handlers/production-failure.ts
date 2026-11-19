@@ -1,10 +1,8 @@
-import { GenerationInputError } from "../../src/server/generation";
-import { ProductionInputError } from "../../src/server/production";
 import { classifyDamiFailure, type FailureCopy, type FailureDecision } from "./failure";
 
 /** The production area's wording. */
 export const PRODUCTION_FAILURE_COPY: FailureCopy = {
-  userErrors: [ProductionInputError, GenerationInputError],
+  userErrors: true,
   credits: true,
   refusal:
     "Claude declined to write this shot's prompt. Change the shot (or its review), then try again.",

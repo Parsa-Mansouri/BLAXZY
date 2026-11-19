@@ -1,10 +1,8 @@
-import { AssetInputError } from "../../src/server/assets";
-import { GenerationInputError } from "../../src/server/generation";
 import { classifyDamiFailure, type FailureCopy, type FailureDecision } from "./failure";
 
 /** The pre-production area's wording. */
 export const ASSET_FAILURE_COPY: FailureCopy = {
-  userErrors: [AssetInputError, GenerationInputError],
+  userErrors: true,
   credits: true,
   refusal:
     "Claude declined to write this image prompt. Describe the asset differently, then try again.",

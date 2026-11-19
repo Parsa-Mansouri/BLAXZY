@@ -5,8 +5,23 @@
  */
 import type { z } from "zod";
 
+/**
+ * Marks an error whose `message` is written for the user: server actions show it as is and jobs
+ * record it without retrying (`isUserFacing`). Each user-facing class sets `userFacing = true`,
+ * so there is no list of classes to keep in step.
+ */
+export interface UserFacing {
+  readonly userFacing: true;
+}
+
+/** True for an error whose message is safe to show the user (its class sets `userFacing`). */
+export function isUserFacing(error: unknown): error is Error & UserFacing {
+  return error instanceof Error && (error as Partial<UserFacing>).userFacing === true;
+}
+
 /** Thrown for input the user can fix, or a step that is not possible now; `message` is safe to show. */
-export class UserInputError extends Error {
+export class UserInputError extends Error implements UserFacing {
+  readonly userFacing = true as const;
   constructor(message: string) {
     super(message);
     this.name = "UserInputError";

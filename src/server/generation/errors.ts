@@ -1,5 +1,8 @@
+import type { UserFacing } from "@/server/errors";
+
 /** Input the user (or the calling service) can fix. `message` is safe to show. */
-export class GenerationInputError extends Error {
+export class GenerationInputError extends Error implements UserFacing {
+  readonly userFacing = true as const;
   constructor(message: string) {
     super(message);
     this.name = "GenerationInputError";

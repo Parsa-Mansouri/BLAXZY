@@ -14,13 +14,14 @@ import {
   DamiRefusalError,
   DamiTruncatedError,
 } from "../../src/server/damis";
+import { isUserFacing } from "../../src/server/errors";
 import {
   isLastAttempt,
   isShutdownAbort,
   type JobContext,
   type JobDefinition,
 } from "../../src/server/jobs";
-import { errorMessage, logLine } from "../../src/server/jobs/log";
+import { logLine } from "../../src/server/jobs/log";
 
 export { isLastAttempt };
 
@@ -33,13 +34,13 @@ export type FailureDecision = {
   runId: string | null;
 };
 
-/** An error class whose message is written for the user (the area's input errors). */
-type UserErrorClass = abstract new (...args: never[]) => Error;
-
 /** One area's wording. Messages are shown to the user as they are. */
 export type FailureCopy = {
-  /** Errors whose own message is shown, never retried (`ScriptInputError`, ...). */
-  userErrors: readonly UserErrorClass[];
+  /**
+   * Show a user-facing error's own message (`isUserFacing`: `ScriptInputError`, ...) and never
+   * retry it. False for areas whose failures nobody reads as is (they fall back to `fallback`).
+   */
+  userErrors: boolean;
   /** Map `InsufficientCreditsError` to "You need N credits..." (areas that spend credits). */
   credits: boolean;
   refusal: string;
@@ -70,10 +71,10 @@ export function classifyDamiFailure(error: unknown, copy: FailureCopy): FailureD
     retryable,
     runId,
   });
-  if (copy.credits && error instanceof InsufficientCreditsError) {
-    return decide(creditsMessage(error), false);
-  }
-  if (error instanceof Error && copy.userErrors.some((type) => error instanceof type)) {
+  if (error instanceof InsufficientCreditsError) {
+    // Only areas that spend credits word it; elsewhere it is unexpected (the fallback, retried).
+    if (copy.credits) return decide(creditsMessage(error), false);
+  } else if (copy.userErrors && isUserFacing(error)) {
     return decide(error.message, false);
   }
   // A dami stopped before it finished (its job's time ran out): another attempt may finish it.
@@ -89,7 +90,10 @@ export function classifyDamiFailure(error: unknown, copy: FailureCopy): FailureD
   return decide(copy.fallback, true);
 }
 
-/** Logs that a job gave up on its work (the user sees `failure`, when there is one). */
+/**
+ * Logs that a job gave up on its work (the user sees `failure`, when there is one). An error
+ * line, so it is reported to the error tracker with the error's stack.
+ */
 export function logGaveUp(
   job: JobDefinition,
   context: JobContext,
@@ -101,7 +105,7 @@ export function logGaveUp(
     id: context.jobId,
     attempt: context.attempt,
     ...(failure !== undefined ? { failure } : {}),
-    error: errorMessage(error),
+    exception: error,
   });
 }
 

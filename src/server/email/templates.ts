@@ -82,6 +82,42 @@ export function passwordResetEmail(to: Recipient, url: string): EmailMessage {
 }
 
 /**
+ * The six-digit code a signed-in user enters to change their password. Only the account owner
+ * asks for it (from the account page), so the mail also warns them if it was not them.
+ */
+export function passwordChangeCodeEmail(to: Recipient, code: string): EmailMessage {
+  return {
+    to: to.email,
+    subject: "Your BLAXZY password change code",
+    text: [
+      GREETING,
+      "",
+      "Someone signed in to your BLAXZY account asked to change its password. To confirm it,",
+      "enter this verification code:",
+      "",
+      code,
+      "",
+      "The code works once and expires in 10 minutes.",
+      "",
+      "If this was not you, do not share the code: someone may know your password. Sign in and",
+      "change it, or reset it from the sign-in page.",
+      "",
+      "BLAXZY",
+    ].join("\n"),
+    html: renderEmail({
+      preheader: "Enter this code to confirm your new BLAXZY password.",
+      heading: "Confirm your password change",
+      paragraphs: [
+        "Someone signed in to your BLAXZY account asked to change its password. Enter this verification code to confirm it.",
+      ],
+      code,
+      footnote:
+        "The code works once and expires in 10 minutes. If this was not you, do not share the code: someone may know your password. Reset it from the sign-in page.",
+    }),
+  };
+}
+
+/**
  * Sent when someone signs up with an address that already has an account. The sign-up answer is
  * the same as for a new address (no account enumeration), so this mail is how the owner finds out.
  * It carries no token: only where to sign in or reset the password.

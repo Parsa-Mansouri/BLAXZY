@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { escapeHtml, renderEmail } from "./layout";
-import { existingAccountEmail, passwordResetEmail, verificationCodeEmail } from "./templates";
+import {
+  existingAccountEmail,
+  passwordChangeCodeEmail,
+  passwordResetEmail,
+  verificationCodeEmail,
+} from "./templates";
 
 const LINK = "https://app.example.com/verify?token=abc&x=1";
 const HOSTILE_LINK = 'https://app.example.com/v?t="><script>alert(1)</script>&a=<b>';
@@ -147,5 +152,18 @@ describe("renderEmail", () => {
     expect(html).not.toContain("<i>");
     expect(html).not.toContain('"x"');
     expect(html).not.toContain("Paste this link");
+  });
+});
+
+describe("password change code email", () => {
+  it("carries the code in both parts, never the name, and links nowhere", () => {
+    const mail = passwordChangeCodeEmail(hostile, CODE);
+    expect(mail.subject).toBe("Your BLAXZY password change code");
+    expect(mail.subject).not.toContain(CODE);
+    expect(mail.text).toContain(`verification code:\n\n${CODE}\n`);
+    expect(mail.html).toContain(`>${CODE}</div>`);
+    expect(mail.actionUrl).toBeUndefined();
+    expect(`${mail.text}${mail.html}`).not.toContain("evil.example");
+    expect(mail.text).not.toMatch(/<\/?[a-z][^>]*>/i);
   });
 });

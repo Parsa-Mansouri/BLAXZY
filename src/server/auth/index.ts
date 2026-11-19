@@ -10,7 +10,13 @@ export {
   type SessionResult,
 } from "./session";
 export { safeNextPath } from "./safe-next-path";
-export { MAX_NAME_LENGTH, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "./constants";
+export { issuePasswordChangeCode } from "./password-change-code";
+export {
+  MAX_NAME_LENGTH,
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_CHANGE_CODE_HEADER,
+} from "./constants";
 
 /** better-auth's HTTP handler, mounted by `src/app/api/auth/[...all]/route.ts`. */
 export function authHandler(request: Request): Promise<Response> {

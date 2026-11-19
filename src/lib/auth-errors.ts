@@ -32,6 +32,8 @@ export function describeAuthFailure(failure: AuthFailure, context: AuthContext):
       return "This link has expired or was already used. Request a new one.";
     case "INVALID_OTP":
       return "That code is not right. Check the email and enter it again.";
+    case "PASSWORD_CHANGE_CODE_REQUIRED":
+      return "Enter the code we emailed you to confirm the change.";
     case "OTP_EXPIRED":
       return "This code has expired. Send a new code and enter that one.";
     case "TOO_MANY_ATTEMPTS":

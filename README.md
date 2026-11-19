@@ -382,15 +382,16 @@ start paid work refuse the request and the others allow it (and log).
 
 <br />
 
-| Bucket      | Per minute | Used for                                                            | If the counter fails |
-| ----------- | ---------- | ------------------------------------------------------------------- | -------------------- |
-| `mutate`    | 60         | Ordinary writes: rename, review decisions that start nothing        | allow                |
-| `upload`    | 30         | Upload tickets                                                      | refuse               |
-| `expensive` | 20         | Anything that enqueues model or generation work or spends credits   | refuse               |
-| `poll`      | 600        | Background polls                                                    | allow                |
-| `read`      | 240        | Pagination loads and one-off reads                                  | allow                |
-| `file`      | 1200       | `/api/files/[id]` (every stored picture on a screen is one request) | allow                |
-| `otp`       | 5          | Verification code guesses, keyed by email address (any IP)          | refuse               |
+| Bucket      | Per minute | Used for                                                                              | If the counter fails |
+| ----------- | ---------- | ------------------------------------------------------------------------------------- | -------------------- |
+| `mutate`    | 60         | Ordinary writes: rename, review decisions that start nothing                          | allow                |
+| `upload`    | 30         | Upload tickets                                                                        | refuse               |
+| `expensive` | 20         | Anything that enqueues model or generation work or spends credits                     | refuse               |
+| `poll`      | 600        | Background polls                                                                      | allow                |
+| `read`      | 240        | Pagination loads and one-off reads                                                    | allow                |
+| `file`      | 1200       | `/api/files/[id]` (every stored picture on a screen is one request)                   | allow                |
+| `otp`       | 5          | Code guesses: email verification (per address, any IP) and password change (per user) | refuse               |
+| `codeSend`  | 3          | Emails a signed-in user asks for (the password change code)                           | refuse               |
 
 The limits are constants in `src/server/ratelimit/buckets.ts`. Auth endpoints have their own per-IP
 limit (see Accounts).

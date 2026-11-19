@@ -16,7 +16,8 @@ describe.skipIf(!reachable)("auth (integration)", async () => {
   const { getDb, closeDb } = await import("@/server/db/client");
   const { actionRateLimit, user, session, verification } = await import("@/server/db/schema");
   const { getEnv } = await import("@/server/env");
-  const { MAX_NAME_LENGTH } = await import("@/server/auth/constants");
+  const { MAX_NAME_LENGTH, PASSWORD_CHANGE_CODE_HEADER } = await import("@/server/auth/constants");
+  const { issuePasswordChangeCode } = await import("@/server/auth/password-change-code");
 
   const auth = getAuth();
   const createdUserIds: string[] = [];
@@ -65,6 +66,25 @@ describe.skipIf(!reachable)("auth (integration)", async () => {
       if (!code) throw new Error("code mail has no code");
       return code;
     });
+  }
+
+  /** Waits for password change code mail number `count` to `email` and returns its code. */
+  async function passwordCodeFor(email: string, count = 1): Promise<string> {
+    return vi.waitFor(() => {
+      const mails = sent.filter(
+        (m) => m.to === email && m.subject === "Your BLAXZY password change code",
+      );
+      if (mails.length < count) throw new Error(`no password code mail ${count} for ${email} yet`);
+      const code = /^(\d{6})$/m.exec(mails.at(-1)?.text ?? "")?.[1];
+      if (!code) throw new Error("password code mail has no code");
+      return code;
+    });
+  }
+
+  function withCode(cookies: Headers, code: string): Headers {
+    const headers = new Headers(cookies);
+    headers.set(PASSWORD_CHANGE_CODE_HEADER, code);
+    return headers;
   }
 
   async function verify(email: string) {
@@ -119,10 +139,12 @@ describe.skipIf(!reachable)("auth (integration)", async () => {
     expect(current?.user.email).toBe(email);
     const otherDevice = await signIn(email, first);
 
-    // The client does not ask for it; the server forces revokeOtherSessions.
+    // The change needs the emailed code. The client does not ask for it; the server forces
+    // revokeOtherSessions.
+    await issuePasswordChangeCode({ id: signedUp.user.id, email });
     await auth.api.changePassword({
       body: { currentPassword: first, newPassword: second },
-      headers: cookies,
+      headers: withCode(cookies, await passwordCodeFor(email)),
     });
     expect(await auth.api.getSession({ headers: otherDevice })).toBeNull();
 
@@ -365,5 +387,60 @@ describe.skipIf(!reachable)("auth (integration)", async () => {
       );
       expect(response.status).toBe(404);
     }
+  });
+
+  it("changes a password only with the emailed code, once, and locks it after five misses", async () => {
+    const email = newEmail();
+    const first = "first-password-123";
+    const signedUp = await signUp(email, first);
+    await verify(email);
+    const cookies = await signIn(email, first);
+    const change = (newPassword: string, headers: Headers, currentPassword = first) =>
+      auth.api.changePassword({ body: { currentPassword, newPassword }, headers });
+
+    // No code, or no code issued yet: refused before the password is looked at.
+    await expectStatus(change("second-password-456", cookies), 400);
+    await expectStatus(change("second-password-456", withCode(cookies, "123456")), 400);
+
+    await issuePasswordChangeCode({ id: signedUp.user.id, email });
+    const code = await passwordCodeFor(email);
+    const wrong = code === "000000" ? "111111" : "000000";
+
+    // A right code with a wrong current password: refused, and the code still works after.
+    await expectStatus(
+      change("second-password-456", withCode(cookies, code), "nope-nope-123"),
+      400,
+    );
+    await change("second-password-456", withCode(cookies, code));
+    // Used once: gone.
+    const again = await signIn(email, "second-password-456");
+    await expectStatus(
+      change("third-password-789", withCode(again, code), "second-password-456"),
+      400,
+    );
+
+    // Five wrong guesses kill a fresh code, even the right one after them.
+    await issuePasswordChangeCode({ id: signedUp.user.id, email });
+    const fresh = await passwordCodeFor(email, 2);
+    await getDb()
+      .delete(actionRateLimit)
+      .where(eq(actionRateLimit.key, `otp:password-change:${signedUp.user.id}`));
+    for (let i = 0; i < 4; i += 1) {
+      await expectStatus(
+        change("third-password-789", withCode(again, wrong), "second-password-456"),
+        400,
+      );
+    }
+    await expectStatus(
+      change("third-password-789", withCode(again, wrong), "second-password-456"),
+      403,
+    );
+    await getDb()
+      .delete(actionRateLimit)
+      .where(eq(actionRateLimit.key, `otp:password-change:${signedUp.user.id}`));
+    await expectStatus(
+      change("third-password-789", withCode(again, fresh), "second-password-456"),
+      403,
+    );
   });
 });

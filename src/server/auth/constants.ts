@@ -49,3 +49,6 @@ export function isPublicPath(pathname: string, isDevelopment: boolean): boolean 
   if (isDevelopment && isUnder(normalized, "/dev")) return true;
   return false;
 }
+
+/** Request header the change-password call carries the emailed code in. */
+export const PASSWORD_CHANGE_CODE_HEADER = "x-password-change-code";

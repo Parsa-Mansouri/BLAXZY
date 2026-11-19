@@ -14,6 +14,12 @@ import { logLine } from "@/server/jobs/log";
 import { checkRateLimit } from "@/server/ratelimit";
 import { keepAlive, sendInBackground } from "./background";
 import {
+  checkPasswordChangeCode,
+  consumePasswordChangeCode,
+  PASSWORD_CHANGE_CODE_HEADER,
+  type PasswordChangeCodeCheck,
+} from "./password-change-code";
+import {
   AUTH_BASE_PATH,
   AUTH_COOKIE_PREFIX,
   FORGOT_PASSWORD_PATH,
@@ -100,6 +106,23 @@ function bodyField(body: unknown, field: string): unknown {
 
 const invalidCode = () =>
   new APIError("BAD_REQUEST", { code: "INVALID_OTP", message: "Invalid OTP" });
+
+/** The refusal for a password change whose emailed code did not check out. */
+function passwordChangeCodeError(check: Exclude<PasswordChangeCodeCheck, "ok">): APIError {
+  switch (check) {
+    case "missing":
+      return new APIError("BAD_REQUEST", {
+        code: "PASSWORD_CHANGE_CODE_REQUIRED",
+        message: "Enter the code sent to your email",
+      });
+    case "expired":
+      return new APIError("BAD_REQUEST", { code: "OTP_EXPIRED", message: "OTP expired" });
+    case "too_many":
+      return new APIError("FORBIDDEN", { code: "TOO_MANY_ATTEMPTS", message: "Too many attempts" });
+    case "invalid":
+      return invalidCode();
+  }
+}
 
 const accountDisabled = () =>
   new APIError("FORBIDDEN", {
@@ -292,14 +315,42 @@ function createAuth() {
             }
           }
         }
-        // Changing the password always signs out the user's other devices.
+        // Changing the password needs the code emailed to the account (see password-change-code),
+        // checked before the current password so a stolen session alone cannot change it. Then
+        // it always signs out the user's other devices.
         if (ctx.path === "/change-password") {
+          const current = await getSessionFromCtx(ctx);
+          if (current) {
+            const limited = await checkRateLimit({
+              userId: `password-change:${current.user.id}`,
+              bucket: "otp",
+            });
+            if (!limited.ok) {
+              throw new APIError(
+                "TOO_MANY_REQUESTS",
+                { code: "TOO_MANY_REQUESTS", message: "Too many attempts" },
+                { "X-Retry-After": String(limited.retryAfterSeconds) },
+              );
+            }
+            const check = await checkPasswordChangeCode(
+              current.user.id,
+              ctx.headers?.get(PASSWORD_CHANGE_CODE_HEADER),
+            );
+            if (check !== "ok") throw passwordChangeCodeError(check);
+          }
           const body: Record<string, unknown> =
             typeof ctx.body === "object" && ctx.body !== null ? ctx.body : {};
           return { context: { body: { ...body, revokeOtherSessions: true } } };
         }
       }),
       after: createAuthMiddleware(async (ctx) => {
+        // The password was changed with the code: retire it.
+        if (ctx.path === "/change-password") {
+          const changed: unknown = ctx.context.returned;
+          const userId = ctx.context.session?.user.id;
+          if (userId && !(changed instanceof Error)) await consumePasswordChangeCode(userId);
+          return;
+        }
         if (ctx.path !== "/get-session") return;
         const returned: unknown = ctx.context.returned;
         if (typeof returned !== "object" || returned === null || !("user" in returned)) return;

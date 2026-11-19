@@ -32,6 +32,8 @@ export const RATE_LIMIT_BUCKETS = {
    * gets no more tries by rotating IPs. A person retyping a code never needs more.
    */
   otp: { limit: 5, failOpen: false },
+  /** Emails a signed-in user can ask for (the password change code): each one is a sent mail. */
+  codeSend: { limit: 3, failOpen: false },
 } as const satisfies Record<string, { limit: number; failOpen: boolean }>;
 
 export type RateLimitBucket = keyof typeof RATE_LIMIT_BUCKETS;

@@ -22,7 +22,7 @@ export default async function Home() {
         <LoopVideo
           src="/landing/hero.mp4"
           poster="/landing/hero.jpg"
-          className="absolute inset-0 -z-10 size-full object-cover object-[30%_center]"
+          className="absolute inset-0 -z-10 size-full object-cover object-center"
         />
         <div
           aria-hidden="true"

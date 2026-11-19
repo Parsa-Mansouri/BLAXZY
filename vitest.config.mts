@@ -25,6 +25,9 @@ export default defineConfig({
       GENERATION_SAMPLE_DELAY_MS: "0",
       // The per-user limit test assumes the default, whatever a local .env sets.
       GENERATION_MAX_PER_USER: "3",
+      // Auth tests read verification and reset links from the console transport; a local .env
+      // that sends over SMTP must not send real mail or hide those links.
+      EMAIL_TRANSPORT: "console",
       // Every integration file has its own pg pool and pg-boss pools and files run in
       // parallel: small pools keep the total far below Postgres' default 100 connections.
       DATABASE_POOL_MAX: process.env.DATABASE_POOL_MAX ?? "3",

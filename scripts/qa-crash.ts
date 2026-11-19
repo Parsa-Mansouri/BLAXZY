@@ -43,7 +43,13 @@ import { sweepStuckDamiRuns } from "../src/server/damis";
 import { saveStyle, createProject } from "../src/server/projects";
 import { startFromBrief } from "../src/server/script";
 import { generationHooks } from "../worker/handlers";
+import { sweepStuckRows } from "../worker/handlers/stuck-rows";
 import { assertDevOnly, pollUntil, runScript, sleep } from "./_lib";
+
+// A queue of its own: any other worker running against the same database (a `pnpm worker` left
+// open) would otherwise take the jobs and finish them, so the crash would never be exercised.
+// Set before anything reads the environment (getEnv is lazy); the child workers inherit it.
+process.env.JOBS_SCHEMA = "pgboss_qa_crash";
 
 const SLOW_MS = 60_000;
 const FAST_MS = 500;
@@ -214,9 +220,13 @@ async function main(): Promise<void> {
   for (const hook of generationHooks) onGenerationFinished(hook);
   const gens = await sweepStuckGenerations({ userId });
   const dami = await sweepStuckDamiRuns();
+  // Rows left pending by a lost job, this project only, with no grace: the queue has settled, so
+  // any job that could still move them is visible to the sweep's own job check.
+  const stuck = await sweepStuckRows({ graceMinutes: 0, projectIds: [projectId] });
   console.log(
     `Sweeps: generations failed ${gens.failed.length}, requeued ${gens.requeued.length}, ` +
-      `renotified ${gens.renotified.length}; dami runs swept ${dami.swept}.`,
+      `renotified ${gens.renotified.length}; dami runs swept ${dami.swept}; ` +
+      `stuck rows recovered ${stuck.recovered.length}.`,
   );
   await sleep(5_000); // requeued runs get a moment on the live worker
   second.child.kill("SIGTERM");

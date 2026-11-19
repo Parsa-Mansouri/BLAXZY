@@ -26,7 +26,7 @@ describe("verification code email", () => {
     expect(html).toContain(`>${CODE}</div>`);
     expect(html).toContain("verification code");
     expect(html).toContain("user-select:all");
-    expect(html).toContain("Copy code");
+    expect(html).not.toContain("Copy code");
     expect(html).toContain("10 minutes");
   });
 

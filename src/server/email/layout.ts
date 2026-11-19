@@ -17,8 +17,7 @@ type EmailLayoutBase = {
 
 /**
  * The hero of the mail: a button to a link, or a one-time code. Mail clients run no script, so
- * the code cannot carry a real copy button: one tap selects the whole code (`user-select: all`)
- * and the "Copy code" pill under it is only the cue, never a link.
+ * the code has no copy button: one tap selects the whole code (`user-select: all`).
  */
 export type EmailLayout = EmailLayoutBase &
   ({ action: { label: string; url: string }; code?: never } | { code: string; action?: never });
@@ -110,13 +109,8 @@ function codeHero(code: string, hasSecondary: boolean): string {
 </td>
 </tr>
 <tr>
-<td align="center" style="padding:18px 0 ${hasSecondary ? "28px" : "0"} 0;">
-<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-<tr>
-<td bgcolor="#ffffff" style="background-color:#ffffff;border-radius:999px;padding:12px 28px;font-family:${FONT};font-size:12px;line-height:16px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#000000;">Copy code</td>
-</tr>
-</table>
-<p style="margin:10px 0 0 0;font-family:${FONT};font-size:12px;line-height:1.5;color:${MUTED};">Tap the code to select it, then copy.</p>
+<td align="center" style="padding:14px 0 ${hasSecondary ? "28px" : "0"} 0;">
+<p style="margin:0;font-family:${FONT};font-size:12px;line-height:1.5;color:${MUTED};">Tap the code to select it, then copy.</p>
 </td>
 </tr>`;
 }

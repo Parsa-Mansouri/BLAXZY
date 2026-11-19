@@ -27,6 +27,11 @@ export const RATE_LIMIT_BUCKETS = {
    * dozens at once. High enough for that, low enough to stop bulk scraping of presigned links.
    */
   file: { limit: 1200, failOpen: true },
+  /**
+   * Email verification code guesses, keyed by the email address (not a user id) so a guesser
+   * gets no more tries by rotating IPs. A person retyping a code never needs more.
+   */
+  otp: { limit: 5, failOpen: false },
 } as const satisfies Record<string, { limit: number; failOpen: boolean }>;
 
 export type RateLimitBucket = keyof typeof RATE_LIMIT_BUCKETS;

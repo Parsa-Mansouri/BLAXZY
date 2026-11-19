@@ -76,7 +76,7 @@ export function SignupForm({
       <CheckEmail
         email={sentTo}
         title={["Check Your", "Email"]}
-        intro="Open the link in the email to confirm your address and finish creating the account."
+        intro="Enter the six-digit code from the email to confirm your address and finish creating the account."
         callbackURL={CALLBACK_URL}
         onBack={() => setSentTo(null)}
         backLabel="Use a Different Email"

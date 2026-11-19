@@ -390,6 +390,7 @@ start paid work refuse the request and the others allow it (and log).
 | `poll`      | 600        | Background polls                                                    | allow                |
 | `read`      | 240        | Pagination loads and one-off reads                                  | allow                |
 | `file`      | 1200       | `/api/files/[id]` (every stored picture on a screen is one request) | allow                |
+| `otp`       | 5          | Verification code guesses, keyed by email address (any IP)          | refuse               |
 
 The limits are constants in `src/server/ratelimit/buckets.ts`. Auth endpoints have their own per-IP
 limit (see Accounts).
@@ -471,8 +472,9 @@ larger film is refused with a message telling the user to download the clips one
 ### Accounts
 
 better-auth (email + password) is served at `/api/auth/*`. Sign-up is open; the email must be
-verified before signing in. In development the verification and password-reset links appear in
-the `pnpm dev` log (console transport); production sends them over SMTP. Auth endpoints are rate
+verified before signing in, with a six-digit code sent by email (valid 10 minutes). In development
+the verification codes and password-reset links appear in the `pnpm dev` log (console transport);
+production sends them over SMTP. Auth endpoints are rate
 limited per client IP (better-auth's defaults, for example 3 per 10 s for sign-in, sign-up and
 password change), with counters in the `rate_limit` table so all web replicas share them. Behind a
 reverse proxy, make sure it sets `X-Forwarded-For` to the single client address and configure

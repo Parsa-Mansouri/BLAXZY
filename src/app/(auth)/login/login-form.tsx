@@ -49,7 +49,7 @@ export function LoginForm({ next }: { next: string }) {
       <CheckEmail
         email={email.trim()}
         title={["Verify Your", "Email"]}
-        intro="This email address is not verified yet, so a new link was sent."
+        intro="This email address is not verified yet, so a new code was sent."
         callbackURL={next}
         onBack={() => setNeedsVerification(false)}
         backLabel="Back to Sign In"

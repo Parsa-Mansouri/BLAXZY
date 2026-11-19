@@ -11,34 +11,38 @@ type Recipient = { email: string; name?: string | null };
 
 const GREETING = "Hello,";
 
-export function verificationEmail(to: Recipient, url: string): EmailMessage {
+/**
+ * The six-digit email verification code. The code stays out of the subject (lock screens and
+ * notification previews show subjects); the phrase "verification code" sits right next to the
+ * digits in both parts so Gmail and iOS recognise it and offer to copy or autofill it.
+ */
+export function verificationCodeEmail(to: Recipient, code: string): EmailMessage {
   return {
     to: to.email,
-    subject: "Confirm your email for BLAXZY",
-    actionUrl: url,
+    subject: "Your BLAXZY verification code",
     text: [
       GREETING,
       "",
       "Someone used this email address to sign up for BLAXZY. To confirm that it is yours,",
-      "open the link below:",
+      "enter this verification code:",
       "",
-      url,
+      code,
       "",
-      "The link works once and expires in 1 hour.",
+      "The code works once and expires in 10 minutes.",
       "",
       "If this was not you, you can ignore this email.",
       "",
       "BLAXZY",
     ].join("\n"),
     html: renderEmail({
-      preheader: "Confirm your email to finish signing up for BLAXZY.",
+      preheader: "Enter this code to finish signing up for BLAXZY.",
       heading: "Confirm your email",
       paragraphs: [
-        "Someone used this email address to sign up for BLAXZY. Confirm that it is yours to finish setting up the account.",
+        "Someone used this email address to sign up for BLAXZY. Enter this verification code to confirm that it is yours.",
       ],
-      action: { label: "Confirm email", url },
+      code,
       footnote:
-        "The link works once and expires in 1 hour. If this was not you, you can ignore this email.",
+        "The code works once and expires in 10 minutes. If this was not you, you can ignore this email.",
     }),
   };
 }

@@ -9,7 +9,7 @@ import { AuthField } from "../_components/auth-fields";
 import { AuthLink, AuthLinks, AuthScreen } from "../_components/auth-parts";
 import { CheckEmail } from "../_components/check-email";
 
-/** Landing page for "your email is not verified": explains it and sends a new link. */
+/** Landing page for "your email is not verified": explains it and sends a new code. */
 export function VerifyEmailPanel() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,9 +26,9 @@ export function VerifyEmailPanel() {
     setSubmitting(true);
     setError(null);
     const result = await callAuth((fetchOptions) =>
-      authClient.sendVerificationEmail({
+      authClient.emailOtp.sendVerificationOtp({
         email: email.trim(),
-        callbackURL: "/dashboard",
+        type: "email-verification",
         fetchOptions,
       }),
     );
@@ -45,7 +45,7 @@ export function VerifyEmailPanel() {
       <CheckEmail
         email={sentTo}
         title={["Check Your", "Email"]}
-        intro="Open the link in the email to confirm your address."
+        intro="Enter the six-digit code from the email to confirm your address."
         callbackURL="/dashboard"
         onBack={() => setSentTo(null)}
         backLabel="Use a Different Email"
@@ -57,7 +57,7 @@ export function VerifyEmailPanel() {
     <AuthScreen
       title={["Verify", "Email"]}
       label="Verify email"
-      description="Confirm your address with the link in the email. To get a new link, enter your email."
+      description="Confirm your address with a six-digit code. Enter your email and we will send you one."
     >
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
         <AuthField
@@ -74,7 +74,7 @@ export function VerifyEmailPanel() {
         />
         <div className="mt-3 flex enter flex-col items-start gap-6" style={stagger(1)}>
           <Button type="submit" variant="primary" size="large" loading={submitting}>
-            Send Link
+            Send Code
           </Button>
           <AuthLinks>
             <AuthLink href="/login">Back to Sign In</AuthLink>

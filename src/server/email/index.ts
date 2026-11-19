@@ -5,4 +5,4 @@ export {
   type EmailMessage,
   type EmailSender,
 } from "./sender";
-export { passwordResetEmail, verificationEmail } from "./templates";
+export { passwordResetEmail, verificationCodeEmail } from "./templates";

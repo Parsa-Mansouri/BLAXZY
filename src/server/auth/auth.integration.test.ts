@@ -14,7 +14,8 @@ const reachable = await databaseReachable();
 describe.skipIf(!reachable)("auth (integration)", async () => {
   const { getAuth } = await import("@/server/auth/config");
   const { getDb, closeDb } = await import("@/server/db/client");
-  const { user, session, verification } = await import("@/server/db/schema");
+  const { actionRateLimit, user, session, verification } = await import("@/server/db/schema");
+  const { getEnv } = await import("@/server/env");
   const { MAX_NAME_LENGTH } = await import("@/server/auth/constants");
 
   const auth = getAuth();
@@ -43,15 +44,31 @@ describe.skipIf(!reachable)("auth (integration)", async () => {
   }
 
   function lastLinkFor(email: string): string {
-    const message = sent.filter((m) => m.to === email).at(-1);
+    const message = sent.filter((m) => m.to === email && m.actionUrl).at(-1);
     if (!message?.actionUrl) throw new Error(`no email with a link was sent to ${email}`);
     return message.actionUrl;
   }
 
+  function codeMailsFor(email: string): EmailMessage[] {
+    return sent.filter((m) => m.to === email && m.subject === "Your BLAXZY verification code");
+  }
+
+  /**
+   * Waits for verification code mail number `count` to `email` (codes are stored and sent in the
+   * background) and returns its code.
+   */
+  async function codeFor(email: string, count = 1): Promise<string> {
+    return vi.waitFor(() => {
+      const mails = codeMailsFor(email);
+      if (mails.length < count) throw new Error(`no code mail ${count} for ${email} yet`);
+      const code = /^(\d{6})$/m.exec(mails.at(-1)?.text ?? "")?.[1];
+      if (!code) throw new Error("code mail has no code");
+      return code;
+    });
+  }
+
   async function verify(email: string) {
-    const token = new URL(lastLinkFor(email)).searchParams.get("token");
-    if (!token) throw new Error("verification link has no token");
-    await auth.api.verifyEmail({ query: { token } });
+    await auth.api.verifyEmailOTP({ body: { email, otp: await codeFor(email) } });
   }
 
   async function signIn(email: string, password: string): Promise<Headers> {
@@ -78,11 +95,25 @@ describe.skipIf(!reachable)("auth (integration)", async () => {
 
     const signedUp = await signUp(email, first);
     expect(signedUp.token).toBeNull();
-    expect(lastLinkFor(email)).toContain("/api/auth/verify-email?token=");
+    const code = await codeFor(email);
+    expect(codeMailsFor(email)[0]?.actionUrl).toBeUndefined();
 
+    // Signing in while unverified is refused and sends a fresh code (the first one stops working).
     await expectStatus(auth.api.signInEmail({ body: { email, password: first } }), 403);
+    const fresh = await codeFor(email, 2);
+    if (fresh !== code) {
+      await expectStatus(auth.api.verifyEmailOTP({ body: { email, otp: code } }), 400);
+    }
 
-    await verify(email);
+    // A right code verifies the address and signs the user in.
+    const verified = await auth.api.verifyEmailOTP({
+      body: { email, otp: fresh },
+      returnHeaders: true,
+    });
+    expect(verified.response.status).toBe(true);
+    expect(verified.response.token).toEqual(expect.any(String));
+    expect(verified.headers.get("set-cookie") ?? "").toContain("session_token");
+
     const cookies = await signIn(email, first);
     const current = await auth.api.getSession({ headers: cookies });
     expect(current?.user.email).toBe(email);
@@ -284,5 +315,55 @@ describe.skipIf(!reachable)("auth (integration)", async () => {
     expect(line).toContain("password_reset");
     expect(line).not.toContain("token");
     logged.mockRestore();
+  });
+
+  it("locks a code after five wrong guesses", async () => {
+    const email = newEmail();
+    await signUp(email, "wrong-code-123");
+    const code = await codeFor(email);
+    const wrong = code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < 5; i++) {
+      await expectStatus(auth.api.verifyEmailOTP({ body: { email, otp: wrong } }), 400);
+    }
+    // The sixth try, even with the right code, is refused: per-address cap (5 a minute) first.
+    await expectStatus(auth.api.verifyEmailOTP({ body: { email, otp: code } }), 429);
+    await getDb()
+      .delete(actionRateLimit)
+      .where(eq(actionRateLimit.key, `otp:${email}`));
+    // With the cap cleared the code itself is used up: a new one must be requested.
+    await expectStatus(auth.api.verifyEmailOTP({ body: { email, otp: code } }), 403);
+    await expectStatus(auth.api.verifyEmailOTP({ body: { email, otp: code } }), 400);
+  });
+
+  it("never sends a code to, or accepts one for, a verified account", async () => {
+    const email = newEmail();
+    await signUp(email, "verified-code-123");
+    await verify(email);
+    const before = codeMailsFor(email).length;
+
+    await auth.api.sendVerificationOTP({ body: { email, type: "email-verification" } });
+    await auth.api.sendVerificationEmail({ body: { email } });
+    // Give the background sends a moment: nothing may arrive.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(codeMailsFor(email)).toHaveLength(before);
+    await expectStatus(auth.api.verifyEmailOTP({ body: { email, otp: "123456" } }), 400);
+  });
+
+  it("sends only verification codes and serves no other OTP route", async () => {
+    await expectStatus(
+      auth.api.sendVerificationOTP({ body: { email: newEmail(), type: "sign-in" } }),
+      400,
+    );
+    const base = getEnv().BETTER_AUTH_URL;
+    for (const path of ["/sign-in/email-otp", "/email-otp/reset-password"]) {
+      const response = await auth.handler(
+        new Request(`${base}/api/auth${path}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: newEmail(), otp: "123456", password: "x-123456789" }),
+        }),
+      );
+      expect(response.status).toBe(404);
+    }
   });
 });

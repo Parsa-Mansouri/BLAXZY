@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { escapeHtml, renderEmail } from "./layout";
-import { existingAccountEmail, passwordResetEmail, verificationEmail } from "./templates";
+import { existingAccountEmail, passwordResetEmail, verificationCodeEmail } from "./templates";
 
 const LINK = "https://app.example.com/verify?token=abc&x=1";
 const HOSTILE_LINK = 'https://app.example.com/v?t="><script>alert(1)</script>&a=<b>';
@@ -8,10 +8,52 @@ const hostile = {
   email: "victim@example.com",
   name: "Your account is locked, go to evil.example",
 };
-const builders = [
-  ["verification", verificationEmail, "Confirm email"],
-  ["password reset", passwordResetEmail, "Choose a new password"],
-] as const;
+const builders = [["password reset", passwordResetEmail, "Choose a new password"]] as const;
+const CODE = "482913";
+
+describe("verification code email", () => {
+  it("carries the code in both parts, next to the words verification code", () => {
+    const mail = verificationCodeEmail({ email: "a@example.com" }, CODE);
+    expect(mail.to).toBe("a@example.com");
+    expect(mail.subject).toBe("Your BLAXZY verification code");
+    expect(mail.subject).not.toContain(CODE);
+    expect(mail.text).toContain(`verification code:\n\n${CODE}\n`);
+    expect(mail.text).toContain("10 minutes");
+    expect(mail.text).not.toMatch(/<\/?[a-z][^>]*>/i);
+    expect(mail.actionUrl).toBeUndefined();
+    const html = mail.html ?? "";
+    expect(html).toMatch(/^<!DOCTYPE html/);
+    expect(html).toContain(`>${CODE}</div>`);
+    expect(html).toContain("verification code");
+    expect(html).toContain("user-select:all");
+    expect(html).toContain("Copy code");
+    expect(html).toContain("10 minutes");
+  });
+
+  it("links nowhere: no verify link, and the code is in no URL", () => {
+    const mail = verificationCodeEmail({ email: "a@example.com" }, CODE);
+    const html = mail.html ?? "";
+    expect(html).not.toContain("verify-email");
+    expect(html).not.toContain("href=");
+    expect(mail.text).not.toContain("http");
+  });
+
+  it("never contains the signed-up name", () => {
+    const mail = verificationCodeEmail(hostile, CODE);
+    expect(mail.to).toBe("victim@example.com");
+    for (const part of [mail.text, mail.html ?? "", mail.subject]) {
+      expect(part).not.toContain("locked");
+      expect(part).not.toContain("evil.example");
+    }
+    expect(mail.text.startsWith("Hello,\n")).toBe(true);
+  });
+
+  it("escapes the code in the HTML part", () => {
+    const html = verificationCodeEmail({ email: "a@example.com" }, "<b>1</b>").html ?? "";
+    expect(html).not.toContain("<b>");
+    expect(html).toContain("&lt;b&gt;1&lt;/b&gt;");
+  });
+});
 
 const SIGN_IN = "https://app.example.com/sign-in";
 const RESET = "https://app.example.com/forgot-password?a=1&b=2";
@@ -91,5 +133,19 @@ describe("renderEmail", () => {
     expect(html).not.toContain("<i>");
     expect(html).not.toContain('"x"');
     expect(html).toContain("&lt;i&gt;&quot;x&quot;&amp;&#39;y&#39;&lt;/i&gt;");
+  });
+
+  it("escapes every interpolated value of a code mail", () => {
+    const evil = `<i>"x"&'y'</i>`;
+    const html = renderEmail({
+      preheader: evil,
+      heading: evil,
+      paragraphs: [evil],
+      code: evil,
+      footnote: evil,
+    });
+    expect(html).not.toContain("<i>");
+    expect(html).not.toContain('"x"');
+    expect(html).not.toContain("Paste this link");
   });
 });

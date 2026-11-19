@@ -30,6 +30,12 @@ export function describeAuthFailure(failure: AuthFailure, context: AuthContext):
       return "Your current password is not correct. Check it and try again.";
     case "INVALID_TOKEN":
       return "This link has expired or was already used. Request a new one.";
+    case "INVALID_OTP":
+      return "That code is not right. Check the email and enter it again.";
+    case "OTP_EXPIRED":
+      return "This code has expired. Send a new code and enter that one.";
+    case "TOO_MANY_ATTEMPTS":
+      return "Too many wrong tries for this code. Send a new code and enter that one.";
     case "USER_ALREADY_EXISTS":
     case "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL":
       return "There is already an account with this email. Sign in instead, or reset your password.";

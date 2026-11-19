@@ -4,17 +4,24 @@
  * value goes through `escapeHtml`, URLs included, so nothing passed in can add markup.
  */
 
-export type EmailLayout = {
+type EmailLayoutBase = {
   /** Hidden preview line shown next to the subject in most inboxes. */
   preheader: string;
   heading: string;
   paragraphs: string[];
-  action: { label: string; url: string };
-  /** A smaller second way out under the button, e.g. "Forgot your password? Choose a new one". */
+  /** A smaller second way out under the hero, e.g. "Forgot your password? Choose a new one". */
   secondary?: { lead: string; label: string; url: string };
   /** Small print under the card (expiry, "if this was not you"). */
   footnote: string;
 };
+
+/**
+ * The hero of the mail: a button to a link, or a one-time code. Mail clients run no script, so
+ * the code cannot carry a real copy button: one tap selects the whole code (`user-select: all`)
+ * and the "Copy code" pill under it is only the cue, never a link.
+ */
+export type EmailLayout = EmailLayoutBase &
+  ({ action: { label: string; url: string }; code?: never } | { code: string; action?: never });
 
 const HTML_ESCAPES: Record<string, string> = {
   "&": "&amp;",
@@ -36,6 +43,8 @@ const INK = "#f2f2f3";
 const BODY = "#c9c9ce";
 const MUTED = "#a1a1a6";
 const FAINT = "#6e6e73";
+const CODE_BORDER = "#3a3a3c";
+const MONO = "'SFMono-Regular', ui-monospace, Menlo, Consolas, 'Courier New', monospace";
 
 function button(label: string, url: string): string {
   const href = escapeHtml(url);
@@ -65,9 +74,59 @@ function button(label: string, url: string): string {
 </table>`;
 }
 
-export function renderEmail(layout: EmailLayout): string {
-  const { preheader, heading, paragraphs, action, secondary, footnote } = layout;
+function linkHero(action: { label: string; url: string }, hasSecondary: boolean): string {
   const url = escapeHtml(action.url);
+  return `<tr>
+<td style="padding:16px 0 0 0;">
+${button(action.label, action.url)}
+</td>
+</tr>
+<tr>
+<td style="padding:24px 0 ${hasSecondary ? "28px" : "0"} 0;">
+<p style="margin:0 0 6px 0;font-family:${FONT};font-size:13px;line-height:1.5;color:${MUTED};">Button not working? Paste this link into your browser:</p>
+<p style="margin:0;font-family:${FONT};font-size:13px;line-height:1.5;color:${MUTED};word-break:break-all;"><a href="${url}" target="_blank" rel="noopener" style="color:${MUTED};text-decoration:underline;word-break:break-all;">${url}</a></p>
+</td>
+</tr>`;
+}
+
+/**
+ * The code set large in a bordered tile. The digits stay one unbroken string (the spacing is
+ * letter-spacing) so a selection copies exactly the code, and "verification code" sits right next
+ * to them so Gmail and iOS offer their own copy / autofill.
+ */
+function codeHero(code: string, hasSecondary: boolean): string {
+  const digits = escapeHtml(code);
+  const select = "user-select:all;-webkit-user-select:all;-moz-user-select:all;";
+  return `<tr>
+<td style="padding:12px 0 0 0;">
+<p style="margin:0 0 10px 0;font-family:${FONT};font-size:11px;line-height:16px;font-weight:600;letter-spacing:0.3em;text-transform:uppercase;color:${MUTED};">Your verification code</p>
+<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+<tr>
+<td align="center" bgcolor="${PAGE}" style="background-color:${PAGE};border:1px solid ${CODE_BORDER};border-radius:14px;padding:26px 12px 24px 12px;">
+<div class="bx-code" style="margin:0;font-family:${MONO};font-size:40px;line-height:48px;font-weight:700;letter-spacing:0.32em;padding-left:0.32em;color:${INK};font-variant-numeric:tabular-nums;white-space:nowrap;${select}">${digits}</div>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td align="center" style="padding:18px 0 ${hasSecondary ? "28px" : "0"} 0;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+<tr>
+<td bgcolor="#ffffff" style="background-color:#ffffff;border-radius:999px;padding:12px 28px;font-family:${FONT};font-size:12px;line-height:16px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#000000;">Copy code</td>
+</tr>
+</table>
+<p style="margin:10px 0 0 0;font-family:${FONT};font-size:12px;line-height:1.5;color:${MUTED};">Tap the code to select it, then copy.</p>
+</td>
+</tr>`;
+}
+
+export function renderEmail(layout: EmailLayout): string {
+  const { preheader, heading, paragraphs, secondary, footnote } = layout;
+  const hero =
+    layout.code !== undefined
+      ? codeHero(layout.code, Boolean(secondary))
+      : linkHero(layout.action, Boolean(secondary));
 
   const body = paragraphs
     .map(
@@ -105,7 +164,7 @@ a { color: ${INK}; }
 @media only screen and (max-width: 600px) {
   .bx-outer { padding: 24px 12px !important; }
   .bx-card { padding: 36px 24px 32px 24px !important; }
-  .bx-heading { font-size: 23px !important; }
+  .bx-heading { font-size: 23px !important; }${layout.code !== undefined ? "\n  .bx-code { font-size: 32px !important; letter-spacing: 0.22em !important; padding-left: 0.22em !important; }" : ""}
 }
 </style>
 </head>
@@ -131,17 +190,7 @@ a { color: ${INK}; }
 ${body}
 </td>
 </tr>
-<tr>
-<td style="padding:16px 0 0 0;">
-${button(action.label, action.url)}
-</td>
-</tr>
-<tr>
-<td style="padding:24px 0 ${secondary ? "28px" : "0"} 0;">
-<p style="margin:0 0 6px 0;font-family:${FONT};font-size:13px;line-height:1.5;color:${MUTED};">Button not working? Paste this link into your browser:</p>
-<p style="margin:0;font-family:${FONT};font-size:13px;line-height:1.5;color:${MUTED};word-break:break-all;"><a href="${url}" target="_blank" rel="noopener" style="color:${MUTED};text-decoration:underline;word-break:break-all;">${url}</a></p>
-</td>
-</tr>
+${hero}
 ${secondaryBlock}
 </table>
 </td>

@@ -16,7 +16,20 @@ import { sampleCreativeDna } from "./creative-dna";
 import { sampleBlockRevision } from "./block-revision";
 import { sampleCinematographer } from "./cinematographer";
 import { sampleDirector } from "./director";
-import { sampleFilmDirector, sampleFilmDirectorCard } from "./film-director";
+import { sampleFilmDirector } from "./film-director";
+import { sampleFilmDirectorCard } from "./director-style";
+import {
+  sampleDirectorV2,
+  sampleDirectorV2Plan,
+  sampleDirectorV2Repair,
+  sampleDirectorV2Shots,
+} from "./director-v2";
+import {
+  sampleCinematographerLook,
+  sampleCinematographerRelight,
+  sampleCinematographerShots,
+} from "./cinematographer-v1";
+import { samplePrompter } from "./prompter";
 import { sampleLocationGenerator } from "./location-generator";
 import { samplePropGenerator } from "./prop-generator";
 import { sampleSheetGeneratorCharacter } from "./sheet-generator-character";
@@ -52,6 +65,14 @@ export const SAMPLE_GENERATORS: Readonly<Record<string, (input: unknown) => unkn
   "film-director": sampleFilmDirector,
   "film-director-card": sampleFilmDirectorCard,
   cinematographer: sampleCinematographer,
+  "director-v2": sampleDirectorV2,
+  "director-v2-plan": sampleDirectorV2Plan,
+  "director-v2-shots": sampleDirectorV2Shots,
+  "director-v2-repair": sampleDirectorV2Repair,
+  "cinematographer-look": sampleCinematographerLook,
+  "cinematographer-shots": sampleCinematographerShots,
+  "cinematographer-relight": sampleCinematographerRelight,
+  prompter: samplePrompter,
 };
 
 function wait(ms: number, signal: AbortSignal | undefined): Promise<void> {

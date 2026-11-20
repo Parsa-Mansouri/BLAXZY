@@ -2,7 +2,6 @@
  * Helpers for the sample-mode generators: a seeded picker (deterministic for a given input) and
  * light screenplay parsing. Nothing here calls Claude or the database.
  */
-import { isEpisodeHeading, isSceneHeading } from "../shared/script-lines";
 
 /** FNV-1a, 32 bit. */
 export function hashString(text: string): number {
@@ -77,42 +76,7 @@ export function countWords(text: string): number {
   return matches ? matches.length : 0;
 }
 
-const TRANSITION = /^\s*(FADE (IN|OUT)|CUT TO|DISSOLVE TO|SMASH CUT|MATCH CUT|THE END)\b/i;
-const EXTENSION = /\s*\((?:V\.O\.|O\.S\.|O\.C\.|CONT'D|CONT’D|CONT\.?)\)\s*/gi;
-
-export function isTransition(line: string): boolean {
-  return TRANSITION.test(line);
-}
-
-function hasCase(text: string): boolean {
-  return text.toUpperCase() !== text.toLowerCase();
-}
-
-/**
- * A character cue: a short line on its own, upper case (scripts without letter case: short and
- * without sentence punctuation), followed by dialogue. Returns the name without extensions such as
- * `(O.S.)`, or null.
- */
-export function cueName(lines: string[], index: number): string | null {
-  const line = (lines[index] ?? "").trim();
-  const next = (lines[index + 1] ?? "").trim();
-  const previous = (lines[index - 1] ?? "").trim();
-  if (!line || !next || previous !== "") return null;
-  if (isSceneHeading(line) || isEpisodeHeading(line) || isTransition(line)) return null;
-  if (line.startsWith("(") || line.length > 40) return null;
-  const name = line
-    .replace(EXTENSION, " ")
-    .replace(/\(.*\)/g, " ")
-    .trim();
-  if (!name || name.split(/\s+/).length > 3) return null;
-  if (hasCase(name)) {
-    if (name !== name.toUpperCase() || !/[A-Z]/.test(name)) return null;
-    if (/[.:!?]$/.test(name)) return null;
-  } else if (/[.:!?؟。！？،,]$/.test(name)) {
-    return null;
-  }
-  return name;
-}
+export { cueName, isTransition } from "../shared/script-lines";
 
 /** The place in a heading: `EXT. HARBOUR PIER - DUSK` → `HARBOUR PIER`. */
 export function headingPlace(heading: string): string {

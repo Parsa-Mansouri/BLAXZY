@@ -1,6 +1,6 @@
 /**
  * The owner's Director master prompt (Mode A: Director Style Card; Mode B: direction), copied
- * verbatim from `source/director_master_prompt.md`. `film-director.test.ts` checks this text
+ * verbatim from `source/director_master_prompt.md`. `director-style.test.ts` checks this text
  * against the source file; when the owner sends a new version, replace the file, re-copy this text
  * and bump the dami's version.
  */

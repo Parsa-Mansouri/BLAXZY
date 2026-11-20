@@ -44,6 +44,43 @@ export function isEpisodeHeading(line: string): boolean {
   return EPISODE_HEADING.test(line);
 }
 
+const TRANSITION = /^\s*(FADE (IN|OUT)|CUT TO|DISSOLVE TO|SMASH CUT|MATCH CUT|THE END)\b/i;
+const EXTENSION = /\s*\((?:V\.O\.|O\.S\.|O\.C\.|CONT'D|CONT’D|CONT\.?)\)\s*/gi;
+
+export function isTransition(line: string): boolean {
+  return TRANSITION.test(line);
+}
+
+function hasCase(text: string): boolean {
+  return text.toUpperCase() !== text.toLowerCase();
+}
+
+/**
+ * A character cue: a short line on its own, upper case (scripts without letter case: short and
+ * without sentence punctuation), followed by dialogue. Returns the name without extensions such as
+ * `(O.S.)`, or null.
+ */
+export function cueName(lines: string[], index: number): string | null {
+  const line = (lines[index] ?? "").trim();
+  const next = (lines[index + 1] ?? "").trim();
+  const previous = (lines[index - 1] ?? "").trim();
+  if (!line || !next || previous !== "") return null;
+  if (isSceneHeading(line) || isEpisodeHeading(line) || isTransition(line)) return null;
+  if (line.startsWith("(") || line.length > 40) return null;
+  const name = line
+    .replace(EXTENSION, " ")
+    .replace(/\(.*\)/g, " ")
+    .trim();
+  if (!name || name.split(/\s+/).length > 3) return null;
+  if (hasCase(name)) {
+    if (name !== name.toUpperCase() || !/[A-Z]/.test(name)) return null;
+    if (/[.:!?]$/.test(name)) return null;
+  } else if (/[.:!?؟。！？،,]$/.test(name)) {
+    return null;
+  }
+  return name;
+}
+
 /** A contiguous, inclusive 1-based line range. */
 export type LineRange = { startLine: number; endLine: number };
 

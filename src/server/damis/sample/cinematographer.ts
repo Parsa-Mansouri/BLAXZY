@@ -4,7 +4,10 @@
  * director's camera, without describing any character or place.
  */
 import { cinematographerCard } from "../cinematographer/library";
-import { cinematographerInputSchema, type CinematographerOutput } from "../cinematographer/schema";
+import {
+  cinematographerInputSchema,
+  type CinematographerOutput,
+} from "../cinematographer/legacy/schema";
 
 export function sampleCinematographer(raw: unknown): CinematographerOutput {
   const input = cinematographerInputSchema.parse(raw);

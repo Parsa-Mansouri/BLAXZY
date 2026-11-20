@@ -1,0 +1,2288 @@
+{
+  "creative_bible": {
+    "dami": "creative_dna",
+    "dami_version": "1.0",
+    "registry_version": "1.0",
+    "selection": {
+      "genre_id": "genre.drama",
+      "style_id": "style.realistic"
+    },
+    "project_frame": {
+      "format": "film",
+      "episode_count": null,
+      "episode_duration_sec": 60,
+      "total_duration_sec": 60,
+      "orientation": "portrait",
+      "audience": "PG-13",
+      "script_language": "en",
+      "ui_language": "en",
+      "dialogue_policy": "normal",
+      "block_length_sec": 15,
+      "blocks_per_episode": 4,
+      "max_spoken_words_per_block": 26
+    },
+    "contracts": {
+      "genre_contract": "Make the central desire, resistance and consequence legible through behavior. Build emotional meaning from choices, relationships and subtext rather than automatic tragedy.",
+      "style_contract": "Interpret realism as a coherent photographic and physical presentation of the approved world, not as a ban on speculative content. Preserve the story, genre, identities and established world exceptions.",
+      "combination_logic": "Drama owns the story logic and Realistic owns the presentation; neither changes the other's domain, and the project's locks win over both."
+    },
+    "slices": {
+      "for_script_writer": {
+        "rules": [
+          {
+            "id": "sw_01",
+            "rule": "Develop only the authorized premise; make each scene change knowledge, relationship or circumstance, and keep action filmable.",
+            "source": "genre"
+          },
+          {
+            "id": "sw_02",
+            "rule": "Do not force a full character arc into every short scene.",
+            "source": "genre"
+          },
+          {
+            "id": "sw_03",
+            "rule": "Use concrete observable behavior and material detail without inserting lens lists or changing events.",
+            "source": "style"
+          },
+          {
+            "id": "sw_04",
+            "rule": "Interpret realism as a coherent photographic and physical presentation of the approved world, not as a ban on speculative content.",
+            "source": "style"
+          },
+          {
+            "id": "sw_05",
+            "rule": "Preserve the story, genre, identities and established world exceptions.",
+            "source": "style"
+          },
+          {
+            "id": "sw_06",
+            "rule": "Plan each block as a 15-second unit with at most 2 distinct events.",
+            "source": "frame"
+          },
+          {
+            "id": "sw_07",
+            "rule": "Keep spoken lines within 26 words per block, leaving at least 30% of each block for action and reaction.",
+            "source": "frame"
+          }
+        ],
+        "beat_guidance": [
+          "Block 1: establish the situation and what the central character wants.",
+          "Blocks 2 to 3: build resistance, the choice and its cost, one visible beat each.",
+          "Block 4: the change must be visible; end on a reaction, not a line."
+        ],
+        "series_rules": []
+      },
+      "for_script_checker": {
+        "rules": [
+          {
+            "id": "sc_01",
+            "rule": "Develop only the authorized premise; make each scene change knowledge, relationship or circumstance, and keep action filmable.",
+            "source": "genre"
+          },
+          {
+            "id": "sc_02",
+            "rule": "Do not force a full character arc into every short scene.",
+            "source": "genre"
+          },
+          {
+            "id": "sc_03",
+            "rule": "Use concrete observable behavior and material detail without inserting lens lists or changing events.",
+            "source": "style"
+          },
+          {
+            "id": "sc_04",
+            "rule": "Interpret realism as a coherent photographic and physical presentation of the approved world, not as a ban on speculative content.",
+            "source": "style"
+          },
+          {
+            "id": "sc_05",
+            "rule": "Preserve the story, genre, identities and established world exceptions.",
+            "source": "style"
+          },
+          {
+            "id": "sc_06",
+            "rule": "Keep spoken lines within 26 words per block, leaving at least 30% of each block for action and reaction.",
+            "source": "frame"
+          }
+        ]
+      },
+      "for_asset_detector": {
+        "rules": [
+          {
+            "id": "ad_01",
+            "rule": "Translate the dramatic beat into visible posture, distance, attention and interaction with approved objects.",
+            "source": "genre"
+          },
+          {
+            "id": "ad_02",
+            "rule": "Make the central desire, resistance and consequence legible through behavior.",
+            "source": "genre"
+          },
+          {
+            "id": "ad_03",
+            "rule": "Build emotional meaning from choices, relationships and subtext rather than automatic tragedy.",
+            "source": "genre"
+          },
+          {
+            "id": "ad_04",
+            "rule": "Allow warmth, humor, speed and restraint when the brief supports them.",
+            "source": "genre"
+          },
+          {
+            "id": "ad_05",
+            "rule": "Describe credible anatomy or approved creature design, scale, surface response, contact, occlusion and spatial depth.",
+            "source": "style"
+          },
+          {
+            "id": "ad_06",
+            "rule": "Interpret realism as a coherent photographic and physical presentation of the approved world, not as a ban on speculative content.",
+            "source": "style"
+          },
+          {
+            "id": "ad_07",
+            "rule": "Preserve the story, genre, identities and established world exceptions.",
+            "source": "style"
+          }
+        ],
+        "attributes_to_capture": [
+          {
+            "asset_type": "character",
+            "attributes": [
+              "How a character is rendered in Realistic: medium, line or material language"
+            ]
+          },
+          {
+            "asset_type": "location",
+            "attributes": ["Every light source in the place, named (lamp, window, screen, sun)"]
+          },
+          {
+            "asset_type": "prop",
+            "attributes": ["The material and surface of the prop in Realistic"]
+          }
+        ]
+      },
+      "for_asset_generation": {
+        "rules": [
+          {
+            "id": "ag_01",
+            "rule": "Translate the dramatic beat into visible posture, distance, attention and interaction with approved objects.",
+            "source": "genre"
+          },
+          {
+            "id": "ag_02",
+            "rule": "Make the central desire, resistance and consequence legible through behavior.",
+            "source": "genre"
+          },
+          {
+            "id": "ag_03",
+            "rule": "Build emotional meaning from choices, relationships and subtext rather than automatic tragedy.",
+            "source": "genre"
+          },
+          {
+            "id": "ag_04",
+            "rule": "Allow warmth, humor, speed and restraint when the brief supports them.",
+            "source": "genre"
+          },
+          {
+            "id": "ag_05",
+            "rule": "Describe credible anatomy or approved creature design, scale, surface response, contact, occlusion and spatial depth.",
+            "source": "style"
+          },
+          {
+            "id": "ag_06",
+            "rule": "Interpret realism as a coherent photographic and physical presentation of the approved world, not as a ban on speculative content.",
+            "source": "style"
+          },
+          {
+            "id": "ag_07",
+            "rule": "Preserve the story, genre, identities and established world exceptions.",
+            "source": "style"
+          },
+          {
+            "id": "ag_08",
+            "rule": "Stage key action center-weighted in the vertical 9:16 frame, stacking foreground and background, with the top and bottom safe zones free of essential action.",
+            "source": "frame"
+          },
+          {
+            "id": "ag_09",
+            "rule": "Keep fewer characters in frame at once so each stays readable at phone size.",
+            "source": "frame"
+          }
+        ],
+        "guided_question_focus": [
+          {
+            "asset_type": "character",
+            "focus": ["Posture, distance and attention that carry the genre"]
+          },
+          {
+            "asset_type": "location",
+            "focus": ["Where the light comes from and what it touches"]
+          }
+        ]
+      },
+      "for_sheet_generator": {
+        "rules": [
+          {
+            "id": "sg_01",
+            "rule": "Translate the dramatic beat into visible posture, distance, attention and interaction with approved objects.",
+            "source": "genre"
+          },
+          {
+            "id": "sg_02",
+            "rule": "Make the central desire, resistance and consequence legible through behavior.",
+            "source": "genre"
+          },
+          {
+            "id": "sg_03",
+            "rule": "Build emotional meaning from choices, relationships and subtext rather than automatic tragedy.",
+            "source": "genre"
+          },
+          {
+            "id": "sg_04",
+            "rule": "Allow warmth, humor, speed and restraint when the brief supports them.",
+            "source": "genre"
+          },
+          {
+            "id": "sg_05",
+            "rule": "Describe credible anatomy or approved creature design, scale, surface response, contact, occlusion and spatial depth.",
+            "source": "style"
+          },
+          {
+            "id": "sg_06",
+            "rule": "Interpret realism as a coherent photographic and physical presentation of the approved world, not as a ban on speculative content.",
+            "source": "style"
+          },
+          {
+            "id": "sg_07",
+            "rule": "Preserve the story, genre, identities and established world exceptions.",
+            "source": "style"
+          },
+          {
+            "id": "sg_08",
+            "rule": "Stage key action center-weighted in the vertical 9:16 frame, stacking foreground and background, with the top and bottom safe zones free of essential action.",
+            "source": "frame"
+          },
+          {
+            "id": "sg_09",
+            "rule": "Keep fewer characters in frame at once so each stays readable at phone size.",
+            "source": "frame"
+          }
+        ],
+        "locks_to_capture": ["Ending: mother and children reconcile"]
+      },
+      "for_director": {
+        "rules": [
+          {
+            "id": "dr_01",
+            "rule": "Give playable intentions, meaningful blocking and motivated shot emphasis; preserve the approved events.",
+            "source": "genre"
+          },
+          {
+            "id": "dr_02",
+            "rule": "Make the central desire, resistance and consequence legible through behavior.",
+            "source": "genre"
+          },
+          {
+            "id": "dr_03",
+            "rule": "Build emotional meaning from choices, relationships and subtext rather than automatic tragedy.",
+            "source": "genre"
+          },
+          {
+            "id": "dr_04",
+            "rule": "Allow warmth, humor, speed and restraint when the brief supports them.",
+            "source": "genre"
+          },
+          {
+            "id": "dr_05",
+            "rule": "Motivate lighting, perspective, performance and camera behavior from the scene.",
+            "source": "style"
+          },
+          {
+            "id": "dr_06",
+            "rule": "Artificial lighting is acceptable when it produces a coherent, believable result.",
+            "source": "style"
+          },
+          {
+            "id": "dr_07",
+            "rule": "Handheld movement, muted color, grime and film grain are optional, not defining requirements.",
+            "source": "style"
+          },
+          {
+            "id": "dr_08",
+            "rule": "Stage key action center-weighted in the vertical 9:16 frame, stacking foreground and background, with the top and bottom safe zones free of essential action.",
+            "source": "frame"
+          },
+          {
+            "id": "dr_09",
+            "rule": "Keep fewer characters in frame at once so each stays readable at phone size.",
+            "source": "frame"
+          },
+          {
+            "id": "dr_10",
+            "rule": "Plan each block as a 15-second unit with at most 2 distinct events.",
+            "source": "frame"
+          }
+        ]
+      },
+      "for_text_blocks_video": {
+        "rules": [
+          {
+            "id": "tb_01",
+            "rule": "Specify the selected action and response in a feasible temporal order.",
+            "source": "genre"
+          },
+          {
+            "id": "tb_02",
+            "rule": "Never substitute mood adjectives for observable behavior.",
+            "source": "genre"
+          },
+          {
+            "id": "tb_03",
+            "rule": "Do not add bereavement, illness, crying, explanatory monologues or tragic endings merely to signal seriousness.",
+            "source": "genre"
+          },
+          {
+            "id": "tb_04",
+            "rule": "Preserve an explicitly requested moral or ending and express its consequence through action.",
+            "source": "genre"
+          },
+          {
+            "id": "tb_05",
+            "rule": "Maintain weight, grip, momentum, gaze and stable geometry over time.",
+            "source": "style"
+          },
+          {
+            "id": "tb_06",
+            "rule": "Do not replace a locked anthropomorphic animal with a naturalistic wild animal.",
+            "source": "style"
+          },
+          {
+            "id": "tb_07",
+            "rule": "Avoid waxy skin, plastic sheen, arbitrary imperfections, gratuitous sharpness and empty quality slogans.",
+            "source": "style"
+          },
+          {
+            "id": "tb_08",
+            "rule": "For reference sheets prioritize readable form over dramatic darkness.",
+            "source": "style"
+          },
+          {
+            "id": "tb_09",
+            "rule": "Plan each block as a 15-second unit with at most 2 distinct events.",
+            "source": "frame"
+          }
+        ]
+      }
+    },
+    "continuity_locks": [
+      "Ending: mother and children reconcile",
+      "The portrait orientation stays the same in every stage."
+    ],
+    "anti_cliche_guards": [
+      {
+        "guard": "Do not impose crying, illness, death or a bitter past on a simple idea to make it seem important.",
+        "source": "genre"
+      },
+      {
+        "guard": "Do not write an invisible feeling in place of action: \"feels free\" is not enough without a playable sign.",
+        "source": "genre"
+      },
+      {
+        "guard": "Do not turn every line of dialogue into a confession, a psychological analysis or a maxim.",
+        "source": "genre"
+      },
+      {
+        "guard": "Do not remove a specified moral ending; shorten requested advice and give it weight with a later action.",
+        "source": "genre"
+      },
+      {
+        "guard": "Do not force a full character arc into every short scene.",
+        "source": "genre"
+      },
+      {
+        "guard": "Do not add bereavement, illness, crying, explanatory monologues or tragic endings merely to signal seriousness.",
+        "source": "genre"
+      },
+      {
+        "guard": "Do not equate Realistic with everything dirty, sad, dark or shaky.",
+        "source": "style"
+      },
+      {
+        "guard": "Do not add waxy skin, unmotivated retouching, plastic gloss or irrelevant detail to look higher quality.",
+        "source": "style"
+      },
+      {
+        "guard": "Do not use lens names, camera brands, 8K or generic quality phrases in place of an actionable description.",
+        "source": "style"
+      },
+      {
+        "guard": "Do not replace a locked anthropomorphic animal with a naturalistic wild animal.",
+        "source": "style"
+      },
+      {
+        "guard": "Do not let the style add story content, or the genre change the medium.",
+        "source": "combo"
+      }
+    ],
+    "qc_checklist": [
+      {
+        "id": "genre_qc_01",
+        "type": "criterion",
+        "source": "genre",
+        "stage": "script",
+        "criterion": "The central desire and its obstacle are understood without outside explanation.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "genre_qc_02",
+        "type": "criterion",
+        "source": "genre",
+        "stage": "script",
+        "criterion": "A change of relationship or decision shows in one visible behavior.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "genre_qc_03",
+        "type": "criterion",
+        "source": "genre",
+        "stage": "asset",
+        "criterion": "Dialogue never repeats what the audience already knows.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "genre_qc_04",
+        "type": "criterion",
+        "source": "genre",
+        "stage": "sheet",
+        "criterion": "The feeling matches the intensity of the brief and no imposed incident is added.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "genre_qc_05",
+        "type": "criterion",
+        "source": "genre",
+        "stage": "text_block",
+        "criterion": "The ending and the locked relationships are preserved.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "genre_qc_06",
+        "type": "criterion",
+        "source": "genre",
+        "stage": "video",
+        "criterion": "The medium and the visual rules have not crossed into the style module.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "style_qc_01",
+        "type": "criterion",
+        "source": "style",
+        "stage": "asset",
+        "criterion": "The world's premise has not been mistaken for a photographic style.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "style_qc_02",
+        "type": "criterion",
+        "source": "style",
+        "stage": "sheet",
+        "criterion": "Approved scale, contact and anatomy are consistent.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "style_qc_03",
+        "type": "criterion",
+        "source": "style",
+        "stage": "text_block",
+        "criterion": "Light sources and material response are understandable.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "style_qc_04",
+        "type": "criterion",
+        "source": "style",
+        "stage": "video",
+        "criterion": "Identity and inherent color stay constant between shots.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "style_qc_05",
+        "type": "criterion",
+        "source": "style",
+        "stage": "video",
+        "criterion": "No cliched texture or camera shake has been added by force.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "style_qc_06",
+        "type": "criterion",
+        "source": "style",
+        "stage": "all",
+        "criterion": "The style has not changed the story, the genre or the ending.",
+        "how_to_check": "Compare the stage output with this criterion and point to the line or frame that meets or breaks it."
+      },
+      {
+        "id": "genre_boundary_01",
+        "type": "boundary_test",
+        "source": "genre",
+        "stage": "all",
+        "criterion": "Boundary test: a happy drama with a reconciliation ending must work without death or forced sorrow. Dialogue-removal test: with desire and consequence kept, the wordless version must stay understandable.",
+        "how_to_check": "Run the boundary test on the stage output and report whether it holds."
+      },
+      {
+        "id": "style_boundary_01",
+        "type": "boundary_test",
+        "source": "style",
+        "stage": "all",
+        "criterion": "Boundary test: realistic science fiction must keep the approved technology, not remove it. Asset test: the same object by day and by night must stay recognizable without forcing the light to stay fixed.",
+        "how_to_check": "Run the boundary test on the stage output and report whether it holds."
+      },
+      {
+        "id": "combo_01",
+        "type": "criterion",
+        "source": "combo",
+        "stage": "all",
+        "criterion": "Drama keeps the story logic and Realistic keeps the presentation; neither changes the other's domain.",
+        "how_to_check": "Check that no rule or output changes the medium because of the genre, or the plot because of the style."
+      },
+      {
+        "id": "frame_01",
+        "type": "criterion",
+        "source": "frame",
+        "stage": "text_block",
+        "criterion": "Each block fits 15 seconds with at most 2 distinct events.",
+        "how_to_check": "Count the events of each block and compare with its length."
+      },
+      {
+        "id": "frame_02",
+        "type": "criterion",
+        "source": "frame",
+        "stage": "video",
+        "criterion": "The framing follows the portrait orientation rules.",
+        "how_to_check": "Check the key action position and the safe zones in a frame of the clip."
+      }
+    ],
+    "review_options": {
+      "script": {
+        "technical": [
+          {
+            "id": "script_tech_style_drift",
+            "label": "The Realistic look is not consistent in the script",
+            "fix_instruction": "Restore the Realistic presentation rules of the Creative Bible; leave the story content unchanged.",
+            "target_stage": "script"
+          },
+          {
+            "id": "script_tech_genre_logic",
+            "label": "The Drama feel is lost in the script",
+            "fix_instruction": "Restore the Drama narrative logic of the Creative Bible without changing the medium or the look.",
+            "target_stage": "script"
+          },
+          {
+            "id": "script_tech_added_content",
+            "label": "Something appears in the script that was never in the script",
+            "fix_instruction": "Remove every character, event, setting or ending the script and the project locks do not authorize.",
+            "target_stage": "script"
+          },
+          {
+            "id": "script_tech_framing",
+            "label": "The portrait framing does not fit in the script",
+            "fix_instruction": "Re-compose for the portrait frame following the orientation rules of the Creative Bible.",
+            "target_stage": "script"
+          }
+        ],
+        "preference": [
+          {
+            "id": "script_pref_calmer",
+            "label": "Make it calmer",
+            "fix_instruction": "Lower the intensity within Drama and Realistic; keep every approved event.",
+            "target_stage": "script"
+          },
+          {
+            "id": "script_pref_more_intense",
+            "label": "Make it more intense",
+            "fix_instruction": "Raise the intensity within Drama and Realistic; keep every approved event.",
+            "target_stage": "script"
+          },
+          {
+            "id": "script_pref_simpler_setting",
+            "label": "Simplify the surroundings",
+            "fix_instruction": "Reduce background detail so the main action reads first; keep every locked location element.",
+            "target_stage": "script"
+          },
+          {
+            "id": "script_pref_warmer_mood",
+            "label": "Make the mood warmer",
+            "fix_instruction": "Warm the mood within the Realistic light and color language; do not change the genre.",
+            "target_stage": "script"
+          }
+        ]
+      },
+      "asset": {
+        "technical": [
+          {
+            "id": "asset_tech_style_drift",
+            "label": "The Realistic look is not consistent in the asset",
+            "fix_instruction": "Restore the Realistic presentation rules of the Creative Bible; leave the story content unchanged.",
+            "target_stage": "asset"
+          },
+          {
+            "id": "asset_tech_genre_logic",
+            "label": "The Drama feel is lost in the asset",
+            "fix_instruction": "Restore the Drama narrative logic of the Creative Bible without changing the medium or the look.",
+            "target_stage": "asset"
+          },
+          {
+            "id": "asset_tech_added_content",
+            "label": "Something appears in the asset that was never in the script",
+            "fix_instruction": "Remove every character, event, setting or ending the script and the project locks do not authorize.",
+            "target_stage": "asset"
+          },
+          {
+            "id": "asset_tech_framing",
+            "label": "The portrait framing does not fit in the asset",
+            "fix_instruction": "Re-compose for the portrait frame following the orientation rules of the Creative Bible.",
+            "target_stage": "asset"
+          }
+        ],
+        "preference": [
+          {
+            "id": "asset_pref_calmer",
+            "label": "Make it calmer",
+            "fix_instruction": "Lower the intensity within Drama and Realistic; keep every approved event.",
+            "target_stage": "asset"
+          },
+          {
+            "id": "asset_pref_more_intense",
+            "label": "Make it more intense",
+            "fix_instruction": "Raise the intensity within Drama and Realistic; keep every approved event.",
+            "target_stage": "asset"
+          },
+          {
+            "id": "asset_pref_simpler_setting",
+            "label": "Simplify the surroundings",
+            "fix_instruction": "Reduce background detail so the main action reads first; keep every locked location element.",
+            "target_stage": "asset"
+          },
+          {
+            "id": "asset_pref_warmer_mood",
+            "label": "Make the mood warmer",
+            "fix_instruction": "Warm the mood within the Realistic light and color language; do not change the genre.",
+            "target_stage": "asset"
+          }
+        ]
+      },
+      "sheet": {
+        "technical": [
+          {
+            "id": "sheet_tech_style_drift",
+            "label": "The Realistic look is not consistent in the sheet",
+            "fix_instruction": "Restore the Realistic presentation rules of the Creative Bible; leave the story content unchanged.",
+            "target_stage": "sheet"
+          },
+          {
+            "id": "sheet_tech_genre_logic",
+            "label": "The Drama feel is lost in the sheet",
+            "fix_instruction": "Restore the Drama narrative logic of the Creative Bible without changing the medium or the look.",
+            "target_stage": "sheet"
+          },
+          {
+            "id": "sheet_tech_added_content",
+            "label": "Something appears in the sheet that was never in the script",
+            "fix_instruction": "Remove every character, event, setting or ending the script and the project locks do not authorize.",
+            "target_stage": "sheet"
+          },
+          {
+            "id": "sheet_tech_framing",
+            "label": "The portrait framing does not fit in the sheet",
+            "fix_instruction": "Re-compose for the portrait frame following the orientation rules of the Creative Bible.",
+            "target_stage": "sheet"
+          }
+        ],
+        "preference": [
+          {
+            "id": "sheet_pref_calmer",
+            "label": "Make it calmer",
+            "fix_instruction": "Lower the intensity within Drama and Realistic; keep every approved event.",
+            "target_stage": "sheet"
+          },
+          {
+            "id": "sheet_pref_more_intense",
+            "label": "Make it more intense",
+            "fix_instruction": "Raise the intensity within Drama and Realistic; keep every approved event.",
+            "target_stage": "sheet"
+          },
+          {
+            "id": "sheet_pref_simpler_setting",
+            "label": "Simplify the surroundings",
+            "fix_instruction": "Reduce background detail so the main action reads first; keep every locked location element.",
+            "target_stage": "sheet"
+          },
+          {
+            "id": "sheet_pref_warmer_mood",
+            "label": "Make the mood warmer",
+            "fix_instruction": "Warm the mood within the Realistic light and color language; do not change the genre.",
+            "target_stage": "sheet"
+          }
+        ]
+      },
+      "text_block": {
+        "technical": [
+          {
+            "id": "text_block_tech_style_drift",
+            "label": "The Realistic look is not consistent in the text block",
+            "fix_instruction": "Restore the Realistic presentation rules of the Creative Bible; leave the story content unchanged.",
+            "target_stage": "text_block"
+          },
+          {
+            "id": "text_block_tech_genre_logic",
+            "label": "The Drama feel is lost in the text block",
+            "fix_instruction": "Restore the Drama narrative logic of the Creative Bible without changing the medium or the look.",
+            "target_stage": "text_block"
+          },
+          {
+            "id": "text_block_tech_added_content",
+            "label": "Something appears in the text block that was never in the script",
+            "fix_instruction": "Remove every character, event, setting or ending the script and the project locks do not authorize.",
+            "target_stage": "text_block"
+          },
+          {
+            "id": "text_block_tech_framing",
+            "label": "The portrait framing does not fit in the text block",
+            "fix_instruction": "Re-compose for the portrait frame following the orientation rules of the Creative Bible.",
+            "target_stage": "text_block"
+          }
+        ],
+        "preference": [
+          {
+            "id": "text_block_pref_calmer",
+            "label": "Make it calmer",
+            "fix_instruction": "Lower the intensity within Drama and Realistic; keep every approved event.",
+            "target_stage": "text_block"
+          },
+          {
+            "id": "text_block_pref_more_intense",
+            "label": "Make it more intense",
+            "fix_instruction": "Raise the intensity within Drama and Realistic; keep every approved event.",
+            "target_stage": "text_block"
+          },
+          {
+            "id": "text_block_pref_simpler_setting",
+            "label": "Simplify the surroundings",
+            "fix_instruction": "Reduce background detail so the main action reads first; keep every locked location element.",
+            "target_stage": "text_block"
+          },
+          {
+            "id": "text_block_pref_warmer_mood",
+            "label": "Make the mood warmer",
+            "fix_instruction": "Warm the mood within the Realistic light and color language; do not change the genre.",
+            "target_stage": "text_block"
+          }
+        ]
+      },
+      "video": {
+        "technical": [
+          {
+            "id": "video_tech_style_drift",
+            "label": "The Realistic look is not consistent in the video",
+            "fix_instruction": "Restore the Realistic presentation rules of the Creative Bible; leave the story content unchanged.",
+            "target_stage": "video"
+          },
+          {
+            "id": "video_tech_genre_logic",
+            "label": "The Drama feel is lost in the video",
+            "fix_instruction": "Restore the Drama narrative logic of the Creative Bible without changing the medium or the look.",
+            "target_stage": "video"
+          },
+          {
+            "id": "video_tech_added_content",
+            "label": "Something appears in the video that was never in the script",
+            "fix_instruction": "Remove every character, event, setting or ending the script and the project locks do not authorize.",
+            "target_stage": "video"
+          },
+          {
+            "id": "video_tech_framing",
+            "label": "The portrait framing does not fit in the video",
+            "fix_instruction": "Re-compose for the portrait frame following the orientation rules of the Creative Bible.",
+            "target_stage": "video"
+          }
+        ],
+        "preference": [
+          {
+            "id": "video_pref_calmer",
+            "label": "Make it calmer",
+            "fix_instruction": "Lower the intensity within Drama and Realistic; keep every approved event.",
+            "target_stage": "video"
+          },
+          {
+            "id": "video_pref_more_intense",
+            "label": "Make it more intense",
+            "fix_instruction": "Raise the intensity within Drama and Realistic; keep every approved event.",
+            "target_stage": "video"
+          },
+          {
+            "id": "video_pref_simpler_setting",
+            "label": "Simplify the surroundings",
+            "fix_instruction": "Reduce background detail so the main action reads first; keep every locked location element.",
+            "target_stage": "video"
+          },
+          {
+            "id": "video_pref_warmer_mood",
+            "label": "Make the mood warmer",
+            "fix_instruction": "Warm the mood within the Realistic light and color language; do not change the genre.",
+            "target_stage": "video"
+          }
+        ]
+      }
+    },
+    "conflicts": [],
+    "open_questions": [],
+    "assumptions": [
+      "Block length 15 s (the platform default); the film is one 60 s episode of 4 blocks.",
+      "Speech fills at most 70% of a block, so 26 words per block at 2.5 words per second."
+    ],
+    "validation_status": "ok_with_assumptions"
+  },
+  "asset_registry": {
+    "characters": [
+      {
+        "char_id": "char_1",
+        "name": "Nora",
+        "name_latin": "Nora",
+        "aliases": [],
+        "kind": "human",
+        "role": "lead",
+        "is_minor": "no",
+        "script_description": "A woman in her forties with short dark hair, wearing a grey wool cardigan",
+        "facts": [],
+        "looks": [
+          {
+            "look_id": "look_1",
+            "description": "A woman in her forties with short dark hair, wearing a grey wool cardigan"
+          }
+        ],
+        "speaks": true,
+        "dialogue_language": "en",
+        "voice_delivery": ["on_screen"],
+        "voice_hints": []
+      },
+      {
+        "char_id": "char_2",
+        "name": "Lina",
+        "name_latin": "Lina",
+        "aliases": [],
+        "kind": "human",
+        "role": "supporting",
+        "is_minor": "yes",
+        "script_description": "A girl of fifteen with a long dark braid, wearing a green parka",
+        "facts": [],
+        "looks": [
+          {
+            "look_id": "look_1",
+            "description": "A girl of fifteen with a long dark braid, wearing a green parka"
+          }
+        ],
+        "speaks": true,
+        "dialogue_language": "en",
+        "voice_delivery": ["on_screen"],
+        "voice_hints": []
+      },
+      {
+        "char_id": "char_3",
+        "name": "Sam",
+        "name_latin": "Sam",
+        "aliases": [],
+        "kind": "human",
+        "role": "supporting",
+        "is_minor": "yes",
+        "script_description": "A boy of nine with curly brown hair, wearing a yellow sweater",
+        "facts": [],
+        "looks": [
+          {
+            "look_id": "look_1",
+            "description": "A boy of nine with curly brown hair, wearing a yellow sweater"
+          }
+        ],
+        "speaks": false,
+        "dialogue_language": null,
+        "voice_delivery": [],
+        "voice_hints": []
+      }
+    ],
+    "locations": [
+      {
+        "loc_id": "loc_1",
+        "name": "Kitchen",
+        "name_latin": "Kitchen",
+        "aliases": [],
+        "interior_exterior": "interior",
+        "time_of_day": "evening",
+        "script_description": "A small kitchen with yellow walls, a wooden table and a gas stove, lit by an amber hanging lamp",
+        "facts": [],
+        "fixed_elements_from_script": [
+          {
+            "element": "the stove"
+          },
+          {
+            "element": "the table"
+          },
+          {
+            "element": "the doorway"
+          }
+        ]
+      },
+      {
+        "loc_id": "loc_2",
+        "name": "Front Step",
+        "name_latin": "Front Step",
+        "aliases": [],
+        "interior_exterior": "exterior",
+        "time_of_day": "night",
+        "script_description": "A concrete front step under a yellow porch light, with a cold blue street beyond",
+        "facts": [],
+        "fixed_elements_from_script": [
+          {
+            "element": "the front door behind the step"
+          },
+          {
+            "element": "the garden wall"
+          }
+        ]
+      }
+    ],
+    "props": [
+      {
+        "prop_id": "prop_1",
+        "name": "Blue Kettle",
+        "name_latin": "Blue Kettle",
+        "aliases": [],
+        "category_hint": "kitchenware",
+        "script_description": "A blue enamel kettle with a black handle",
+        "facts": []
+      },
+      {
+        "prop_id": "prop_2",
+        "name": "Scarf",
+        "name_latin": "Scarf",
+        "aliases": [],
+        "category_hint": "clothing",
+        "script_description": "A long red wool scarf with fringed ends",
+        "facts": []
+      }
+    ],
+    "scene_index": [
+      {
+        "scene_number": "1",
+        "heading": "INT. KITCHEN - EVENING",
+        "location_id": "loc_1",
+        "time_of_day": "evening",
+        "characters_present": ["char_1", "char_2", "char_3"],
+        "heard_only": [],
+        "speakers": ["char_1", "char_2"],
+        "props_present": ["prop_1"]
+      },
+      {
+        "scene_number": "2",
+        "heading": "EXT. FRONT STEP - NIGHT",
+        "location_id": "loc_2",
+        "time_of_day": "night",
+        "characters_present": ["char_1", "char_2", "char_3"],
+        "heard_only": [],
+        "speakers": ["char_1", "char_2"],
+        "props_present": ["prop_2"]
+      }
+    ]
+  },
+  "director": {
+    "dami": "director",
+    "dami_version": "2.0",
+    "creative_bible_ref": {
+      "genre_id": "genre.drama",
+      "style_id": "style.realistic",
+      "dami_version": "1.0"
+    },
+    "mode": "full",
+    "status": "ok_with_warnings",
+    "project": {
+      "title": "INT. KITCHEN - EVENING",
+      "format": "film",
+      "episode_number": null,
+      "aspect_ratio": "9:16",
+      "delivery_mode": "block_15"
+    },
+    "dramatic_analysis": {
+      "logline": "A family finds its way back to each other.",
+      "dramatic_question": "Will they reconcile?",
+      "protagonist_want": "to be understood",
+      "turning_points": ["the apology"],
+      "scenes": [
+        {
+          "scene_id": "sc_1",
+          "heading": "INT. KITCHEN - EVENING",
+          "dramatic_function": "setup",
+          "pov_character": "char_1",
+          "emotional_temperature": 3,
+          "relationship_start": "apart",
+          "relationship_end": "closer"
+        },
+        {
+          "scene_id": "sc_2",
+          "heading": "EXT. FRONT STEP - NIGHT",
+          "dramatic_function": "release",
+          "pov_character": "char_1",
+          "emotional_temperature": 3,
+          "relationship_start": "apart",
+          "relationship_end": "closer"
+        }
+      ]
+    },
+    "directors_notes": {
+      "camera_personality": "Patient and close; the camera moves only when a feeling turns.",
+      "staging_personality": "Distance carries the conflict; closing it carries the turn.",
+      "rhythm_map": "Long holds early, shorter cuts at the turn, a long final hold.",
+      "sound_world": "Room ambience, no music.",
+      "framing_rules": "Depth stacking, faces in the upper third.",
+      "rules_used": ["dr_01"],
+      "aesthetic_overrides": []
+    },
+    "continuity_bible": {
+      "characters": [
+        {
+          "asset_id": "char_1",
+          "name": "Nora",
+          "descriptor": "A woman in her forties with short dark hair, wearing a grey wool cardigan",
+          "voice": "Speaks en.",
+          "costume_versions": []
+        },
+        {
+          "asset_id": "char_2",
+          "name": "Lina",
+          "descriptor": "A girl of fifteen with a long dark braid, wearing a green parka",
+          "voice": "Speaks en.",
+          "costume_versions": []
+        },
+        {
+          "asset_id": "char_3",
+          "name": "Sam",
+          "descriptor": "A boy of nine with curly brown hair, wearing a yellow sweater",
+          "voice": "",
+          "costume_versions": []
+        }
+      ],
+      "locations": [
+        {
+          "asset_id": "loc_1",
+          "descriptor": "A small kitchen with yellow walls, a wooden table and a gas stove, by an hanging lamp",
+          "landmarks": ["the stove", "the table", "the doorway"]
+        },
+        {
+          "asset_id": "loc_2",
+          "descriptor": "A concrete front step under a yellow porch light, with a cold blue street beyond",
+          "landmarks": ["the front door behind the step", "the garden wall"]
+        }
+      ],
+      "props": [
+        {
+          "asset_id": "prop_1",
+          "descriptor": "A blue enamel kettle with a black handle"
+        },
+        {
+          "asset_id": "prop_2",
+          "descriptor": "A long red wool scarf with fringed ends"
+        }
+      ]
+    },
+    "scene_plan": [
+      {
+        "scene_id": "sc_1",
+        "location_id": "loc_1",
+        "time_of_day": "evening",
+        "start_staging_id": "st_sc1_01",
+        "end_staging_id": "st_sc1_02",
+        "target_ideal_s": 14,
+        "merge_ok_with_next": false
+      },
+      {
+        "scene_id": "sc_2",
+        "location_id": "loc_2",
+        "time_of_day": "night",
+        "start_staging_id": "st_sc2_01",
+        "end_staging_id": "st_sc2_02",
+        "target_ideal_s": 14,
+        "merge_ok_with_next": false
+      }
+    ],
+    "staging_states": [
+      {
+        "staging_id": "st_sc1_01",
+        "scene_id": "sc_1",
+        "entries": [
+          {
+            "character_id": "char_1",
+            "on_screen": true,
+            "position": "beside the stove",
+            "posture": "standing",
+            "facing": "three-quarter toward frame right",
+            "gaze": "at the others",
+            "screen_side": "frame-left",
+            "distances": [
+              {
+                "to": "char_2",
+                "zone": "social",
+                "approx_m": 2
+              },
+              {
+                "to": "char_3",
+                "zone": "social",
+                "approx_m": 2
+              }
+            ]
+          },
+          {
+            "character_id": "char_2",
+            "on_screen": true,
+            "position": "two steps from the stove",
+            "posture": "seated",
+            "facing": "three-quarter toward frame left",
+            "gaze": "at the floor",
+            "screen_side": "frame-right",
+            "distances": [
+              {
+                "to": "char_1",
+                "zone": "social",
+                "approx_m": 2
+              },
+              {
+                "to": "char_3",
+                "zone": "social",
+                "approx_m": 2
+              }
+            ]
+          },
+          {
+            "character_id": "char_3",
+            "on_screen": true,
+            "position": "two steps from the stove",
+            "posture": "seated",
+            "facing": "three-quarter toward frame right",
+            "gaze": "at the floor",
+            "screen_side": "centre",
+            "distances": [
+              {
+                "to": "char_1",
+                "zone": "social",
+                "approx_m": 2
+              },
+              {
+                "to": "char_2",
+                "zone": "social",
+                "approx_m": 2
+              }
+            ]
+          }
+        ],
+        "meaning": "They keep apart; the distance shows the tension."
+      },
+      {
+        "staging_id": "st_sc1_02",
+        "scene_id": "sc_1",
+        "entries": [
+          {
+            "character_id": "char_1",
+            "on_screen": true,
+            "position": "beside the stove",
+            "posture": "standing",
+            "facing": "three-quarter toward frame right",
+            "gaze": "at the others",
+            "screen_side": "frame-left",
+            "distances": [
+              {
+                "to": "char_2",
+                "zone": "personal",
+                "approx_m": 1
+              },
+              {
+                "to": "char_3",
+                "zone": "personal",
+                "approx_m": 1
+              }
+            ]
+          },
+          {
+            "character_id": "char_2",
+            "on_screen": true,
+            "position": "two steps from the stove",
+            "posture": "seated",
+            "facing": "three-quarter toward frame left",
+            "gaze": "at the floor",
+            "screen_side": "frame-right",
+            "distances": [
+              {
+                "to": "char_1",
+                "zone": "personal",
+                "approx_m": 1
+              },
+              {
+                "to": "char_3",
+                "zone": "personal",
+                "approx_m": 1
+              }
+            ]
+          },
+          {
+            "character_id": "char_3",
+            "on_screen": true,
+            "position": "two steps from the stove",
+            "posture": "seated",
+            "facing": "three-quarter toward frame right",
+            "gaze": "at the floor",
+            "screen_side": "centre",
+            "distances": [
+              {
+                "to": "char_1",
+                "zone": "personal",
+                "approx_m": 1
+              },
+              {
+                "to": "char_2",
+                "zone": "personal",
+                "approx_m": 1
+              }
+            ]
+          }
+        ],
+        "meaning": "The space between them has closed."
+      },
+      {
+        "staging_id": "st_sc2_01",
+        "scene_id": "sc_2",
+        "entries": [
+          {
+            "character_id": "char_1",
+            "on_screen": true,
+            "position": "beside the front door behind the step",
+            "posture": "standing",
+            "facing": "three-quarter toward frame right",
+            "gaze": "at the others",
+            "screen_side": "frame-left",
+            "distances": [
+              {
+                "to": "char_2",
+                "zone": "social",
+                "approx_m": 2
+              },
+              {
+                "to": "char_3",
+                "zone": "social",
+                "approx_m": 2
+              }
+            ]
+          },
+          {
+            "character_id": "char_2",
+            "on_screen": true,
+            "position": "two steps from the front door behind the step",
+            "posture": "seated",
+            "facing": "three-quarter toward frame left",
+            "gaze": "at the floor",
+            "screen_side": "frame-right",
+            "distances": [
+              {
+                "to": "char_1",
+                "zone": "social",
+                "approx_m": 2
+              },
+              {
+                "to": "char_3",
+                "zone": "social",
+                "approx_m": 2
+              }
+            ]
+          },
+          {
+            "character_id": "char_3",
+            "on_screen": true,
+            "position": "two steps from the front door behind the step",
+            "posture": "seated",
+            "facing": "three-quarter toward frame right",
+            "gaze": "at the floor",
+            "screen_side": "centre",
+            "distances": [
+              {
+                "to": "char_1",
+                "zone": "social",
+                "approx_m": 2
+              },
+              {
+                "to": "char_2",
+                "zone": "social",
+                "approx_m": 2
+              }
+            ]
+          }
+        ],
+        "meaning": "They keep apart; the distance shows the tension."
+      },
+      {
+        "staging_id": "st_sc2_02",
+        "scene_id": "sc_2",
+        "entries": [
+          {
+            "character_id": "char_1",
+            "on_screen": true,
+            "position": "beside the front door behind the step",
+            "posture": "standing",
+            "facing": "three-quarter toward frame right",
+            "gaze": "at the others",
+            "screen_side": "frame-left",
+            "distances": [
+              {
+                "to": "char_2",
+                "zone": "personal",
+                "approx_m": 1
+              },
+              {
+                "to": "char_3",
+                "zone": "personal",
+                "approx_m": 1
+              }
+            ]
+          },
+          {
+            "character_id": "char_2",
+            "on_screen": true,
+            "position": "two steps from the front door behind the step",
+            "posture": "seated",
+            "facing": "three-quarter toward frame left",
+            "gaze": "at the floor",
+            "screen_side": "frame-right",
+            "distances": [
+              {
+                "to": "char_1",
+                "zone": "personal",
+                "approx_m": 1
+              },
+              {
+                "to": "char_3",
+                "zone": "personal",
+                "approx_m": 1
+              }
+            ]
+          },
+          {
+            "character_id": "char_3",
+            "on_screen": true,
+            "position": "two steps from the front door behind the step",
+            "posture": "seated",
+            "facing": "three-quarter toward frame right",
+            "gaze": "at the floor",
+            "screen_side": "centre",
+            "distances": [
+              {
+                "to": "char_1",
+                "zone": "personal",
+                "approx_m": 1
+              },
+              {
+                "to": "char_2",
+                "zone": "personal",
+                "approx_m": 1
+              }
+            ]
+          }
+        ],
+        "meaning": "The space between them has closed."
+      }
+    ],
+    "warnings": [
+      {
+        "type": "runtime",
+        "ref": "totals",
+        "message": "The script plays about 28 s against a 60 s target; no plot was added."
+      }
+    ],
+    "shots": [
+      {
+        "shot_id": "sh_0001",
+        "order": 1,
+        "scene_id": "sc_1",
+        "location_id": "loc_1",
+        "owner": "char_1",
+        "size": "wide",
+        "angle": "slightly below eye level",
+        "camera_height": "chest height",
+        "axis_offset": "25 degrees off the room's main axis",
+        "camera_move_intent": "static",
+        "camera_move_reason": "observing the room settles us in it",
+        "staging_start_id": "st_sc1_01",
+        "staging_end_id": "st_sc1_01",
+        "staging_change": "",
+        "state_at_start": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+        "action": "NORA stirs a pot at the stove, her back to the room. LINA sits at the table in her coat, staring at the floor. SAM watches from the doorway.",
+        "in_progress_at_end": "The moment hangs, eyes held on the speaker.",
+        "dialogue": [],
+        "sound_cues": ["a chair creaks"],
+        "assets": {
+          "characters": ["char_1", "char_2", "char_3"],
+          "props": [],
+          "heard_only": []
+        },
+        "duration": {
+          "min_s": 2,
+          "ideal_s": 4,
+          "max_s": 7
+        },
+        "flex_content": "a held look and a breath before the next beat",
+        "spoken_words": 0,
+        "events": 1,
+        "rapid_cut": false,
+        "transition_after": "cut",
+        "break_quality_after": "ok",
+        "trim_anchor": null,
+        "cut_reason": "cut when the action completes",
+        "default_avoided": "both characters in strict profile, centred, at eye level",
+        "default_kept_reason": "",
+        "applied_rules": []
+      },
+      {
+        "shot_id": "sh_0002",
+        "order": 2,
+        "scene_id": "sc_1",
+        "location_id": "loc_1",
+        "owner": "char_1",
+        "size": "medium_close",
+        "angle": "slightly below eye level",
+        "camera_height": "chest height",
+        "axis_offset": "25 degrees off the room's main axis",
+        "camera_move_intent": "push_in",
+        "camera_move_reason": "the line lands; we move closer to the speaker",
+        "staging_start_id": "st_sc1_01",
+        "staging_end_id": "st_sc1_01",
+        "staging_change": "",
+        "state_at_start": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+        "action": "NORA speaks, body turned three-quarter toward the others.",
+        "in_progress_at_end": "The moment hangs, eyes held on the speaker.",
+        "dialogue": [
+          {
+            "speaker_id": "char_1",
+            "line": "Dinner is almost ready.",
+            "delivery": "plain, quiet",
+            "language": "en",
+            "heard_as": "on_screen"
+          }
+        ],
+        "sound_cues": ["a chair creaks"],
+        "assets": {
+          "characters": ["char_1", "char_2", "char_3"],
+          "props": [],
+          "heard_only": []
+        },
+        "duration": {
+          "min_s": 3,
+          "ideal_s": 3,
+          "max_s": 6
+        },
+        "flex_content": "a held look and a breath before the next beat",
+        "spoken_words": 4,
+        "events": 0,
+        "rapid_cut": false,
+        "transition_after": "cut",
+        "break_quality_after": "ok",
+        "trim_anchor": null,
+        "cut_reason": "cut on the end of the line",
+        "default_avoided": "both characters in strict profile, centred, at eye level",
+        "default_kept_reason": "",
+        "applied_rules": []
+      },
+      {
+        "shot_id": "sh_0003",
+        "order": 3,
+        "scene_id": "sc_1",
+        "location_id": "loc_1",
+        "owner": "char_2",
+        "size": "medium_close",
+        "angle": "slightly below eye level",
+        "camera_height": "chest height",
+        "axis_offset": "25 degrees off the room's main axis",
+        "camera_move_intent": "push_in",
+        "camera_move_reason": "the line lands; we move closer to the speaker",
+        "staging_start_id": "st_sc1_01",
+        "staging_end_id": "st_sc1_01",
+        "staging_change": "",
+        "state_at_start": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+        "action": "LINA speaks, body turned three-quarter toward the others.",
+        "in_progress_at_end": "The moment hangs, eyes held on the speaker.",
+        "dialogue": [
+          {
+            "speaker_id": "char_2",
+            "line": "I am not hungry.",
+            "delivery": "plain, quiet",
+            "language": "en",
+            "heard_as": "on_screen"
+          }
+        ],
+        "sound_cues": ["a chair creaks"],
+        "assets": {
+          "characters": ["char_1", "char_2", "char_3"],
+          "props": [],
+          "heard_only": []
+        },
+        "duration": {
+          "min_s": 3,
+          "ideal_s": 3,
+          "max_s": 6
+        },
+        "flex_content": "a held look and a breath before the next beat",
+        "spoken_words": 4,
+        "events": 0,
+        "rapid_cut": false,
+        "transition_after": "cut",
+        "break_quality_after": "ok",
+        "trim_anchor": null,
+        "cut_reason": "cut on the end of the line",
+        "default_avoided": "both characters in strict profile, centred, at eye level",
+        "default_kept_reason": "",
+        "applied_rules": []
+      },
+      {
+        "shot_id": "sh_0004",
+        "order": 4,
+        "scene_id": "sc_1",
+        "location_id": "loc_1",
+        "owner": "char_1",
+        "size": "medium",
+        "angle": "slightly below eye level",
+        "camera_height": "chest height",
+        "axis_offset": "25 degrees off the room's main axis",
+        "camera_move_intent": "static",
+        "camera_move_reason": "observing the room settles us in it",
+        "staging_start_id": "st_sc1_01",
+        "staging_end_id": "st_sc1_02",
+        "staging_change": "They move closer together.",
+        "state_at_start": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+        "action": "NORA sets the blue kettle on the stove and turns to face her daughter.",
+        "in_progress_at_end": "They are settling side by side, shoulders softening.",
+        "dialogue": [],
+        "sound_cues": ["a chair creaks"],
+        "assets": {
+          "characters": ["char_1", "char_2", "char_3"],
+          "props": ["prop_1"],
+          "heard_only": []
+        },
+        "duration": {
+          "min_s": 2,
+          "ideal_s": 4,
+          "max_s": 7
+        },
+        "flex_content": "a held look and a breath before the next beat",
+        "spoken_words": 0,
+        "events": 1,
+        "rapid_cut": false,
+        "transition_after": "scene_change",
+        "break_quality_after": "strong",
+        "trim_anchor": null,
+        "cut_reason": "cut when the action completes",
+        "default_avoided": "both characters in strict profile, centred, at eye level",
+        "default_kept_reason": "",
+        "applied_rules": []
+      },
+      {
+        "shot_id": "sh_0005",
+        "order": 5,
+        "scene_id": "sc_2",
+        "location_id": "loc_2",
+        "owner": "char_1",
+        "size": "wide",
+        "angle": "slightly below eye level",
+        "camera_height": "chest height",
+        "axis_offset": "25 degrees off the room's main axis",
+        "camera_move_intent": "static",
+        "camera_move_reason": "observing the room settles us in it",
+        "staging_start_id": "st_sc2_01",
+        "staging_end_id": "st_sc2_01",
+        "staging_change": "",
+        "state_at_start": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+        "action": "LINA sits alone on the cold step, hugging her knees. NORA comes out and lowers herself beside her.",
+        "in_progress_at_end": "The moment hangs, eyes held on the speaker.",
+        "dialogue": [],
+        "sound_cues": ["a chair creaks"],
+        "assets": {
+          "characters": ["char_1", "char_2", "char_3"],
+          "props": [],
+          "heard_only": []
+        },
+        "duration": {
+          "min_s": 2,
+          "ideal_s": 4,
+          "max_s": 7
+        },
+        "flex_content": "a held look and a breath before the next beat",
+        "spoken_words": 0,
+        "events": 1,
+        "rapid_cut": false,
+        "transition_after": "cut",
+        "break_quality_after": "ok",
+        "trim_anchor": null,
+        "cut_reason": "cut when the action completes",
+        "default_avoided": "both characters in strict profile, centred, at eye level",
+        "default_kept_reason": "",
+        "applied_rules": []
+      },
+      {
+        "shot_id": "sh_0006",
+        "order": 6,
+        "scene_id": "sc_2",
+        "location_id": "loc_2",
+        "owner": "char_1",
+        "size": "medium_close",
+        "angle": "slightly below eye level",
+        "camera_height": "chest height",
+        "axis_offset": "25 degrees off the room's main axis",
+        "camera_move_intent": "push_in",
+        "camera_move_reason": "the line lands; we move closer to the speaker",
+        "staging_start_id": "st_sc2_01",
+        "staging_end_id": "st_sc2_01",
+        "staging_change": "",
+        "state_at_start": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+        "action": "NORA speaks, body turned three-quarter toward the others.",
+        "in_progress_at_end": "The moment hangs, eyes held on the speaker.",
+        "dialogue": [
+          {
+            "speaker_id": "char_1",
+            "line": "I was wrong to shout.",
+            "delivery": "plain, quiet",
+            "language": "en",
+            "heard_as": "on_screen"
+          }
+        ],
+        "sound_cues": ["a chair creaks"],
+        "assets": {
+          "characters": ["char_1", "char_2", "char_3"],
+          "props": [],
+          "heard_only": []
+        },
+        "duration": {
+          "min_s": 3,
+          "ideal_s": 3,
+          "max_s": 6
+        },
+        "flex_content": "a held look and a breath before the next beat",
+        "spoken_words": 5,
+        "events": 0,
+        "rapid_cut": false,
+        "transition_after": "cut",
+        "break_quality_after": "ok",
+        "trim_anchor": null,
+        "cut_reason": "cut on the end of the line",
+        "default_avoided": "both characters in strict profile, centred, at eye level",
+        "default_kept_reason": "",
+        "applied_rules": []
+      },
+      {
+        "shot_id": "sh_0007",
+        "order": 7,
+        "scene_id": "sc_2",
+        "location_id": "loc_2",
+        "owner": "char_2",
+        "size": "medium_close",
+        "angle": "slightly below eye level",
+        "camera_height": "chest height",
+        "axis_offset": "25 degrees off the room's main axis",
+        "camera_move_intent": "push_in",
+        "camera_move_reason": "the line lands; we move closer to the speaker",
+        "staging_start_id": "st_sc2_01",
+        "staging_end_id": "st_sc2_01",
+        "staging_change": "",
+        "state_at_start": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+        "action": "LINA speaks, body turned three-quarter toward the others.",
+        "in_progress_at_end": "The moment hangs, eyes held on the speaker.",
+        "dialogue": [
+          {
+            "speaker_id": "char_2",
+            "line": "I was wrong to leave.",
+            "delivery": "plain, quiet",
+            "language": "en",
+            "heard_as": "on_screen"
+          }
+        ],
+        "sound_cues": ["a chair creaks"],
+        "assets": {
+          "characters": ["char_1", "char_2", "char_3"],
+          "props": [],
+          "heard_only": []
+        },
+        "duration": {
+          "min_s": 3,
+          "ideal_s": 3,
+          "max_s": 6
+        },
+        "flex_content": "a held look and a breath before the next beat",
+        "spoken_words": 5,
+        "events": 0,
+        "rapid_cut": false,
+        "transition_after": "cut",
+        "break_quality_after": "ok",
+        "trim_anchor": null,
+        "cut_reason": "cut on the end of the line",
+        "default_avoided": "both characters in strict profile, centred, at eye level",
+        "default_kept_reason": "",
+        "applied_rules": []
+      },
+      {
+        "shot_id": "sh_0008",
+        "order": 8,
+        "scene_id": "sc_2",
+        "location_id": "loc_2",
+        "owner": "char_1",
+        "size": "medium",
+        "angle": "slightly below eye level",
+        "camera_height": "chest height",
+        "axis_offset": "25 degrees off the room's main axis",
+        "camera_move_intent": "static",
+        "camera_move_reason": "observing the room settles us in it",
+        "staging_start_id": "st_sc2_01",
+        "staging_end_id": "st_sc2_02",
+        "staging_change": "They move closer together.",
+        "state_at_start": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+        "action": "NORA wraps her scarf around Lina's shoulders. SAM sits down on her other side, and the three of them look at the street together.",
+        "in_progress_at_end": "They are settling side by side, shoulders softening.",
+        "dialogue": [],
+        "sound_cues": ["a chair creaks"],
+        "assets": {
+          "characters": ["char_1", "char_2", "char_3"],
+          "props": ["prop_2"],
+          "heard_only": []
+        },
+        "duration": {
+          "min_s": 2,
+          "ideal_s": 4,
+          "max_s": 7
+        },
+        "flex_content": "a held look and a breath before the next beat",
+        "spoken_words": 0,
+        "events": 1,
+        "rapid_cut": false,
+        "transition_after": "end",
+        "break_quality_after": "strong",
+        "trim_anchor": null,
+        "cut_reason": "cut when the action completes",
+        "default_avoided": "both characters in strict profile, centred, at eye level",
+        "default_kept_reason": "",
+        "applied_rules": []
+      }
+    ],
+    "totals": {
+      "shot_count": 8,
+      "min_runtime_s": 20,
+      "ideal_runtime_s": 28,
+      "max_runtime_s": 52,
+      "target_runtime_s": 60,
+      "deviation_pct": 53.3
+    }
+  },
+  "cinematographer": {
+    "look_bible": {
+      "vocabulary": "photographic",
+      "look_line": "Photoreal live action, soft natural contrast, restrained earth tones with true skin, fine film texture, calm classical framing.",
+      "palette": {
+        "dominant": ["muted earth", "soft grey"],
+        "accents": [
+          {
+            "colour": "warm skin",
+            "meaning": "closeness"
+          }
+        ],
+        "forbidden": ["saturated neon"]
+      },
+      "light_setups": [
+        {
+          "light_id": "loc_1_evening",
+          "location_id": "loc_1",
+          "time_of_day": "evening",
+          "key_source": "a window out of frame",
+          "key_direction": "from frame left, three-quarter",
+          "quality": "soft",
+          "fill": "low",
+          "practicals": [],
+          "light_colour": "neutral, slightly warm",
+          "contrast": "medium",
+          "trigger": "",
+          "light_line": "Soft key light from one side of the room, little fill, shadows falling gently toward darkness."
+        },
+        {
+          "light_id": "loc_2_night",
+          "location_id": "loc_2",
+          "time_of_day": "night",
+          "key_source": "a window out of frame",
+          "key_direction": "from frame left, three-quarter",
+          "quality": "soft",
+          "fill": "low",
+          "practicals": [],
+          "light_colour": "neutral, slightly warm",
+          "contrast": "medium",
+          "trigger": "",
+          "light_line": "Soft key light from one side of the room, little fill, shadows falling gently toward darkness."
+        }
+      ],
+      "lens_language": [
+        {
+          "use_when": "intimate moments",
+          "lens_family": "long",
+          "dof": "shallow",
+          "phrase": "long lens, the background a soft blur"
+        },
+        {
+          "use_when": "geography and groups",
+          "lens_family": "normal",
+          "dof": "deep",
+          "phrase": "normal lens, deep even focus"
+        },
+        {
+          "use_when": "isolation in space",
+          "lens_family": "wide",
+          "dof": "deep",
+          "phrase": "wide view, the figure small in open space"
+        }
+      ],
+      "movement_language": [
+        {
+          "intent": "static",
+          "support": "locked",
+          "speed": "slow",
+          "phrase": "A locked-off camera holds at chest height."
+        },
+        {
+          "intent": "push_in",
+          "support": "dolly",
+          "speed": "slow",
+          "phrase": "The camera moves slowly and smoothly, close to the subject."
+        }
+      ],
+      "emotional_temperature_map": [
+        {
+          "temperature": 1,
+          "light": "soft key, gentle shadow",
+          "lens": "normal lens"
+        },
+        {
+          "temperature": 2,
+          "light": "soft key, gentle shadow",
+          "lens": "normal lens"
+        },
+        {
+          "temperature": 3,
+          "light": "soft key, gentle shadow",
+          "lens": "normal lens"
+        },
+        {
+          "temperature": 4,
+          "light": "harder key, deeper shadow",
+          "lens": "tighter, long lens"
+        },
+        {
+          "temperature": 5,
+          "light": "harder key, deeper shadow",
+          "lens": "tighter, long lens"
+        }
+      ],
+      "forbidden_looks": ["lens flares", "teal-and-orange", "haze", "god rays"],
+      "portrait_rules": "Stack figures in depth; faces in the upper third; keep the top and bottom edges free of key action.",
+      "rules_used": ["dr_01"]
+    },
+    "shots": [
+      {
+        "shot_id": "sh_0001",
+        "light_id": "loc_1_evening",
+        "lighting_change": null,
+        "lens_family": "normal",
+        "dof": "deep",
+        "focus_action": "",
+        "support": "locked",
+        "speed": "none",
+        "move_path": "",
+        "frame_start": "wide",
+        "frame_end": "wide",
+        "composition": {
+          "subject_position": "left third",
+          "headroom": "tight",
+          "lead_room": "toward the gaze",
+          "foreground": "",
+          "background": "the room's far wall"
+        },
+        "phrases": {
+          "lens_phrase": "normal lens, deep even focus",
+          "camera_phrase": "A locked-off camera holds at chest height.",
+          "composition_phrase": "Subject on the left third, space toward the gaze.",
+          "light_accent": ""
+        },
+        "reason": "the room's geography reads"
+      },
+      {
+        "shot_id": "sh_0002",
+        "light_id": "loc_1_evening",
+        "lighting_change": null,
+        "lens_family": "long",
+        "dof": "shallow",
+        "focus_action": "",
+        "support": "dolly",
+        "speed": "slow",
+        "move_path": "a slow move toward the subject",
+        "frame_start": "medium_close",
+        "frame_end": "medium_close",
+        "composition": {
+          "subject_position": "left third",
+          "headroom": "tight",
+          "lead_room": "toward the gaze",
+          "foreground": "",
+          "background": "the room's far wall"
+        },
+        "phrases": {
+          "lens_phrase": "long lens, the background a soft blur",
+          "camera_phrase": "A slow dolly push toward the subject.",
+          "composition_phrase": "Subject on the left third, space toward the gaze.",
+          "light_accent": ""
+        },
+        "reason": "the moment is intimate"
+      },
+      {
+        "shot_id": "sh_0003",
+        "light_id": "loc_1_evening",
+        "lighting_change": null,
+        "lens_family": "long",
+        "dof": "shallow",
+        "focus_action": "",
+        "support": "dolly",
+        "speed": "slow",
+        "move_path": "a slow move toward the subject",
+        "frame_start": "medium_close",
+        "frame_end": "medium_close",
+        "composition": {
+          "subject_position": "left third",
+          "headroom": "tight",
+          "lead_room": "toward the gaze",
+          "foreground": "",
+          "background": "the room's far wall"
+        },
+        "phrases": {
+          "lens_phrase": "long lens, the background a soft blur",
+          "camera_phrase": "A slow dolly push toward the subject.",
+          "composition_phrase": "Subject on the left third, space toward the gaze.",
+          "light_accent": ""
+        },
+        "reason": "the moment is intimate"
+      },
+      {
+        "shot_id": "sh_0004",
+        "light_id": "loc_1_evening",
+        "lighting_change": null,
+        "lens_family": "normal",
+        "dof": "deep",
+        "focus_action": "",
+        "support": "locked",
+        "speed": "none",
+        "move_path": "",
+        "frame_start": "medium",
+        "frame_end": "medium",
+        "composition": {
+          "subject_position": "left third",
+          "headroom": "tight",
+          "lead_room": "toward the gaze",
+          "foreground": "",
+          "background": "the room's far wall"
+        },
+        "phrases": {
+          "lens_phrase": "normal lens, deep even focus",
+          "camera_phrase": "A locked-off camera holds at chest height.",
+          "composition_phrase": "Subject on the left third, space toward the gaze.",
+          "light_accent": ""
+        },
+        "reason": "the room's geography reads"
+      },
+      {
+        "shot_id": "sh_0005",
+        "light_id": "loc_2_night",
+        "lighting_change": null,
+        "lens_family": "normal",
+        "dof": "deep",
+        "focus_action": "",
+        "support": "locked",
+        "speed": "none",
+        "move_path": "",
+        "frame_start": "wide",
+        "frame_end": "wide",
+        "composition": {
+          "subject_position": "left third",
+          "headroom": "tight",
+          "lead_room": "toward the gaze",
+          "foreground": "",
+          "background": "the room's far wall"
+        },
+        "phrases": {
+          "lens_phrase": "normal lens, deep even focus",
+          "camera_phrase": "A locked-off camera holds at chest height.",
+          "composition_phrase": "Subject on the left third, space toward the gaze.",
+          "light_accent": ""
+        },
+        "reason": "the room's geography reads"
+      },
+      {
+        "shot_id": "sh_0006",
+        "light_id": "loc_2_night",
+        "lighting_change": null,
+        "lens_family": "long",
+        "dof": "shallow",
+        "focus_action": "",
+        "support": "dolly",
+        "speed": "slow",
+        "move_path": "a slow move toward the subject",
+        "frame_start": "medium_close",
+        "frame_end": "medium_close",
+        "composition": {
+          "subject_position": "left third",
+          "headroom": "tight",
+          "lead_room": "toward the gaze",
+          "foreground": "",
+          "background": "the room's far wall"
+        },
+        "phrases": {
+          "lens_phrase": "long lens, the background a soft blur",
+          "camera_phrase": "A slow dolly push toward the subject.",
+          "composition_phrase": "Subject on the left third, space toward the gaze.",
+          "light_accent": ""
+        },
+        "reason": "the moment is intimate"
+      },
+      {
+        "shot_id": "sh_0007",
+        "light_id": "loc_2_night",
+        "lighting_change": null,
+        "lens_family": "long",
+        "dof": "shallow",
+        "focus_action": "",
+        "support": "dolly",
+        "speed": "slow",
+        "move_path": "a slow move toward the subject",
+        "frame_start": "medium_close",
+        "frame_end": "medium_close",
+        "composition": {
+          "subject_position": "left third",
+          "headroom": "tight",
+          "lead_room": "toward the gaze",
+          "foreground": "",
+          "background": "the room's far wall"
+        },
+        "phrases": {
+          "lens_phrase": "long lens, the background a soft blur",
+          "camera_phrase": "A slow dolly push toward the subject.",
+          "composition_phrase": "Subject on the left third, space toward the gaze.",
+          "light_accent": ""
+        },
+        "reason": "the moment is intimate"
+      },
+      {
+        "shot_id": "sh_0008",
+        "light_id": "loc_2_night",
+        "lighting_change": null,
+        "lens_family": "normal",
+        "dof": "deep",
+        "focus_action": "",
+        "support": "locked",
+        "speed": "none",
+        "move_path": "",
+        "frame_start": "medium",
+        "frame_end": "medium",
+        "composition": {
+          "subject_position": "left third",
+          "headroom": "tight",
+          "lead_room": "toward the gaze",
+          "foreground": "",
+          "background": "the room's far wall"
+        },
+        "phrases": {
+          "lens_phrase": "normal lens, deep even focus",
+          "camera_phrase": "A locked-off camera holds at chest height.",
+          "composition_phrase": "Subject on the left third, space toward the gaze.",
+          "light_accent": ""
+        },
+        "reason": "the room's geography reads"
+      }
+    ]
+  },
+  "units": [
+    {
+      "unit_id": 1,
+      "unit_type": "block",
+      "duration_s": 7,
+      "generate_s": 7,
+      "trim": null,
+      "scene_ids": ["sc_1"],
+      "location_ids": ["loc_1"],
+      "shots": [
+        {
+          "shot_id": "sh_0001",
+          "window": "0-4s",
+          "start_s": 0,
+          "end_s": 4,
+          "duration_s": 4,
+          "cut_in": "first"
+        },
+        {
+          "shot_id": "sh_0002",
+          "window": "4-7s",
+          "start_s": 4,
+          "end_s": 7,
+          "duration_s": 3,
+          "cut_in": "cut"
+        }
+      ],
+      "start_staging_id": "st_sc1_01",
+      "end_staging_id": "st_sc1_01",
+      "opening_frame": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+      "in_progress_at_end": "The moment hangs, eyes held on the speaker.",
+      "continuity": {
+        "type": "first",
+        "use_last_frame_as_start": false
+      },
+      "budgets": {
+        "spoken_words": 4,
+        "spoken_words_max": 4,
+        "events": 1,
+        "events_max": 1,
+        "shot_budget": "standard",
+        "shots_counted": 2
+      },
+      "warnings": []
+    },
+    {
+      "unit_id": 2,
+      "unit_type": "block",
+      "duration_s": 7,
+      "generate_s": 7,
+      "trim": null,
+      "scene_ids": ["sc_1"],
+      "location_ids": ["loc_1"],
+      "shots": [
+        {
+          "shot_id": "sh_0003",
+          "window": "0-3s",
+          "start_s": 0,
+          "end_s": 3,
+          "duration_s": 3,
+          "cut_in": "first"
+        },
+        {
+          "shot_id": "sh_0004",
+          "window": "3-7s",
+          "start_s": 3,
+          "end_s": 7,
+          "duration_s": 4,
+          "cut_in": "cut"
+        }
+      ],
+      "start_staging_id": "st_sc1_01",
+      "end_staging_id": "st_sc1_02",
+      "opening_frame": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+      "in_progress_at_end": "They are settling side by side, shoulders softening.",
+      "continuity": {
+        "type": "hard_cut",
+        "use_last_frame_as_start": false
+      },
+      "budgets": {
+        "spoken_words": 4,
+        "spoken_words_max": 4,
+        "events": 1,
+        "events_max": 1,
+        "shot_budget": "standard",
+        "shots_counted": 2
+      },
+      "warnings": []
+    },
+    {
+      "unit_id": 3,
+      "unit_type": "block",
+      "duration_s": 7,
+      "generate_s": 7,
+      "trim": null,
+      "scene_ids": ["sc_2"],
+      "location_ids": ["loc_2"],
+      "shots": [
+        {
+          "shot_id": "sh_0005",
+          "window": "0-4s",
+          "start_s": 0,
+          "end_s": 4,
+          "duration_s": 4,
+          "cut_in": "first"
+        },
+        {
+          "shot_id": "sh_0006",
+          "window": "4-7s",
+          "start_s": 4,
+          "end_s": 7,
+          "duration_s": 3,
+          "cut_in": "cut"
+        }
+      ],
+      "start_staging_id": "st_sc2_01",
+      "end_staging_id": "st_sc2_01",
+      "opening_frame": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+      "in_progress_at_end": "The moment hangs, eyes held on the speaker.",
+      "continuity": {
+        "type": "new_scene",
+        "use_last_frame_as_start": false
+      },
+      "budgets": {
+        "spoken_words": 5,
+        "spoken_words_max": 5,
+        "events": 1,
+        "events_max": 1,
+        "shot_budget": "standard",
+        "shots_counted": 2
+      },
+      "warnings": []
+    },
+    {
+      "unit_id": 4,
+      "unit_type": "block",
+      "duration_s": 7,
+      "generate_s": 7,
+      "trim": null,
+      "scene_ids": ["sc_2"],
+      "location_ids": ["loc_2"],
+      "shots": [
+        {
+          "shot_id": "sh_0007",
+          "window": "0-3s",
+          "start_s": 0,
+          "end_s": 3,
+          "duration_s": 3,
+          "cut_in": "first"
+        },
+        {
+          "shot_id": "sh_0008",
+          "window": "3-7s",
+          "start_s": 3,
+          "end_s": 7,
+          "duration_s": 4,
+          "cut_in": "cut"
+        }
+      ],
+      "start_staging_id": "st_sc2_01",
+      "end_staging_id": "st_sc2_02",
+      "opening_frame": "char_1, char_2, char_3 hold their places in the room, bodies tense, breathing shallow.",
+      "in_progress_at_end": "They are settling side by side, shoulders softening.",
+      "continuity": {
+        "type": "hard_cut",
+        "use_last_frame_as_start": false
+      },
+      "budgets": {
+        "spoken_words": 5,
+        "spoken_words_max": 5,
+        "events": 1,
+        "events_max": 1,
+        "shot_budget": "standard",
+        "shots_counted": 2
+      },
+      "warnings": []
+    }
+  ]
+}

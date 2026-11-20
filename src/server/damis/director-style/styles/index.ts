@@ -1,8 +1,8 @@
 /**
- * The Director Style Cards the film-director dami can direct with. Each card is a reviewed
+ * The Director Style Cards DIRECTOR v2.0 directs with (sent as `<director_style_card>`). Each card is a reviewed
  * Markdown file next to this one (`<id>.card.md`) whose text is copied into `<id>.card.ts`, so
  * both the Next server and the esbuild worker bundle carry it without reading the file system;
- * `film-director.test.ts` checks every copy against its .md. A card is made by a live Mode A run of
+ * `director-style.test.ts` checks every copy against its .md. A card is made by a live Mode A run of
  * `film-director-card` and reviewed before it lands here.
  */
 import { NOLAN_CARD } from "./nolan.card";

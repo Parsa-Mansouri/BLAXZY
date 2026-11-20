@@ -29,6 +29,14 @@ describe("dami registry", () => {
         "sheet-generator-location",
         "sheet-generator-prop",
         "video-review",
+        "director-v2",
+        "director-v2-plan",
+        "director-v2-shots",
+        "director-v2-repair",
+        "cinematographer-look",
+        "cinematographer-shots",
+        "cinematographer-relight",
+        "prompter",
       ].sort(),
     );
   });

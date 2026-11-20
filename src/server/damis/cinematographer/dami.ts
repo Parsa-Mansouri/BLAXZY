@@ -1,35 +1,67 @@
 import { defineDami } from "../framework/define";
 import { CLAUDE_MODELS } from "../framework/models";
-import { buildCinematographerPrompt } from "./prompt";
-import { cinematographerInputSchema, cinematographerOutputSchema } from "./schema";
-import { checkCinematographer, finalizeCinematographer } from "./validate";
+import { buildCinematographerV1Prompt } from "./prompt";
+import {
+  cinematographerLookInputSchema,
+  cinematographerRelightInputSchema,
+  cinematographerShotsInputSchema,
+  cinematographerShotsOutputSchema,
+  lookOutputSchema,
+  relightOutputSchema,
+} from "./schema";
+import { checkCinematographerShots, checkLook, checkRelight } from "./validate";
 
-/** Ours; each card carries its own owner version (`library.ts`). */
+/** Ours; the owner's file is CINEMATOGRAPHER v1.0 (`CINEMATOGRAPHER_OWNER_VERSION`). */
 export const CINEMATOGRAPHER_VERSION = "1.0.0";
+export const CINEMATOGRAPHER_OWNER_VERSION = "1.0";
 
 /**
- * A look is ~1.5k tokens and a scene ~250 per shot; low effort thinks little. 8k covers a scene of
- * ~20 shots without streaming.
+ * CINEMATOGRAPHER v1.0, mode `look`: the project's frozen look bible (look_line, light setups and
+ * their light_lines, lens and movement language), in the chosen DP card's style. Once per project.
+ * Opus (the owner's header). A look bible is ~2 to 4k tokens of JSON.
  */
-export const CINEMATOGRAPHER_MAX_OUTPUT_TOKENS = 8_000;
-
-/**
- * CINEMATOGRAPHER (step 2 of the craft pipeline): one of the owner's six DP cards as the system
- * prompt. Mode `look` runs once per film (the camera and light language, one card mode per scene);
- * mode `scene` runs per scene (lens, light, framing, grade and texture per shot).
- */
-export const cinematographer = defineDami({
-  key: "cinematographer",
+export const cinematographerLook = defineDami({
+  key: "cinematographer-look",
   version: CINEMATOGRAPHER_VERSION,
-  description:
-    "CINEMATOGRAPHER (owner DP cards): mode look sets the film's camera and light language and one card mode per scene; mode scene gives each shot of a scene its lens, light, framing, grade and texture.",
-  input: cinematographerInputSchema,
-  output: cinematographerOutputSchema,
-  // Sonnet at low effort: the card already holds the decisions; the job is applying them.
+  description: `CINEMATOGRAPHER (owner v${CINEMATOGRAPHER_OWNER_VERSION}, output_22_dp), mode look: the project's look bible in the chosen director of photography's style.`,
+  input: cinematographerLookInputSchema,
+  output: lookOutputSchema,
+  model: CLAUDE_MODELS.opus,
+  effort: "medium",
+  maxOutputTokens: 12_000,
+  build: buildCinematographerV1Prompt,
+  check: checkLook,
+});
+
+/**
+ * Mode `shots`: each shot of a scene range gets its light setup, lens, support, move execution,
+ * composition and pasteable phrases. Sonnet, Opus on the corrective retry (the owner's header).
+ * ~300 to 400 tokens per shot; a batch of ~30 shots fits in 16k.
+ */
+export const cinematographerShots = defineDami({
+  key: "cinematographer-shots",
+  version: CINEMATOGRAPHER_VERSION,
+  description: `CINEMATOGRAPHER (owner v${CINEMATOGRAPHER_OWNER_VERSION}), mode shots: the cinematography and ready-to-paste phrases of every shot in a scene range.`,
+  input: cinematographerShotsInputSchema,
+  output: cinematographerShotsOutputSchema,
   model: CLAUDE_MODELS.sonnet,
+  retryModel: CLAUDE_MODELS.opus,
   effort: "low",
-  maxOutputTokens: CINEMATOGRAPHER_MAX_OUTPUT_TOKENS,
-  build: buildCinematographerPrompt,
-  check: checkCinematographer,
-  finalize: finalizeCinematographer,
+  maxOutputTokens: 16_000,
+  build: buildCinematographerV1Prompt,
+  check: checkCinematographerShots,
+});
+
+/** Mode `relight`: rewrites a location's light setups to match its approved sheet. Opus. */
+export const cinematographerRelight = defineDami({
+  key: "cinematographer-relight",
+  version: CINEMATOGRAPHER_VERSION,
+  description: `CINEMATOGRAPHER (owner v${CINEMATOGRAPHER_OWNER_VERSION}), mode relight: rewrites the light setups of one location to match its approved sheet.`,
+  input: cinematographerRelightInputSchema,
+  output: relightOutputSchema,
+  model: CLAUDE_MODELS.opus,
+  effort: "low",
+  maxOutputTokens: 6_000,
+  build: buildCinematographerV1Prompt,
+  check: checkRelight,
 });

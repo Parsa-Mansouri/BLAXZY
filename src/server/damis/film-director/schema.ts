@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { creativeBibleShape } from "../creative-dna/schema";
 import { assetRegistrySchema, BLOCK_MODES, dialogueSchema } from "../director/schema";
-import { DIRECTOR_STYLE_IDS } from "./styles";
+import { DIRECTOR_STYLE_IDS } from "../director-style/styles";
 
 /* -------------------------------------------------------------------------- */
 /* Input                                                                       */
@@ -24,14 +24,6 @@ export const filmDirectorInputSchema = z.object({
   script: z.string().trim().min(1).max(200_000),
 });
 export type FilmDirectorInput = z.output<typeof filmDirectorInputSchema>;
-
-/** Mode A: the Director Style Card of one director. */
-export const filmDirectorCardInputSchema = z.object({
-  director_name: z.string().trim().min(1).max(200),
-  /** Films (or a period) to analyse; omitted: the model picks 4 to 6 representative films. */
-  films: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
-});
-export type FilmDirectorCardInput = z.output<typeof filmDirectorCardInputSchema>;
 
 /* -------------------------------------------------------------------------- */
 /* Output: the shot plan                                                       */
@@ -195,7 +187,3 @@ export const shotPlanSchema = z
     }
   });
 export type ShotPlan = z.output<typeof shotPlanSchema>;
-
-/** Mode A: the Director Style Card as Markdown, sections 0 to 14. */
-export const filmDirectorCardOutputSchema = z.object({ card_markdown: z.string() });
-export type FilmDirectorCardOutput = z.output<typeof filmDirectorCardOutputSchema>;

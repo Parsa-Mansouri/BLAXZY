@@ -18,8 +18,16 @@ import { sheetGeneratorLocation } from "./sheet-generator-location/dami";
 import { sheetGeneratorProp } from "./sheet-generator-prop/dami";
 import { director, directorPlan } from "./director/dami";
 import { blockRevision } from "./block-revision/dami";
-import { filmDirector, filmDirectorCard } from "./film-director/dami";
-import { cinematographer } from "./cinematographer/dami";
+import { filmDirector } from "./film-director/dami";
+import { filmDirectorCard } from "./director-style/dami";
+import { cinematographer } from "./cinematographer/legacy/dami";
+import { directorV2, directorV2Plan, directorV2Repair, directorV2Shots } from "./director-v2/dami";
+import {
+  cinematographerLook,
+  cinematographerRelight,
+  cinematographerShots,
+} from "./cinematographer/dami";
+import { prompter } from "./prompter/dami";
 import { videoReview } from "./video-review/dami";
 
 // Framework
@@ -342,6 +350,14 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [filmDirector.key]: filmDirector,
   [filmDirectorCard.key]: filmDirectorCard,
   [cinematographer.key]: cinematographer,
+  [directorV2.key]: directorV2,
+  [directorV2Plan.key]: directorV2Plan,
+  [directorV2Shots.key]: directorV2Shots,
+  [directorV2Repair.key]: directorV2Repair,
+  [cinematographerLook.key]: cinematographerLook,
+  [cinematographerShots.key]: cinematographerShots,
+  [cinematographerRelight.key]: cinematographerRelight,
+  [prompter.key]: prompter,
 };
 
 // Creative DNA (DAMI-00): the per-project Creative Bible and what later damis read from it
@@ -477,19 +493,16 @@ export {
 } from "./director/validate";
 export { SHOT_PLAN_INSTRUCTION } from "./director/prompt";
 
-// Craft pipeline (wired: `script.direct`, `direction.scene`): FILM DIRECTOR (shot plan, Director Style Cards) and
-// CINEMATOGRAPHER (the owner's six DP cards, modes look and scene)
+// DEPRECATED provisional craft pipeline (wired today: `script.direct`, `direction.scene`): the film-director
+// Mode-B dami and the card-as-system-prompt cinematographer. Deleted when the worker moves to the v2 damis below.
 export {
   filmDirector,
-  filmDirectorCard,
   FILM_DIRECTOR_MAX_OUTPUT_TOKENS,
   FILM_DIRECTOR_OWNER_VERSION,
   FILM_DIRECTOR_VERSION,
 } from "./film-director/dami";
 export {
   beatSchema,
-  filmDirectorCardInputSchema,
-  filmDirectorCardOutputSchema,
   filmDirectorInputSchema,
   filmShotSchema,
   sceneGeographySchema,
@@ -502,8 +515,6 @@ export {
   FRAME_POSITIONS,
   type Beat,
   type FilmDirectorBlockMode,
-  type FilmDirectorCardInput,
-  type FilmDirectorCardOutput,
   type FilmDirectorInput,
   type FilmShot,
   type SceneGeography,
@@ -512,7 +523,7 @@ export {
   type ShotProp,
   type ShotStaging,
 } from "./film-director/schema";
-export { checkShotPlan, checkStyleCard, MAX_SHOT_SECONDS } from "./film-director/validate";
+export { checkShotPlan, MAX_SHOT_SECONDS } from "./film-director/validate";
 export {
   DIRECTOR_STYLE_IDS,
   DIRECTOR_STYLES,
@@ -521,8 +532,8 @@ export {
   isDirectorStyleId,
   type DirectorStyle,
   type DirectorStyleId,
-} from "./film-director/styles";
-export { cinematographer, CINEMATOGRAPHER_VERSION } from "./cinematographer/dami";
+} from "./director-style/styles";
+export { cinematographer, LEGACY_CINEMATOGRAPHER_VERSION } from "./cinematographer/legacy/dami";
 export {
   CINEMATOGRAPHER_IDS,
   CINEMATOGRAPHER_MODE_IDS,
@@ -556,7 +567,7 @@ export {
   type SceneInput,
   type SceneShotInput,
   type SceneVisual,
-} from "./cinematographer/schema";
+} from "./cinematographer/legacy/schema";
 export { stubCreativeBible } from "./director/stub";
 export { blockExcerpts } from "./director/excerpts";
 export { creativeBibleShape } from "./creative-dna/schema";
@@ -613,3 +624,169 @@ export {
   type VideoReviewInput,
   type VideoReviewOutput,
 } from "./video-review/schema";
+
+// The owner's split pipeline (not wired yet): DIRECTOR v2.0 → CINEMATOGRAPHER v1.0 → BREAKDOWN
+// (code, contract only here) → PROMPTER v1.0. Style cards are inputs: the Director Style Card
+// (`director-style/`) to DIRECTOR v2.0, the DP card (`cinematographer/library.ts`) to CINEMATOGRAPHER.
+export {
+  filmDirectorCard,
+  DIRECTOR_STYLE_OWNER_VERSION,
+  DIRECTOR_STYLE_VERSION,
+} from "./director-style/dami";
+export {
+  filmDirectorCardInputSchema,
+  filmDirectorCardOutputSchema,
+  type FilmDirectorCardInput,
+  type FilmDirectorCardOutput,
+} from "./director-style/schema";
+export { STYLE_CARD_SECTIONS } from "./director-style/prompt";
+export { checkStyleCard } from "./director-style/validate";
+export {
+  DELIVERY_MODES,
+  PIPELINE_PLATFORM_CONFIG,
+  defaultPipelinePlatformConfig,
+  maxShotSeconds,
+  pipelinePlatformConfigSchema,
+  promptWordRange,
+  wpsFor,
+  type DeliveryMode,
+  type PipelinePlatformConfig,
+} from "./shared/pipeline-platform";
+export {
+  directorV2,
+  directorV2Plan,
+  directorV2Repair,
+  directorV2Shots,
+  DIRECTOR_V2_MAX_OUTPUT_TOKENS,
+  DIRECTOR_V2_OWNER_VERSION,
+  DIRECTOR_V2_VERSION,
+} from "./director-v2/dami";
+export {
+  BREAK_QUALITIES,
+  CAMERA_MOVE_INTENTS,
+  DIRECTOR_V2_MODES,
+  SHOT_SIZES,
+  TRANSITIONS,
+  TRIM_ANCHORS,
+  continuityBibleV2Schema,
+  costumeDescriptorFor,
+  currentShotsSchema,
+  dialogueV2Schema,
+  directorV2InputSchema,
+  directorV2OutputSchema,
+  directorV2PlanInputSchema,
+  directorV2PlanOutputSchema,
+  directorV2RepairInputSchema,
+  directorV2RepairOutputSchema,
+  directorV2ShotsInputSchema,
+  directorV2ShotsOutputSchema,
+  durationRangeSchema,
+  scenePlanEntrySchema,
+  sceneRangeIds,
+  shotV2Schema,
+  stagingStateSchema,
+  targetRuntimeSeconds,
+  type BreakQuality,
+  type CameraMoveIntent,
+  type ContinuityBibleV2,
+  type CurrentShots,
+  type DialogueV2,
+  type DirectorV2Input,
+  type DirectorV2Mode,
+  type DirectorV2Output,
+  type DirectorV2PlanInput,
+  type DirectorV2PlanOutput,
+  type DirectorV2RepairInput,
+  type DirectorV2RepairOutput,
+  type DirectorV2ShotsInput,
+  type DirectorV2ShotsOutput,
+  type DirectorV2Totals,
+  type DirectorV2Warning,
+  type DurationRange,
+  type ScenePlanEntry,
+  type SceneRepair,
+  type ShotSize,
+  type ShotV2,
+  type StagingState,
+  type Transition,
+  type TrimAnchor,
+} from "./director-v2/schema";
+export {
+  checkDirectorV2,
+  checkDirectorV2Plan,
+  checkDirectorV2Repair,
+  checkDirectorV2Shots,
+  computeTotals as directorV2Totals,
+  maxWordsForSeconds,
+  minSecondsForWords,
+} from "./director-v2/validate";
+export { applyDirectorV2Repairs, assembleDirectorV2 } from "./director-v2/assemble";
+export {
+  BREAKDOWN_SPEC_VERSION,
+  BREAKDOWN_STATUSES,
+  CUT_INS,
+  REPAIR_PROBLEMS,
+  UNIT_CONTINUITY_TYPES,
+  UNIT_TYPES,
+  breakdownOutputSchema,
+  breakdownRepairRequestSchema,
+  breakdownUnitSchema,
+  breakdownWarningSchema,
+  parseUnitWindow,
+  unitShotSchema,
+  type BreakdownInput,
+  type BreakdownOutput,
+  type BreakdownRepairRequest,
+  type BreakdownStatus,
+  type BreakdownUnit,
+  type BreakdownWarning,
+  type CutIn,
+  type RepairProblem,
+  type UnitContinuityType,
+  type UnitShot,
+  type UnitType,
+} from "./breakdown/schema";
+export {
+  cinematographerLook,
+  cinematographerRelight,
+  cinematographerShots,
+  CINEMATOGRAPHER_OWNER_VERSION,
+  CINEMATOGRAPHER_VERSION,
+} from "./cinematographer/dami";
+export { cinematographerStyleCard } from "./cinematographer/library";
+export {
+  challengeSchema,
+  cinematographerLookInputSchema,
+  cinematographerRelightInputSchema,
+  cinematographerShotsInputSchema,
+  cinematographerShotsOutputSchema,
+  directorOutputViewSchema,
+  dpShotSchema,
+  lightSetupSchema,
+  lookBibleSchema,
+  lookOutputSchema,
+  relightOutputSchema,
+  type Challenge,
+  type CinematographerLookInput,
+  type CinematographerRelightInput,
+  type CinematographerShots,
+  type CinematographerShotsInput,
+  type DpShot,
+  type LightSetup,
+  type LookBible,
+  type LookOutput,
+  type RelightOutput,
+} from "./cinematographer/schema";
+export { checkCinematographerShots, checkLook, checkRelight } from "./cinematographer/validate";
+export { prompter, PROMPTER_OWNER_VERSION, PROMPTER_VERSION } from "./prompter/dami";
+export {
+  prompterInputSchema,
+  prompterOutputSchema,
+  prompterUnitSchema,
+  type PrompterCinematographer,
+  type PrompterDirector,
+  type PrompterInput,
+  type PrompterOutput,
+  type PrompterUnit,
+} from "./prompter/schema";
+export { checkPrompter, checkPrompterUnit, frozenTexts, unitMaterial } from "./prompter/validate";

@@ -1,4 +1,5 @@
 /**
+ * DEPRECATED with the provisional film-director dami (deleted when the worker is rewired).
  * Sample FILM DIRECTOR: a deterministic shot plan built from the input, with no Claude call. It
  * splits the script into scenes (by heading) and paragraphs, makes one shot of 3 to 6 seconds per
  * paragraph (action or one character's dialogue), stages the scene's characters left to right and
@@ -7,11 +8,8 @@
  */
 import type { AssetRegistry, Dialogue } from "../director/schema";
 import { FILM_DIRECTOR_VERSION } from "../film-director/dami";
-import { STYLE_CARD_SECTIONS } from "../film-director/prompt";
 import {
-  filmDirectorCardInputSchema,
   filmDirectorInputSchema,
-  type FilmDirectorCardOutput,
   type Beat,
   type FilmShot,
   type SceneGeography,
@@ -263,18 +261,5 @@ export function sampleFilmDirector(raw: unknown): ShotPlan {
     beats,
     shots,
     warnings,
-  };
-}
-
-/** Sample Mode A: a skeleton card with every section heading, from the director's name. */
-export function sampleFilmDirectorCard(raw: unknown): FilmDirectorCardOutput {
-  const input = filmDirectorCardInputSchema.parse(raw);
-  const films = input.films?.join(", ") ?? "four to six representative films";
-  const sections = STYLE_CARD_SECTIONS.map(
-    (name, i) =>
-      `## ${i}. ${name}\n${i === 0 ? `${input.director_name}. Films analysed: ${films}.` : "Sample text: run film-director-card live for the real card."}`,
-  );
-  return {
-    card_markdown: [`# Director Style Card — ${input.director_name}`, ...sections].join("\n\n"),
   };
 }

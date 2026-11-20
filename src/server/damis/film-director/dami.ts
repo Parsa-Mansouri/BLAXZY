@@ -1,13 +1,8 @@
 import { defineDami } from "../framework/define";
 import { CLAUDE_MODELS } from "../framework/models";
-import { buildFilmDirectorCardPrompt, buildFilmDirectorPrompt } from "./prompt";
-import {
-  filmDirectorCardInputSchema,
-  filmDirectorCardOutputSchema,
-  filmDirectorInputSchema,
-  shotPlanSchema,
-} from "./schema";
-import { checkShotPlan, checkStyleCard } from "./validate";
+import { buildFilmDirectorPrompt } from "./prompt";
+import { filmDirectorInputSchema, shotPlanSchema } from "./schema";
+import { checkShotPlan } from "./validate";
 
 /** Ours. The owner's master prompt carries no version; `FILM_DIRECTOR_OWNER_VERSION` names it. */
 export const FILM_DIRECTOR_VERSION = "1.0.0";
@@ -21,7 +16,11 @@ export const FILM_DIRECTOR_OWNER_VERSION = "master-1";
 export const FILM_DIRECTOR_MAX_OUTPUT_TOKENS = 32_000;
 
 /**
- * FILM DIRECTOR (step 1 of the craft pipeline): directs the approved script with a Director Style
+ * DEPRECATED: replaced by the owner's DIRECTOR v2.0 (`../director-v2/`) with the style card as an
+ * input; this folder is deleted when the worker is rewired. Mode A (`film-director-card`) and the
+ * style cards live in `../director-style/`.
+ *
+ * FILM DIRECTOR (step 1 of the provisional craft pipeline): directs the approved script with a Director Style
  * Card (MODE B, steps 1, 2, 4, 5 and 7 only) into a shot plan with geography and full staging. No
  * prompt text and no physical descriptions: the cinematographer adds the look, the Breakdown
  * groups shots into blocks and the prompter writes them.
@@ -38,22 +37,4 @@ export const filmDirector = defineDami({
   maxOutputTokens: FILM_DIRECTOR_MAX_OUTPUT_TOKENS,
   build: buildFilmDirectorPrompt,
   check: checkShotPlan,
-});
-
-/**
- * The same master prompt in MODE A: one director's name in, a Director Style Card out (sections 0
- * to 14 as Markdown). Run by hand (`pnpm dami:run film-director-card <input.json> --live`); the
- * reviewed card is then committed under `film-director/styles/`.
- */
-export const filmDirectorCard = defineDami({
-  key: "film-director-card",
-  version: FILM_DIRECTOR_VERSION,
-  description: `FILM DIRECTOR (owner master prompt ${FILM_DIRECTOR_OWNER_VERSION}, Mode A): writes the Director Style Card of one director, sections 0 to 14 as Markdown.`,
-  input: filmDirectorCardInputSchema,
-  output: filmDirectorCardOutputSchema,
-  model: CLAUDE_MODELS.opus,
-  effort: "high",
-  maxOutputTokens: 24_000,
-  build: buildFilmDirectorCardPrompt,
-  check: checkStyleCard,
 });

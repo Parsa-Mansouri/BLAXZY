@@ -138,3 +138,17 @@ export function cinematographerCard(id: CinematographerId): Cinematographer {
 export function isCardMode(id: CinematographerId, modeId: string): boolean {
   return cinematographerCard(id).modes.some((m) => m.id === modeId);
 }
+
+/**
+ * The part of a card CINEMATOGRAPHER v1.0 reads as `<cinematographer_style_card>`: "## Rule 2: The
+ * look" with its sections, through "### Modes", up to "## Rule 3". The card's title (which names
+ * the DP), Rule 1 (restated in the precedence instruction), Rule 3 (one image prompt) and the
+ * examples are left out.
+ */
+export function cinematographerStyleCard(id: CinematographerId): string {
+  const card = cinematographerCard(id).system;
+  const start = card.indexOf("## Rule 2");
+  const end = card.indexOf("## Rule 3", start);
+  if (start < 0 || end < 0) throw new Error(`Card "${id}" has no Rule 2 / Rule 3 sections`);
+  return card.slice(start, end).trimEnd();
+}

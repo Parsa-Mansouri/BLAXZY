@@ -131,6 +131,51 @@ describe("runDami", () => {
     expect(store.runs[0]?.finish?.status).toBe("succeeded");
   });
 
+  it("runs the corrective retry on retryModel, replaying the text only, and prices each call by its model", async () => {
+    const cheapFirst = defineDami({
+      key: "test-retry-model",
+      version: "0.0.1",
+      description: "Sonnet first, Opus to fix",
+      input: z.object({ word: z.string().min(1) }),
+      output: z.object({ upper: z.string() }),
+      model: "claude-sonnet-5-5",
+      retryModel: "claude-opus-5-5",
+      maxOutputTokens: 1000,
+      build: (input) => ({
+        system: [{ text: "Base" }],
+        messages: [{ role: "user", content: [{ text: input.word }] }],
+      }),
+      check: (output, input) => (output.upper === input.word.toUpperCase() ? [] : ["wrong"]),
+    });
+    const usage = { input: 1_000_000, output: 0 };
+    const client = new FakeClaudeClient([
+      jsonResponse({ upper: "HELO" }, { usage }),
+      jsonResponse({ upper: "HELLO" }, { usage }),
+    ]);
+    const { deps, store } = testDeps(client);
+    const result = await runDami(cheapFirst, { word: "hello" }, {}, deps);
+    expect(client.requests.map((r) => r.model)).toEqual(["claude-sonnet-5-5", "claude-opus-5-5"]);
+    expect(client.requests[1]?.messages[1]).toEqual({
+      role: "assistant",
+      content: [{ type: "text", text: '{"upper":"HELO"}' }],
+    });
+    expect(result.model).toBe("claude-opus-5-5");
+    // 1M input tokens on Sonnet ($2) + 1M on Opus ($4)
+    expect(result.costUsd).toBe(6);
+    expect(store.runs[0]?.model).toBe("claude-sonnet-5-5");
+    expect(store.runs[0]?.finish?.costUsd).toBe(6);
+
+    // An explicit run model replaces both calls' models.
+    const pinned = new FakeClaudeClient([
+      jsonResponse({ upper: "X" }),
+      jsonResponse({ upper: "HI" }),
+    ]);
+    await runDami(cheapFirst, { word: "hi" }, { model: "claude-haiku-5-5" }, testDeps(pinned).deps);
+    expect(pinned.requests.map((r) => r.model)).toEqual(["claude-haiku-5-5", "claude-haiku-5-5"]);
+    // Same model on both calls: the thinking block is replayed.
+    expect(JSON.stringify(pinned.requests[1]?.messages[1])).toContain("thinking");
+  });
+
   it("treats semantic check failures like schema errors", async () => {
     const client = new FakeClaudeClient([
       jsonResponse({ upper: "HELO", length: 5 }),

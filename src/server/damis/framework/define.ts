@@ -41,6 +41,12 @@ export type DamiConfig<I extends z.ZodType, O extends z.ZodType, R> = {
   output: O;
   /** Default model; see `resolveModel` for overrides. */
   model?: string;
+  /**
+   * Model of the corrective retry (the second call, after a failed validation), when it should
+   * differ from `model` (e.g. Sonnet first, Opus to fix). Overrides apply as for `model`: an
+   * explicit run model or DAMI_DEFAULT_MODEL replaces both. Default: the first call's model.
+   */
+  retryModel?: string;
   /** `output_config.effort`. Set explicitly: defaults differ per model. */
   effort?: DamiEffort;
   /** `max_tokens`. Thinking tokens count against it, so leave headroom. */
@@ -65,6 +71,7 @@ export type DamiDefinition<I extends z.ZodType, O extends z.ZodType, R> = {
   readonly input: I;
   readonly output: O;
   readonly model: string | undefined;
+  readonly retryModel: string | undefined;
   readonly effort: DamiEffort | undefined;
   readonly maxOutputTokens: number;
   readonly streaming: boolean;
@@ -123,6 +130,7 @@ export function defineDami<I extends z.ZodType, O extends z.ZodType>(
     input: config.input,
     output: config.output,
     model: config.model,
+    retryModel: config.retryModel,
     effort: config.effort,
     maxOutputTokens: config.maxOutputTokens,
     streaming: config.streaming ?? config.maxOutputTokens > STREAMING_THRESHOLD_TOKENS,

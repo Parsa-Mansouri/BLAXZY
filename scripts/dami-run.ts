@@ -7,8 +7,14 @@
  * `director` (modes full and write_blocks) and `director-plan` read the fixtures in
  * `src/server/damis/director/fixtures` (set `mode` to `plan` for director-plan).
  * `film-director-card` (Mode A, writes a Director Style Card) reads
- * `src/server/damis/film-director/fixtures/card-input.json`; `film-director` reads `input.json`
- * there; `cinematographer` reads `look-input.json` or `scene-input.json` in its `fixtures`.
+ * `src/server/damis/director-style/fixtures/card-input.json`. The owner's split pipeline:
+ * `director-v2` / `director-v2-plan` / `director-v2-shots` / `director-v2-repair` read
+ * `input.json`, `plan-input.json`, `shots-input.json`, `repair-input.json` in
+ * `src/server/damis/director-v2/fixtures`; `cinematographer-look` / `-shots` / `-relight` read
+ * `look-input.json`, `shots-input.json`, `relight-input.json` in
+ * `src/server/damis/cinematographer/fixtures`; `prompter` reads `prompter/fixtures/input.json`.
+ * Deprecated until the worker is rewired: `film-director` (`film-director/fixtures/input.json`)
+ * and `cinematographer` (`cinematographer/legacy/fixtures/`).
  * Needs ANTHROPIC_API_KEY and a reachable DATABASE_URL (the run is recorded in dami_run).
  * In live mode it makes PAID Claude calls and requires the explicit --live flag. Refuses to run
  * in production or against a non-local database (see assertDevOnly in scripts/_lib.ts).

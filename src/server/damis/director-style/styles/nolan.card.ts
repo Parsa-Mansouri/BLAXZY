@@ -1,6 +1,6 @@
 /**
  * The Christopher Nolan Director Style Card, verbatim from `nolan.card.md` (the reviewed source;
- * `film-director.test.ts` checks the two match). A PLACEHOLDER until the lead replaces the .md with
+ * `director-style.test.ts` checks the two match). A PLACEHOLDER until the lead replaces the .md with
  * the output of a live `film-director-card` run and re-copies the text here.
  */
 export const NOLAN_CARD = `<!-- PLACEHOLDER: replace with the Mode A output of the live run -->

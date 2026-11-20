@@ -208,28 +208,57 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
 - Sample mode (`sample/director.ts`, `sample/block-revision.ts`) is deterministic, passes the
   dami's own `check()`, and covers all three Director modes.
 
-## Craft pipeline: film director and cinematographer (not wired yet)
+## The owner's split pipeline (built, not wired yet)
 
-The new four-step prompting pipeline: (1) FILM DIRECTOR, (2) CINEMATOGRAPHER, (3) Breakdown (code,
-groups shots into 15/30 s blocks), (4) prompter. Steps 1 and 2 are damis here.
+The owner's own split of the prompting pipeline (drop of 2026-11-20): script → DIRECTOR v2.0 →
+CINEMATOGRAPHER v1.0 → BREAKDOWN (code) → PROMPTER v1.0 → assembler (code) → output_22 (the v1.4
+block shape, so Block Revision, Video Review and Voice Box keep working). Every owner system
+prompt is sent verbatim (`prompt-text.ts`, checked against `source/`); our additions are in the
+user turn only.
 
-- `film-director/`: the owner's Director master prompt (`source/director_master_prompt.md`,
-  copied verbatim into `prompt-text.ts`). `film-director` runs MODE B steps 1, 2, 4, 5 and 7 only:
-  with a Director Style Card it turns the script into `shotPlanSchema` (notes, changes, scene
-  geography, beats and ordered shots with full staging, dialogue reusing the v1.4 dialogue shape).
-  No prompt text, no continuity bible, no physical descriptions: assets are named by id only.
-  `film-director-card` is MODE A (a director's name in, `{ card_markdown }` out), run by hand
-  with `pnpm dami:run film-director-card <input.json> --live`.
-- `film-director/styles/`: the Director Style Cards (`<id>.card.md` reviewed, copied into
-  `<id>.card.ts`, a test keeps them equal). The Nolan card is a marked placeholder until the live
-  Mode A run replaces it.
-- `cinematographer/`: the owner's six DP cards (`source/`, copied into `cards/`), listed with
-  their modes in `library.ts`. One dami, input discriminated on `mode`: `look` (once per film:
-  camera and light language, one card mode per scene) and `scene` (per scene: lens, light,
-  framing, grade and texture per shot). Structured output needs one closed schema, so the model
-  answers a `{ mode, look | null, scene | null }` wrapper and `finalize` returns the mode's half.
-- `src/server/direction/craft.ts`: `pickCraft` returns the defaults (Nolan, Deakins) until the
-  owner's "brain" dami decides them from the Style step.
+- `shared/pipeline-platform.ts`: `DELIVERY_MODES` (`block_15`, `block_30`, `block_auto`, `shot`)
+  and `PIPELINE_PLATFORM_CONFIG` (the `<platform_config>` of the new damis and BREAKDOWN:
+  `PLATFORM_CONFIG` plus `unit_min_s`, shot budgets, prompt word ranges, repair rounds).
+- `director-v2/`: DIRECTOR v2.0 (output_22_dir). One key per answer shape (structured output
+  needs one closed schema each), one prompt and Opus at medium effort for all: `director-v2`
+  (`full`), `director-v2-plan` (`plan`, no shots), `director-v2-shots` (`write_shots`, one scene
+  range of a saved plan; shot ids are scene-scoped `sh_<n>_<nn>` so parallel batches never
+  collide, and `order` is renumbered on assembly), `director-v2-repair` (`repair`, BREAKDOWN's
+  requests; `<current_shots>` carries the scenes' shots and the staging states they use).
+  `validate.ts` is the owner's `<code_side_validator>` plus the checkable parts of its process
+  (deviations listed in the file); `assemble.ts` joins a plan and its batches, and applies a repair,
+  into one `DirectorV2Output`. In a plan, a costume version's `from_shot` names a scene
+  (`costumeDescriptorFor` resolves both).
+- `director-style/`: the Director master prompt (`source/director_master_prompt.md`), run only in
+  MODE A as `film-director-card` to write a Director Style Card, and the reviewed cards in
+  `styles/` (`directorStyleCard(id)`; Nolan is a placeholder). DIRECTOR v2.0 gets the chosen card
+  as `<director_style_card>` with a precedence note (`DIRECTOR_STYLE_CARD_INSTRUCTION`): the
+  owner's sources of truth first, the card shapes what they leave open, the bible wins a conflict
+  (warning ref `director_style_card`), the card's output format never applies, the name never
+  travels. A new director is one card file plus one `DIRECTOR_STYLES` entry.
+- `cinematographer/`: CINEMATOGRAPHER v1.0 (output_22_dp): `cinematographer-look` (Opus, the
+  frozen look bible), `cinematographer-shots` (Sonnet, Opus on the corrective retry, per scene
+  range) and `cinematographer-relight` (Opus, a location's setups against its approved sheet).
+  The chosen DP card's Rule 2 with its Modes (`cinematographerStyleCard(id)`, from `library.ts`
+  and `cards/`) is sent as `<cinematographer_style_card>` with
+  `CINEMATOGRAPHER_STYLE_CARD_INSTRUCTION` (Rule 1 still holds, Rule 3 does not, the look bible
+  rules in shots mode). A new DP is one card file plus one `CINEMATOGRAPHERS` entry.
+- `breakdown/`: `source/breakdown.spec.md` (the owner's spec of the code stage) and `schema.ts`
+  (output_22_brk: units, unit shots with windows and `cut_in`, repair requests). The packer itself
+  is not built yet.
+- `prompter/`: PROMPTER v1.0 (`prompter`, Sonnet, Opus on the corrective retry): one prompt per
+  BREAKDOWN unit, block or shot layout. The file's `<assembly_note>` is not sent (it describes
+  our assembler). `sample-units.ts` makes naive units for tests and the fixture until BREAKDOWN
+  exists.
+- Framework: `retryModel` on a dami runs the corrective retry on another model (the replayed
+  answer drops its thinking blocks, and each call is priced by its own model).
+
+### Deprecated provisional craft pipeline (still wired; deleted by the rewiring)
+
+`script.direct`, `direction.scene`, `direction.write` and `src/server/direction/` still run the
+provisional pipeline: `film-director/` (the master prompt's MODE B as dami `film-director`) and
+`cinematographer/legacy/` (the DP card as the whole system prompt, dami `cinematographer`), with
+`src/server/direction/breakdown.ts` and Director v1.4 `write_blocks` as the prompter bridge.
 
 ## Video Review and the router
 

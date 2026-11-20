@@ -111,12 +111,17 @@ export function buildClaudeRequest(prompt: DamiPrompt, options: RequestOptions):
 /**
  * The assistant turn to replay before a corrective message. Thinking blocks are passed back
  * unchanged, as the API requires for preserved thinking; other block types are not expected
- * with structured output and are dropped.
+ * with structured output and are dropped. `thinking: false` (a retry on another model, which
+ * cannot verify the first model's thinking signatures) replays the text only.
  */
-export function replayAssistantContent(content: ContentBlock[]): ContentBlockParam[] {
+export function replayAssistantContent(
+  content: ContentBlock[],
+  options: { thinking: boolean } = { thinking: true },
+): ContentBlockParam[] {
   const replay: ContentBlockParam[] = [];
   for (const block of content) {
     if (block.type === "text") replay.push({ type: "text", text: block.text });
+    else if (!options.thinking) continue;
     else if (block.type === "thinking")
       replay.push({ type: "thinking", thinking: block.thinking, signature: block.signature });
     else if (block.type === "redacted_thinking")

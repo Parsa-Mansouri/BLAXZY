@@ -81,6 +81,7 @@ export type DamiRunnerDeps = {
 export type DamiRunResult<R> = {
   runId: string;
   output: R;
+  /** The model whose answer was accepted (the retry model when the corrective retry succeeded). */
   model: string;
   /** API attempts, including transient retries and the corrective retry. */
   attempts: number;
@@ -235,6 +236,10 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
     ? SAMPLE_MODEL
     : resolveModel(dami.model ?? "", config.defaultModel, ctx.model);
   if (!model) throw new DamiConfigError(dami.key, `Dami "${dami.key}" has no model configured`);
+  // The corrective retry may run on another model (`retryModel`); overrides apply to both.
+  const retryModel = sample
+    ? SAMPLE_MODEL
+    : resolveModel(dami.retryModel ?? model, config.defaultModel, ctx.model);
   const baseClient =
     deps.client ??
     (sample
@@ -277,6 +282,17 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
 
   let attempts = 0;
   let usage: TokenUsage | null = null;
+  // Usage per model, so a run whose retry used another model is priced per call.
+  const usageByModel = new Map<string, TokenUsage>();
+  const runCost = (): number | null => {
+    let total = 0;
+    for (const [m, u] of usageByModel) {
+      const cost = computeCostUsd(m, u);
+      if (cost === null) return null;
+      total += cost;
+    }
+    return Math.round(total * 1_000_000) / 1_000_000;
+  };
 
   const call = async (req: ClaudeRequest): Promise<ClaudeResponse> => {
     for (let retry = 0; ; retry++) {
@@ -290,7 +306,9 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
               : client.createMessage(req, callOptions),
           ctx.signal,
         );
-        usage = addUsage(usage ?? ZERO_USAGE, usageOf(response));
+        const callUsage = usageOf(response);
+        usage = addUsage(usage ?? ZERO_USAGE, callUsage);
+        usageByModel.set(req.model, addUsage(usageByModel.get(req.model) ?? ZERO_USAGE, callUsage));
         return response;
       } catch (error) {
         if (isAbort(error, ctx.signal)) throw new DamiAbortedError(dami.key, { cause: error });
@@ -352,8 +370,9 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
     });
     const messages: MessageParam[] = [...request.messages];
     let correctionsLeft = 1;
+    let callModel = model;
     for (;;) {
-      const response = await call({ ...request, messages });
+      const response = await call({ ...request, model: callModel, messages });
       if (response.stop_reason === "refusal") {
         throw new DamiRefusalError(
           dami.key,
@@ -373,7 +392,7 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
           throw new DamiOutputError(dami.key, [`finalize failed: ${describeError(error)}`]);
         }
         const finalUsage: TokenUsage = usage ?? ZERO_USAGE;
-        const costUsd = computeCostUsd(model, finalUsage);
+        const costUsd = runCost();
         // Bookkeeping must never discard a paid, valid output (a retry would pay again).
         try {
           await store.finish(runId, { status: "succeeded", output, attempts, usage, costUsd });
@@ -386,12 +405,19 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
             alert: true,
           });
         }
-        return { runId, output, model, attempts, usage: finalUsage, costUsd };
+        return { runId, output, model: callModel, attempts, usage: finalUsage, costUsd };
       }
       if (correctionsLeft === 0) throw new DamiOutputError(dami.key, result.issues);
       correctionsLeft--;
+      // Thinking signatures belong to the model that wrote them: a retry on another model gets
+      // the answer's text only.
+      const switching = retryModel !== callModel;
+      callModel = retryModel;
       messages.push(
-        { role: "assistant", content: replayAssistantContent(response.content) },
+        {
+          role: "assistant",
+          content: replayAssistantContent(response.content, { thinking: !switching }),
+        },
         { role: "user", content: correctionMessage(result.issues) },
       );
     }
@@ -412,7 +438,7 @@ export async function runDami<I extends z.ZodType, O extends z.ZodType, R>(
         error: describeError(typed),
         attempts,
         usage: finalUsage,
-        costUsd: finalUsage ? computeCostUsd(model, finalUsage) : null,
+        costUsd: finalUsage ? runCost() : null,
       });
     } catch (storeError) {
       logLine("error", "could not record a dami run's result", {

@@ -31,6 +31,27 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
   const { scriptReviseHandler } = await import("./script-revise");
   const { scriptDetectAssetsHandler } = await import("./script-detect-assets");
   const { scriptDirectHandler } = await import("./script-direct");
+  const { directionSceneHandler } = await import("./direction-scene");
+  const { directionWriteHandler } = await import("./direction-write");
+  const directions = await import("../../src/server/direction");
+
+  /** Runs the scene batches, then the write batches, that `script.direct` queued for a version. */
+  async function finishDirection(projectId: string, versionId: string): Promise<void> {
+    const row = await directions.getLatestDirection(projectId, versionId);
+    if (!row) return;
+    for (const b of await directions.listBatches(row.id, "scene")) {
+      await directionSceneHandler.run(
+        { directionId: row.id, batchIndex: b.batchIndex },
+        jobContext(),
+      );
+    }
+    for (const b of await directions.listBatches(row.id, "write")) {
+      await directionWriteHandler.run(
+        { directionId: row.id, batchIndex: b.batchIndex },
+        jobContext(),
+      );
+    }
+  }
   const fixtures = createFixtures();
 
   afterAll(async () => {
@@ -130,7 +151,9 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     expect(counts?.prop).toBeGreaterThanOrEqual(1);
 
     await twice(scriptDirectHandler, v2?.id ?? "");
-    expect(await runCount(projectId, "director")).toBe(1);
+    await finishDirection(projectId, v2?.id ?? "");
+    expect(await runCount(projectId, "film-director")).toBe(1);
+    expect(await runCount(projectId, "director")).toBeGreaterThanOrEqual(1);
     const status = await blocks.getSectioningStatus(projectId, userId);
     expect(status?.state).toBe("done");
     expect(status?.blockCount).toBeGreaterThan(3);
@@ -155,6 +178,7 @@ describe.skipIf(!reachable)("script job handlers (integration, sample mode)", as
     expect(staleBlocks?.items.every((b) => b.stale)).toBe(true);
 
     await scriptDirectHandler.run({ scriptVersionId: edited?.id ?? "" }, jobContext());
+    await finishDirection(projectId, edited?.id ?? "");
     const after = await blocks.listBlocks(projectId, userId, { limit: 200 });
     expect(after?.items.every((b) => b.scriptVersionId === edited?.id && !b.stale)).toBe(true);
     expect(after?.items.some((b) => b.versionNumber === 2)).toBe(true); // carried lineage

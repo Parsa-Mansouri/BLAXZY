@@ -1,0 +1,237 @@
+{
+  "tools": [
+    {
+      "name": "submit_scene_facts",
+      "description": "Mode extract_facts. Record what the text explicitly states about people, props, places, time and knowledge, scene by scene. No inference.",
+      "input_schema": {
+        "type": "object",
+        "required": ["segment_id", "scenes"],
+        "properties": {
+          "segment_id": { "type": "string" },
+          "scenes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["scene_number", "timeline_mode", "time", "characters", "props", "location_facts", "knowledge", "alias_candidates"],
+              "properties": {
+                "scene_number": { "type": "integer" },
+                "timeline_mode": {
+                  "type": "string",
+                  "enum": ["present", "flashback", "dream_or_vision", "montage", "unclear"],
+                  "description": "Only non-present when the script itself marks it (FLASHBACK, dream, memory, montage, or equivalent words in the script's language)."
+                },
+                "time": {
+                  "type": "object",
+                  "required": ["time_of_day", "elapsed_note", "day_marker", "evidence_quote"],
+                  "properties": {
+                    "time_of_day": { "type": "string", "description": "From the heading, as given." },
+                    "elapsed_note": { "type": "string", "description": "Stated time passage in the text (for example 'next morning', 'two hours later'). Empty string if none." },
+                    "day_marker": { "type": "string", "description": "Stated day count or date (for example 'day three'). Empty string if none." },
+                    "evidence_quote": { "type": "string" }
+                  }
+                },
+                "characters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["name", "presence", "condition", "location", "clothing", "injuries", "carrying", "evidence_quote", "element_index"],
+                    "properties": {
+                      "name": { "type": "string", "description": "Exactly as written." },
+                      "presence": { "type": "string", "enum": ["on_screen", "off_screen_voice", "mentioned_only"] },
+                      "condition": { "type": "string", "enum": ["normal", "injured", "unconscious", "dead", "unknown"] },
+                      "location": { "type": "string", "description": "Where the text puts them in this scene. Empty if not stated." },
+                      "clothing": { "type": "string", "description": "Only if the text states it in this scene. Empty otherwise." },
+                      "injuries": { "type": "string", "description": "Only if stated. Empty otherwise." },
+                      "carrying": { "type": "array", "items": { "type": "string" }, "description": "Objects the text says they hold or carry in this scene." },
+                      "evidence_quote": { "type": "string", "description": "Exact words, 20 words or fewer." },
+                      "element_index": { "type": "integer" }
+                    }
+                  }
+                },
+                "props": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["name", "holder_or_location", "state", "evidence_quote", "element_index"],
+                    "properties": {
+                      "name": { "type": "string" },
+                      "holder_or_location": { "type": "string", "description": "Who holds it or where it is, if stated. Empty otherwise." },
+                      "state": { "type": "string", "description": "Condition if stated (broken, open, lit, empty). Empty otherwise." },
+                      "evidence_quote": { "type": "string" },
+                      "element_index": { "type": "integer" }
+                    }
+                  }
+                },
+                "location_facts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["fact", "evidence_quote", "element_index"],
+                    "properties": {
+                      "fact": { "type": "string", "description": "A stated physical fact about the place (layout, doors, floors, objects fixed in place, weather)." },
+                      "evidence_quote": { "type": "string" },
+                      "element_index": { "type": "integer" }
+                    }
+                  }
+                },
+                "knowledge": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["character", "fact", "how_learned", "evidence_quote", "element_index"],
+                    "properties": {
+                      "character": { "type": "string" },
+                      "fact": { "type": "string", "description": "Something the character learns, says they know, or acts on that matters to the plot." },
+                      "how_learned": { "type": "string", "description": "How the text shows they learned it. Empty if not shown here." },
+                      "evidence_quote": { "type": "string" },
+                      "element_index": { "type": "integer" }
+                    }
+                  }
+                },
+                "alias_candidates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["names", "evidence_quote"],
+                    "properties": {
+                      "names": { "type": "array", "items": { "type": "string" } },
+                      "evidence_quote": { "type": "string", "description": "Where the text itself links the names, if it does. Empty if only suspected." }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "submit_continuity_report",
+      "description": "Mode find_contradictions. Report continuity problems found in the whole script. Report only; never rewrite.",
+      "input_schema": {
+        "type": "object",
+        "required": ["verdict", "summary", "findings", "alias_groups"],
+        "properties": {
+          "verdict": { "type": "string", "enum": ["consistent", "consistent_with_notes", "needs_fixes"] },
+          "summary": { "type": "string", "description": "2 to 3 plain sentences in the script's language." },
+          "findings": {
+            "type": "array",
+            "maxItems": 40,
+            "items": {
+              "type": "object",
+              "required": ["id", "category", "severity", "evidence", "problem", "downstream_impact", "fix"],
+              "properties": {
+                "id": { "type": "string", "description": "k1, k2, ..." },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "character_state",
+                    "prop_state",
+                    "location_state",
+                    "timeline",
+                    "presence_conflict",
+                    "status_conflict",
+                    "knowledge_leak",
+                    "alias_drift",
+                    "heading_mismatch",
+                    "loose_end"
+                  ]
+                },
+                "severity": { "type": "string", "enum": ["blocker", "major", "minor", "note"] },
+                "evidence": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 4,
+                  "description": "The two or more places that conflict, or the single place for a loose end.",
+                  "items": {
+                    "type": "object",
+                    "required": ["scene_number", "element_index", "quote"],
+                    "properties": {
+                      "scene_number": { "type": "integer" },
+                      "element_index": { "type": "integer" },
+                      "quote": { "type": "string", "description": "Exact text, 25 words or fewer." }
+                    }
+                  }
+                },
+                "problem": { "type": "string" },
+                "downstream_impact": { "type": "string", "description": "What goes wrong in asset sheets, scene breakdown or generated video." },
+                "fix": {
+                  "type": "object",
+                  "required": ["safety", "kind"],
+                  "properties": {
+                    "safety": { "type": "string", "enum": ["auto_safe", "needs_user_decision", "no_fix_needed"] },
+                    "kind": { "type": "string", "enum": ["replace_text", "rename_everywhere", "set_heading_field", "none"] },
+                    "target": {
+                      "type": "object",
+                      "description": "replace_text and set_heading_field: the one place to change.",
+                      "properties": { "scene_number": { "type": "integer" }, "element_index": { "type": "integer" } }
+                    },
+                    "old_text": { "type": "string" },
+                    "new_text": { "type": "string" },
+                    "occurrences": {
+                      "type": "array",
+                      "description": "rename_everywhere: every location to change.",
+                      "items": {
+                        "type": "object",
+                        "required": ["scene_number", "element_index"],
+                        "properties": { "scene_number": { "type": "integer" }, "element_index": { "type": "integer" } }
+                      }
+                    },
+                    "options": { "type": "array", "maxItems": 3, "items": { "type": "string" } },
+                    "explanation": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "alias_groups": {
+            "type": "array",
+            "description": "Names that refer to one character, prop or place. Used by asset_detector to avoid duplicate assets.",
+            "items": {
+              "type": "object",
+              "required": ["kind", "suggested_canonical", "names", "confidence", "evidence"],
+              "properties": {
+                "kind": { "type": "string", "enum": ["character", "prop", "location"] },
+                "suggested_canonical": { "type": "string" },
+                "names": { "type": "array", "items": { "type": "string" } },
+                "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["scene_number", "element_index", "quote"],
+                    "properties": { "scene_number": { "type": "integer" }, "element_index": { "type": "integer" }, "quote": { "type": "string" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "submit_verification",
+      "description": "Mode verify. Confirm or reject candidate continuity findings after reading the actual scenes.",
+      "input_schema": {
+        "type": "object",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["finding_id", "confirmed", "reason"],
+              "properties": {
+                "finding_id": { "type": "string" },
+                "confirmed": { "type": "boolean" },
+                "reason": { "type": "string", "description": "One or two sentences. If rejected, name the explanation in the text that resolves the apparent contradiction." },
+                "corrected_severity": { "type": "string", "enum": ["blocker", "major", "minor", "note"] },
+                "corrected_fix": { "type": "object", "description": "Same shape as finding.fix. Only if the original fix was wrong." }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

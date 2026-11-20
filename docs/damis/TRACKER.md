@@ -8,6 +8,20 @@ master prompt (first style: Nolan) and six cinematographer cards are wired as Fi
 Cinematographer; a code Breakdown groups their shots into blocks; Director v1.4 writes the prompts
 until the owner's Prompter file arrives. The Style step asks for the block length).
 
+Later on 2026-11-20 the owner's full archive (`blaxzy_project_files.zip`, every file rebuilt from his
+chats) was checked against the repo. Files already wired, earlier versions and superseded drafts
+were dropped (they are in his archive and, where they were ever used, in git history). What was
+missing waits in `inbox/2026-11-20/`:
+
+- `pipeline-v2/`: the owner's own split of the picture's pipeline: Director v2.0
+  (`dami_director.system.md`, output_22_dir), Cinematographer v1.0 (look bible, `look` / `shots` /
+  `relight`, output_22_dp), `breakdown.spec.md` (code, output_22_brk, `delivery_mode` incl. shot by
+  shot) and Prompter v1.0 (the file row 24 was waiting for). Not wired; see open question 19.
+- `sheet_generator_character_v5.md`: a newer Character Sheet Generator than the wired v4 (row 10).
+- `script-upload/`: Script Intake, Script Structurer, Script Checker and Continuity Checker v0.1,
+  each with its schema (the "I already have a script" branch; answers open question 1).
+- `reference/blaxzy_project_instructions.md`: the owner's project brief for his dami chats.
+
 ## Prompting pipeline (from 2026-11-20)
 
 Style step question (15 s / 30 s blocks; shot by shot later) → script + output_10 + output_21 →
@@ -161,3 +175,7 @@ Still open for the owner (Hamed):
     it arrives every project uses Nolan and Deakins.
 18. **Nolan card:** we generate the master prompt's Mode A card with one live run. Does the owner
     want to review it, or will he send his own?
+19. **Pipeline v2 vs the style cards:** `inbox/2026-11-20/pipeline-v2/` (Director v2.0,
+    Cinematographer v1.0, Breakdown spec, Prompter v1.0) covers the same steps as the wired Film
+    Director (Nolan master prompt) and Cinematographer (six DP cards), but names no style card.
+    Do the style cards become an input to the v2 damis, or do the v2 damis replace them?

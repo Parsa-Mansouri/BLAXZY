@@ -1,0 +1,141 @@
+{
+  "tools": [
+    {
+      "name": "submit_structured_screenplay",
+      "description": "Submit the user's own script converted to structured elements. Words must be unchanged from the source.",
+      "input_schema": {
+        "type": "object",
+        "required": ["screenplay", "structure_issues", "name_variants", "removed_artifacts", "self_check"],
+        "properties": {
+          "screenplay": {
+            "type": "object",
+            "required": ["title", "language", "scenes"],
+            "properties": {
+              "title": { "type": "string", "description": "From the title page if present, else empty string." },
+              "language": { "type": "string", "description": "BCP-47 tag of the script text, e.g. fa, en." },
+              "scenes": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["scene_number", "heading", "elements"],
+                  "properties": {
+                    "scene_number": { "type": "integer", "minimum": 1 },
+                    "continues_previous_scene": { "type": "boolean", "description": "Chunk mode only: this chunk starts mid-scene." },
+                    "heading": {
+                      "type": "object",
+                      "required": ["int_ext", "location", "time_of_day", "inferred", "raw_heading"],
+                      "properties": {
+                        "int_ext": { "type": "string", "enum": ["INT", "EXT", "INT/EXT", "UNSPECIFIED"] },
+                        "location": { "type": "string", "description": "Verbatim from the source heading, without the INT/EXT prefix and the time part." },
+                        "time_of_day": { "type": "string", "enum": ["DAY", "NIGHT", "DAWN", "DUSK", "CONTINUOUS", "LATER", "UNSPECIFIED"] },
+                        "inferred": { "type": "boolean", "description": "True if the source had no heading and this one was derived from the text." },
+                        "raw_heading": { "type": "string", "description": "The heading line exactly as written in the source. Empty string if inferred." }
+                      }
+                    },
+                    "elements": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "required": ["type", "text"],
+                        "properties": {
+                          "type": { "type": "string", "enum": ["action", "dialogue", "transition"] },
+                          "text": { "type": "string", "description": "Verbatim source text of this element." },
+                          "character": { "type": "string", "description": "dialogue only. Exactly as written in the source cue." },
+                          "extension": { "type": "string", "enum": ["", "V.O.", "O.S."] },
+                          "parenthetical": { "type": "string", "description": "dialogue only. Verbatim, without the brackets. Empty string if none." },
+                          "flags": {
+                            "type": "array",
+                            "items": { "type": "string", "enum": ["uncertain_type", "contains_shot_language", "contains_note_or_comment"] }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "structure_issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["scene_number", "issue", "action_taken"],
+              "properties": {
+                "scene_number": { "type": "integer" },
+                "element_index": { "type": "integer" },
+                "issue": { "type": "string" },
+                "action_taken": { "type": "string" }
+              }
+            }
+          },
+          "name_variants": {
+            "type": "array",
+            "description": "Cue names that probably refer to the same character but are written differently. Names are NOT changed.",
+            "items": {
+              "type": "object",
+              "required": ["names", "note"],
+              "properties": {
+                "names": { "type": "array", "items": { "type": "string" } },
+                "note": { "type": "string" }
+              }
+            }
+          },
+          "removed_artifacts": {
+            "type": "array",
+            "description": "Format artifacts that were dropped (page numbers, headers, CONT'D, MORE, margin scene numbers).",
+            "items": {
+              "type": "object",
+              "required": ["kind", "count"],
+              "properties": { "kind": { "type": "string" }, "count": { "type": "integer" } }
+            }
+          },
+          "self_check": {
+            "type": "object",
+            "required": ["all_text_preserved", "nothing_added", "order_preserved", "notes"],
+            "properties": {
+              "all_text_preserved": { "type": "boolean" },
+              "nothing_added": { "type": "boolean" },
+              "order_preserved": { "type": "boolean" },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "submit_fixed_screenplay",
+      "description": "Submit the screenplay after applying ONLY the approved fixes.",
+      "input_schema": {
+        "type": "object",
+        "required": ["screenplay", "change_log", "skipped"],
+        "properties": {
+          "screenplay": { "type": "object", "description": "Complete screenplay, same shape as in submit_structured_screenplay.screenplay." },
+          "change_log": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["fix_id", "scene_number", "element_index", "before", "after"],
+              "properties": {
+                "fix_id": { "type": "string" },
+                "scene_number": { "type": "integer" },
+                "element_index": { "type": "integer" },
+                "before": { "type": "string" },
+                "after": { "type": "string" }
+              }
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["fix_id", "reason"],
+              "properties": { "fix_id": { "type": "string" }, "reason": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

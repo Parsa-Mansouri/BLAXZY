@@ -1,0 +1,101 @@
+{
+  "tools": [
+    {
+      "name": "submit_script_report",
+      "description": "Submit the review report for the user's script. Report only; never rewrite the script.",
+      "input_schema": {
+        "type": "object",
+        "required": ["verdict", "summary", "strengths", "findings", "genre_style_fit"],
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": ["ready", "ready_with_notes", "needs_fixes"],
+            "description": "ready: no blocker or major findings. needs_fixes: at least one blocker, or three or more major findings."
+          },
+          "summary": { "type": "string", "description": "2 to 3 plain sentences for the user, in the script's language." },
+          "strengths": {
+            "type": "array",
+            "maxItems": 3,
+            "items": { "type": "string" },
+            "description": "Short, specific, true things that work. Not flattery."
+          },
+          "findings": {
+            "type": "array",
+            "maxItems": 40,
+            "items": {
+              "type": "object",
+              "required": ["id", "category", "severity", "scene_number", "element_index", "quote", "problem", "downstream_impact", "fix"],
+              "properties": {
+                "id": { "type": "string", "description": "f1, f2, ..." },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "unfilmable",
+                    "camera_or_prompt_language",
+                    "impossible_action",
+                    "continuity",
+                    "naming_inconsistency",
+                    "speaker_not_introduced",
+                    "ambiguous_reference",
+                    "cause_effect",
+                    "scene_no_change",
+                    "dialogue",
+                    "genre_fit",
+                    "style_fit",
+                    "format",
+                    "production_risk"
+                  ]
+                },
+                "severity": { "type": "string", "enum": ["blocker", "major", "minor", "note"] },
+                "scene_number": { "type": "integer", "description": "0 if the finding is about the whole script." },
+                "element_index": { "type": "integer", "description": "-1 if the finding is about a whole scene or the whole script." },
+                "quote": { "type": "string", "description": "Exact text from the script, 25 words or fewer. Empty only for whole-script findings." },
+                "problem": { "type": "string" },
+                "downstream_impact": { "type": "string", "description": "What concretely goes wrong in asset detection, scene breakdown or video generation." },
+                "occurrences": {
+                  "type": "array",
+                  "description": "Use when the same problem repeats. List every location.",
+                  "items": {
+                    "type": "object",
+                    "required": ["scene_number", "element_index"],
+                    "properties": { "scene_number": { "type": "integer" }, "element_index": { "type": "integer" } }
+                  }
+                },
+                "fix": {
+                  "type": "object",
+                  "required": ["safety", "kind"],
+                  "properties": {
+                    "safety": {
+                      "type": "string",
+                      "enum": ["auto_safe", "needs_user_decision", "no_fix_needed"],
+                      "description": "auto_safe: meaning-preserving, one small span. needs_user_decision: touches story content, deletes something, or has several valid options."
+                    },
+                    "kind": { "type": "string", "enum": ["replace_text", "rename_everywhere", "set_heading_field", "none"] },
+                    "old_text": { "type": "string", "description": "Exact substring of the element (or the old name for rename_everywhere)." },
+                    "new_text": { "type": "string" },
+                    "options": {
+                      "type": "array",
+                      "maxItems": 3,
+                      "description": "For needs_user_decision: up to three alternative replacements.",
+                      "items": { "type": "string" }
+                    },
+                    "explanation": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "genre_style_fit": {
+            "type": "object",
+            "required": ["genre_fit", "style_fit", "notes"],
+            "properties": {
+              "genre_fit": { "type": "string", "enum": ["strong", "partial", "weak"] },
+              "style_fit": { "type": "string", "enum": ["strong", "partial", "weak"] },
+              "notes": { "type": "string", "description": "Plain observation. Never suggest changing the user's chosen genre or style." }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -8,12 +8,17 @@ import {
   filmDirector,
   isBlocked,
   runDami,
+  shotPlanSchema,
   stubCreativeBible,
   type ShotPlan,
 } from "../../src/server/damis";
 import {
   blockModeFor,
+  directionContextSchema,
   failDirection,
+  getLatestDirection,
+  type CraftSelection,
+  type DirectionRow,
   lookScenesFor,
   pickCraft,
   registryFromView,
@@ -32,6 +37,28 @@ import { classifyFailure } from "./script-failure";
 
 /** The user-facing reason a run cannot start: the Director refused the style notes. */
 const COULD_NOT_START = "The Director could not start";
+
+/** Statuses where the scene and write batches own the run, not this job. */
+const HANDED_OFF = new Set(["lighting", "planned", "writing"]);
+
+/**
+ * The latest run when it can resume from its stored shot plan: still `directing`, the plan saved,
+ * and made with the same asset list, block mode and craft (else the plan is stale and is redone).
+ */
+function resumableRun(
+  row: DirectionRow | null,
+  current: { registry: unknown; blockMode: string; craft: CraftSelection },
+): { id: string; shotPlan: ShotPlan } | null {
+  if (!row || row.status !== "directing" || row.shotPlan == null) return null;
+  const plan = shotPlanSchema.safeParse(row.shotPlan);
+  const context = directionContextSchema.safeParse(row.context);
+  if (!plan.success || !context.success) return null;
+  const same =
+    context.data.block_mode === current.blockMode &&
+    JSON.stringify(context.data.asset_registry) === JSON.stringify(current.registry) &&
+    JSON.stringify(row.craft) === JSON.stringify(current.craft);
+  return same ? { id: row.id, shotPlan: plan.data } : null;
+}
 
 /**
  * Directs the accepted script with the craft pipeline. Here: the director and cinematographer are
@@ -93,11 +120,28 @@ export const scriptDirectHandler = defineHandler(scriptDirect, async (payload, c
     const craft = pickCraft(style, bible);
     const blockMode = blockModeFor(bible, style);
 
+    // A run already handed to its scene and write batches is finished by them (and the stuck-row
+    // sweep), so a repeated delivery of this job does nothing. A run whose shot plan is stored but
+    // whose look failed resumes from that plan instead of paying for the film-director again.
+    const latestRun = payload.resection ? null : await getLatestDirection(project.id, versionId);
+    if (latestRun && HANDED_OFF.has(latestRun.status)) return;
+
     const attempt = async () => {
       const detectedAt = await latestDetectionAt(project.id);
       const state = await loadDetectorState(project.id);
       const view = detectorView(state.rows, state.latest?.sceneIndex ?? [], "full");
       const { registry, bindings } = registryFromView(view);
+      const resumable = resumableRun(latestRun, { registry, blockMode, craft });
+      if (resumable) {
+        directionId = resumable.id;
+        return {
+          id: resumable.id,
+          run: null,
+          shotPlan: resumable.shotPlan,
+          changed: false,
+          registry,
+        };
+      }
       const directorContext: DirectionContext = {
         platform_config: defaultPlatformConfig(),
         block_mode: blockMode,
@@ -128,13 +172,12 @@ export const scriptDirectHandler = defineHandler(scriptDirect, async (payload, c
       );
       const latest = await latestDetectionAt(project.id);
       const changed = latest !== null && (detectedAt === null || latest > detectedAt);
-      return { id, run, changed, registry };
+      return { id, run, shotPlan: run.output, changed, registry };
     };
     const first = await attempt();
-    const { id, run, registry } = first.changed ? await attempt() : first;
+    const { id, run, shotPlan, registry } = first.changed ? await attempt() : first;
 
-    const shotPlan: ShotPlan = run.output;
-    if (isBlocked(shotPlan)) {
+    if (run && isBlocked(shotPlan)) {
       const reason = shotPlan.warnings.map((w) => w.message).join(" ");
       throw new ScriptInputError(
         `${COULD_NOT_START}: ${reason || "the script could not be directed."}`,
@@ -145,7 +188,7 @@ export const scriptDirectHandler = defineHandler(scriptDirect, async (payload, c
       await supersedeDirection(id); // edited again meanwhile
       return;
     }
-    if (!(await saveShotPlan({ directionId: id, shotPlan, runId: run.runId }))) return;
+    if (run && !(await saveShotPlan({ directionId: id, shotPlan, runId: run.runId }))) return;
 
     const look = await runDami(
       cinematographer,

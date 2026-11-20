@@ -23,6 +23,8 @@ export const creativeDnaInputSchema = z
     episode_duration_sec: z.number().int().positive().nullable().optional(),
     total_duration_sec: z.number().int().positive().nullable().optional(),
     orientation: z.enum(FRAME_ORIENTATIONS),
+    /** The block length the user chose (15 or 30 s); binding on the bible. Absent: the dami picks. */
+    block_length_sec: z.union([z.literal(15), z.literal(30)]).optional(),
     audience: z.string().trim().min(1).max(200).nullable().optional(),
     script_language: z.string().trim().min(1).max(40).nullable().optional(),
     ui_language: z.string().trim().min(1).max(40),

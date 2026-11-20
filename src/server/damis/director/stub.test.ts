@@ -54,6 +54,15 @@ describe("stub Creative Bible (a project without a bible)", () => {
     expect(stub.contracts.style_contract).toContain("Wool and button eyes");
   });
 
+  it("uses the block length the user chose", () => {
+    expect(stubCreativeBible({ ...style, blockLength: "30" }).project_frame.block_length_sec).toBe(
+      30,
+    );
+    expect(
+      stubCreativeBible({ ...style, blockLength: "shot" }).project_frame.block_length_sec,
+    ).toBe(15);
+  });
+
   it("is accepted by the Director input and reaches the prompt with the owner's field list", () => {
     const input = directorInputSchema.parse({ ...inputJson, creative_bible: stub });
     const prompt = buildDirectorPrompt(input);

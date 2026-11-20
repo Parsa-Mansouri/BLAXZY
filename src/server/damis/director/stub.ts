@@ -1,4 +1,4 @@
-import { ownerGenreName, ownerStyleName } from "@/lib/style-options";
+import { blockLengthSeconds, ownerGenreName, ownerStyleName } from "@/lib/style-options";
 import type { ProjectStyle } from "@/server/db/schema";
 import type { CreativeBible } from "../creative-dna/schema";
 import { PLATFORM_CONFIG } from "../shared/platform";
@@ -42,7 +42,8 @@ export function stubCreativeBible(style: ProjectStyle): CreativeBible {
       script_language: null,
       ui_language: "en",
       dialogue_policy: null,
-      block_length_sec: PLATFORM_CONFIG.default_block_length_sec,
+      block_length_sec:
+        blockLengthSeconds(style.blockLength) ?? PLATFORM_CONFIG.default_block_length_sec,
       blocks_per_episode: null,
       max_spoken_words_per_block: null,
     },

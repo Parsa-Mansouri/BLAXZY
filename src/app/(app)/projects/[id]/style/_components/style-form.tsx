@@ -21,17 +21,21 @@ import {
 } from "@/ui";
 import { stageHref } from "@/lib/stages";
 import {
+  BLOCK_LENGTHS,
+  DEFAULT_BLOCK_LENGTH,
   DURATION_PRESETS,
   FORMATS,
   GENRES,
   MAX_DURATION_SECONDS,
   MAX_EPISODES,
+  OFFERED_BLOCK_LENGTHS,
   ORIENTATION_OPTIONS,
   OTHER_VALUE,
   VISUAL_STYLES,
   durationError,
   episodeCount,
   splitChoice,
+  type BlockLength,
   type StyleOption,
 } from "@/lib/style-options";
 import {
@@ -51,18 +55,20 @@ export interface SavedStyle {
   orientation: "landscape" | "portrait";
   totalDurationSeconds: number;
   episodeDurationSeconds: number | null;
+  blockLength?: BlockLength;
   references?: { visualStyle?: StyleReferenceInput; genre?: StyleReferenceInput };
 }
 
 type Format = "movie" | "series";
 type Orientation = "landscape" | "portrait";
-type QuestionKey = "look" | "genre" | "format" | "length" | "frame";
+type QuestionKey = "look" | "genre" | "format" | "length" | "blocks" | "frame";
 
 const QUESTIONS: { key: QuestionKey; label: string }[] = [
   { key: "look", label: "Look" },
   { key: "genre", label: "Genre" },
   { key: "format", label: "Format" },
   { key: "length", label: "Length" },
+  { key: "blocks", label: "Blocks" },
   { key: "frame", label: "Frame" },
 ];
 
@@ -191,6 +197,10 @@ export function StyleForm({
       ? episodeCount(saved.totalDurationSeconds, saved.episodeDurationSeconds)
       : DEFAULT_EPISODES,
   );
+  // Old projects have none saved: they show 15 s, the default a new project starts with.
+  const [blockLength, setBlockLength] = useState<BlockLength>(
+    saved?.blockLength ?? DEFAULT_BLOCK_LENGTH,
+  );
   const [customOpen, setCustomOpen] = useState(false);
 
   const [step, setStep] = useState(saved ? DONE : 0);
@@ -239,6 +249,9 @@ export function StyleForm({
         : "Choose a genre.",
     format: format ? null : "Choose a movie or a series.",
     length: lengthError(),
+    blocks: OFFERED_BLOCK_LENGTHS.includes(blockLength)
+      ? null
+      : "Choose 15-second or 30-second blocks.",
     frame: orientation ? null : "Choose a frame.",
   };
 
@@ -271,6 +284,7 @@ export function StyleForm({
         : isSeries
           ? `${lengthLabel(lengthValue)} · ${shownCount} ${shownCount === 1 ? "episode" : "episodes"}`
           : lengthLabel(lengthValue),
+    blocks: BLOCK_LENGTHS.find((b) => b.value === blockLength)?.label ?? "",
     frame: ORIENTATION_OPTIONS.find((o) => o.value === orientation)?.label ?? "",
   };
 
@@ -283,6 +297,7 @@ export function StyleForm({
     (genreIsRef && !sameReference(savedGenreRef, genreRef)) ||
     saved.format !== format ||
     saved.orientation !== orientation ||
+    (saved.blockLength ?? DEFAULT_BLOCK_LENGTH) !== blockLength ||
     saved.totalDurationSeconds !== total ||
     (isSeries && saved.episodeDurationSeconds !== episode);
   const changesLength =
@@ -329,6 +344,7 @@ export function StyleForm({
       genre: genreValue,
       format,
       orientation,
+      blockLength,
       totalDurationSeconds: total,
       ...(isSeries && episode !== null ? { episodeDurationSeconds: episode } : {}),
       ...(visualIsRef || genreIsRef ? { references } : {}),
@@ -547,6 +563,27 @@ export function StyleForm({
                   </div>
                 </div>
               ) : null}
+            </div>
+          </Question>
+        );
+      case "blocks":
+        return (
+          <Question heading="How long is each clip?" error={shownError("blocks")}>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-3">
+              {BLOCK_LENGTHS.filter((b) => OFFERED_BLOCK_LENGTHS.includes(b.value)).map((b, i) => (
+                <OptionRow
+                  key={b.value}
+                  selected={blockLength === b.value}
+                  onSelect={() => setBlockLength(b.value)}
+                  className="min-h-32 enter items-end pb-5"
+                  style={stagger(i, base)}
+                >
+                  <span className="block text-heading-sm font-semibold">{b.label}</span>
+                  <span className="font-normal mt-1 block text-secondary text-pretty text-label-2">
+                    {b.description}
+                  </span>
+                </OptionRow>
+              ))}
             </div>
           </Question>
         );

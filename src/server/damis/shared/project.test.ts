@@ -41,6 +41,18 @@ describe("style references in the prompts", () => {
   });
 });
 
+describe("projectStyleSchema blockLength", () => {
+  it("accepts 15, 30, shot and unset, and rejects anything else", () => {
+    for (const blockLength of ["15", "30", "shot"]) {
+      expect(projectStyleSchema.safeParse({ ...base, blockLength }).success).toBe(true);
+    }
+    expect(projectStyleSchema.safeParse(base).success).toBe(true);
+    for (const blockLength of ["20", 15, "", "auto"]) {
+      expect(projectStyleSchema.safeParse({ ...base, blockLength }).success).toBe(false);
+    }
+  });
+});
+
 describe("projectStyleSchema references", () => {
   it("accepts a stored style with references and an older one without", () => {
     expect(projectStyleSchema.safeParse(withReferences).success).toBe(true);

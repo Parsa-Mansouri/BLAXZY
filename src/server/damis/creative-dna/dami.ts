@@ -61,6 +61,11 @@ export function checkCreativeBible(bible: CreativeBible, input: CreativeDnaInput
   if (!lengths.includes(frame.block_length_sec)) {
     errors.push(`block_length_sec must be one of ${lengths.join(", ")}`);
   }
+  if (input.block_length_sec !== undefined && frame.block_length_sec !== input.block_length_sec) {
+    errors.push(
+      `block_length_sec must be ${input.block_length_sec}, the length the user chose in project_settings`,
+    );
+  }
   if (input.episode_duration_sec != null) {
     const expected = Math.ceil(input.episode_duration_sec / frame.block_length_sec);
     if (frame.blocks_per_episode !== expected) {

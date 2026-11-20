@@ -24,6 +24,11 @@ export function buildCreativeDnaPrompt(input: CreativeDnaInput): DamiPrompt {
   const perProject = [
     `<project_settings>\n${JSON.stringify(settings)}\n</project_settings>`,
     `<platform_config>\n${JSON.stringify(PLATFORM_CONFIG)}\n</platform_config>`,
+    ...(input.block_length_sec
+      ? [
+          `The user chose ${input.block_length_sec}-second blocks (block_length_sec in project_settings). This is binding: set project_frame.block_length_sec to ${input.block_length_sec} and compute every block number from it.`,
+        ]
+      : []),
     "Compile output_10 now. Return only the JSON object.",
   ].join("\n\n");
   return {

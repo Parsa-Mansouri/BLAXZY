@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { DirectorBlock } from "@/server/damis";
+import type { CreativeBible, DirectorBlock } from "@/server/damis";
 import outputJson from "@/server/damis/director/fixtures/model-output.json";
 import { directedBlocks } from "./blocks";
-import { batchRanges, blockModeFor, estimateBlockCount, type DirectionBinding } from "./context";
+import {
+  batchRanges,
+  blockLengthFor,
+  blockModeFor,
+  estimateBlockCount,
+  type DirectionBinding,
+} from "./context";
 
 const blocks = (outputJson as unknown as { blocks: DirectorBlock[] }).blocks;
 
@@ -43,6 +49,19 @@ describe("batch ranges and the block estimate", () => {
 
   it("blockModeFor is auto without a bible", () => {
     expect(blockModeFor(null)).toBe("auto");
+  });
+
+  it("blockModeFor lets the style's 15 or 30 s answer win over the bible", () => {
+    const bible = { project_frame: { block_length_sec: 30 } } as unknown as CreativeBible;
+    expect(blockModeFor(bible)).toBe("fixed_30");
+    expect(blockModeFor(bible, style)).toBe("fixed_30");
+    expect(blockModeFor(bible, { ...style, blockLength: "15" })).toBe("fixed_15");
+    expect(blockModeFor(null, { ...style, blockLength: "30" })).toBe("fixed_30");
+    // Shot by shot and unset fall back to the bible.
+    expect(blockModeFor(bible, { ...style, blockLength: "shot" })).toBe("fixed_30");
+    expect(blockModeFor(null, { ...style, blockLength: "shot" })).toBe("auto");
+    expect(blockLengthFor(bible, 15, { ...style, blockLength: "15" })).toBe(15);
+    expect(blockLengthFor(bible, 15, style)).toBe(30);
   });
 });
 

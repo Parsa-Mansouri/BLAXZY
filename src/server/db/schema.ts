@@ -156,6 +156,11 @@ export type ProjectStyle = {
   totalDurationSeconds: number;
   /** Series only. */
   episodeDurationSeconds?: number;
+  /**
+   * How the film is cut into generated clips: 15 s or 30 s blocks, or shot by shot (stored, not
+   * offered yet). Unset (older projects): the Creative Bible picks the block length.
+   */
+  blockLength?: "15" | "30" | "shot";
   /** Anything else the Style stage collects (tone, audience, language, ...). */
   extras?: Record<string, string>;
   /**

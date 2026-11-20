@@ -105,6 +105,38 @@ export const FORMATS = [
   { value: "series", label: "Series" },
 ] as const;
 
+/** How the film is cut into generated video clips. `shot` is stored but not offered yet. */
+export type BlockLength = "15" | "30" | "shot";
+
+export const BLOCK_LENGTHS: readonly (StyleOption & { value: BlockLength })[] = [
+  {
+    value: "15",
+    label: "15-Second Blocks",
+    description: "Short clips with a quick rhythm: one or two moments each.",
+  },
+  {
+    value: "30",
+    label: "30-Second Blocks",
+    description: "Longer clips with room for a whole scene beat.",
+  },
+  {
+    value: "shot",
+    label: "Shot by Shot",
+    description: "Every shot is its own clip, for the most control.",
+  },
+];
+
+/** The block lengths the Style screen offers today (shot by shot cannot run yet). */
+export const OFFERED_BLOCK_LENGTHS: readonly BlockLength[] = ["15", "30"];
+
+/** The block length a new project starts with. */
+export const DEFAULT_BLOCK_LENGTH: BlockLength = "15";
+
+/** The fixed block length in seconds a choice means, or null for shot by shot / unset. */
+export function blockLengthSeconds(choice: BlockLength | undefined): 15 | 30 | null {
+  return choice === "15" ? 15 : choice === "30" ? 30 : null;
+}
+
 export const ORIENTATION_OPTIONS = [
   { value: "landscape", label: "Landscape", description: "16:9" },
   { value: "portrait", label: "Portrait", description: "9:16" },

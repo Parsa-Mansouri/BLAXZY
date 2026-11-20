@@ -29,6 +29,7 @@ export interface StyleInput {
   orientation: "landscape" | "portrait";
   totalDurationSeconds: number;
   episodeDurationSeconds?: number;
+  blockLength?: "15" | "30" | "shot";
   references?: { visualStyle?: StyleReferenceInput; genre?: StyleReferenceInput };
 }
 

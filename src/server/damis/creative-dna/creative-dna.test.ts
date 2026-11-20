@@ -169,6 +169,39 @@ describe("creativeDnaInputFromStyle", () => {
     expect(creativeDnaInputSchema.safeParse(result).success).toBe(true);
   });
 
+  it("carries the chosen block length (15 or 30) and makes it binding", () => {
+    for (const [choice, sec] of [
+      ["15", 15],
+      ["30", 30],
+    ] as const) {
+      const result = creativeDnaInputFromStyle(style({ blockLength: choice }));
+      expect(result).toMatchObject({ block_length_sec: sec });
+      expect(creativeDnaInputSchema.safeParse(result).success).toBe(true);
+      const parsed = creativeDnaInputSchema.parse(result);
+      const text = JSON.stringify(buildCreativeDnaPrompt(parsed));
+      expect(text).toContain(`The user chose ${sec}-second blocks`);
+      // The sample bible follows the choice, and a bible that ignores it fails the check.
+      const bible = sampleCreativeDna(parsed);
+      expect(bible.project_frame.block_length_sec).toBe(sec);
+      expect(checkCreativeBible(bible, parsed)).toEqual([]);
+      const other = sec === 15 ? 30 : 15;
+      const wrong = structuredClone(bible);
+      wrong.project_frame.block_length_sec = other;
+      wrong.project_frame.blocks_per_episode = Math.ceil(parsed.episode_duration_sec! / other);
+      expect(checkCreativeBible(wrong, parsed).join(" ")).toContain("the user chose");
+    }
+  });
+
+  it("leaves the block length out for shot by shot or unset, and the key changes with it", () => {
+    expect(creativeDnaInputFromStyle(style({ blockLength: "shot" }))).not.toHaveProperty(
+      "block_length_sec",
+    );
+    expect(creativeDnaInputFromStyle(style())).not.toHaveProperty("block_length_sec");
+    const base = creativeBibleKey(style());
+    expect(creativeBibleKey(style({ blockLength: "shot" }))).toBe(base);
+    expect(creativeBibleKey(style({ blockLength: "30" }))).not.toBe(base);
+  });
+
   it("is null for Other, and the key ignores what a bible does not depend on", () => {
     expect(creativeDnaInputFromStyle(style({ genre: "Other thing" }))).toBeNull();
     expect(creativeBibleKey(style({ genre: "Other thing" }))).toBeNull();

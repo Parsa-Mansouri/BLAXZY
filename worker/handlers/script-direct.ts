@@ -74,7 +74,11 @@ export const scriptDirectHandler = defineHandler(scriptDirect, async (payload, c
     if (ready.deferred) return;
     const bible = ready.bible?.bible ?? null;
     const runContext = { userId: project.ownerId, projectId: project.id, signal: context.signal };
-    const blockLengthSec = blockLengthFor(bible, defaultPlatformConfig().default_block_length_sec);
+    const blockLengthSec = blockLengthFor(
+      bible,
+      defaultPlatformConfig().default_block_length_sec,
+      style,
+    );
     const planned = estimateBlockCount({ style, script, blockLengthSec });
     const mode = planned <= FULL_MODE_MAX_BLOCKS ? "full" : "plan";
 
@@ -85,7 +89,7 @@ export const scriptDirectHandler = defineHandler(scriptDirect, async (payload, c
       const { registry, bindings } = registryFromView(view);
       const directorContext: DirectionContext = {
         platform_config: defaultPlatformConfig(),
-        block_mode: blockModeFor(bible),
+        block_mode: blockModeFor(bible, style),
         creative_bible: bible ?? stubCreativeBible(style),
         asset_registry: registry,
         bindings,

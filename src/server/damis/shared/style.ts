@@ -30,6 +30,7 @@ export const projectStyleSchema = z
     orientation: z.enum(ORIENTATIONS),
     totalDurationSeconds: z.number().int().positive(),
     episodeDurationSeconds: z.number().int().positive().optional(),
+    blockLength: z.enum(["15", "30", "shot"]).optional(),
     extras: z.record(z.string(), z.string()).optional(),
     references: z
       .object({

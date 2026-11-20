@@ -4,6 +4,7 @@
  * blocks a script will need (full call or plan and batches) and the batch ranges. No database.
  */
 import { z } from "zod";
+import { blockLengthSeconds } from "@/lib/style-options";
 import {
   assetRegistrySchema,
   BLOCK_MODES,
@@ -65,15 +66,25 @@ export function registryFromView(view: DetectorView): {
   return { registry, bindings };
 }
 
-/** `fixed_<n>` from the bible's block length when it is a platform option, else `auto`. */
-export function blockModeFor(bible: CreativeBible | null): BlockMode {
-  const length = bible?.project_frame.block_length_sec;
+/**
+ * `fixed_<n>` from the style's block length when the user chose 15 or 30 s (their answer wins);
+ * else (unset, or shot by shot) from the bible's block length when it is a platform option, else
+ * `auto`.
+ */
+export function blockModeFor(bible: CreativeBible | null, style?: ProjectStyle | null): BlockMode {
+  const length = blockLengthSeconds(style?.blockLength) ?? bible?.project_frame.block_length_sec;
   return length === 15 ? "fixed_15" : length === 30 ? "fixed_30" : "auto";
 }
 
-/** The block length used to estimate the count (the bible's, else the platform default). */
-export function blockLengthFor(bible: CreativeBible | null, fallback: number): number {
-  return bible?.project_frame.block_length_sec ?? fallback;
+/** The block length used to estimate the count (the style's 15/30 choice, the bible's, else the platform default). */
+export function blockLengthFor(
+  bible: CreativeBible | null,
+  fallback: number,
+  style?: ProjectStyle | null,
+): number {
+  return (
+    blockLengthSeconds(style?.blockLength) ?? bible?.project_frame.block_length_sec ?? fallback
+  );
 }
 
 /**

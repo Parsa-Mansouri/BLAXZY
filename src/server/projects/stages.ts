@@ -120,6 +120,7 @@ function validateStyle(style: unknown) {
       orientation: "Choose landscape or portrait.",
       totalDurationSeconds: "Enter a valid total duration.",
       episodeDurationSeconds: "Enter a valid episode duration.",
+      blockLength: "Choose 15-second or 30-second blocks.",
       references: "Add a film or show name, a reference image or a description.",
     };
     throw new ProjectInputError(

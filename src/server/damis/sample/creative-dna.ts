@@ -63,9 +63,10 @@ function frameOf(input: CreativeDnaInput): Frame {
   const episodeSeconds = input.episode_duration_sec ?? input.total_duration_sec ?? null;
   // Longer pieces that split evenly into 30 s blocks use them; everything else the default.
   const blockLength =
-    episodeSeconds !== null && episodeSeconds >= 300 && episodeSeconds % 30 === 0
+    input.block_length_sec ??
+    (episodeSeconds !== null && episodeSeconds >= 300 && episodeSeconds % 30 === 0
       ? 30
-      : PLATFORM_CONFIG.default_block_length_sec;
+      : PLATFORM_CONFIG.default_block_length_sec);
   const events: Readonly<Record<string, number>> = PLATFORM_CONFIG.max_events_per_block;
   return {
     blockLength,

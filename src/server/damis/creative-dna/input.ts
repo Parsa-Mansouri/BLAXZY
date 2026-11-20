@@ -1,4 +1,4 @@
-import { episodeCount } from "@/lib/style-options";
+import { blockLengthSeconds, episodeCount } from "@/lib/style-options";
 import type { ProjectStyle } from "@/server/db/schema";
 import { registryIdsForStyle } from "./registry";
 import type { CreativeDnaInput } from "./schema";
@@ -17,6 +17,7 @@ export function creativeDnaInputFromStyle(style: ProjectStyle): CreativeDnaInput
   if (!ids) return null;
   const series = style.format === "series" && style.episodeDurationSeconds !== undefined;
   const language = style.extras?.language?.trim();
+  const blockLength = blockLengthSeconds(style.blockLength);
   return {
     genre_id: ids.genreId,
     style_id: ids.styleId,
@@ -29,6 +30,7 @@ export function creativeDnaInputFromStyle(style: ProjectStyle): CreativeDnaInput
       : style.totalDurationSeconds,
     total_duration_sec: style.totalDurationSeconds,
     orientation: style.orientation,
+    ...(blockLength ? { block_length_sec: blockLength } : {}),
     ...(style.audienceRating ? { audience: style.audienceRating } : {}),
     ...(language ? { script_language: language } : {}),
     ui_language: CREATIVE_UI_LANGUAGE,

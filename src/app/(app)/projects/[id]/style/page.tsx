@@ -13,6 +13,7 @@ export default async function StylePage({ params }: { params: Promise<{ id: stri
         orientation: project.style.orientation,
         totalDurationSeconds: project.style.totalDurationSeconds,
         episodeDurationSeconds: project.style.episodeDurationSeconds ?? null,
+        ...(project.style.blockLength ? { blockLength: project.style.blockLength } : {}),
         ...(project.style.references ? { references: project.style.references } : {}),
       }
     : null;
@@ -21,7 +22,7 @@ export default async function StylePage({ params }: { params: Promise<{ id: stri
     <>
       <PageHeader
         title="Style"
-        description="Five choices that set how the film looks and how long it runs."
+        description="Six choices that set how the film looks and how long it runs."
       />
       <StyleForm projectId={project.id} saved={saved} pastStyleStage={project.stage !== "style"} />
     </>

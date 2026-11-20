@@ -47,12 +47,26 @@ copied block still matches the source. To take a new version from Hamed:
 | `dami_director.system.md` (v1.4) | `director/source/` | Job description (Director, output_22) |
 | `dami_block_revision.system.md` (v1.5) | `block-revision/source/` | Job description (Block Revision) |
 | `dami_video_review.system.md` (v1.0) | `video-review/source/` | Job description (Video Review; its router is our code) |
+| `director-master-prompt nolan.md` | `film-director/source/director_master_prompt.md` | Job description (Film Director, Mode A style card / Mode B direction) |
+| `deakins-enhancer-v1.2.md`, `christopher-doyle-enhancer-v1.1.md`, `delbonnel_enhancer_v1.2.md`, `gordon-willis-enhancer-v1.3.md`, `lubezki-enhancer-v1.2.md`, `storaro-enhancer-v1.2.md` | `cinematographer/source/` (renamed `<name>_v<version>.md`) | Cinematographer cards (one per DP) |
+| `enhancer-library-update.md` | `docs/damis/reference/` | Change brief for the card library (already applied to all six cards) |
 
 Retired owner files: Text Blocks, Prompt Sectioner and Take Fixer (replaced by the Director, by
 Video Review plus the router, and by Block Revision). The Asset Detector v1 files are in git
 history only.
 
 ## Settings that differ from the files
+
+- **Film Director.** The master prompt is written for a chat that ends in a Markdown document with
+  Seedance prompts. Here it runs Mode B steps 1, 2, 4, 5 and 7 only and answers a JSON shot plan:
+  no prompt text, no continuity bible, no physical descriptors (the character, location and prop
+  sheets own appearance), no edit plan. Mode A runs as its own dami (`film-director-card`) to make
+  a style card once; the cards live in `film-director/styles/`.
+- **Cinematographer cards.** Each card is written to rewrite one image prompt (Rule 3). Here the
+  card is the system prompt of a film's DP: `look` once per direction, `scene` once per scene, both
+  answering structured JSON instead of Rule 3's single prompt. Rule 1 (never add content) holds.
+- **Director and cinematographer choice.** The owner's Brain dami will choose them from the Style
+  step; until then `src/server/direction/craft.ts` picks Nolan and Deakins.
 
 - **Output format.** The files ask for a forced tool call. The framework uses structured JSON output
   (`output_config.format`) instead, which guarantees the same schema.

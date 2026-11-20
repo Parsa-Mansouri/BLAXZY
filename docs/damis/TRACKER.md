@@ -3,9 +3,19 @@
 Every dami BLAXZY runs or plans to run, the latest owner (Hamed) file for it, and where it stands in
 the code. Update this file whenever an owner file arrives or a dami is wired, upgraded or retired.
 
-Last updated: 2026-11-19 (owner drop of 2026-11-19: Director v1.4 and Block Revision v1.5 wired;
-the new Storyboard and Voice Box damis are received and wait in `inbox/2026-11-19/`. The Wizard
-question bank is still the only file left in `inbox/2026-11-16/`).
+Last updated: 2026-11-20 (owner drop of 2026-11-20: the new prompting pipeline. The Director
+master prompt (first style: Nolan) and six cinematographer cards are wired as Film Director and
+Cinematographer; a code Breakdown groups their shots into blocks; Director v1.4 writes the prompts
+until the owner's Prompter file arrives. The Style step asks for the block length).
+
+## Prompting pipeline (from 2026-11-20)
+
+Style step question (15 s / 30 s blocks; shot by shot later) → script + output_10 + output_21 →
+① Film Director (row 21) → ② Cinematographer (row 22, `look` once + `scene` per scene) →
+③ Breakdown (code, row 23) → ④ Prompter (row 24; Director v1.4 bridges) → validator (code) →
+output_22 → Block Revision. A future **Brain** dami (row 25) will pick the director and the
+cinematographer from the Style step; until then `src/server/direction/craft.ts` picks Nolan and
+Deakins.
 
 ## Status key
 
@@ -30,7 +40,7 @@ question bank is still the only file left in `inbox/2026-11-16/`).
 | 10 | Sheet Generator: character (output_30) | Pre-production | `sheet-generator-character/source/sheet_generator_character_v4.md` | live (owner) | `sheet-generator-character/` | |
 | 11 | Sheet Generator: location | Pre-production | `sheet-generator-location/source/sheet_generator_location_v1.md` | live (owner) | `sheet-generator-location/` | |
 | 12 | Sheet Generator: prop | Pre-production | `sheet-generator-prop/source/sheet_generator_prop_v1.md` | live (owner) | `sheet-generator-prop/` | |
-| 13 | Director (output_22) | After script approval (background) | `director/source/dami_director.system.md` v1.4 | live (owner) | `director/` | v1.4 (2026-11-19): voices are not assets (`assets.heard_only` for speakers heard but not seen, no bible `voices`, no `voice_` ids), dialogue `heard_as`, voice notes only from detector facts; v1.3 blocks already stored still parse. Wired (Phase 4): `script.direct` runs `full` for up to ~8 blocks, else `plan` plus `direction.write` batches of ~8 (`write_blocks`). Replaced the earlier Director v1, which the owner marked wrong. Blocks arrive directed (15 or 30 s); a project without a Creative Bible gets a stub bible. Code-side validator is `director/validate.ts`. |
+| 13 | Director (output_22) | After script approval (background); since 2026-11-20 it is the ④ Prompter bridge (row 24) | `director/source/dami_director.system.md` v1.4 | live (owner) | `director/` | v1.4 (2026-11-19): voices are not assets (`assets.heard_only` for speakers heard but not seen, no bible `voices`, no `voice_` ids), dialogue `heard_as`, voice notes only from detector facts; v1.3 blocks already stored still parse. Wired (Phase 4): `script.direct` runs `full` for up to ~8 blocks, else `plan` plus `direction.write` batches of ~8 (`write_blocks`). Replaced the earlier Director v1, which the owner marked wrong. Blocks arrive directed (15 or 30 s); a project without a Creative Bible gets a stub bible. Code-side validator is `director/validate.ts`. |
 | 14 | Text Blocks / reference binding | Production | none | retired | none | Retired (Phase 4). The Director writes the final prompts; reference binding is code (`bindAssetTokens`/`tagAssetIds` at store time, `production/binding.ts` at preparation). Folder, sample and tests deleted. |
 | 15 | Block Revision | Production | `block-revision/source/dami_block_revision.system.md` v1.5 | live (owner) | `block-revision/` (the draft block-reviser is retired) | v1.5 (2026-11-19): follows Director v1.4 assets, keeps `<<<audio_N>>>` tokens, adds `flags.voice_rebind_required`. Minimal-diff fixes, sliders, keep list, escalation levels 1 to 4, attempt history. |
 | 16 | Video Review (+ Router, code) | Production | `video-review/source/dami_video_review.system.md` v1.0 | live (owner) | `video-review/` | Run by the `take.review` job on every generated clip of a directed block (ffmpeg cut detection and keyframes, the report on the take). The Router (rebind, revise, reroll) is backend code (`production/router.ts`, `take-routing.ts`), not a dami; there is no 6-generation cap (generations are unlimited, each confirmed by the user). |
@@ -38,6 +48,11 @@ question bank is still the only file left in `inbox/2026-11-16/`).
 | 18 | Take Fixer | Production | none | retired | none | Retired (Phase 6), replaced by Video Review + the router + Block Revision. Folder, sample generator, tests and the `take.fix` job deleted. |
 | 19 | Storyboard (output_31) | New STORYBOARD stage, between Pre-production and Production | `inbox/2026-11-19/dami_storyboard.system.md` v1.0 | received (not wired) | none yet | One storyboard sheet per block: turns a Director block plus the approved asset sheets (attached as images) into one Nano Banana prompt for a pencil storyboard, one numbered panel per shot, red movement marks; modes `first` / `fix` (free-text change request, optional panel numbers). Re-runs a block only when its block version or a sheet it uses changes. Opus, low effort. Needs: a new wizard stage, a storyboard version table (like `asset_sheet`), a `storyboard_image` generation purpose, and the live Higgsfield provider (stub today). |
 | 20 | Voice Box (output_23 + voice_cast) | Production, between the text-block preview and generation | `inbox/2026-11-19/dami_voice_box.system.md` v1.0 + `voice_box_review_catalog_v1.json` | received (not wired) | none yet | Modes `detect` (per block: lines, delivery type, timing fit, recommended source upload / tts / native), `cast` (once per speaking character, picks from the TTS voice catalog or writes a voice-design prompt; consent rules for cloning) and `bind` (TTS requests, upload checks, line placement, `<<<audio_N>>>` reference audio, rewritten Audio line, mix plan). Sonnet. Needs Director v1.4 / Block Revision v1.5 (done), ElevenLabs TTS through Higgsfield, an `audio` generation kind, voice uploads with consent, and an ffmpeg mix step; `take.generate` hard-codes `sound: true` today (native only). |
+| 21 | Film Director (① shot plan) | After script approval (background) | `film-director/source/director_master_prompt.md` (drop 2026-11-20, sent as "director-master-prompt nolan.md"); style cards in `film-director/styles/` | live (owner) | `film-director/` | Mode B steps 1, 2, 4, 5 and 7 only: beats, director's notes, scene geography, mise-en-scène per shot, shot timing. No prompt text and no physical descriptors (the sheets own appearance). Style library: Nolan only. **`styles/nolan.card.md` is a placeholder** until the Mode A card is generated by one live run of `film-director-card`. |
+| 22 | Cinematographer (② visual layer) | After the Film Director | `cinematographer/source/`: Deakins v1.2, Christopher Doyle v1.1, Delbonnel v1.2, Gordon Willis v1.3, Lubezki v1.2, Storaro v1.2 (drop 2026-11-20; the library change brief is `reference/enhancer-library-update.md`, already applied to every card) | live (owner) | `cinematographer/` | The card is sent verbatim as the system prompt. `look` runs once per direction (one card mode per scene), `scene` once per scene (lens, light, framing, grade and texture per shot). Structured JSON replaces the cards' Rule 3. Default card: Deakins. |
+| 23 | Breakdown (③) | After the Cinematographer | none (code) | code | `src/server/direction/breakdown.ts` | Groups the shots into 15 or 30 s blocks without splitting a shot, within the platform budgets. Shot by shot is planned but cannot be written until the Prompter exists. |
+| 24 | Prompter (④) | After the Breakdown | none yet | owner file owed | bridged by `director/` (v1.4, `write_blocks`) | Until the file arrives, v1.4 gets each block's shot plan and visual layer and writes the output_22 blocks. |
+| 25 | Brain | Style step | none yet | planned (owner) | `src/server/direction/craft.ts` (placeholder) | Will decide the director style and the cinematographer per project. |
 
 ## Logical damis named by the question bank (no owner file yet)
 
@@ -140,3 +155,9 @@ Still open for the owner (Hamed):
 15. **Voice catalog and cloning:** Voice Box `cast` picks from the TTS engine's voice catalog and
     can clone a consented sample. Which Higgsfield (ElevenLabs) endpoints and voice list do we
     use, and is cloning allowed on our plan?
+16. **Prompter file (2026-11-20 pipeline):** step ④ has no owner file yet. Director v1.4 writes the
+    prompts from the Breakdown's blocks until it arrives; shot by shot waits for it too.
+17. **Brain dami:** will pick the director style and the cinematographer from the Style step. Until
+    it arrives every project uses Nolan and Deakins.
+18. **Nolan card:** we generate the master prompt's Mode A card with one live run. Does the owner
+    want to review it, or will he send his own?

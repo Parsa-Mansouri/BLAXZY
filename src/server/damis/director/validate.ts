@@ -22,6 +22,7 @@ import {
   type DirectorOutput,
   type DirectorPlanOutput,
   type PlanBlock,
+  type PlannedShot,
   type PlatformConfigInput,
   type Shot,
   type Staging,
@@ -115,6 +116,10 @@ export function checkDuration(
   return errors;
 }
 
+/** A prompt window's length in seconds, inclusive (the owner's 2 to 6 s). */
+export const SHOT_WINDOW_MIN_S = 2;
+export const SHOT_WINDOW_MAX_S = 6;
+
 /**
  * The one window rule, shared by Director and Block Revision. A window is a timed prompt segment
  * of `minSeconds` to `maxSeconds` (default 2 to 6 s; rapid-cut windows of 2 to 3 s fit). Windows
@@ -128,8 +133,8 @@ export function checkShotWindows(
   options: { minSeconds?: number; maxSeconds?: number } = {},
 ): string[] {
   const errors: string[] = [];
-  const min = options.minSeconds ?? 2;
-  const max = options.maxSeconds ?? 6;
+  const min = options.minSeconds ?? SHOT_WINDOW_MIN_S;
+  const max = options.maxSeconds ?? SHOT_WINDOW_MAX_S;
   let cursor = 0;
   let previous = 0;
   const numbers: number[] = [];
@@ -231,10 +236,7 @@ export function checkBudgets(
       `${label(block)}: ${spoken} spoken words exceed spoken_words_max ${block.budgets.spoken_words_max}`,
     );
   }
-  const rate =
-    platform.speech_rate_wps[(language ?? "").toLowerCase().split(/[-_]/)[0] ?? ""] ??
-    speechRateWps(language);
-  const ceiling = Math.floor(rate * block.duration_s * 0.7);
+  const ceiling = spokenWordsCeiling(platform, language, block.duration_s);
   if (block.budgets.spoken_words_max > ceiling) {
     errors.push(
       `${label(block)}: spoken_words_max ${block.budgets.spoken_words_max} is above ${ceiling} (speech rate x duration minus 30% for action)`,
@@ -249,7 +251,23 @@ export function checkBudgets(
   return errors;
 }
 
-export function spokenWords(shots: readonly Shot[]): number {
+/**
+ * The most words a block of `duration` seconds may speak: the speech rate of the language times
+ * the duration, minus 30 % for action and reaction (the owner's process). The Breakdown packs
+ * shots under the same number.
+ */
+export function spokenWordsCeiling(
+  platform: PlatformConfigInput,
+  language: string | null | undefined,
+  duration: number,
+): number {
+  const rate =
+    platform.speech_rate_wps[(language ?? "").toLowerCase().split(/[-_]/)[0] ?? ""] ??
+    speechRateWps(language);
+  return Math.floor(rate * duration * 0.7);
+}
+
+export function spokenWords(shots: readonly Pick<Shot, "dialogue">[]): number {
   return shots.reduce(
     (sum, shot) => sum + shot.dialogue.reduce((s, d) => s + countWords(d.line), 0),
     0,
@@ -534,6 +552,44 @@ export function checkStagingContinuity(
       ];
 }
 
+/**
+ * Craft pipeline: a written block follows the Breakdown's shots exactly (tolerance 0). Its `shots`
+ * are the planned windows in order, each window's seconds are the planned ones, and the k-th
+ * planned shot is shot_number k (a shot with several windows repeats its number).
+ */
+export function checkShotPlanFollowed(
+  block: Pick<PromptBlock, "block_id" | "shots">,
+  planned: { shots: readonly Pick<PlannedShot, "shot_id" | "windows">[] } | undefined,
+): string[] {
+  if (!planned) return [`${label(block)}: the shot plan has no entry for this block`];
+  const expected = planned.shots.flatMap((shot, i) =>
+    shot.windows.map((w) => ({ shotId: shot.shot_id, number: i + 1, from: w.from_s, to: w.to_s })),
+  );
+  if (block.shots.length !== expected.length) {
+    return [
+      `${label(block)}: the shot plan has ${expected.length} windows (${planned.shots.map((s) => s.shot_id).join(", ")}), the block has ${block.shots.length}`,
+    ];
+  }
+  const errors: string[] = [];
+  block.shots.forEach((shot, i) => {
+    const want = expected[i];
+    if (!want) return;
+    const where = `${label(block)} window ${i + 1}`;
+    const got = parseWindow(shot.window);
+    if (!got || got.from !== want.from || got.to !== want.to) {
+      errors.push(
+        `${where}: window must be "${want.from}-${want.to}s" (shot ${want.shotId} of the shot plan), not "${shot.window}"`,
+      );
+    }
+    if (shot.shot_number !== want.number) {
+      errors.push(
+        `${where}: shot_number must be ${want.number} (shot ${want.shotId} of the shot plan), not ${shot.shot_number}`,
+      );
+    }
+  });
+  return errors;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Script checks                                                               */
 /* -------------------------------------------------------------------------- */
@@ -783,8 +839,11 @@ export function checkDirector(output: DirectorOutput, input: AnyDirectorInput): 
     });
   }
   const planById = new Map((plan?.blocks ?? []).map((b) => [b.block_id, b]));
+  const shotPlan =
+    range && input.shot_plan ? new Map(input.shot_plan.map((b) => [b.block_id, b])) : null;
   output.blocks.forEach((block, i) => {
     errors.push(...blockChecks(block, ctx));
+    if (shotPlan) errors.push(...checkShotPlanFollowed(block, shotPlan.get(block.block_id)));
     const previous =
       i > 0 ? (output.blocks[i - 1] ?? null) : (planById.get(block.block_id - 1) ?? null);
     errors.push(...checkStagingContinuity(block, previous));

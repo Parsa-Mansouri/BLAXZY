@@ -136,6 +136,21 @@ export const scriptDirect = defineJob({
 });
 
 /**
+ * One batch of scenes of a direction in `lighting`: the cinematographer's `scene` mode for each
+ * scene of the batch. Keyed by the batch: a duplicate send is dropped, and the handler stores a
+ * batch once (the last one to finish runs the Breakdown and queues the `direction.write` batches).
+ */
+export const directionScene = defineJob({
+  name: "direction.scene",
+  payload: z.object({
+    directionId: z.string().uuid(),
+    batchIndex: z.number().int().min(0).max(1000),
+  }),
+  options: { ...damiJob, expireInSeconds: 30 * 60 },
+  dedupeKey: (p) => `${p.directionId}:${p.batchIndex}`,
+});
+
+/**
  * One `write_blocks` batch of a planned direction. Keyed by the batch: a duplicate send is
  * dropped, and the handler stores a batch once (the last one to finish assembles the blocks).
  */
@@ -368,6 +383,7 @@ export const ALL_JOBS = [
   scriptDetectAssets,
   assetDetectFix,
   scriptDirect,
+  directionScene,
   directionWrite,
   generationRun,
   generationSweep,

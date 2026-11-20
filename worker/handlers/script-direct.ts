@@ -2,25 +2,24 @@ import { detectorView, loadDetectorState } from "../../src/server/assets";
 import { latestDetectionAt } from "../../src/server/assets/jobs";
 import { hasCurrentBlocksFor, setSectioningState } from "../../src/server/blocks";
 import {
+  cinematographer,
+  cinematographerBible,
   defaultPlatformConfig,
-  director,
-  directorPlan,
+  filmDirector,
   isBlocked,
   runDami,
   stubCreativeBible,
-  type DirectorOutput,
-  type DirectorPlanOutput,
+  type ShotPlan,
 } from "../../src/server/damis";
 import {
-  blockLengthFor,
   blockModeFor,
-  estimateBlockCount,
   failDirection,
-  FULL_MODE_MAX_BLOCKS,
+  lookScenesFor,
+  pickCraft,
   registryFromView,
-  saveFull,
-  savePlan,
+  saveShotPlan,
   startDirection,
+  startLighting,
   supersedeDirection,
   type DirectionContext,
 } from "../../src/server/direction";
@@ -31,17 +30,23 @@ import { creativeBibleForRun } from "./creative-bible";
 import { handleFailure } from "./failure";
 import { classifyFailure } from "./script-failure";
 
+/** The user-facing reason a run cannot start: the Director refused the style notes. */
+const COULD_NOT_START = "The Director could not start";
+
 /**
- * Directs the accepted script with the Director (owner v1.3): the blocks arrive with staging,
- * shots, rationales and a self-contained prompt. Up to ~8 blocks it is one `full` call whose
- * blocks are stored here; a longer script is a `plan` call whose plan is stored with one
- * `direction.write` job per batch (`direction-write.ts`), and the last batch stores the blocks.
- * Skips a version that is no longer the accepted one, and defers while the Creative Bible is
- * still compiling. A project without a bible gets the stub bible (`stubCreativeBible`).
+ * Directs the accepted script with the craft pipeline. Here: the director and cinematographer are
+ * picked (`pickCraft`, frozen into the run), the film-director plans the shots (`ShotPlan`) and the
+ * cinematographer sets the film's look; the run then becomes `lighting` with one `direction.scene`
+ * job per batch of scenes (`direction-scene.ts`). The last scene batch runs the Breakdown and
+ * queues the `direction.write` batches (`direction-write.ts`), whose last batch stores the blocks.
+ *
+ * Skips a version that is no longer the accepted one, and defers while the Creative Bible is still
+ * compiling. A project without a bible gets the stub bible (`stubCreativeBible`). Shot-by-shot
+ * clips cannot be written yet, so a style asking for them fails with a clear reason.
  *
  * One run per version (and kind) at a time. A correction round that applies a new detection while
- * the Director runs queues a re-direction that is dropped, so the run is made once more here with
- * the new list instead of storing blocks that name the old one.
+ * the film-director runs queues a re-direction that is dropped, so the run is made once more here
+ * with the new list instead of storing shots that name the old one.
  */
 export const scriptDirectHandler = defineHandler(scriptDirect, async (payload, context) => {
   const versionId = payload.scriptVersionId;
@@ -64,6 +69,11 @@ export const scriptDirectHandler = defineHandler(scriptDirect, async (payload, c
     if (!project.style) throw new ScriptInputError("Choose the project's style first.");
     if (!version.content) throw new ScriptInputError("The accepted script has no text.");
     const style = project.style;
+    if (style.blockLength === "shot") {
+      throw new ScriptInputError(
+        "Shot-by-shot clips cannot be directed yet. Choose 15 or 30 second blocks in the Style step and try again.",
+      );
+    }
     const script = version.content;
     const ready = await creativeBibleForRun({
       projectId: project.id,
@@ -73,14 +83,15 @@ export const scriptDirectHandler = defineHandler(scriptDirect, async (payload, c
     });
     if (ready.deferred) return;
     const bible = ready.bible?.bible ?? null;
+    const creativeBible = bible ?? stubCreativeBible(style);
+    if (creativeBible.validation_status === "rejected") {
+      throw new ScriptInputError(
+        `${COULD_NOT_START}: the Creative Bible of this style was rejected. Adjust the style and try again.`,
+      );
+    }
     const runContext = { userId: project.ownerId, projectId: project.id, signal: context.signal };
-    const blockLengthSec = blockLengthFor(
-      bible,
-      defaultPlatformConfig().default_block_length_sec,
-      style,
-    );
-    const planned = estimateBlockCount({ style, script, blockLengthSec });
-    const mode = planned <= FULL_MODE_MAX_BLOCKS ? "full" : "plan";
+    const craft = pickCraft(style, bible);
+    const blockMode = blockModeFor(bible, style);
 
     const attempt = async () => {
       const detectedAt = await latestDetectionAt(project.id);
@@ -89,42 +100,44 @@ export const scriptDirectHandler = defineHandler(scriptDirect, async (payload, c
       const { registry, bindings } = registryFromView(view);
       const directorContext: DirectionContext = {
         platform_config: defaultPlatformConfig(),
-        block_mode: blockModeFor(bible, style),
-        creative_bible: bible ?? stubCreativeBible(style),
+        block_mode: blockMode,
+        creative_bible: creativeBible,
         asset_registry: registry,
         bindings,
+        craft,
       };
       const id = await startDirection({
         projectId: project.id,
         scriptVersionId: versionId,
         creativeBibleId: ready.bible?.id ?? null,
-        mode,
+        mode: "craft",
         context: directorContext,
+        craft,
       });
       directionId = id;
-      const input = {
-        platform_config: directorContext.platform_config,
-        block_mode: directorContext.block_mode,
-        creative_bible: directorContext.creative_bible,
-        asset_registry: directorContext.asset_registry,
-        script,
-      };
-      const run =
-        mode === "full"
-          ? await runDami(director, { mode: "full" as const, ...input }, runContext)
-          : await runDami(directorPlan, { mode: "plan" as const, ...input }, runContext);
+      const run = await runDami(
+        filmDirector,
+        {
+          director_id: craft.directorId,
+          block_mode: blockMode,
+          creative_bible: creativeBible,
+          asset_registry: registry,
+          script,
+        },
+        runContext,
+      );
       const latest = await latestDetectionAt(project.id);
       const changed = latest !== null && (detectedAt === null || latest > detectedAt);
-      return { id, run, changed };
+      return { id, run, changed, registry };
     };
     const first = await attempt();
-    const { id, run } = first.changed ? await attempt() : first;
+    const { id, run, registry } = first.changed ? await attempt() : first;
 
-    const output: DirectorOutput | DirectorPlanOutput = run.output;
-    if (isBlocked(output)) {
-      const reason = output.warnings.map((w) => w.message).join(" ");
+    const shotPlan: ShotPlan = run.output;
+    if (isBlocked(shotPlan)) {
+      const reason = shotPlan.warnings.map((w) => w.message).join(" ");
       throw new ScriptInputError(
-        `The Director could not start: ${reason || "the style notes were rejected."}`,
+        `${COULD_NOT_START}: ${reason || "the script could not be directed."}`,
       );
     }
     const current = await loadScriptJob(versionId);
@@ -132,24 +145,21 @@ export const scriptDirectHandler = defineHandler(scriptDirect, async (payload, c
       await supersedeDirection(id); // edited again meanwhile
       return;
     }
-    if (mode === "full") {
-      const stored = await saveFull({
-        directionId: id,
-        output: output as DirectorOutput,
-        runId: run.runId,
-      });
-      if (!stored.stored) return; // superseded by a newer run
-      if (stored.assembled && !stored.replaced.skipped) {
-        await reopenProductionAfterScriptEdit(project.id);
-      } else if (stored.assembled) {
-        // A newer version was accepted meanwhile: its own run stores the blocks.
-        console.info(
-          `[script.direct] blocks of ${versionId} not stored: it is not the newest accepted version`,
-        );
-      }
-      return;
-    }
-    await savePlan({ directionId: id, plan: output as DirectorPlanOutput, runId: run.runId });
+    if (!(await saveShotPlan({ directionId: id, shotPlan, runId: run.runId }))) return;
+
+    const look = await runDami(
+      cinematographer,
+      {
+        mode: "look",
+        cinematographer_id: craft.cinematographerId,
+        creative_bible: cinematographerBible(creativeBible),
+        scenes: lookScenesFor(shotPlan, registry),
+      },
+      runContext,
+    );
+    if (look.output.mode !== "look")
+      throw new Error("The cinematographer answered the wrong mode.");
+    await startLighting({ directionId: id, look: look.output.look, runId: look.runId });
   } catch (error) {
     await handleFailure(
       error,

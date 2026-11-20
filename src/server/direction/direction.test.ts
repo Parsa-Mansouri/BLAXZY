@@ -2,17 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { CreativeBible, DirectorBlock } from "@/server/damis";
 import outputJson from "@/server/damis/director/fixtures/model-output.json";
 import { directedBlocks } from "./blocks";
-import {
-  batchRanges,
-  blockLengthFor,
-  blockModeFor,
-  estimateBlockCount,
-  type DirectionBinding,
-} from "./context";
+import { batchRanges, blockLengthFor, blockModeFor, type DirectionBinding } from "./context";
 
 const blocks = (outputJson as unknown as { blocks: DirectorBlock[] }).blocks;
 
-describe("batch ranges and the block estimate", () => {
+describe("batch ranges and the block mode", () => {
   it("covers 1..total in inclusive batches of eight", () => {
     expect(batchRanges(8)).toEqual([{ from: 1, to: 8 }]);
     expect(batchRanges(9)).toEqual([
@@ -29,23 +23,6 @@ describe("batch ranges and the block estimate", () => {
     orientation: "landscape" as const,
     totalDurationSeconds: 120,
   };
-
-  it("estimates from the target runtime, or the script when it is longer", () => {
-    expect(estimateBlockCount({ style, script: "short", blockLengthSec: 15 })).toBe(8);
-    expect(estimateBlockCount({ style, script: "short", blockLengthSec: 30 })).toBe(4);
-    const long = Array(2000).fill("word").join(" ");
-    expect(estimateBlockCount({ style, script: long, blockLengthSec: 15 })).toBeGreaterThan(8);
-  });
-
-  it("uses the episode runtime of a series", () => {
-    expect(
-      estimateBlockCount({
-        style: { ...style, format: "series", episodeDurationSeconds: 60 },
-        script: "s",
-        blockLengthSec: 15,
-      }),
-    ).toBe(4);
-  });
 
   it("blockModeFor is auto without a bible", () => {
     expect(blockModeFor(null)).toBe("auto");

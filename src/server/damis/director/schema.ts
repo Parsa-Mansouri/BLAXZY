@@ -447,6 +447,71 @@ export const storedDirectorPlanOutputSchema = z.preprocess(
 );
 
 /* -------------------------------------------------------------------------- */
+/* The craft pipeline's shot plan for write_blocks                             */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * What the Breakdown hands the writer for each block of a batch: the film-director's shots in the
+ * block, each with its prompt windows (seconds from the block's start), and the cinematographer's
+ * look of every shot. Defined here, in the writer's own terms, rather than imported from the
+ * film-director's schema (which imports this file): staging and props arrive as one line per
+ * character or prop.
+ */
+
+export const plannedWindowSchema = z.object({ from_s: z.number(), to_s: z.number() });
+export type PlannedWindow = z.output<typeof plannedWindowSchema>;
+
+export const plannedShotSchema = z.object({
+  shot_id: text,
+  scene_id: text,
+  size: text,
+  camera: z.object({
+    position: text,
+    height: text,
+    angle: text,
+    movement: text,
+    background: text,
+  }),
+  /** One line per character in or just out of frame, by asset id. */
+  staging: z.array(text),
+  /** One line per prop: who holds it in which hand, or where it sits. */
+  props: z.array(text),
+  action: text,
+  dialogue: z.array(dialogueSchema),
+  sound: text,
+  cut_reason: text,
+  start_state: text,
+  end_state: text,
+  /** The shot's windows in the block, in order: one, or several for a long shot. */
+  windows: z.array(plannedWindowSchema).min(1),
+});
+export type PlannedShot = z.output<typeof plannedShotSchema>;
+
+export const blockShotPlanSchema = z.object({
+  block_id: z.number().int().positive(),
+  shots: z.array(plannedShotSchema).min(1),
+});
+export type BlockShotPlan = z.output<typeof blockShotPlanSchema>;
+
+export const visualShotSchema = z.object({
+  shot_id: text,
+  lens: text,
+  camera_height_angle: text,
+  light: text,
+  framing: text,
+  grade: text,
+  texture: text,
+});
+export type VisualShot = z.output<typeof visualShotSchema>;
+
+export const visualLayerSchema = z.object({
+  /** The film's camera and light language, as the cinematographer's look states it. */
+  look: text,
+  shots: z.array(visualShotSchema),
+});
+export type VisualLayer = z.output<typeof visualLayerSchema>;
+
+/* -------------------------------------------------------------------------- */
 /* Input schemas                                                               */
 /* -------------------------------------------------------------------------- */
 
@@ -464,13 +529,35 @@ const inputShape = {
   plan: storedDirectorPlanOutputSchema.optional(),
   /** write_blocks only, `"9-16"`: inclusive block numbers. */
   block_range: z.string().trim().optional(),
+  /**
+   * write_blocks only, from the craft pipeline's Breakdown: the shots of every block of
+   * `block_range` with their windows. The written blocks must follow them exactly.
+   */
+  shot_plan: z.array(blockShotPlanSchema).optional(),
+  /** write_blocks only, with `shot_plan`: the cinematographer's look of those shots. */
+  visual_layer: visualLayerSchema.optional(),
 };
 
 function refineMode(
-  input: { mode: DirectorMode; plan?: unknown; block_range?: string },
+  input: {
+    mode: DirectorMode;
+    plan?: unknown;
+    block_range?: string;
+    shot_plan?: unknown;
+    visual_layer?: unknown;
+  },
   ctx: z.RefinementCtx,
 ): void {
-  if (input.mode !== "write_blocks") return;
+  if (input.mode !== "write_blocks") {
+    if (input.shot_plan || input.visual_layer) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["shot_plan"],
+        message: "shot_plan and visual_layer are for write_blocks only",
+      });
+    }
+    return;
+  }
   if (!input.plan) {
     ctx.addIssue({ code: "custom", path: ["plan"], message: "write_blocks needs the saved plan" });
   }

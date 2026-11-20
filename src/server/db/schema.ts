@@ -957,12 +957,22 @@ export const promptBlock = pgTable(
 /* Direction (the Director's run set for one script version)                   */
 /* -------------------------------------------------------------------------- */
 
-export const DIRECTION_MODES = ["full", "plan"] as const;
+/**
+ * `craft`: the film-director, the cinematographer, the Breakdown and `write_blocks` batches (every
+ * new run). `full` and `plan` are the older single-call and plan-pass runs, kept for their rows.
+ */
+export const DIRECTION_MODES = ["craft", "full", "plan"] as const;
 export type DirectionMode = (typeof DIRECTION_MODES)[number];
 
-/** `pending` (the Director runs) → `writing` (plan stored, batches queued) → `ready`. */
+/**
+ * A craft run: `directing` (the film-director plans the shots, the cinematographer sets the look)
+ * → `lighting` (scene batches light every shot) → `planned` (the Breakdown's plan stored, write
+ * batches queued) → `writing` → `ready`. `pending` is the start of an older (full or plan) run.
+ */
 export const DIRECTION_STATUSES = [
   "pending",
+  "directing",
+  "lighting",
   "planned",
   "writing",
   "ready",
@@ -970,6 +980,19 @@ export const DIRECTION_STATUSES = [
   "superseded",
 ] as const;
 export type DirectionStatus = (typeof DIRECTION_STATUSES)[number];
+
+/** The statuses of a run still in flight (at most one per script version; the sweeps watch them). */
+export const DIRECTION_ACTIVE_STATUSES = [
+  "pending",
+  "directing",
+  "lighting",
+  "planned",
+  "writing",
+] as const satisfies readonly DirectionStatus[];
+
+/** `scene`: a batch of scenes the cinematographer lights; `write`: a `write_blocks` batch. */
+export const DIRECTION_BATCH_KINDS = ["scene", "write"] as const;
+export type DirectionBatchKind = (typeof DIRECTION_BATCH_KINDS)[number];
 
 export const DIRECTION_BATCH_STATUSES = ["pending", "done", "failed"] as const;
 export type DirectionBatchStatus = (typeof DIRECTION_BATCH_STATUSES)[number];
@@ -1001,6 +1024,14 @@ export const direction = pgTable(
     header: jsonb("header").$type<unknown>(),
     plan: jsonb("plan").$type<unknown>(),
     context: jsonb("context").$type<unknown>(),
+    /** Craft runs: the director and cinematographer chosen for the run (`CraftSelection`). */
+    craft: jsonb("craft").$type<unknown>(),
+    /** Craft runs: the film-director's shot plan. */
+    shotPlan: jsonb("shot_plan").$type<unknown>(),
+    /** Craft runs: the cinematographer's look and, once every scene batch is done, its scenes. */
+    visual: jsonb("visual").$type<unknown>(),
+    /** Craft runs: the Breakdown's shots and windows per block (what each write batch follows). */
+    breakdown: jsonb("breakdown").$type<unknown>(),
     warnings: jsonb("warnings")
       .$type<{ type: string; ref: string; message: string }[]>()
       .notNull()
@@ -1021,12 +1052,14 @@ export const direction = pgTable(
     // At most one run in flight per script version.
     uniqueIndex("direction_active_unique")
       .on(t.scriptVersionId)
-      .where(sql`${t.status} in ('pending', 'planned', 'writing')`),
+      .where(sql`${t.status} in ('pending', 'directing', 'lighting', 'planned', 'writing')`),
   ],
 );
 
 /**
- * One `write_blocks` batch of a planned direction (blocks `blockFrom` to `blockTo`, inclusive).
+ * One batch of a direction: a `write_blocks` batch of a planned direction (`kind` write, blocks
+ * `blockFrom` to `blockTo`, inclusive), or a batch of scenes the cinematographer lights (`kind`
+ * scene, the run's scenes `blockFrom` to `blockTo` in shot-plan order, 1-based).
  * A child table, not a counter on the direction: batches run in parallel on any worker and each
  * writes only its own row, so no update is lost; the run is complete when no batch is `pending`.
  */
@@ -1037,18 +1070,21 @@ export const directionBatch = pgTable(
     directionId: uuid("direction_id")
       .notNull()
       .references(() => direction.id),
+    kind: text("kind").$type<DirectionBatchKind>().notNull().default("write"),
     batchIndex: integer("batch_index").notNull(),
     blockFrom: integer("block_from").notNull(),
     blockTo: integer("block_to").notNull(),
     status: text("status").$type<DirectionBatchStatus>().notNull().default("pending"),
     /** The written blocks (output_22 `blocks`) once done. */
     blocks: jsonb("blocks").$type<unknown>(),
+    /** A scene batch's lit scenes (cinematographer `SceneVisual`s), saved as each one finishes. */
+    sceneVisuals: jsonb("scene_visuals").$type<unknown>(),
     damiRunId: uuid("dami_run_id").references(() => damiRun.id),
     failure: text("failure"),
     createdAt: createdAt(),
     finishedAt: ts("finished_at"),
   },
-  (t) => [uniqueIndex("direction_batch_unique").on(t.directionId, t.batchIndex)],
+  (t) => [uniqueIndex("direction_batch_unique").on(t.directionId, t.kind, t.batchIndex)],
 );
 
 /* -------------------------------------------------------------------------- */

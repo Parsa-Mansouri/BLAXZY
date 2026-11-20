@@ -27,6 +27,7 @@ import {
   checkRationales,
   checkScriptCoverage,
   checkShotBudget,
+  checkShotPlanFollowed,
   checkShotWindows,
   checkStagingContinuity,
   checkTotals,
@@ -682,5 +683,56 @@ describe("the shared window rule", () => {
         ),
       ).join(" "),
     ).toContain("Cut to Shot 1");
+  });
+});
+
+describe("checkShotPlanFollowed (craft pipeline)", () => {
+  const shotOf = (window: string, shot_number: number) => ({
+    ...block(0).shots[0]!,
+    window,
+    shot_number,
+  });
+  const planned = {
+    shots: [
+      { shot_id: "s4", windows: [{ from_s: 0, to_s: 5 }] },
+      {
+        shot_id: "s5",
+        windows: [
+          { from_s: 5, to_s: 10 },
+          { from_s: 10, to_s: 15 },
+        ],
+      },
+    ],
+  };
+  const make = (shots: Block["shots"]) => ({ block_id: 2, shots });
+
+  it("passes when the windows and shot numbers are the plan's, exactly", () => {
+    expect(
+      checkShotPlanFollowed(
+        make([shotOf("0-5s", 1), shotOf("5-10s", 2), shotOf("10-15s", 2)]),
+        planned,
+      ),
+    ).toEqual([]);
+  });
+
+  it("fails on a moved boundary, a wrong shot number, a missing window or a missing plan", () => {
+    expect(
+      checkShotPlanFollowed(
+        make([shotOf("0-6s", 1), shotOf("6-10s", 2), shotOf("10-15s", 2)]),
+        planned,
+      ).join(" "),
+    ).toContain('must be "0-5s"');
+    expect(
+      checkShotPlanFollowed(
+        make([shotOf("0-5s", 1), shotOf("5-10s", 2), shotOf("10-15s", 3)]),
+        planned,
+      ).join(" "),
+    ).toContain("shot_number must be 2");
+    expect(
+      checkShotPlanFollowed(make([shotOf("0-5s", 1), shotOf("5-15s", 2)]), planned).join(" "),
+    ).toContain("3 windows");
+    expect(checkShotPlanFollowed(make([shotOf("0-15s", 1)]), undefined)).toEqual([
+      "block 2: the shot plan has no entry for this block",
+    ]);
   });
 });

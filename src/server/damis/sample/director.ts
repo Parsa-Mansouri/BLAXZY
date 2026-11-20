@@ -15,15 +15,17 @@ import {
   type AnyDirectorInput,
   type AssetRegistry,
   type Block,
+  type BlockShotPlan,
   type ContinuityBible,
   type DirectorOutput,
   type DirectorPlanOutput,
   type PlanBlock,
   type Shot,
   type Staging,
+  type VisualLayer,
 } from "../director/schema";
 import { DIRECTOR_VERSION } from "../director/dami";
-import { FORBIDDEN_PROMPT_WORDS, countWords } from "../director/validate";
+import { FORBIDDEN_PROMPT_WORDS, countWords, descriptorFor } from "../director/validate";
 import { speechRateWps } from "../shared/platform";
 import { cueName } from "./util";
 import {
@@ -826,6 +828,138 @@ function composeBlock(
 }
 
 /* -------------------------------------------------------------------------- */
+/* write_blocks from the craft pipeline's shot plan                            */
+/* -------------------------------------------------------------------------- */
+
+/** Prompt trim steps for the shot-plan writer: shorter actions first, then fewer look words. */
+const CRAFT_TRIM = [
+  { actionMax: 160, look: true },
+  { actionMax: 90, look: true },
+  { actionMax: 60, look: false },
+  { actionMax: 30, look: false },
+] as const;
+
+/**
+ * A written block that follows the Breakdown exactly: one shot entry per planned window (the
+ * first window of a shot cuts to it, later ones repeat its number), the film-director's camera,
+ * action and dialogue, and the cinematographer's lens and light in the prompt.
+ */
+function writeFromShotPlan(
+  plan: PlanBlock,
+  planned: BlockShotPlan,
+  visual: VisualLayer | undefined,
+  bible: ContinuityBible,
+  frame: Frame,
+  castMap: Map<string, Cast>,
+): Block {
+  let block = composeFromShotPlan(plan, planned, visual, bible, frame, castMap, CRAFT_TRIM[0]);
+  for (const step of CRAFT_TRIM.slice(1)) {
+    if (block.word_count <= 320) break;
+    block = composeFromShotPlan(plan, planned, visual, bible, frame, castMap, step);
+  }
+  return block;
+}
+
+function composeFromShotPlan(
+  plan: PlanBlock,
+  planned: BlockShotPlan,
+  visual: VisualLayer | undefined,
+  bible: ContinuityBible,
+  frame: Frame,
+  castMap: Map<string, Cast>,
+  trim: { actionMax: number; look: boolean },
+): Block {
+  const lit = new Map((visual?.shots ?? []).map((v) => [v.shot_id, v]));
+  const nameOf = (id: string) => (castMap.get(id)?.name ?? id).toUpperCase();
+  const lang = frame.language;
+  const spokenIn = lang.toLowerCase().startsWith("en") ? "" : ` speaking ${languageName(lang)}`;
+  const shots: Shot[] = [];
+  const shotLines: string[] = [];
+  planned.shots.forEach((shot, k) => {
+    const look = lit.get(shot.shot_id);
+    const owner =
+      shot.dialogue.find((d) => plan.assets.characters.includes(d.speaker_id))?.speaker_id ??
+      plan.assets.characters[0] ??
+      "";
+    shot.windows.forEach((w, j) => {
+      const window = `${w.from_s}-${w.to_s}s`;
+      const first = j === 0;
+      const action = first
+        ? firstSentences(clean(shot.action) || "The moment plays out", trim.actionMax)
+        : firstSentences(clean(shot.end_state) || "The frame holds on the moment", trim.actionMax);
+      const spoken = first
+        ? shot.dialogue.map(
+            (d) =>
+              `${d.heard_as === "on_screen" ? nameOf(d.speaker_id) : `The voice of ${nameOf(d.speaker_id)}`}${spokenIn}, ${clean(d.delivery) || "plainly"}: "${d.line}"`,
+          )
+        : [];
+      shots.push({
+        window,
+        shot_number: k + 1,
+        owner,
+        shot: shot.size,
+        angle: shot.camera.angle,
+        camera_height: shot.camera.height,
+        camera: shot.camera.movement,
+        action,
+        staging_change: "",
+        default_avoided: "a flat, centred frame at eye level",
+        default_kept_reason: "",
+        cut_reason: clean(shot.cut_reason) || "the cut follows the shot plan",
+        dialogue: first ? shot.dialogue : [],
+      });
+      const lens = look ? ` ${firstSentences(clean(look.lens), 60)}` : "";
+      const lead = first ? (k === 0 ? "" : "Cut to ") : "";
+      shotLines.push(
+        `[${window}] ${lead}Shot ${k + 1} — ${clean(shot.size)}, ${clean(shot.camera.angle)}, ${clean(shot.camera.height)}.${first ? lens : ""} ${firstSentences(clean(shot.camera.movement) || "The camera holds", 80)} ${action}${spoken.length > 0 ? ` ${spoken.join(" ")}` : ""}`,
+      );
+    });
+  });
+
+  const lines: string[] = [
+    "BEGIN PROMPT",
+    `A ${plan.duration_s}-second sequence from a ${frame.style} ${frame.genre} ${frame.format === "series" ? "series episode" : "film"}, ${frame.aspect}.`,
+  ];
+  plan.assets.characters.forEach((id, i) => {
+    lines.push(
+      `${i === 0 ? "Characters: " : ""}@${id} ${nameOf(id)} — ${descriptorFor(bible, id, plan.block_id) ?? ""}.`,
+    );
+  });
+  for (const id of plan.assets.locations) {
+    lines.push(`Locations: @${id} — ${descriptorFor(bible, id, plan.block_id) ?? ""}.`);
+  }
+  plan.assets.props.forEach((id, i) => {
+    lines.push(
+      `${i === 0 ? "Props: " : ""}@${id} — ${descriptorFor(bible, id, plan.block_id) ?? ""}.`,
+    );
+  });
+  const firstLook = planned.shots.map((s) => lit.get(s.shot_id)).find(Boolean);
+  lines.push(
+    `Staging: ${clean(describeStaging(plan.start_staging, castMap))}. ${clean(plan.staging_meaning)}`.trim(),
+    `Opening frame: ${firstSentences(clean(plan.opening_frame) || "The scene is under way", 200)}`,
+    "Shots:",
+    ...shotLines,
+  );
+  const lookLine = firstLook
+    ? `${firstSentences(clean(firstLook.light), 90)} ${trim.look ? firstSentences(clean(firstLook.grade), 70) : ""}`.trim()
+    : "Motivated light from the sources in the room, natural colour grade.";
+  const hasDialogue = shots.some((s) => s.dialogue.length > 0);
+  const tail = (extra: string[]) => [
+    `Look: ${lookLine}${trim.look && bible.style_line ? ` ${clean(bible.style_line)}.` : ""}`,
+    `Audio: ${hasDialogue ? "dialogue delivered clearly, " : ""}soft room ambience, no music.${extra.length > 0 ? ` ${extra.join(" ")}` : ""}`,
+    `No subtitles. No text on screen. No extra characters.${plan.assets.characters.length >= 2 ? " No flat side-profile two-shot." : ""}`,
+    "END PROMPT",
+  ];
+  const extra: string[] = [];
+  let body = [...lines, ...tail(extra)].join("\n");
+  while (countWords(body) < 180 && extra.length < ATMOSPHERE.length * 4) {
+    extra.push(ATMOSPHERE[extra.length % ATMOSPHERE.length] ?? "");
+    body = [...lines, ...tail(extra)].join("\n");
+  }
+  return { ...plan, shots, prompt_text: body, word_count: countWords(body) };
+}
+
+/* -------------------------------------------------------------------------- */
 /* The three modes                                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -1018,6 +1152,36 @@ export function sampleDirector(raw: unknown): DirectorOutput | DirectorPlanOutpu
   if (input.creative_bible.validation_status === "rejected") return blocked(input);
 
   const frame = frameOf(input);
+  if (input.mode === "write_blocks" && input.shot_plan) {
+    // Craft pipeline: the plan comes from the Breakdown, so the script is not divided again.
+    const plan = input.plan;
+    const range = input.block_range ? parseBlockRange(input.block_range) : null;
+    if (!plan || !range) throw new Error("write_blocks needs a plan and a block_range");
+    const castMap = new Map<string, Cast>(
+      plan.continuity_bible.characters.map((c) => [
+        c.asset_id,
+        { id: c.asset_id, name: c.name, descriptor: c.descriptor, voice: c.voice },
+      ]),
+    );
+    const byBlock = new Map(input.shot_plan.map((b) => [b.block_id, b]));
+    const { blocks: _planned, ...planHeader } = plan;
+    void _planned;
+    const written = plan.blocks
+      .filter((b) => b.block_id >= range.from && b.block_id <= range.to)
+      .map((block) => {
+        const shots = byBlock.get(block.block_id);
+        if (!shots) throw new Error(`The shot plan has no block ${block.block_id}`);
+        return writeFromShotPlan(
+          block,
+          shots,
+          input.visual_layer,
+          plan.continuity_bible,
+          { ...frame, duration: block.duration_s },
+          castMap,
+        );
+      });
+    return { ...planHeader, blocks: written };
+  }
   const projectFrame = input.creative_bible.project_frame;
   const scenes = fitToTarget(
     parseScript(input.script),

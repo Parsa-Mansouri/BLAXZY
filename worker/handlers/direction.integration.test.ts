@@ -1,9 +1,11 @@
 /**
- * The Director pipeline against the local Postgres, in sample mode (the sample Director answers at
- * once and passes its own `check()`): `script.direct` for a short script (one `full` call) and a
- * long one (plan, then `direction.write` batches), idempotent batch completion, the stub bible of a
- * project without one, 30 second blocks, a re-direction after a script edit keeping lineages, and
- * a failed run retried. Handlers run directly; follow-up jobs go to a throwaway queue schema.
+ * The craft pipeline against the local Postgres, in sample mode (every sample dami answers at once
+ * and passes its own `check()`): `script.direct` (film-director, cinematographer look), the
+ * `direction.scene` batches (scene looks; the last one runs the Breakdown) and the
+ * `direction.write` batches (the v1.4 writer; the last one stores the blocks), idempotent batch
+ * completion, the stub bible of a project without one, 30 second blocks, a re-direction after a
+ * script edit keeping lineages, a failed run retried, and the shot-by-shot style refused. Handlers
+ * run directly; follow-up jobs go to a throwaway queue schema.
  */
 import "dotenv/config";
 import { afterAll, describe, expect, it } from "vitest";
@@ -31,6 +33,7 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
   const { and, asc, eq, sql } = await import("drizzle-orm");
   const { scriptDetectAssetsHandler } = await import("./script-detect-assets");
   const { scriptDirectHandler } = await import("./script-direct");
+  const { directionSceneHandler } = await import("./direction-scene");
   const { directionWriteHandler } = await import("./direction-write");
   const bibleFixture = (
     await import("../../src/server/damis/creative-dna/fixtures/model-output.json")
@@ -133,26 +136,68 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
     return (await blocks.listBlocks(projectId, userId, { limit: 200 }))?.items ?? [];
   }
 
-  async function queuedWrites(directionId: string): Promise<number[]> {
+  async function queued(name: string, directionId: string): Promise<number[]> {
     const result = await getDb().execute<{ index: string }>(
       sql.raw(
-        `select data->>'batchIndex' as index from ${jobSchema}.job where name = 'direction.write' ` +
+        `select data->>'batchIndex' as index from ${jobSchema}.job where name = '${name}' ` +
           `and data->>'directionId' = '${directionId}' order by data->>'batchIndex'`,
       ),
     );
     return result.rows.map((r) => Number(r.index));
   }
 
-  it("a short script is one full call: blocks carry the direction, tags and 15 s", async () => {
+  const lightScene = (directionId: string, batchIndex: number) =>
+    directionSceneHandler.run({ directionId, batchIndex }, jobContext());
+  const write = (directionId: string, batchIndex: number) =>
+    directionWriteHandler.run({ directionId, batchIndex }, jobContext());
+
+  /** Runs every queued scene batch, then every write batch, of the version's latest run. */
+  async function finish(projectId: string, versionId: string) {
+    const row = await directions.getLatestDirection(projectId, versionId);
+    if (!row) return null;
+    for (const b of await directions.listBatches(row.id, "scene")) {
+      await lightScene(row.id, b.batchIndex);
+    }
+    for (const b of await directions.listBatches(row.id, "write")) {
+      await write(row.id, b.batchIndex);
+    }
+    return directions.getLatestDirection(projectId, versionId);
+  }
+
+  const directAll = async (projectId: string, versionId: string) => {
+    await direct(versionId);
+    return finish(projectId, versionId);
+  };
+
+  it("a short script: film-director, look, scene batch, Breakdown and writer; blocks keep output_22", async () => {
     const { userId, projectId, versionId } = await setup({ scenes: 3 });
     await direct(versionId);
-    expect(await runs(projectId, "director")).toHaveLength(1);
-    expect(await runs(projectId, "director-plan")).toHaveLength(0);
+    expect(await runs(projectId, "film-director")).toHaveLength(1);
+    expect(await runs(projectId, "cinematographer")).toHaveLength(1);
+    expect(await runs(projectId, "director")).toHaveLength(0);
+    const lighting = await directions.getLatestDirection(projectId, versionId);
+    expect(lighting).toMatchObject({ mode: "craft", status: "lighting" });
+    expect(lighting?.craft).toEqual({ directorId: "nolan", cinematographerId: "deakins" });
+    expect(directions.directionContextSchema.parse(lighting?.context).craft).toEqual(
+      lighting?.craft,
+    );
+    expect((lighting?.shotPlan as { shots: unknown[] }).shots.length).toBeGreaterThan(0);
+    const sceneBatches = await directions.listBatches(lighting?.id ?? "", "scene");
+    expect(sceneBatches.length).toBeGreaterThan(0);
+    expect(await queued("direction.scene", lighting?.id ?? "")).toEqual(
+      sceneBatches.map((b) => b.batchIndex),
+    );
 
-    const row = await directions.getLatestDirection(projectId, versionId);
-    expect(row).toMatchObject({ mode: "full", status: "ready", batchCount: 0, failure: null });
+    const row = await finish(projectId, versionId);
+    expect(row).toMatchObject({ mode: "craft", status: "ready", failure: null });
     expect(row?.creativeBibleId).toBeNull();
     expect(row?.header).toMatchObject({ dami: "director", status: expect.any(String) });
+    const visual = directions.directionVisualSchema.parse(row?.visual);
+    expect(visual.scenes.length).toBe(3);
+    const breakdown = directions.storedBreakdownSchema.parse(row?.breakdown);
+    expect(breakdown.blocks.length).toBe((row?.plan as { blocks: unknown[] }).blocks.length);
+    expect(await runs(projectId, "cinematographer")).toHaveLength(1 + 3);
+    expect(await runs(projectId, "director")).toHaveLength(row?.batchCount ?? -1);
 
     const items = await currentBlocks(projectId, userId);
     expect(items.length).toBeGreaterThanOrEqual(3);
@@ -177,13 +222,13 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
 
     // A repeated job finds the blocks and calls nothing.
     await direct(versionId);
-    expect(await runs(projectId, "director")).toHaveLength(1);
+    expect(await runs(projectId, "film-director")).toHaveLength(1);
   });
 
   it("a project without a bible sends the stub: no rules, ok_with_assumptions", async () => {
     const { projectId, versionId } = await setup({ scenes: 2 });
-    await direct(versionId);
-    const row = await directions.getLatestDirection(projectId, versionId);
+    const row = await directAll(projectId, versionId);
+    expect(row?.status).toBe("ready");
     const context = directions.directionContextSchema.parse(row?.context);
     expect(context.creative_bible).toMatchObject({
       selection: { genre_id: "genre.other", style_id: "style.other" },
@@ -196,8 +241,14 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
     const [dami] = await getDb()
       .select({ input: s.damiRun.input })
       .from(s.damiRun)
+      .where(and(eq(s.damiRun.projectId, projectId), eq(s.damiRun.damiKey, "film-director")));
+    expect(dami?.input).toMatchObject({ director_id: "nolan", block_mode: "auto" });
+    const [writer] = await getDb()
+      .select({ input: s.damiRun.input })
+      .from(s.damiRun)
       .where(and(eq(s.damiRun.projectId, projectId), eq(s.damiRun.damiKey, "director")));
-    expect(dami?.input).toMatchObject({ mode: "full", block_mode: "auto" });
+    expect(writer?.input).toMatchObject({ mode: "write_blocks", block_mode: "auto" });
+    expect((writer?.input as { shot_plan?: unknown[] }).shot_plan?.length).toBeGreaterThan(0);
   });
 
   it("a ready bible with 30 s blocks: fixed_30, blocks of 30 s, its row on the direction", async () => {
@@ -205,41 +256,56 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
       scenes: 3,
       bible: "ready30",
     });
-    await direct(versionId);
-    const row = await directions.getLatestDirection(projectId, versionId);
+    const row = await directAll(projectId, versionId);
     expect(row).toMatchObject({ status: "ready", blockMode: "fixed_30", creativeBibleId: bibleId });
     const items = await currentBlocks(projectId, userId);
     expect(items.length).toBeGreaterThan(0);
     expect(items.every((b) => b.durationSeconds === 30)).toBe(true);
   });
 
-  it("a long script is a plan and batches; the last batch assembles, repeats change nothing", async () => {
+  it("a long script: scene batches then write batches; the last of each moves on, repeats change nothing", async () => {
     const { userId, projectId, versionId } = await setup({
       scenes: 24,
       style: { ...TEST_STYLE, totalDurationSeconds: 360 },
     });
     await direct(versionId);
-    expect(await runs(projectId, "director-plan")).toHaveLength(1);
-    expect(await runs(projectId, "director")).toHaveLength(0);
+    const lighting = await directions.getLatestDirection(projectId, versionId);
+    expect(lighting).toMatchObject({ mode: "craft", status: "lighting" });
+    const id = lighting?.id ?? "";
+    const scenes = await directions.listBatches(id, "scene");
+    expect(scenes.length).toBeGreaterThanOrEqual(2);
+    expect(scenes[0]).toMatchObject({ kind: "scene", blockFrom: 1, status: "pending" });
+    expect(await queued("direction.scene", id)).toEqual(scenes.map((b) => b.batchIndex));
+    // Out of order, each delivered twice (a duplicate delivery must not run the dami again).
+    const sceneOrder = [...scenes.map((b) => b.batchIndex)].reverse();
+    for (const [i, batchIndex] of sceneOrder.entries()) {
+      await lightScene(id, batchIndex);
+      await lightScene(id, batchIndex);
+      const state = await directions.getLatestDirection(projectId, versionId);
+      expect(state?.status).toBe(i === sceneOrder.length - 1 ? "planned" : "lighting");
+    }
+    expect(await runs(projectId, "cinematographer")).toHaveLength(1 + 24);
 
     const planned = await directions.getLatestDirection(projectId, versionId);
-    expect(planned).toMatchObject({ mode: "plan", status: "planned" });
-    const batches = await directions.listBatches(planned?.id ?? "");
+    expect(planned).toMatchObject({ mode: "craft", status: "planned" });
+    const batches = await directions.listBatches(id);
     expect(batches.length).toBeGreaterThanOrEqual(2);
     expect(planned?.batchCount).toBe(batches.length);
-    expect(batches[0]).toMatchObject({ blockFrom: 1, blockTo: 8, status: "pending" });
-    expect(await queuedWrites(planned?.id ?? "")).toEqual(batches.map((b) => b.batchIndex));
+    expect(batches[0]).toMatchObject({
+      kind: "write",
+      blockFrom: 1,
+      blockTo: 8,
+      status: "pending",
+    });
+    expect(await queued("direction.write", id)).toEqual(batches.map((b) => b.batchIndex));
     // Nothing is stored until every batch is.
     expect(await currentBlocks(projectId, userId)).toHaveLength(0);
     expect((await blocks.getSectioningStatus(projectId, userId))?.state).not.toBe("done");
 
-    const write = (batchIndex: number) =>
-      directionWriteHandler.run({ directionId: planned?.id ?? "", batchIndex }, jobContext());
-    // Out of order, each delivered twice (a duplicate delivery must not run the dami again).
     const order = [...batches.map((b) => b.batchIndex)].reverse();
     for (const [i, batchIndex] of order.entries()) {
-      await write(batchIndex);
-      await write(batchIndex);
+      await write(id, batchIndex);
+      await write(id, batchIndex);
       const state = await directions.getLatestDirection(projectId, versionId);
       expect(state?.status).toBe(i === order.length - 1 ? "ready" : "writing");
     }
@@ -258,8 +324,10 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
     });
 
     // Late duplicates after the run is ready: no run, no new block versions.
-    await write(0);
-    await write(order[0] ?? 0);
+    await write(id, 0);
+    await write(id, order[0] ?? 0);
+    await lightScene(id, 0);
+    expect(await runs(projectId, "cinematographer")).toHaveLength(1 + 24);
     expect(await runs(projectId, "director")).toHaveLength(batches.length);
     expect(await currentBlocks(projectId, userId)).toHaveLength(total);
     const all = await getDb()
@@ -271,7 +339,7 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
 
   it("a script edit directs again: a new direction supersedes the old, lineages are kept", async () => {
     const { userId, projectId, versionId } = await setup({ scenes: 3 });
-    await direct(versionId);
+    await directAll(projectId, versionId);
     const before = await currentBlocks(projectId, userId);
     const first = await directions.getLatestDirection(projectId, versionId);
 
@@ -282,7 +350,7 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
     );
     await scriptDetectAssetsHandler.run({ scriptVersionId: edited }, jobContext());
     expect((await blocks.getSectioningStatus(projectId, userId))?.state).toBe("stale");
-    await direct(edited);
+    await directAll(projectId, edited);
 
     const after = await currentBlocks(projectId, userId);
     expect(after.length).toBeGreaterThan(before.length);
@@ -300,15 +368,15 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
     expect((await directions.getLatestDirection(projectId, edited))?.status).toBe("ready");
   });
 
-  it("a Director that cannot start fails the run; a retry after the fix directs it", async () => {
+  it("a rejected bible fails before any paid call; a retry after the fix directs it", async () => {
     const { userId, projectId, versionId, bibleId } = await setup({
       scenes: 2,
       bible: "rejected",
     });
     await direct(versionId);
-    const failed = await directions.getLatestDirection(projectId, versionId);
-    expect(failed).toMatchObject({ status: "failed" });
-    expect(failed?.failure).toContain("The Director could not start");
+    // Refused before a run starts: no direction row and no dami run.
+    expect(await directions.getLatestDirection(projectId, versionId)).toBeNull();
+    expect(await runs(projectId, "film-director")).toHaveLength(0);
     expect(await currentBlocks(projectId, userId)).toHaveLength(0);
     expect(await blocks.getSectioningStatus(projectId, userId)).toMatchObject({
       state: "failed",
@@ -323,8 +391,7 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
     const retried = await blocks.retrySectioning({ projectId, userId });
     expect(retried?.state).toBe("running");
     await scriptDetectAssetsHandler.run({ scriptVersionId: versionId }, jobContext());
-    await direct(versionId);
-    expect((await directions.getLatestDirection(projectId, versionId))?.status).toBe("ready");
+    expect((await directAll(projectId, versionId))?.status).toBe("ready");
     expect((await blocks.getSectioningStatus(projectId, userId))?.state).toBe("done");
     expect((await currentBlocks(projectId, userId)).length).toBeGreaterThan(0);
   });
@@ -335,7 +402,7 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
     const versionId = await addVersion(projectId, 1, scriptText(2));
     await scriptDetectAssetsHandler.run({ scriptVersionId: versionId }, jobContext());
     await direct(versionId);
-    expect(await runs(projectId, "director")).toHaveLength(0);
+    expect(await runs(projectId, "film-director")).toHaveLength(0);
     expect(await directions.getLatestDirection(projectId, versionId)).toBeNull();
     const rows = await getDb().execute<{ waits: string | null }>(
       sql.raw(
@@ -350,5 +417,18 @@ describe.skipIf(!reachable)("director pipeline (integration, sample mode)", asyn
       .where(eq(s.creativeBible.projectId, projectId))
       .orderBy(asc(s.creativeBible.versionNumber));
     expect(order).toHaveLength(1);
+  });
+
+  it("a style asking for shot-by-shot clips fails with a clear reason and calls nothing", async () => {
+    const { userId, projectId, versionId } = await setup({
+      scenes: 2,
+      style: { ...TEST_STYLE, blockLength: "shot" },
+    });
+    await direct(versionId);
+    expect(await runs(projectId, "film-director")).toHaveLength(0);
+    expect(await blocks.getSectioningStatus(projectId, userId)).toMatchObject({
+      state: "failed",
+      failure: expect.stringContaining("Shot-by-shot clips cannot be directed yet"),
+    });
   });
 });

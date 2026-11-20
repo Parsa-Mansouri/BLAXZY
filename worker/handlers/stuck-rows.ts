@@ -36,6 +36,7 @@ import {
   blockTake,
   creativeBible,
   direction,
+  DIRECTION_ACTIVE_STATUSES,
   exportBundle,
   project,
   promptBlock,
@@ -50,6 +51,7 @@ import {
   assetSheetGenerate,
   assetSheetPlan,
   blockRevise,
+  directionScene,
   directionWrite,
   exportBuild,
   jobRefsInFlight,
@@ -193,7 +195,10 @@ const creativeBibles: Kind<Row> = {
   recover: (row) => failCreativeBible({ bibleId: row.id, failure: TOOK_TOO_LONG, damiRunId: null }),
 };
 
-/** A Director run in flight (`pending`, `planned`, `writing`); failing it fails its sectioning. */
+/**
+ * A Director run in flight (`pending`, `directing`, `lighting`, `planned`, `writing`); failing it
+ * fails its sectioning.
+ */
 const directions: Kind<Row & { scriptVersionId: string }> = {
   name: "direction",
   page: async (input) => {
@@ -206,7 +211,7 @@ const directions: Kind<Row & { scriptVersionId: string }> = {
       .from(direction)
       .where(
         and(
-          inArray(direction.status, ["pending", "planned", "writing"]),
+          inArray(direction.status, [...DIRECTION_ACTIVE_STATUSES]),
           lt(direction.createdAt, input.cutoff),
           scope(input, direction.id, direction.projectId),
         ),
@@ -217,7 +222,7 @@ const directions: Kind<Row & { scriptVersionId: string }> = {
   },
   refs: (row) => [
     { jobs: [scriptDirect], field: "scriptVersionId", value: row.scriptVersionId },
-    { jobs: [directionWrite], field: "directionId", value: row.id },
+    { jobs: [directionScene, directionWrite], field: "directionId", value: row.id },
   ],
   recover: async (row) => {
     const { failed } = await failDirection(row.id, TOOK_TOO_LONG);
@@ -260,7 +265,7 @@ const sectionings: Kind<Row & { scriptVersionId: string; directionIds: string[] 
         .where(
           and(
             eq(direction.scriptVersionId, record.scriptVersionId),
-            inArray(direction.status, ["pending", "planned", "writing"]),
+            inArray(direction.status, [...DIRECTION_ACTIVE_STATUSES]),
           ),
         );
       rows.push({
@@ -278,7 +283,11 @@ const sectionings: Kind<Row & { scriptVersionId: string; directionIds: string[] 
       field: "scriptVersionId",
       value: row.scriptVersionId,
     },
-    ...row.directionIds.map((id) => ({ jobs: [directionWrite], field: "directionId", value: id })),
+    ...row.directionIds.map((id) => ({
+      jobs: [directionScene, directionWrite],
+      field: "directionId",
+      value: id,
+    })),
   ],
   recover: (row) =>
     setSectioningState({

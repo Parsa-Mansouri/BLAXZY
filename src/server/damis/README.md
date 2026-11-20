@@ -162,18 +162,26 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
   counts, which a compiled bible already passed) so the stub validates.
 - `director/excerpts.ts` (pure): the script text of each block from its `script_coverage` quotes.
 
-### The pipeline
+### The pipeline (craft)
 
 - `script.direct` (replaces `script.section`) is queued after detection, by a correction round
   (`resection`) and by the retry path. The handler (`worker/handlers/script-direct.ts`) reads the
   accepted version's text, the latest detection as the registry (`detectorView` ids, voice-only
   characters as characters with no reference), the ready Creative Bible or the stub (a bible still
-  compiling defers the job like every bible consumer) and `fixed_<n>` / `auto` for the block mode.
-  Up to ~8 estimated blocks (the longer of the target runtime and the script's spoken length, over
-  the block length) it is one `full` call; otherwise `director-plan`, then one
-  `direction.write` job per batch of 8 (`write_blocks`, parallel, the plan carries the staging).
-- Data: `direction` (one row per run set, append-only; `header`, `plan`, frozen `context`) and
-  `direction_batch` (a child table, so parallel batches each write only their own row).
+  compiling defers the job like every bible consumer) and `fixed_<n>` / `auto` for the block mode
+  (a style asking for shot-by-shot clips fails with a clear reason). `pickCraft` picks the
+  director and cinematographer (frozen into the run); the film-director plans the shots and the
+  cinematographer sets the look (`directing`), then one `direction.scene` job per 4 scenes lights
+  every shot (`lighting`, cinematographer `scene` mode). The last scene batch runs the Breakdown
+  (`src/server/direction/breakdown.ts`, code: shots grouped into 15/30 s blocks, timed into 2 to
+  6 s windows) and stores its v1.4 plan (`planned`); one `direction.write` job per batch of 8 then
+  runs `write_blocks` with the batch's `<shot_plan>` and `<visual_layer>`, which the written
+  blocks must follow exactly (`checkShotPlanFollowed`). The `full` and `plan` modes stay in the
+  dami (and `director-plan` stays registered) but no job runs them any more; their old rows still
+  read.
+- Data: `direction` (one row per run set, append-only; `header`, `plan`, frozen `context`, and
+  for craft runs `craft`, `shot_plan`, `visual`, `breakdown`) and `direction_batch` (a child
+  table of `scene` and `write` batches, so parallel batches each write only their own row).
   `src/server/direction/service.ts`: storing a batch locks the direction row; the batch that finds
   none pending assembles the blocks in the same transaction (`replaceBlocks`, sectioning state,
   direction `ready`), so completion is idempotent and a late duplicate changes nothing.

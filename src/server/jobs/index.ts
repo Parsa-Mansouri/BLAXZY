@@ -18,6 +18,7 @@ export {
   assetSheetViewsAdvance,
   blockRevise,
   damiSweep,
+  directionScene,
   directionWrite,
   exportBuild,
   fileSweep,

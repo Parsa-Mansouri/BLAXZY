@@ -10,7 +10,7 @@ import { FakeClaudeClient, jsonResponse, testDeps } from "../test-utils";
 import { director, directorPlan } from "./dami";
 import rawInput from "./fixtures/input.json";
 import outputJson from "./fixtures/model-output.json";
-import { buildDirectorPrompt, directorBible } from "./prompt";
+import { buildDirectorPrompt, directorBible, SHOT_PLAN_INSTRUCTION } from "./prompt";
 import { DIRECTOR_SYSTEM } from "./prompt-text";
 import {
   blockedSkeletonSchema,
@@ -249,6 +249,55 @@ describe("director prompt", () => {
     expect(parts[2]).toContain("<block_range>\n3-4\n</block_range>");
   });
 
+  it("a craft batch adds the shot plan and visual layer to the per-call turn only", () => {
+    const plan = sampleDirector({ ...inputJson, mode: "plan" });
+    const shot = {
+      shot_id: "s1",
+      scene_id: "sc_1",
+      size: "wide",
+      camera: {
+        position: "south",
+        height: "eye level",
+        angle: "low",
+        movement: "push in",
+        background: "wall",
+      },
+      staging: ["char_1: frame-left, midground"],
+      props: [],
+      action: "Nora waits.",
+      dialogue: [],
+      sound: "room tone",
+      cut_reason: "on the look",
+      start_state: "Nora by the door.",
+      end_state: "Nora by the door.",
+      windows: [{ from_s: 0, to_s: 5 }],
+    };
+    const wb = directorInputSchema.parse({
+      ...inputJson,
+      mode: "write_blocks",
+      plan,
+      block_range: "1-1",
+      shot_plan: [{ block_id: 1, shots: [shot] }],
+      visual_layer: { look: "Soft window light.", shots: [] },
+    });
+    const prompt = buildDirectorPrompt(wb);
+    expect(prompt.system).toEqual([{ text: DIRECTOR_SYSTEM, cache: true }]);
+    expect(countBreakpoints(prompt)).toBe(3);
+    const parts = (prompt.messages[0]?.content ?? []).map((p) => (p as { text: string }).text);
+    expect(parts[0]).not.toContain("<shot_plan>");
+    expect(parts[2]).toContain("<shot_plan>");
+    expect(parts[2]).toContain("<visual_layer>");
+    expect(parts[2]).toContain(SHOT_PLAN_INSTRUCTION);
+    // Only write_blocks takes a shot plan.
+    expect(
+      directorInputSchema.safeParse({
+        ...inputJson,
+        mode: "full",
+        shot_plan: [{ block_id: 1, shots: [shot] }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("the creative bible block is the owner's list: no review options, but open questions and status", () => {
     const sent = directorBible(input.creative_bible);
     expect(Object.keys(sent).sort()).toEqual(
@@ -361,7 +410,7 @@ describe("director run", () => {
     expect(result.output).toEqual(output);
     expect(client.requests[0]?.model).toBe(CLAUDE_MODELS.opus);
     expect(client.methods[0]).toBe("stream");
-    expect(director.version).toBe("1.1.0");
+    expect(director.version).toBe("1.2.0");
   });
 
   it("sends the failed checks back once, then accepts the corrected answer", async () => {

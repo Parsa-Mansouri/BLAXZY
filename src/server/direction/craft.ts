@@ -6,16 +6,24 @@
  * then every project gets the defaults below; the arguments are already the brain's inputs so
  * callers do not change when it lands.
  */
-import type { CinematographerId, CreativeBible, DirectorStyleId } from "@/server/damis";
+import { z } from "zod";
+import {
+  CINEMATOGRAPHER_IDS,
+  DIRECTOR_STYLE_IDS,
+  type CinematographerId,
+  type CreativeBible,
+  type DirectorStyleId,
+} from "@/server/damis";
 import type { ProjectStyle } from "@/server/db/schema";
 
 export const DEFAULT_DIRECTOR_ID: DirectorStyleId = "nolan";
 export const DEFAULT_CINEMATOGRAPHER_ID: CinematographerId = "deakins";
 
-export type CraftSelection = {
-  directorId: DirectorStyleId;
-  cinematographerId: CinematographerId;
-};
+export const craftSelectionSchema = z.object({
+  directorId: z.enum(DIRECTOR_STYLE_IDS),
+  cinematographerId: z.enum(CINEMATOGRAPHER_IDS),
+});
+export type CraftSelection = z.output<typeof craftSelectionSchema>;
 
 export function pickCraft(style: ProjectStyle | null, bible: CreativeBible | null): CraftSelection {
   void style;

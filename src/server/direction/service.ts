@@ -1,6 +1,7 @@
 /**
  * The Director's run set for a script version (`direction`, `direction_batch`): starting a run,
- * storing a plan and queueing its batches, storing a batch, and assembling the finished blocks.
+ * storing the craft pipeline's shot plan and look, its scene batches, the Breakdown's plan and its
+ * write batches, storing a batch, and assembling the finished blocks.
  * Worker-side (handlers call it); every state change is conditional on the row's current status,
  * so a duplicate or stale job changes nothing.
  *
@@ -14,32 +15,57 @@ import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { replaceBlocks, setSectioningState, type ReplaceBlocksResult } from "@/server/blocks";
 import {
+  lookSchema,
+  sceneVisualSchema,
+  shotPlanSchema,
   storedBlockSchema,
   type DirectorBlock,
   type DirectorOutput,
   type DirectorPlanOutput,
+  type Look,
+  type SceneVisual,
+  type ShotPlan,
 } from "@/server/damis";
 import { getDb, type DbTx } from "@/server/db/client";
-import { direction, directionBatch, project, scriptVersion } from "@/server/db/schema";
-import { directionWrite, enqueue } from "@/server/jobs";
+import {
+  direction,
+  directionBatch,
+  DIRECTION_ACTIVE_STATUSES,
+  project,
+  scriptVersion,
+  type DirectionMode,
+} from "@/server/db/schema";
+import { directionScene, directionWrite, enqueue } from "@/server/jobs";
 import { logProjectEvent } from "@/server/projects";
 import { directedBlocks } from "./blocks";
+import { storedBreakdownSchema } from "./breakdown";
 import { batchRanges, directionContextSchema, type DirectionContext } from "./context";
+import { buildCraftPlan, sceneIdsOf, SCENE_BATCH_SCENES } from "./craft-plan";
+import type { CraftSelection } from "./craft";
 
 export type DirectionRow = typeof direction.$inferSelect;
 
-const ACTIVE = ["pending", "planned", "writing"] as const;
+const ACTIVE = DIRECTION_ACTIVE_STATUSES;
+
+/** `direction.visual`: the look, and the lit scenes once every scene batch is done. */
+export const directionVisualSchema = z.object({
+  look: lookSchema,
+  scenes: z.array(sceneVisualSchema),
+});
+export type DirectionVisual = z.output<typeof directionVisualSchema>;
 
 /**
- * Starts a run: supersedes the project's runs still in flight and adds a `pending` one. Locks the
- * project row, which serialises the runs of one project.
+ * Starts a run: supersedes the project's runs still in flight and adds a new one (`directing` for
+ * a craft run, `pending` for an older mode). Locks the project row, which serialises the runs of
+ * one project.
  */
 export async function startDirection(input: {
   projectId: string;
   scriptVersionId: string;
   creativeBibleId: string | null;
-  mode: "full" | "plan";
+  mode: DirectionMode;
   context: DirectionContext;
+  craft?: CraftSelection;
 }): Promise<string> {
   return getDb().transaction(async (tx) => {
     await tx
@@ -59,7 +85,9 @@ export async function startDirection(input: {
         creativeBibleId: input.creativeBibleId,
         blockMode: input.context.block_mode,
         mode: input.mode,
+        status: input.mode === "craft" ? "directing" : "pending",
         context: input.context,
+        ...(input.craft ? { craft: input.craft } : {}),
       })
       .returning({ id: direction.id });
     if (!row) throw new Error("direction insert returned no row");
@@ -106,11 +134,12 @@ export async function getFinishedDirection(
   return row ?? null;
 }
 
-export async function listBatches(directionId: string) {
+/** A run's batches of one kind (`write` by default), in order. */
+export async function listBatches(directionId: string, kind: "scene" | "write" = "write") {
   return getDb()
     .select()
     .from(directionBatch)
-    .where(eq(directionBatch.directionId, directionId))
+    .where(and(eq(directionBatch.directionId, directionId), eq(directionBatch.kind, kind)))
     .orderBy(asc(directionBatch.batchIndex));
 }
 
@@ -151,61 +180,10 @@ export async function failDirection(
 }
 
 /** The project-level part of an output (everything but the blocks). */
-function headerOf(output: DirectorOutput | DirectorPlanOutput): Record<string, unknown> {
+function headerOf(output: DirectorPlanOutput): Record<string, unknown> {
   const { blocks, ...header } = output;
   void blocks;
   return header;
-}
-
-/**
- * Plan stored: the direction becomes `planned`, one batch row and one `direction.write` job per
- * range are added, all in one transaction (no batch without its job). Returns the batch count, or
- * 0 when the run is no longer `pending`.
- */
-export async function savePlan(input: {
-  directionId: string;
-  plan: DirectorPlanOutput;
-  runId: string;
-}): Promise<number> {
-  const { plan } = input;
-  const ranges = batchRanges(plan.blocks.length);
-  return getDb().transaction(async (tx) => {
-    const [row] = await tx
-      .update(direction)
-      .set({
-        status: "planned",
-        plan,
-        header: headerOf(plan),
-        warnings: plan.warnings,
-        batchCount: ranges.length,
-        damiRunIds: [input.runId],
-      })
-      .where(and(eq(direction.id, input.directionId), eq(direction.status, "pending")))
-      .returning({ projectId: direction.projectId });
-    if (!row) return 0;
-    await tx.insert(directionBatch).values(
-      ranges.map((r, i) => ({
-        directionId: input.directionId,
-        batchIndex: i,
-        blockFrom: r.from,
-        blockTo: r.to,
-      })),
-    );
-    for (let i = 0; i < ranges.length; i++) {
-      await enqueue(directionWrite, { directionId: input.directionId, batchIndex: i }, { tx });
-    }
-    await logProjectEvent(tx, {
-      projectId: row.projectId,
-      userId: null,
-      type: "direction.planned",
-      payload: {
-        directionId: input.directionId,
-        blocks: plan.blocks.length,
-        batches: ranges.length,
-      },
-    });
-    return ranges.length;
-  });
 }
 
 export type StoredOutcome =
@@ -317,27 +295,249 @@ async function lockOpen(tx: DbTx, directionId: string, statuses: readonly string
   return row && statuses.includes(row.status) ? row : null;
 }
 
-/** A `full` run's answer: the blocks are stored and the direction is ready, in one transaction. */
-export async function saveFull(input: {
+/** Batch blocks read back from their rows; a batch written by Director v1.3 is upgraded. */
+const writtenBlocks = z.array(storedBlockSchema);
+
+const isWrite = (directionId: string) =>
+  and(eq(directionBatch.directionId, directionId), eq(directionBatch.kind, "write"));
+const isScene = (directionId: string) =>
+  and(eq(directionBatch.directionId, directionId), eq(directionBatch.kind, "scene"));
+
+/* -------------------------------------------------------------------------- */
+/* Craft runs: shot plan, look and scene batches                               */
+/* -------------------------------------------------------------------------- */
+
+const appendRunId = (runId: string) =>
+  sql`${direction.damiRunIds} || ${JSON.stringify([runId])}::jsonb`;
+
+/** The film-director's shot plan, stored while the run is `directing`. False when it is not. */
+export async function saveShotPlan(input: {
   directionId: string;
-  output: DirectorOutput;
+  shotPlan: ShotPlan;
   runId: string;
-}): Promise<StoredOutcome> {
+}): Promise<boolean> {
+  const rows = await getDb()
+    .update(direction)
+    .set({
+      shotPlan: input.shotPlan,
+      damiRunIds: appendRunId(input.runId),
+    })
+    .where(and(eq(direction.id, input.directionId), eq(direction.status, "directing")))
+    .returning({ id: direction.id });
+  return rows.length > 0;
+}
+
+/** Inclusive 1-based ranges of `SCENE_BATCH_SCENES` scenes covering 1..total. */
+export function sceneBatchRanges(total: number): { from: number; to: number }[] {
+  return batchRanges(total, SCENE_BATCH_SCENES);
+}
+
+/**
+ * The look stored: the direction becomes `lighting`, and one `scene` batch row and one
+ * `direction.scene` job per range of the shot plan's scenes are added, in one transaction (no
+ * batch without its job). Returns the batch count, or 0 when the run is no longer `directing`.
+ */
+export async function startLighting(input: {
+  directionId: string;
+  look: Look;
+  runId: string;
+}): Promise<number> {
   return getDb().transaction(async (tx) => {
-    const row = await lockOpen(tx, input.directionId, ["pending"]);
-    if (!row) return { stored: false };
-    return assemble(tx, row, {
-      blocks: input.output.blocks,
-      header: headerOf(input.output),
-      warnings: input.output.warnings,
-      runIds: input.output.blocks.map(() => input.runId),
-      damiRunIds: [input.runId],
+    const row = await lockOpen(tx, input.directionId, ["directing"]);
+    if (!row) return 0;
+    const shotPlan = shotPlanSchema.parse(row.shotPlan);
+    const ranges = sceneBatchRanges(sceneIdsOf(shotPlan).length);
+    const visual: DirectionVisual = { look: input.look, scenes: [] };
+    await tx
+      .update(direction)
+      .set({ status: "lighting", visual, damiRunIds: appendRunId(input.runId) })
+      .where(eq(direction.id, row.id));
+    await tx.insert(directionBatch).values(
+      ranges.map((r, i) => ({
+        directionId: input.directionId,
+        kind: "scene" as const,
+        batchIndex: i,
+        blockFrom: r.from,
+        blockTo: r.to,
+      })),
+    );
+    for (let i = 0; i < ranges.length; i++) {
+      await enqueue(directionScene, { directionId: input.directionId, batchIndex: i }, { tx });
+    }
+    await logProjectEvent(tx, {
+      projectId: row.projectId,
+      userId: null,
+      type: "direction.lighting",
+      payload: {
+        directionId: input.directionId,
+        shots: shotPlan.shots.length,
+        batches: ranges.length,
+      },
     });
+    return ranges.length;
   });
 }
 
-/** Batch blocks read back from their rows; a batch written by Director v1.3 is upgraded. */
-const writtenBlocks = z.array(storedBlockSchema);
+const sceneVisuals = z.array(sceneVisualSchema);
+
+/** What a scene batch handler needs: the run, its context, shot plan, look and the batch's scenes. */
+export async function loadSceneBatchJob(directionId: string, batchIndex: number) {
+  const db = getDb();
+  const [row] = await db.select().from(direction).where(eq(direction.id, directionId)).limit(1);
+  if (!row) return null;
+  const [batch] = await db
+    .select()
+    .from(directionBatch)
+    .where(and(isScene(directionId), eq(directionBatch.batchIndex, batchIndex)))
+    .limit(1);
+  if (!batch) return null;
+  const [owner] = await db
+    .select({ ownerId: project.ownerId, archivedAt: project.archivedAt })
+    .from(project)
+    .where(eq(project.id, row.projectId))
+    .limit(1);
+  if (!owner || owner.archivedAt) return null;
+  const context = directionContextSchema.parse(row.context);
+  const shotPlan = shotPlanSchema.parse(row.shotPlan);
+  const visual = directionVisualSchema.parse(row.visual);
+  const sceneIds = sceneIdsOf(shotPlan).slice(batch.blockFrom - 1, batch.blockTo);
+  return {
+    direction: row,
+    batch,
+    ownerId: owner.ownerId,
+    context,
+    shotPlan,
+    look: visual.look,
+    sceneIds,
+    /** Scenes this batch already lit (an earlier attempt saved them). */
+    done: batch.sceneVisuals ? sceneVisuals.parse(batch.sceneVisuals) : [],
+  };
+}
+
+/** Saves a scene batch's progress (the scenes lit so far) while it is pending. */
+export async function saveSceneProgress(input: {
+  directionId: string;
+  batchIndex: number;
+  scenes: SceneVisual[];
+  runId: string;
+}): Promise<void> {
+  await getDb().transaction(async (tx) => {
+    const updated = await tx
+      .update(directionBatch)
+      .set({ sceneVisuals: input.scenes })
+      .where(
+        and(
+          isScene(input.directionId),
+          eq(directionBatch.batchIndex, input.batchIndex),
+          eq(directionBatch.status, "pending"),
+        ),
+      )
+      .returning({ id: directionBatch.id });
+    if (updated.length === 0) return;
+    await tx
+      .update(direction)
+      .set({ damiRunIds: appendRunId(input.runId) })
+      .where(and(eq(direction.id, input.directionId), eq(direction.status, "lighting")));
+  });
+}
+
+export type SceneBatchOutcome =
+  | { stored: false }
+  | { stored: true; planned: false }
+  | { stored: true; planned: true; blocks: number; batches: number };
+
+/**
+ * A scene batch's answer. Idempotent like `saveBatch`: a batch already done, or a run no longer
+ * `lighting`, changes nothing. The last scene batch to finish (the direction row is locked, so two
+ * finishing at once are serialised) runs the Breakdown and stores the v1.4 plan, the windows and
+ * the lit scenes; the direction becomes `planned`, and one `write` batch row and one
+ * `direction.write` job per range of blocks are added in the same transaction.
+ */
+export async function saveSceneBatch(input: {
+  directionId: string;
+  batchIndex: number;
+  scenes: SceneVisual[];
+}): Promise<SceneBatchOutcome> {
+  return getDb().transaction(async (tx) => {
+    const row = await lockOpen(tx, input.directionId, ["lighting"]);
+    if (!row) return { stored: false };
+    const done = await tx
+      .update(directionBatch)
+      .set({ status: "done", sceneVisuals: input.scenes, failure: null, finishedAt: new Date() })
+      .where(
+        and(
+          isScene(input.directionId),
+          eq(directionBatch.batchIndex, input.batchIndex),
+          eq(directionBatch.status, "pending"),
+        ),
+      )
+      .returning({ id: directionBatch.id });
+    if (done.length === 0) return { stored: false };
+    const batches = await tx
+      .select()
+      .from(directionBatch)
+      .where(isScene(input.directionId))
+      .orderBy(asc(directionBatch.batchIndex));
+    if (batches.some((b) => b.status !== "done")) return { stored: true, planned: false };
+
+    const context = directionContextSchema.parse(row.context);
+    const shotPlan = shotPlanSchema.parse(row.shotPlan);
+    const { look } = directionVisualSchema.parse(row.visual);
+    const scenes = batches.flatMap((b) => sceneVisuals.parse(b.sceneVisuals ?? []));
+    const [owner] = await tx
+      .select({ title: project.title })
+      .from(project)
+      .where(eq(project.id, row.projectId))
+      .limit(1);
+    const craft = buildCraftPlan({ shotPlan, look, context, title: owner?.title ?? "" });
+    const ranges = batchRanges(craft.plan.blocks.length);
+    const visual: DirectionVisual = { look, scenes };
+    await tx
+      .update(direction)
+      .set({
+        status: "planned",
+        plan: craft.plan,
+        header: headerOf(craft.plan),
+        breakdown: { blocks: craft.breakdown },
+        visual,
+        warnings: craft.plan.warnings,
+        batchCount: ranges.length,
+      })
+      .where(eq(direction.id, row.id));
+    await tx.insert(directionBatch).values(
+      ranges.map((r, i) => ({
+        directionId: input.directionId,
+        kind: "write" as const,
+        batchIndex: i,
+        blockFrom: r.from,
+        blockTo: r.to,
+      })),
+    );
+    for (let i = 0; i < ranges.length; i++) {
+      await enqueue(directionWrite, { directionId: input.directionId, batchIndex: i }, { tx });
+    }
+    await logProjectEvent(tx, {
+      projectId: row.projectId,
+      userId: null,
+      type: "direction.planned",
+      payload: {
+        directionId: input.directionId,
+        blocks: craft.plan.blocks.length,
+        batches: ranges.length,
+      },
+    });
+    return {
+      stored: true,
+      planned: true,
+      blocks: craft.plan.blocks.length,
+      batches: ranges.length,
+    };
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Write batches                                                               */
+/* -------------------------------------------------------------------------- */
 
 /**
  * A batch's answer. Idempotent: a batch already done, or a direction no longer open, changes
@@ -363,7 +563,7 @@ export async function saveBatch(input: {
       })
       .where(
         and(
-          eq(directionBatch.directionId, input.directionId),
+          isWrite(input.directionId),
           eq(directionBatch.batchIndex, input.batchIndex),
           eq(directionBatch.status, "pending"),
         ),
@@ -373,7 +573,7 @@ export async function saveBatch(input: {
     const batches = await tx
       .select()
       .from(directionBatch)
-      .where(eq(directionBatch.directionId, input.directionId))
+      .where(isWrite(input.directionId))
       .orderBy(asc(directionBatch.batchIndex));
     if (batches.some((b) => b.status !== "done")) {
       if (row.status === "planned") {
@@ -399,7 +599,10 @@ export async function saveBatch(input: {
   });
 }
 
-/** What a batch handler needs: the run, its frozen context, the saved plan and the batch. */
+/**
+ * What a write batch handler needs: the run, its frozen context, the saved plan and the batch;
+ * for a craft run also the shot plan, the Breakdown's windows and the lit scenes.
+ */
 export async function loadBatchJob(directionId: string, batchIndex: number) {
   const db = getDb();
   const [row] = await db.select().from(direction).where(eq(direction.id, directionId)).limit(1);
@@ -407,9 +610,7 @@ export async function loadBatchJob(directionId: string, batchIndex: number) {
   const [batch] = await db
     .select()
     .from(directionBatch)
-    .where(
-      and(eq(directionBatch.directionId, directionId), eq(directionBatch.batchIndex, batchIndex)),
-    )
+    .where(and(isWrite(directionId), eq(directionBatch.batchIndex, batchIndex)))
     .limit(1);
   if (!batch) return null;
   const [owner] = await db
@@ -423,12 +624,21 @@ export async function loadBatchJob(directionId: string, batchIndex: number) {
     .where(eq(scriptVersion.id, row.scriptVersionId))
     .limit(1);
   if (!owner || owner.archivedAt || !version?.content) return null;
+  const craft =
+    row.mode === "craft" && row.shotPlan && row.breakdown && row.visual
+      ? {
+          shotPlan: shotPlanSchema.parse(row.shotPlan),
+          breakdown: storedBreakdownSchema.parse(row.breakdown).blocks,
+          visual: directionVisualSchema.parse(row.visual),
+        }
+      : null;
   return {
     direction: row,
     batch,
     ownerId: owner.ownerId,
     script: version.content,
     context: directionContextSchema.parse(row.context),
+    craft,
   };
 }
 

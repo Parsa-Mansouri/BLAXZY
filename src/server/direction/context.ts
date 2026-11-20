@@ -1,7 +1,7 @@
 /**
  * What a Director run is made of, and the pure rules around it: the frozen input every batch of a
- * run shares (`DirectionContext`), the asset registry built from the stored detection, how many
- * blocks a script will need (full call or plan and batches) and the batch ranges. No database.
+ * run shares (`DirectionContext`), the asset registry built from the stored detection, the block
+ * mode and the batch ranges. No database.
  */
 import { z } from "zod";
 import { blockLengthSeconds } from "@/lib/style-options";
@@ -10,15 +10,12 @@ import {
   BLOCK_MODES,
   creativeBibleShape,
   platformConfigSchema,
-  WORDS_PER_MINUTE,
   type BlockMode,
   type CreativeBible,
 } from "@/server/damis";
 import { ASSET_KINDS, type AssetKind, type ProjectStyle } from "@/server/db/schema";
 import type { DetectorView } from "@/server/assets";
-
-/** Up to this many blocks the Director answers in one `full` call (the owner's threshold). */
-export const FULL_MODE_MAX_BLOCKS = 8;
+import { craftSelectionSchema } from "./craft";
 
 /** Blocks per `write_blocks` batch. */
 export const BATCH_BLOCKS = 8;
@@ -39,6 +36,8 @@ export const directionContextSchema = z.object({
   creative_bible: creativeBibleShape,
   asset_registry: assetRegistrySchema,
   bindings: z.array(directionBindingSchema),
+  /** The director and cinematographer of a craft run (absent on older runs). */
+  craft: craftSelectionSchema.optional(),
 });
 export type DirectionContext = z.output<typeof directionContextSchema>;
 
@@ -76,7 +75,7 @@ export function blockModeFor(bible: CreativeBible | null, style?: ProjectStyle |
   return length === 15 ? "fixed_15" : length === 30 ? "fixed_30" : "auto";
 }
 
-/** The block length used to estimate the count (the style's 15/30 choice, the bible's, else the platform default). */
+/** The block length in seconds (the style's 15/30 choice, the bible's, else the platform default). */
 export function blockLengthFor(
   bible: CreativeBible | null,
   fallback: number,
@@ -84,25 +83,6 @@ export function blockLengthFor(
 ): number {
   return (
     blockLengthSeconds(style?.blockLength) ?? bible?.project_frame.block_length_sec ?? fallback
-  );
-}
-
-/**
- * How many blocks the script will need: the longer of the target runtime (the episode's for a
- * series) and the script's own spoken length, over the block length. An estimate only, it picks
- * between one `full` call and plan plus batches.
- */
-export function estimateBlockCount(input: {
-  style: ProjectStyle;
-  script: string;
-  blockLengthSec: number;
-}): number {
-  const target = input.style.episodeDurationSeconds ?? input.style.totalDurationSeconds;
-  const words = input.script.trim().split(/\s+/).filter(Boolean).length;
-  const scriptSeconds = Math.round((words / WORDS_PER_MINUTE) * 60);
-  return Math.max(
-    1,
-    Math.ceil(Math.max(target, scriptSeconds) / Math.max(1, input.blockLengthSec)),
   );
 }
 

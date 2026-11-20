@@ -241,8 +241,8 @@ export function sampleFilmDirector(raw: unknown): ShotPlan {
         start_state: state,
         end_state: state,
         script_quote: {
-          start: p.words.slice(0, 6).join(" "),
-          end: p.words.slice(-6).join(" "),
+          start: p.words.slice(0, 10).join(" "),
+          end: p.words.slice(-10).join(" "),
         },
       });
     }

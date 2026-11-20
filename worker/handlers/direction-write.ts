@@ -1,9 +1,15 @@
-import { director, runDami, type DirectorOutput } from "../../src/server/damis";
+import {
+  director,
+  runDami,
+  storedDirectorPlanOutputSchema,
+  type DirectorOutput,
+} from "../../src/server/damis";
 import {
   failDirection,
   isDirectionOpen,
   loadBatchJob,
   saveBatch,
+  writerInputsFor,
 } from "../../src/server/direction";
 import { setSectioningState } from "../../src/server/blocks";
 import { defineHandler, directionWrite } from "../../src/server/jobs";
@@ -14,7 +20,9 @@ import { classifyFailure } from "./script-failure";
 
 /**
  * Writes one batch of a planned direction (`write_blocks` over a `block_range`, with the saved plan
- * verbatim). Batches of one run run in parallel; each stores only its own row, and the one that
+ * verbatim). For a craft run the batch also gets the Breakdown's shots and windows of its blocks
+ * and the cinematographer's look of those shots (`shot_plan`, `visual_layer`), which the written
+ * blocks must follow. Batches of one run run in parallel; each stores only its own row, and the one that
  * finishes last assembles every batch's blocks (`saveBatch`, one transaction). A batch of a run
  * that was superseded or failed is skipped; a batch already stored is skipped. A batch that
  * fails for good fails the whole run (the user retries it as a whole).
@@ -41,6 +49,17 @@ export const directionWriteHandler = defineHandler(directionWrite, async (payloa
     const plan: unknown = direction.plan;
     if (!plan) throw new ScriptInputError("The plan of this run is missing. Try again.");
     const { context: directorContext } = job;
+    const range = { from: job.batch.blockFrom, to: job.batch.blockTo };
+    const craft = job.craft
+      ? writerInputsFor({
+          shotPlan: job.craft.shotPlan,
+          breakdown: job.craft.breakdown,
+          plan: storedDirectorPlanOutputSchema.parse(plan),
+          look: job.craft.visual.look,
+          scenes: job.craft.visual.scenes,
+          ...range,
+        })
+      : null;
     const run = await runDami(
       director,
       {
@@ -51,7 +70,8 @@ export const directionWriteHandler = defineHandler(directionWrite, async (payloa
         asset_registry: directorContext.asset_registry,
         script: job.script,
         plan,
-        block_range: `${job.batch.blockFrom}-${job.batch.blockTo}`,
+        block_range: `${range.from}-${range.to}`,
+        ...(craft ?? {}),
       },
       { userId: job.ownerId, projectId: direction.projectId, signal: context.signal },
     );

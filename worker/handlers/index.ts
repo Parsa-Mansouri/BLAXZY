@@ -9,6 +9,7 @@ import {
   assetSheetPlanHandler,
   assetSheetViewsAdvanceHandler,
 } from "./asset-sheet-pack";
+import { directionSceneHandler } from "./direction-scene";
 import { directionWriteHandler } from "./direction-write";
 import { generationRunHandler } from "./generation-run";
 import { generationSweepHandler, generationSweepSchedule } from "./generation-sweep";
@@ -64,6 +65,7 @@ export const handlers: JobHandler[] = [
   scriptReviseHandler,
   scriptDetectAssetsHandler,
   scriptDirectHandler,
+  directionSceneHandler,
   directionWriteHandler,
   assetDetectFixHandler,
   generationRunHandler,

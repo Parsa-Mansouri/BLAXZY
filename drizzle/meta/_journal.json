@@ -127,6 +127,13 @@
       "when": 1795097811153,
       "tag": "0017_ops_health_stuck_rows",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795170786183,
+      "tag": "0018_craft_pipeline",
+      "breakpoints": true
     }
   ]
 }

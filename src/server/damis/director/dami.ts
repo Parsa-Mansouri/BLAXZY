@@ -10,7 +10,7 @@ import {
 import { checkDirector, checkDirectorPlan } from "./validate";
 
 /** Ours; the owner's Director is v1.4 (`DIRECTOR_OWNER_VERSION`). */
-export const DIRECTOR_VERSION = "1.1.0";
+export const DIRECTOR_VERSION = "1.2.0";
 export const DIRECTOR_OWNER_VERSION = "1.4";
 
 /**
@@ -26,7 +26,7 @@ export const DIRECTOR_MAX_OUTPUT_TOKENS = 32_000;
 /**
  * DIRECTOR (owner v1.4): directs the approved script and divides it into Seedance blocks. This
  * dami answers `full` (for scripts of up to ~8 blocks) and `write_blocks` (a batch of a saved
- * plan). Run by `script.direct` and `direction.write`.
+ * plan). Run by `direction.write` (the craft pipeline's prompter bridge).
  */
 export const director = defineDami({
   key: "director",

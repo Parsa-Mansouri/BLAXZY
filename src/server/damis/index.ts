@@ -418,6 +418,11 @@ export { director, directorPlan, DIRECTOR_VERSION, DIRECTOR_OWNER_VERSION } from
 export {
   assetRegistrySchema,
   blockSchema,
+  blockShotPlanSchema,
+  plannedShotSchema,
+  plannedWindowSchema,
+  visualLayerSchema,
+  visualShotSchema,
   platformConfigSchema,
   defaultPlatformConfig,
   continuityBibleSchema,
@@ -443,6 +448,11 @@ export {
   type Block as DirectorBlock,
   type PlatformConfigInput,
   type BlockMode,
+  type BlockShotPlan,
+  type PlannedShot,
+  type PlannedWindow,
+  type VisualLayer,
+  type VisualShot,
   type ContinuityBible,
   type DirectorInput,
   type DirectorMode,
@@ -454,9 +464,20 @@ export {
   type Shot,
   type Staging,
 } from "./director/schema";
-export { checkDirector, checkDirectorPlan } from "./director/validate";
+export {
+  checkDirector,
+  checkDirectorPlan,
+  checkShotPlanFollowed,
+  countWords,
+  shotLimit,
+  spokenWords,
+  spokenWordsCeiling,
+  SHOT_WINDOW_MAX_S,
+  SHOT_WINDOW_MIN_S,
+} from "./director/validate";
+export { SHOT_PLAN_INSTRUCTION } from "./director/prompt";
 
-// Craft pipeline (not wired yet): FILM DIRECTOR (shot plan, Director Style Cards) and
+// Craft pipeline (wired: `script.direct`, `direction.scene`): FILM DIRECTOR (shot plan, Director Style Cards) and
 // CINEMATOGRAPHER (the owner's six DP cards, modes look and scene)
 export {
   filmDirector,

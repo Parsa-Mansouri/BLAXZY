@@ -36,6 +36,19 @@ export function directorBible(bible: CreativeBible) {
 const tag = (name: string, value: string) => `<${name}>\n${value}\n</${name}>`;
 
 /**
+ * The craft pipeline's addendum to `write_blocks` (user turn only; the owner's system prompt is
+ * unchanged): the film-director's shots, grouped and timed by the Breakdown, and the
+ * cinematographer's look are binding, and the writer turns them into the blocks' prompt text.
+ */
+export const SHOT_PLAN_INSTRUCTION = `The shots of these blocks are already directed. <shot_plan> lists, for each block of block_range, its shots in order with their windows in seconds from the block's start; <visual_layer> gives the film's look and each shot's lens, camera height and angle, light, framing, grade and texture.
+Follow them exactly:
+- The block's \`shots\` has one entry per window of <shot_plan>, in order, with \`window\` written as "{from_s}-{to_s}s". The first window of a shot starts a new shot_number ("Cut to Shot N" in prompt_text, except Shot 1); every further window of the same shot repeats its shot_number and is written without "Cut to".
+- Keep each shot's size, camera position, height, angle and movement, its staging, props, action, dialogue (word for word, with its heard_as) and sound. Do not add, drop, merge or reorder shots.
+- Write prompt_text from them: each shot's lens and framing in its Shots line, and the light, grade and texture of <visual_layer> in the Look: line, briefly, within the 180 to 350 words.
+- The plan's start_staging, end_staging, opening_frame and continuity come from these shots: keep them.
+- The continuity_bible descriptors are labels only: the character, location and prop sheets (the reference images) define how everything looks. Paste each descriptor word for word as usual and never describe faces, hair, clothing, materials or architecture.`;
+
+/**
  * The owner's `<inputs>` as tagged blocks of the user turn.
  *
  * Caching (3 of 4 breakpoints): the owner's system prompt is identical for every call (1); the
@@ -60,6 +73,11 @@ export function buildDirectorPrompt(input: AnyDirectorInput): DamiPrompt {
   }
   const perCall = [tag("mode", input.mode)];
   if (input.block_range) perCall.push(tag("block_range", input.block_range));
+  if (input.shot_plan) {
+    perCall.push(tag("shot_plan", JSON.stringify(input.shot_plan)));
+    if (input.visual_layer) perCall.push(tag("visual_layer", JSON.stringify(input.visual_layer)));
+    perCall.push(SHOT_PLAN_INSTRUCTION);
+  }
   perCall.push(
     input.mode === "plan"
       ? "Run the plan pass now. Return only the JSON object."

@@ -18,6 +18,8 @@ import { sheetGeneratorLocation } from "./sheet-generator-location/dami";
 import { sheetGeneratorProp } from "./sheet-generator-prop/dami";
 import { director, directorPlan } from "./director/dami";
 import { blockRevision } from "./block-revision/dami";
+import { filmDirector, filmDirectorCard } from "./film-director/dami";
+import { cinematographer } from "./cinematographer/dami";
 import { videoReview } from "./video-review/dami";
 
 // Framework
@@ -337,6 +339,9 @@ export const DAMIS: Readonly<Record<string, AnyDami>> = {
   [directorPlan.key]: directorPlan,
   [blockRevision.key]: blockRevision,
   [videoReview.key]: videoReview,
+  [filmDirector.key]: filmDirector,
+  [filmDirectorCard.key]: filmDirectorCard,
+  [cinematographer.key]: cinematographer,
 };
 
 // Creative DNA (DAMI-00): the per-project Creative Bible and what later damis read from it
@@ -450,6 +455,87 @@ export {
   type Staging,
 } from "./director/schema";
 export { checkDirector, checkDirectorPlan } from "./director/validate";
+
+// Craft pipeline (not wired yet): FILM DIRECTOR (shot plan, Director Style Cards) and
+// CINEMATOGRAPHER (the owner's six DP cards, modes look and scene)
+export {
+  filmDirector,
+  filmDirectorCard,
+  FILM_DIRECTOR_MAX_OUTPUT_TOKENS,
+  FILM_DIRECTOR_OWNER_VERSION,
+  FILM_DIRECTOR_VERSION,
+} from "./film-director/dami";
+export {
+  beatSchema,
+  filmDirectorCardInputSchema,
+  filmDirectorCardOutputSchema,
+  filmDirectorInputSchema,
+  filmShotSchema,
+  sceneGeographySchema,
+  shotCameraSchema,
+  shotPlanSchema,
+  shotPropSchema,
+  shotStagingSchema,
+  FILM_DIRECTOR_BLOCK_MODES,
+  FRAME_DEPTHS,
+  FRAME_POSITIONS,
+  type Beat,
+  type FilmDirectorBlockMode,
+  type FilmDirectorCardInput,
+  type FilmDirectorCardOutput,
+  type FilmDirectorInput,
+  type FilmShot,
+  type SceneGeography,
+  type ShotCamera,
+  type ShotPlan,
+  type ShotProp,
+  type ShotStaging,
+} from "./film-director/schema";
+export { checkShotPlan, checkStyleCard, MAX_SHOT_SECONDS } from "./film-director/validate";
+export {
+  DIRECTOR_STYLE_IDS,
+  DIRECTOR_STYLES,
+  directorStyle,
+  directorStyleCard,
+  isDirectorStyleId,
+  type DirectorStyle,
+  type DirectorStyleId,
+} from "./film-director/styles";
+export { cinematographer, CINEMATOGRAPHER_VERSION } from "./cinematographer/dami";
+export {
+  CINEMATOGRAPHER_IDS,
+  CINEMATOGRAPHER_MODE_IDS,
+  CINEMATOGRAPHERS,
+  cinematographerCard,
+  isCardMode,
+  isCinematographerId,
+  type Cinematographer,
+  type CinematographerId,
+  type CinematographerMode,
+  type CinematographerModeId,
+} from "./cinematographer/library";
+export {
+  cinematographerBible,
+  cinematographerBibleSchema,
+  cinematographerInputSchema,
+  cinematographerOutputSchema,
+  lookInputSchema,
+  lookSchema,
+  sceneInputSchema,
+  sceneShotsFor,
+  sceneVisualSchema,
+  stagingSummary,
+  type CinematographerBible,
+  type CinematographerInput,
+  type CinematographerOutput,
+  type CinematographerResult,
+  type Look,
+  type LookInput,
+  type LookSceneInput,
+  type SceneInput,
+  type SceneShotInput,
+  type SceneVisual,
+} from "./cinematographer/schema";
 export { stubCreativeBible } from "./director/stub";
 export { blockExcerpts } from "./director/excerpts";
 export { creativeBibleShape } from "./creative-dna/schema";

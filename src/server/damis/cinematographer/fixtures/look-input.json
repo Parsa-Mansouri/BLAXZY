@@ -1,0 +1,45 @@
+{
+  "mode": "look",
+  "cinematographer_id": "deakins",
+  "creative_bible": {
+    "selection": {
+      "genre_id": "genre.drama",
+      "style_id": "style.realistic"
+    },
+    "project_frame": {
+      "format": "film",
+      "episode_count": null,
+      "episode_duration_sec": 60,
+      "total_duration_sec": 60,
+      "orientation": "portrait",
+      "audience": "PG-13",
+      "script_language": "en",
+      "ui_language": "en",
+      "dialogue_policy": "normal",
+      "block_length_sec": 15,
+      "blocks_per_episode": 4,
+      "max_spoken_words_per_block": 26
+    },
+    "contracts": {
+      "genre_contract": "Make the central desire, resistance and consequence legible through behavior. Build emotional meaning from choices, relationships and subtext rather than automatic tragedy.",
+      "style_contract": "Interpret realism as a coherent photographic and physical presentation of the approved world, not as a ban on speculative content. Preserve the story, genre, identities and established world exceptions.",
+      "combination_logic": "Drama owns the story logic and Realistic owns the presentation; neither changes the other's domain, and the project's locks win over both."
+    }
+  },
+  "scenes": [
+    {
+      "scene_id": "sc_1",
+      "location_label": "kitchen",
+      "interior_exterior": "interior",
+      "time_of_day": "evening",
+      "summary": "char_1 cooks; char_2 refuses dinner; char_3 watches from the doorway."
+    },
+    {
+      "scene_id": "sc_2",
+      "location_label": "front step",
+      "interior_exterior": "exterior",
+      "time_of_day": "night",
+      "summary": "char_1 joins char_2 on the step; they apologise; char_3 sits with them."
+    }
+  ]
+}

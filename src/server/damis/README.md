@@ -200,6 +200,29 @@ creative-bible.ts`) in its transaction, which adds a `creative_bible` row and qu
 - Sample mode (`sample/director.ts`, `sample/block-revision.ts`) is deterministic, passes the
   dami's own `check()`, and covers all three Director modes.
 
+## Craft pipeline: film director and cinematographer (not wired yet)
+
+The new four-step prompting pipeline: (1) FILM DIRECTOR, (2) CINEMATOGRAPHER, (3) Breakdown (code,
+groups shots into 15/30 s blocks), (4) prompter. Steps 1 and 2 are damis here.
+
+- `film-director/`: the owner's Director master prompt (`source/director_master_prompt.md`,
+  copied verbatim into `prompt-text.ts`). `film-director` runs MODE B steps 1, 2, 4, 5 and 7 only:
+  with a Director Style Card it turns the script into `shotPlanSchema` (notes, changes, scene
+  geography, beats and ordered shots with full staging, dialogue reusing the v1.4 dialogue shape).
+  No prompt text, no continuity bible, no physical descriptions: assets are named by id only.
+  `film-director-card` is MODE A (a director's name in, `{ card_markdown }` out), run by hand
+  with `pnpm dami:run film-director-card <input.json> --live`.
+- `film-director/styles/`: the Director Style Cards (`<id>.card.md` reviewed, copied into
+  `<id>.card.ts`, a test keeps them equal). The Nolan card is a marked placeholder until the live
+  Mode A run replaces it.
+- `cinematographer/`: the owner's six DP cards (`source/`, copied into `cards/`), listed with
+  their modes in `library.ts`. One dami, input discriminated on `mode`: `look` (once per film:
+  camera and light language, one card mode per scene) and `scene` (per scene: lens, light,
+  framing, grade and texture per shot). Structured output needs one closed schema, so the model
+  answers a `{ mode, look | null, scene | null }` wrapper and `finalize` returns the mode's half.
+- `src/server/direction/craft.ts`: `pickCraft` returns the defaults (Nolan, Deakins) until the
+  owner's "brain" dami decides them from the Style step.
+
 ## Video Review and the router
 
 - `video-review/` is the owner's VIDEO_REVIEW v1.0 (Sonnet, medium effort): it compares a generated

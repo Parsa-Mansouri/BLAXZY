@@ -17,6 +17,12 @@ export {
 } from "./context";
 export { bindingsMap, directedBlocks } from "./blocks";
 export {
+  DEFAULT_CINEMATOGRAPHER_ID,
+  DEFAULT_DIRECTOR_ID,
+  pickCraft,
+  type CraftSelection,
+} from "./craft";
+export {
   failDirection,
   getFinishedDirection,
   getLatestDirection,

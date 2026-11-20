@@ -14,7 +14,9 @@ import { sampleAssetDetector } from "./asset-detector";
 import { sampleCharacterGenerator } from "./character-generator";
 import { sampleCreativeDna } from "./creative-dna";
 import { sampleBlockRevision } from "./block-revision";
+import { sampleCinematographer } from "./cinematographer";
 import { sampleDirector } from "./director";
+import { sampleFilmDirector, sampleFilmDirectorCard } from "./film-director";
 import { sampleLocationGenerator } from "./location-generator";
 import { samplePropGenerator } from "./prop-generator";
 import { sampleSheetGeneratorCharacter } from "./sheet-generator-character";
@@ -47,6 +49,9 @@ export const SAMPLE_GENERATORS: Readonly<Record<string, (input: unknown) => unkn
   "director-plan": sampleDirector,
   "block-revision": sampleBlockRevision,
   "video-review": sampleVideoReview,
+  "film-director": sampleFilmDirector,
+  "film-director-card": sampleFilmDirectorCard,
+  cinematographer: sampleCinematographer,
 };
 
 function wait(ms: number, signal: AbortSignal | undefined): Promise<void> {

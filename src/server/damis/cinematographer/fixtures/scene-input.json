@@ -1,0 +1,85 @@
+{
+  "mode": "scene",
+  "cinematographer_id": "deakins",
+  "look": {
+    "cinematographer_id": "deakins",
+    "lens_and_camera": "Natural focal lengths, a steady mounted camera, deep focus in wides.",
+    "framing": "Classical framing with clear headroom; the horizon kept level.",
+    "multi_character_framing": "Two or more characters share the frame in depth, never stacked.",
+    "daylight": "One soft directional source from a window or the sky, little fill.",
+    "night": "Practical sources only; shadows allowed to fall toward black.",
+    "interiors_sealed_light": "Light from the room's own practicals, motivated and low.",
+    "color_contrast_texture": "Restrained colour, medium contrast, fine grain.",
+    "scene_modes": [
+      {
+        "scene_id": "sc_1",
+        "mode_id": "A",
+        "reason": "Naturalist fits kitchen."
+      },
+      {
+        "scene_id": "sc_2",
+        "mode_id": "A",
+        "reason": "Naturalist fits front step."
+      }
+    ]
+  },
+  "scene": {
+    "scene_id": "sc_1",
+    "location_label": "kitchen",
+    "time_of_day": "evening"
+  },
+  "shots": [
+    {
+      "shot_id": "s1",
+      "size": "wide",
+      "camera": {
+        "position": "south side of the room, looking north",
+        "height": "eye level",
+        "angle": "straight on",
+        "movement": "locked off",
+        "background": "the north wall of the location"
+      },
+      "staging": "char_1: frame-left, midground, three-quarter toward frame right, still; char_2: frame-right, midground, three-quarter toward frame left, still; char_3: centre, midground, three-quarter toward frame left, still",
+      "action": "NORA stirs a pot at the stove, her back to the room. LINA sits at the table in her coat, staring at the floor. SAM watches from the doorway."
+    },
+    {
+      "shot_id": "s2",
+      "size": "medium close-up",
+      "camera": {
+        "position": "south side of the room, looking north",
+        "height": "eye level",
+        "angle": "straight on",
+        "movement": "locked off",
+        "background": "the north wall of the location"
+      },
+      "staging": "char_1: frame-left, foreground, three-quarter toward frame right, still; char_2: frame-right, midground, three-quarter toward frame left, still; char_3: centre, midground, three-quarter toward frame left, still",
+      "action": "char_1 speaks."
+    },
+    {
+      "shot_id": "s3",
+      "size": "medium close-up",
+      "camera": {
+        "position": "south side of the room, looking north",
+        "height": "eye level",
+        "angle": "straight on",
+        "movement": "locked off",
+        "background": "the north wall of the location"
+      },
+      "staging": "char_1: frame-left, midground, three-quarter toward frame right, still; char_2: frame-right, foreground, three-quarter toward frame left, still; char_3: centre, midground, three-quarter toward frame left, still",
+      "action": "char_2 speaks."
+    },
+    {
+      "shot_id": "s4",
+      "size": "medium",
+      "camera": {
+        "position": "south side of the room, looking north",
+        "height": "eye level",
+        "angle": "straight on",
+        "movement": "locked off",
+        "background": "the north wall of the location"
+      },
+      "staging": "char_1: frame-left, midground, three-quarter toward frame right, still; char_2: frame-right, midground, three-quarter toward frame left, still; char_3: centre, midground, three-quarter toward frame left, still",
+      "action": "NORA sets the blue kettle on the stove and turns to face her daughter."
+    }
+  ]
+}

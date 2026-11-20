@@ -6,6 +6,9 @@
  * Example: pnpm dami:run script-writer src/server/damis/script-writer/fixtures/input.json
  * `director` (modes full and write_blocks) and `director-plan` read the fixtures in
  * `src/server/damis/director/fixtures` (set `mode` to `plan` for director-plan).
+ * `film-director-card` (Mode A, writes a Director Style Card) reads
+ * `src/server/damis/film-director/fixtures/card-input.json`; `film-director` reads `input.json`
+ * there; `cinematographer` reads `look-input.json` or `scene-input.json` in its `fixtures`.
  * Needs ANTHROPIC_API_KEY and a reachable DATABASE_URL (the run is recorded in dami_run).
  * In live mode it makes PAID Claude calls and requires the explicit --live flag. Refuses to run
  * in production or against a non-local database (see assertDevOnly in scripts/_lib.ts).
